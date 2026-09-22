@@ -14,6 +14,12 @@ All notable changes to this project are documented here. The format follows
   (a Story is never placed under an Epic), and a Task still needs its Story.
 - Drafts with no parent and no id yet are named `draft-<slug>.md`.
 
+### Fixed
+
+- `protected-items` now also refuses a write whose text mentions a protected work item as `#<id>`
+  or by work item URL. Azure DevOps turns such a mention into a link, so copying a description
+  that mentioned the original would have changed it. Name the original in plain text instead.
+
 ## [0.1.1] - 2026-09-22
 
 ### Fixed

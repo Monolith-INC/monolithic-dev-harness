@@ -309,6 +309,42 @@ class TestProtected(HookTestCase):
             "protected-items",
         )
 
+    def test_mentioning_a_protected_item_in_text_is_denied(self) -> None:
+        self.approve()
+        for text in (
+            "Copia da Idea #1001",
+            "Origem: https://dev.azure.com/org/demo/_workitems/edit/1001",
+        ):
+            self.assertDenied(
+                self.claude(
+                    AZ + "wit_work_item_write",
+                    {
+                        "action": "create",
+                        "workItemType": "Feature",
+                        "fields": [{"name": "System.Description", "value": text}],
+                    },
+                ),
+                "protected-items",
+            )
+
+    def test_plain_text_names_and_html_entities_are_allowed(self) -> None:
+        self.approve()
+        self.assertAllowed(
+            self.claude(
+                AZ + "wit_work_item_write",
+                {
+                    "action": "create",
+                    "workItemType": "Feature",
+                    "fields": [
+                        {
+                            "name": "System.Description",
+                            "value": "## &#1001; Origem\nCopia da Idea 1001, relacionada a #9001",
+                        }
+                    ],
+                },
+            )
+        )
+
     def test_other_items_are_writable_with_approval(self) -> None:
         self.approve()
         self.assertAllowed(

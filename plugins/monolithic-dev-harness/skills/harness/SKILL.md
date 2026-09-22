@@ -38,9 +38,10 @@ first and say so.
    the user's idea or an existing item. The **Descrição Original** section keeps the source text
    verbatim. The top ancestor can be a Feature or a User Story: neither needs a parent, so do not
    ask for or invent one. When the source is an item that must stay intact (for example, the
-   original of a copied item), create a new item and cite the original by URL in its description.
-   Never link to it: links are two-way and change the original. Protected ids are blocked by rule
-   `protected-items`.
+   original of a copied item), create a new item and name the original in plain text (id and
+   title, for example `Idea 4007`). Never link to it, and never write `#4007` or its URL in a
+   description or comment: Azure DevOps turns a mention into a link, and links are two-way. Rule
+   `protected-items` blocks protected ids in id fields and in text.
 2. **Enrich** it (`enrich-work-item`) into the team format.
 3. **Decompose** (`decompose-backlog`, tree mode for an Epic): Features, then Stories with points,
    one outline at GATE 1 and one body batch at GATE 2. Points go into the Azure points field.

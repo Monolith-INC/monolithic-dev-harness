@@ -71,6 +71,12 @@ _ID_KEYS = frozenset(
     }
 )
 _NESTED_ID_LISTS = ("batchUpdates", "updates", "items")
+# Text that links a work item when Azure DevOps saves it: a `#123` mention (not an HTML entity
+# such as `&#127919;`) or a work item URL.
+_TEXT_REFERENCE = re.compile(
+    r"(?<![&\w])#(\d+)\b|_workitems/edit/(\d+)|/_apis/wit/workItems/(\d+)",
+    re.IGNORECASE,
+)
 
 
 @dataclass(frozen=True)
@@ -275,16 +281,42 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
     return Decision.allow()
 
 
+def mentioned_ids(value: Any) -> set[int]:
+    """Work item ids that text in a payload would link: `#123` mentions and work item URLs."""
+    if isinstance(value, str):
+        return {
+            int(next(group for group in match.groups() if group))
+            for match in _TEXT_REFERENCE.finditer(value)
+        }
+    if isinstance(value, dict):
+        value = list(value.values())
+    if isinstance(value, list):
+        found: set[int] = set()
+        for item in value:
+            found |= mentioned_ids(item)
+        return found
+    return set()
+
+
 def rule_protected_items(call: ToolCall, policy: dict[str, Any]) -> Decision:
     if not is_remote_write(call):
         return Decision.allow()
-    hit = referenced_ids(call.tool_input) & protected_ids(policy)
+    protected = protected_ids(policy)
+    hit = referenced_ids(call.tool_input) & protected
     if hit:
         return Decision.deny(
             "protected-items",
             f"work item(s) {sorted(hit)} are protected in .harness/policy.json and are never written, "
             "linked, or parented — not even with approval (links are two-way and would change them). "
-            "Reference the item by URL in the new item's description instead.",
+            "Name the item in plain text instead, for example 'Idea 4007', without '#' or a link.",
+        )
+    mentioned = mentioned_ids(call.tool_input) & protected
+    if mentioned:
+        return Decision.deny(
+            "protected-items",
+            f"the text mentions protected work item(s) {sorted(mentioned)} as '#<id>' or by URL. "
+            "Azure DevOps turns a mention into a link, which changes the protected item. Name it in "
+            "plain text instead, for example 'Idea 4007', without '#' or a link.",
         )
     return Decision.allow()
 
