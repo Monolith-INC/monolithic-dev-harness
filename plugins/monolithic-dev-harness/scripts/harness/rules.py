@@ -252,6 +252,92 @@ _HUMAN_OWNED = (
     ".harness/state/approvals/**",
     ".harness/state/manual/**",
 )
+_HUMAN_OWNED_TEXT = re.compile(
+    r"\.harness/state/(approvals|manual)|\.harness/policy\.json"
+)
+_SHELL_WRITERS = frozenset(
+    {
+        "tee",
+        "cp",
+        "mv",
+        "rm",
+        "touch",
+        "truncate",
+        "ln",
+        "install",
+        "dd",
+        "rsync",
+        "chmod",
+    }
+)
+_INTERPRETERS = ("python", "node", "perl", "ruby", "bash", "sh", "zsh")
+_REDIRECTS = frozenset({">", ">>", ">|", "&>", "&>>", ">&"})
+_SEPARATORS = frozenset({"&&", "||", ";", "|", "&", "\n"})
+
+
+def _shell_segments(command: str) -> list[list[str]] | None:
+    """The command split into simple commands (tokens), or None if it cannot be parsed."""
+    try:
+        lexer = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lexer.whitespace_split = True
+        tokens = list(lexer)
+    except ValueError:
+        return None
+    segments: list[list[str]] = [[]]
+    for token in tokens:
+        if token in _SEPARATORS:
+            segments.append([])
+        else:
+            segments[-1].append(token)
+    return [segment for segment in segments if segment]
+
+
+def shell_writes_human_owned(command: str) -> bool:
+    """True when a shell command may write the policy, approvals, or manual-check records.
+
+    Reading them (`cat`, `ls`, `jq`, a `2>/dev/null` elsewhere in the line) is fine. Writing is a
+    redirect onto one of them, a writing command (cp, mv, rm, tee, sed -i, ...) or an interpreter
+    that names one, or any write after `cd` into `.harness/`. Unparseable commands fail closed.
+    """
+    if ".harness" not in command:
+        return False
+    segments = _shell_segments(command)
+    if segments is None:
+        return bool(_HUMAN_OWNED_TEXT.search(command))
+    inside_harness = False
+    for segment in segments:
+        words = [
+            token
+            for token in segment
+            if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", token)
+        ]
+        name = Path(words[0]).name if words else ""
+        if name in {"cd", "pushd"}:
+            inside_harness = any(".harness" in token for token in words[1:])
+            continue
+        names_owned = any(_HUMAN_OWNED_TEXT.search(token) for token in segment)
+        for index, token in enumerate(segment):
+            if token in _REDIRECTS and index + 1 < len(segment):
+                target = segment[index + 1]
+                # A redirect onto a human-owned file, or onto a computed target in a line that
+                # names one, or any redirect after `cd` into `.harness/`.
+                if _HUMAN_OWNED_TEXT.search(target) or (
+                    target.startswith(("$", "`")) and (names_owned or inside_harness)
+                ):
+                    return True
+                if inside_harness and target != "/dev/null":
+                    return True
+        writes = (
+            name in _SHELL_WRITERS
+            or name.startswith(_INTERPRETERS)
+            or (
+                name == "sed"
+                and any(re.match(r"^-[a-zA-Z]*i", word) for word in words[1:])
+            )
+        )
+        if writes and (names_owned or inside_harness):
+            return True
+    return False
 
 
 def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
@@ -264,16 +350,7 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
                     f"{_relative(repo, path)} is human-owned. Approvals and manual checks are recorded from the "
                     "user's own prompt; the policy is edited by a person (or created once by bootstrap).",
                 )
-    if (
-        call.name in SHELL_TOOLS
-        and re.search(
-            r"\.harness/state/(approvals|manual)|\.harness/policy\.json", call.command
-        )
-        and re.search(
-            r">|\btee\b|\bcp\b|\bmv\b|\brm\b|sed\s+-[a-zA-Z]*i|touch|python|node",
-            call.command,
-        )
-    ):
+    if call.name in SHELL_TOOLS and shell_writes_human_owned(call.command):
         return Decision.deny(
             "human-owned",
             "this command would write human-owned harness state or policy.",

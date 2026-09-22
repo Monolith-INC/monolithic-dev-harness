@@ -189,110 +189,6 @@ class LinearTrackerAdapter(TrackerAdapter):
         return str(self.mappings.get("states", {}).get(state, state))
 
 
-class AzureDevOpsTrackerAdapter(TrackerAdapter):
-    def get_work_item(self, ref: str) -> WorkItem:
-        return _work_item(
-            self._call(
-                "get_work_item", {"id": int(ref) if str(ref).isdigit() else ref}
-            ),
-            self.mappings,
-        )
-
-    def search_work_items(
-        self, query: str, cursor: str | None = None
-    ) -> dict[str, Any]:
-        return _page(
-            self._call("search_work_items", {"query": query, "cursor": cursor}),
-            self.mappings,
-        )
-
-    def create_work_item(
-        self, kind: str, title: str, description: str, parent_ref: str | None = None
-    ) -> WorkItem:
-        args = {
-            "type": self.mappings.get("kinds", {}).get(kind, kind),
-            "title": title,
-            "description": description,
-        }
-        if parent_ref:
-            args["parentId"] = (
-                int(parent_ref) if str(parent_ref).isdigit() else parent_ref
-            )
-        return _work_item(self._call("create_work_item", args), self.mappings)
-
-    def transition_work_item(self, ref: str, state: str) -> WorkItem:
-        return _work_item(
-            self._call(
-                "transition_work_item",
-                {"id": ref, "state": self._provider_state(state)},
-            ),
-            self.mappings,
-        )
-
-    def list_artifacts(self, ref: str, kind: str | None = None) -> list[ArtifactRef]:
-        artifacts = [
-            _artifact(item)
-            for item in _items(self._call("list_artifacts", {"id": ref, "kind": kind}))
-        ]
-        return [item for item in artifacts if kind is None or item.kind == kind]
-
-    def list_children(self, ref: str) -> list[WorkItem]:
-        parent_id = int(ref) if str(ref).isdigit() else ref
-        result = self._call(
-            "list_children",
-            {
-                "ids": [parent_id],
-                "parentId": parent_id,
-                "query": f"SELECT [System.Id] FROM WorkItems WHERE [System.Parent] = {parent_id}",
-            },
-        )
-        return [_work_item(item, self.mappings) for item in _items(result)]
-
-    def publish_artifact(
-        self, ref: str, kind: str, title: str, content: str, revision: str
-    ) -> ArtifactRef:
-        from .publish import publish_artifact_idempotent
-
-        envelope = _encode_artifact_envelope(
-            kind=kind, title=title, revision=revision, content=content
-        )
-        result = publish_artifact_idempotent(
-            list_fn=lambda: self.list_artifacts(ref, kind),
-            create_fn=lambda: _artifact(
-                self._call(
-                    "publish_artifact",
-                    {
-                        "id": int(ref) if str(ref).isdigit() else ref,
-                        "kind": kind,
-                        "title": title,
-                        "content": envelope,
-                        "text": envelope,
-                        "revision": revision,
-                    },
-                ),
-                fallback_kind=kind,
-                fallback_title=title,
-                fallback_revision=revision,
-            ),
-            title=title,
-            revision=revision,
-        )
-        artifact = result["artifact"]
-        return ArtifactRef(
-            artifact.id,
-            artifact.kind or kind,
-            artifact.title or title,
-            artifact.revision or revision,
-            artifact.url,
-            dict(artifact.provider_data),
-            result["outcome"],
-            result["attempts"],
-        )
-
-    def _provider_state(self, state: str) -> str:
-        return str(self.mappings.get("states", {}).get(state, state))
-
-
 class ScmAdapter:
     def __init__(self, config: dict[str, Any]):
         self.config = config
@@ -319,7 +215,12 @@ class ScmAdapter:
         return _pull_request(self._call("get_pull_request", {"id": ref}))
 
     def create_pull_request(
-        self, title: str, description: str, source_branch: str, target_branch: str
+        self,
+        title: str,
+        description: str,
+        source_branch: str,
+        target_branch: str,
+        draft: bool = True,
     ) -> PullRequest:
         return _pull_request(
             self._call(
@@ -329,6 +230,7 @@ class ScmAdapter:
                     "description": description,
                     "source": source_branch,
                     "target": target_branch,
+                    "draft": draft,
                 },
             )
         )
@@ -412,7 +314,12 @@ class GitHubScmAdapter(ScmAdapter):
         return _pull_request(value)
 
     def create_pull_request(
-        self, title: str, description: str, source_branch: str, target_branch: str
+        self,
+        title: str,
+        description: str,
+        source_branch: str,
+        target_branch: str,
+        draft: bool = True,
     ) -> PullRequest:
         value = self._run_text(
             [
@@ -427,6 +334,7 @@ class GitHubScmAdapter(ScmAdapter):
                 source_branch,
                 "--base",
                 target_branch,
+                *(["--draft"] if draft else []),
             ]
         )
         url = value.strip().splitlines()[-1] if value.strip() else ""
@@ -475,84 +383,8 @@ class GitHubScmAdapter(ScmAdapter):
         }
 
 
-class AzureReposScmAdapter(ScmAdapter):
-    """Azure Repos transport through the configured MCP bindings."""
-
-    def get_pull_request(self, ref: str) -> PullRequest:
-        return _pull_request(
-            self._call(
-                "get_pull_request",
-                {
-                    "id": int(ref) if str(ref).isdigit() else ref,
-                    "repositoryId": self.config.get("repository"),
-                    "project": self.config.get("project"),
-                },
-            )
-        )
-
-    def create_pull_request(
-        self, title: str, description: str, source_branch: str, target_branch: str
-    ) -> PullRequest:
-        return _pull_request(
-            self._call(
-                "create_pull_request",
-                {
-                    "title": title,
-                    "description": description,
-                    "source": source_branch,
-                    "target": target_branch,
-                    "sourceRefName": f"refs/heads/{source_branch}",
-                    "targetRefName": f"refs/heads/{target_branch}",
-                    "repositoryId": self.config.get("repository"),
-                    "project": self.config.get("project"),
-                },
-            )
-        )
-
-    def list_review_threads(self, ref: str) -> list[ReviewThread]:
-        value = self._call(
-            "list_review_threads",
-            {
-                "id": int(ref) if str(ref).isdigit() else ref,
-                "pullRequestId": int(ref) if str(ref).isdigit() else ref,
-                "repositoryId": self.config.get("repository"),
-                "project": self.config.get("project"),
-            },
-        )
-        return [_review_thread(item) for item in _items(value)]
-
-    def reply_to_thread(
-        self, pr_ref: str, thread_ref: str, content: str
-    ) -> dict[str, Any]:
-        return self._call(
-            "reply_to_thread",
-            {
-                "pull_request": pr_ref,
-                "thread": thread_ref,
-                "content": content,
-                "pullRequestId": int(pr_ref) if str(pr_ref).isdigit() else pr_ref,
-                "repositoryId": self.config.get("repository"),
-                "project": self.config.get("project"),
-            },
-        )
-
-    def link_work_item(self, pr_ref: str, work_item_ref: str) -> dict[str, Any]:
-        return self._call(
-            "link_work_item",
-            {
-                "pull_request": pr_ref,
-                "work_item": work_item_ref,
-                "pullRequestId": int(pr_ref) if str(pr_ref).isdigit() else pr_ref,
-                "workItemId": int(work_item_ref)
-                if str(work_item_ref).isdigit()
-                else work_item_ref,
-                "repositoryId": self.config.get("repository"),
-                "project": self.config.get("project"),
-            },
-        )
-
-
 def tracker_adapter(config: dict[str, Any]) -> TrackerAdapter:
+    from .azure import AzureDevOpsTrackerAdapter
     from .local_tracker import LocalTrackerAdapter
 
     adapter = config.get("adapter")
@@ -566,6 +398,8 @@ def tracker_adapter(config: dict[str, Any]) -> TrackerAdapter:
 
 
 def scm_adapter(config: dict[str, Any]) -> ScmAdapter:
+    from .azure import AzureReposScmAdapter
+
     adapter = config.get("adapter")
     if adapter == "github":
         return GitHubScmAdapter(config)
@@ -578,7 +412,15 @@ def _items(value: Any) -> list[Any]:
     if isinstance(value, list):
         return value
     if isinstance(value, dict):
-        for key in ("items", "nodes", "value", "workItems", "artifacts", "threads"):
+        for key in (
+            "items",
+            "nodes",
+            "value",
+            "workItems",
+            "artifacts",
+            "threads",
+            "comments",
+        ):
             if isinstance(value.get(key), list):
                 return value[key]
     return []

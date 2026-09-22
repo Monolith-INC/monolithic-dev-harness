@@ -182,16 +182,17 @@ def _default_tracker_config(
                     "repositories",
                 ],
             },
+            "project": _azure_remote(project_dest)[1] if project_dest else "",
             "mappings": presets,
             "bindings": {
-                "get_work_item": "wit_get_work_item",
-                "search_work_items": "wit_query_by_wiql",
-                "create_work_item": "wit_create_work_item",
-                "list_children": "wit_get_work_items",
-                "transition_work_item": "wit_update_work_item",
-                "publish_artifact": "wit_add_work_item_comment",
-                "list_artifacts": "wit_get_work_item_comments",
-                "link_development_artifact": "wit_add_artifact_link",
+                "get_work_item": "wit_work_item",
+                "search_work_items": "wit_query",
+                "create_work_item": "wit_work_item_write",
+                "list_children": "wit_query",
+                "transition_work_item": "wit_work_item_write",
+                "publish_artifact": "wit_work_item_comment_write",
+                "list_artifacts": "wit_work_item",
+                "link_development_artifact": "wit_work_item_link_write",
             },
         }
     if provider == "local_tracker":
@@ -316,11 +317,11 @@ def _default_scm_config(provider: str, project_dest: Path) -> dict:
                 ],
             },
             "bindings": {
-                "get_pull_request": "repo_get_pull_request_by_id",
-                "create_pull_request": "repo_create_pull_request",
-                "list_review_threads": "repo_list_pull_request_threads",
-                "reply_to_thread": "repo_reply_to_comment",
-                "link_work_item": "wit_link_work_item_to_pull_request",
+                "get_pull_request": "repo_pull_request",
+                "create_pull_request": "repo_pull_request_write",
+                "list_review_threads": "repo_pull_request_thread",
+                "reply_to_thread": "repo_pull_request_thread_write",
+                "link_work_item": "wit_work_item_link_write",
             },
         }
     raise ValueError(f"unsupported SCM: {provider}")
@@ -372,8 +373,12 @@ def _azure_remote(project_dest: Path) -> tuple[str, str, str]:
         return "", "", ""
     value = remote.removesuffix(".git")
     if "dev.azure.com" in value:
+        # https://[user@]dev.azure.com/<org>/<project>/_git/<repo>
+        # git@ssh.dev.azure.com:v3/<org>/<project>/<repo>
         tail = value.split("dev.azure.com", 1)[-1].lstrip(":/")
         parts = [part for part in tail.split("/") if part and part != "_git"]
+        if value.split("dev.azure.com", 1)[0].endswith("ssh.") and parts[:1] == ["v3"]:
+            parts = parts[1:]
         if len(parts) >= 3:
             return parts[0], parts[1], parts[2]
     if "visualstudio.com" in value:

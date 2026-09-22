@@ -189,12 +189,27 @@ class TestHumanOwned(HookTestCase):
             ),
             "human-owned",
         )
+        for command in (
+            "cp /tmp/p.json .harness/policy.json",
+            "sed -i 's/4007//' .harness/policy.json",
+            "python3 -c \"open('.harness/policy.json', 'w').write('{}')\"",
+            "echo '{}' | tee .harness/state/approvals/HB-1.json",
+            "cd .harness/state/approvals && echo '{}' > HB-2.json",
+            "ls 2>/dev/null; echo x >> .harness/policy.json",
+        ):
+            self.assertDenied(self.claude("Bash", {"command": command}), "human-owned")
 
     def test_other_state_and_files_are_writable(self) -> None:
         self.assertAllowed(
             self.claude("Write", {"file_path": str(self.repo / "lib/a.dart")})
         )
         self.assertAllowed(self.claude("Bash", {"command": "cat .harness/policy.json"}))
+        for command in (
+            "ls -la .harness/ && cat .harness/policy.json 2>/dev/null | head -80",
+            "jq .azure .harness/policy.json > /tmp/azure.json",
+            "cd .harness && ls state 2>/dev/null",
+        ):
+            self.assertAllowed(self.claude("Bash", {"command": command}))
 
 
 class TestApproval(HookTestCase):

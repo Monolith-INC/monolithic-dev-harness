@@ -69,10 +69,33 @@ def load_config(project_root: Path | None = None) -> IntegrationConfig:
     if "branchPattern" not in tracker:
         tracker = {**tracker, "branchPattern": branch_template}
     tracker = {**tracker, "projectRoot": str(root)}
+    tracker, scm = _azure_project_from_policy(root, tracker, scm)
     tracking = raw.get("tracking")
     if isinstance(tracking, dict) and tracking.get("mode") in {"enforced", "skipped"}:
         tracker = {**tracker, "trackingMode": str(tracking["mode"])}
     return IntegrationConfig(1, tracker, scm, branch_template, root)
+
+
+def _azure_project_from_policy(
+    root: Path, tracker: dict[str, Any], scm: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """Azure tools need the project; fall back to the one in `.harness/policy.json`."""
+    try:
+        policy = json.loads(
+            (root / ".harness" / "policy.json").read_text(encoding="utf-8")
+        )
+    except (OSError, json.JSONDecodeError):
+        return tracker, scm
+    azure = policy.get("azure") if isinstance(policy, dict) else None
+    if not isinstance(azure, dict):
+        return tracker, scm
+    if tracker.get("adapter") == "azure_devops" and not tracker.get("project"):
+        tracker = {**tracker, "project": azure.get("project")}
+    if scm.get("adapter") == "azure_repos":
+        for key in ("project", "repository", "organization"):
+            if not scm.get(key) and azure.get(key):
+                scm = {**scm, key: azure[key]}
+    return tracker, scm
 
 
 def write_config(project_root: Path, payload: dict[str, Any]) -> Path:

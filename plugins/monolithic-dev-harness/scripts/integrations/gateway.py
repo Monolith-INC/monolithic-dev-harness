@@ -116,6 +116,10 @@ TOOLS = [
                 "description": {"type": "string"},
                 "sourceBranch": {"type": "string"},
                 "targetBranch": {"type": "string"},
+                "isDraft": {
+                    "type": "boolean",
+                    "description": "Create as a draft. The harness only allows drafts (gate G4).",
+                },
             },
         },
     },
@@ -252,6 +256,7 @@ def handle_call(
                         args.get("description", ""),
                         args["sourceBranch"],
                         args["targetBranch"],
+                        draft=bool(args.get("isDraft", True)),
                     )
                 )
             case "scm_list_review_threads":

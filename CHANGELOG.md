@@ -19,6 +19,16 @@ All notable changes to this project are documented here. The format follows
 - `protected-items` now also refuses a write whose text mentions a protected work item as `#<id>`
   or by work item URL. Azure DevOps turns such a mention into a link, so copying a description
   that mentioned the original would have changed it. Name the original in plain text instead.
+- The tracker and pull-request tools (`workflow-integrations`) now call the current
+  `@azure-devops/mcp` tools (`wit_query`, `wit_work_item_write`, `repo_pull_request_write`, ...)
+  and read Azure's real payloads. They used the retired tool names and failed with "tool not
+  found".
+- Bootstrap reads `git@ssh.dev.azure.com:v3/<org>/<project>/<repo>` remotes correctly; the
+  Azure project falls back to `.harness/policy.json` when the integrations file lacks it.
+- `scm_create_pull_request` accepts `isDraft`, which `draft-reviewed-prs` requires; before, a pull
+  request could not be opened through it at all.
+- `human-owned` no longer blocks reading `.harness/` (for example `cat .harness/policy.json
+  2>/dev/null`); it parses the command and blocks only writes.
 
 ## [0.1.1] - 2026-09-22
 
