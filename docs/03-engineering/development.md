@@ -66,7 +66,7 @@ See [testing.md](testing.md).
 ## Full Outcome Gate
 
 ```bash
-.venv/bin/ruff check . && .venv/bin/ruff format --check .
+.venv/bin/ruff check --no-cache . && .venv/bin/ruff format --no-cache --check .
 .venv/bin/shellcheck install.sh scripts/build_release.sh plugins/monolithic-dev-harness/bin/* plugins/monolithic-dev-harness/tests/run.sh
 PYTHON=.venv/bin/python plugins/monolithic-dev-harness/tests/run.sh
 python3 scripts/check_versions.py

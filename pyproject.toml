@@ -11,6 +11,20 @@ select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "DTZ"]
 # the runtime adds its own directories to sys.path before importing siblings
 ignore = ["E402"]
 
+[tool.ruff.lint.isort]
+# The runtime puts scripts/ and runtime/ on sys.path itself; declare its packages so import order
+# does not depend on where ruff runs.
+known-first-party = [
+  "harness",
+  "host_adapters",
+  "integrations",
+  "orchestrator",
+  "orchestrator_core",
+  "policy",
+  "scripts",
+  "tests",
+]
+
 [tool.ruff.lint.per-file-ignores]
 # tests import after adjusting sys.path and build fixtures inline
 "plugins/monolithic-dev-harness/tests/**" = ["E402", "SIM117"]
