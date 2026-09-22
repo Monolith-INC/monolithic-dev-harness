@@ -36,9 +36,11 @@ first and say so.
 
 1. **Top ancestor.** `generate-work-item` drafts the highest item in the tree (usually an Epic) from
    the user's idea or an existing item. The **Descrição Original** section keeps the source text
-   verbatim. When the source is an item that must stay intact (for example, the original of a copied
-   item), create a new item and cite the original by URL in its description. Never link to it:
-   links are two-way and change the original. Protected ids are blocked by rule `protected-items`.
+   verbatim. The top ancestor can be a Feature or a User Story: neither needs a parent, so do not
+   ask for or invent one. When the source is an item that must stay intact (for example, the
+   original of a copied item), create a new item and cite the original by URL in its description.
+   Never link to it: links are two-way and change the original. Protected ids are blocked by rule
+   `protected-items`.
 2. **Enrich** it (`enrich-work-item`) into the team format.
 3. **Decompose** (`decompose-backlog`, tree mode for an Epic): Features, then Stories with points,
    one outline at GATE 1 and one body batch at GATE 2. Points go into the Azure points field.

@@ -212,7 +212,7 @@ Show options:
 Sub-stories drafted. What would you like to do?
 
 1. Keep as local drafts — done; continue manually or via decompose-backlog.
-2. Create in the configured provider and link to the parent Feature.
+2. Create in the configured provider, under the original Story's parent Feature when it has one.
 3. Discard drafts — delete files and stop.
 ```
 

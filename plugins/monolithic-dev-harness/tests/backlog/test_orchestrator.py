@@ -96,6 +96,32 @@ class TestArtifactValidator(unittest.TestCase):
         names = [r.name for r in results if r.result == "FAIL"]
         self.assertNotIn("body-section-missing: 🎯 O quê", names)
 
+    def _hierarchy(self, results):
+        return next(r for r in results if r.name == "hierarchy-story-parent-is-feature")
+
+    def test_story_without_parent_passes(self) -> None:
+        text = RAW_GENERATE_STORY.replace("parent_id: 6868\n", "")
+        record = ingest_from_text(text, filename="draft-login-form-validation")
+        self.assertIsNone(record.parent_id)
+        results = validate_artifact(record)
+        self.assertEqual(outcome_from_results(results), "PASS")
+        self.assertEqual(self._hierarchy(results).result, "PASS")
+        self.assertNotIn("dor-linked-to-feature", [r.name for r in results])
+
+    def test_story_under_non_feature_parent_fails(self) -> None:
+        record = ingest_from_text(
+            RAW_GENERATE_STORY, filename="6869-login-form-validation"
+        )
+        results = validate_artifact(record, hierarchy_parent_is_feature=False)
+        self.assertEqual(outcome_from_results(results), "FAIL")
+        self.assertEqual(self._hierarchy(results).result, "FAIL")
+
+    def test_story_with_unverified_parent_is_skipped(self) -> None:
+        record = ingest_from_text(
+            RAW_GENERATE_STORY, filename="6869-login-form-validation"
+        )
+        self.assertEqual(self._hierarchy(validate_artifact(record)).result, "SKIP")
+
     def test_missing_type_fails(self) -> None:
         record = ingest_file(FIXTURE)
         bad = replace(record, frontmatter={})

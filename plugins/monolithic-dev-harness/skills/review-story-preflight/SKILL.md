@@ -95,9 +95,10 @@ A story is complete in a way individual tasks are not. Three checks only make se
 
 ### 1. Establish what the story asked for
 
-Resolve the story through `fetch_work_item`. Also call `fetch_parent` to get the feature it belongs
-to — a story can satisfy its own text while contradicting its parent's intent, and that is worth
-knowing before a human reviewer finds it.
+Resolve the story through `fetch_work_item`. When the story has a parent, also call `fetch_parent`
+to get the feature it belongs to — a story can satisfy its own text while contradicting its
+parent's intent, and that is worth knowing before a human reviewer finds it. A story with no parent
+is valid; skip the parent checks for it.
 
 Extract goal, requirements, DoD, and out-of-scope statements. If `fetch_work_item` is unsupported,
 ask the user for the story text rather than inferring it.
@@ -135,7 +136,8 @@ Severities are **critical**, **high**, **medium**, **low**, as in `review-task`.
 Then run the pre-flight checks that are specific to this gate:
 
 - **Cross-task contradictions** — a later commit reverting or bypassing an earlier one.
-- **Parent-feature agreement** — does this story move its feature toward its stated goal?
+- **Parent-feature agreement** — does this story move its feature toward its stated goal? (Only
+  when it has a parent feature.)
 - **Leftovers** — debug logging, commented-out blocks, `TODO`/`FIXME` added by this branch,
   temporary fixtures, credentials or endpoints pointing at development environments.
 - **Commit legibility** — commits a reviewer can follow. Say so if the history would be materially

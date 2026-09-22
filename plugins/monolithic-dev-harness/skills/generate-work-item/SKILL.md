@@ -41,7 +41,7 @@ Gather inputs **one at a time** via the host UI. Each step: brief purpose, requi
 | `title` | yes | Short work-item title |
 | `description` | yes | Problem statement or scope in the author's words |
 | `work_item_type` | yes | `epic` \| `feature` \| `user-story` \| `task` |
-| `parent` | when type ≠ epic | Parent id or Azure URL (Epic→Feature, Feature→Story) |
+| `parent` | only for a Task | Parent id or Azure URL (Epic→Feature, Feature→Story, Story→Task) |
 | `attachment` | no | Supporting doc URL or artifacts path |
 | `language` | no | `en` \| `pt-br`, default **pt-BR**. When omitted, follow the existing Locale rule (match
   `description`'s language) instead of forcing the default. |
@@ -50,15 +50,16 @@ Also accept flags from `/generate-work-item` or conversational inference (see Ex
 
 Normalize the Agile type and immediate parent:
 
-| Input | Work item type | Parent required |
-| --- | --- | --- |
-| `epic` | Epic | no |
-| `feature` | Feature | Epic id |
-| `user-story` | User Story | Feature id |
-| `task` | Task | User Story id |
+| Input | Work item type | Parent | Parent type when given |
+| --- | --- | --- | --- |
+| `epic` | Epic | none | — |
+| `feature` | Feature | optional | Epic |
+| `user-story` | User Story | optional | Feature |
+| `task` | Task | required | User Story |
 
-If `parent` is missing when required: STOP and ask once. If parent type mismatches hierarchy: STOP
-and report (see `decomposition-rules.md`).
+A Feature or a User Story may stand alone. Do not ask for a parent the user did not give, and do
+not invent one. Only a Task needs a parent: if it is missing, STOP and ask once. If a given parent
+has the wrong type: STOP and report (see `decomposition-rules.md`).
 
 Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which reads
 `.agile-backlog-toolkit/config.json` and falls back to older locations. See
@@ -174,7 +175,8 @@ Append checkpoint to open `Agent_Sessions/` record when the host keeps a session
 - **Spec before ticket** — PHASE 3 always runs; Context7 feeds the spec.
 - **Tickets/Ready only** for drafts.
 - **One gate** before persistence writes.
-- **Hierarchy invariants** — never link Story to Epic; always pass `type: "parent"` on link.
+- **Hierarchy invariants** — a parent is optional except for a Task; never link Story to Epic;
+  always pass `type: "parent"` on link.
 - **Hook-safe drafts** — valid frontmatter and filename per `ticket-structure.md`.
 - **Locale** — an explicit `language` input wins; otherwise match the language of `description` for
   section labels and body prose. Default pt-BR when neither gives a signal.

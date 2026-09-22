@@ -149,7 +149,7 @@ When `destination` is `filesystem` or `both`:
 2. Filename pattern per `../../references/ticket-structure.md`:
    `task-<kebab-title>` is invalid as a bare prefix — use `task-<slug>` only if the host regex
    allows `task-`; otherwise `<story-id-or-0000>-task-<slug>.md` matching
-   `^(\d+|tech-debt|bug|task|spike)-[a-z0-9-]+`.
+   `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+`.
 3. Frontmatter: `type: ticket`, `work_item_type: Task`, parent Story ref, `language`, no `status:`
    key in Tickets/ (lifecycle note for Breakdown Done can live in the body: `State: Done`).
 4. Body: title heading + short description (WHAT for this atomic unit) + link/ref to `plan_path`

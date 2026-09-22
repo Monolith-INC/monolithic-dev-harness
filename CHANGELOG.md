@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- A Feature no longer needs a parent Epic, and a User Story no longer needs a parent Feature. The
+  backlog skills stop asking for one, the Definition of Ready no longer requires the link, and the
+  validator passes a Story with no parent. A parent, when given, must still be the right type
+  (a Story is never placed under an Epic), and a Task still needs its Story.
+- Drafts with no parent and no id yet are named `draft-<slug>.md`.
+
 ## [0.1.1] - 2026-09-22
 
 ### Fixed

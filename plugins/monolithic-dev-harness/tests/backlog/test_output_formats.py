@@ -152,7 +152,7 @@ COMPLIANT_REPORT = (
     .replace("{{ARTIFACT_TYPE}}", "User Story")
     .replace("{{TITLE}}", "Login field validation")
     .replace("{{SOURCE}}", "file")
-    .replace("{{PASSED}}", "12")
+    .replace("{{PASSED}}", "11")
     .replace("{{FAILED}}", "0")
     .replace("{{WARNINGS}}", "0")
     .replace("{{OUTCOME}}", "PASS")
