@@ -12,9 +12,14 @@ class TestStream(unittest.TestCase):
         stream = OrchestratorStream(state, max_retries=3)
         for i in range(3):
             stream.dispatch(
-                Event(type="TaskFailedEvent", payload={"task_id": "t1", "critique": f"fail-{i}"})
+                Event(
+                    type="TaskFailedEvent",
+                    payload={"task_id": "t1", "critique": f"fail-{i}"},
+                )
             )
-        self.assertEqual(stream.state.tasks["t1"].state, TaskState.BLOCKED_REQUIRES_REVIEW)
+        self.assertEqual(
+            stream.state.tasks["t1"].state, TaskState.BLOCKED_REQUIRES_REVIEW
+        )
 
     def test_authorization_resets_task(self) -> None:
         task = Task(

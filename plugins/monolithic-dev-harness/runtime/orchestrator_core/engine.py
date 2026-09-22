@@ -31,7 +31,12 @@ class ToolCallResult:
         payload = (
             {"status": "completed", "task_id": self.task_id, "output": self.output}
             if self.ok
-            else {"status": "failed", "task_id": self.task_id, "state": self.state, "error": self.error}
+            else {
+                "status": "failed",
+                "task_id": self.task_id,
+                "state": self.state,
+                "error": self.error,
+            }
         )
         return [{"type": "text", "text": json.dumps(payload, indent=2)}]
 
@@ -68,19 +73,24 @@ class OrchestratorEngine:
                 {
                     "name": manifest.get("name"),
                     "description": manifest.get("description"),
-                    "inputSchema": manifest.get("input_schema") or {"type": "object", "properties": {}},
+                    "inputSchema": manifest.get("input_schema")
+                    or {"type": "object", "properties": {}},
                 }
             )
         return tools
 
-    def run_tool_call(self, name: str, arguments: dict[str, Any] | None) -> ToolCallResult:
+    def run_tool_call(
+        self, name: str, arguments: dict[str, Any] | None
+    ) -> ToolCallResult:
         arguments = arguments or {}
         if name not in self._manifests:
             return ToolCallResult(ok=False, output=None, error=f"unknown skill: {name}")
 
         task_id = f"{name}-{uuid.uuid4().hex[:8]}"
         task = Task(id=task_id, skill_name=name, inputs=arguments)
-        stream = OrchestratorStream(QueueState(tasks={task_id: task}), max_retries=self.max_retries)
+        stream = OrchestratorStream(
+            QueueState(tasks={task_id: task}), max_retries=self.max_retries
+        )
         self._subscribe_hooks(stream)
         stream.dispatch(Event(type="TaskSpawnedEvent", payload={"task_id": task_id}))
 
@@ -99,31 +109,69 @@ class OrchestratorEngine:
 
             if name == "validate-artifact" and output.get("outcome") == "pass":
                 stream.dispatch(
-                    Event(type="TaskCompletedEvent", payload={"task_id": task_id, "output": output})
-                )
-                return ToolCallResult(ok=True, output=output, task_id=task_id, state=TaskState.COMPLETED.value)
-
-            if name == "auto-fix-artifact":
-                if output.get("mode") == "completed" or (not critiques and output.get("mode") != "instructions"):
-                    stream.dispatch(
-                        Event(type="TaskCompletedEvent", payload={"task_id": task_id, "output": output})
+                    Event(
+                        type="TaskCompletedEvent",
+                        payload={"task_id": task_id, "output": output},
                     )
-                    clear_error_log(self.project_root, name)
-                    return ToolCallResult(ok=True, output=output, task_id=task_id, state=TaskState.COMPLETED.value)
+                )
+                return ToolCallResult(
+                    ok=True,
+                    output=output,
+                    task_id=task_id,
+                    state=TaskState.COMPLETED.value,
+                )
+
+            if name == "auto-fix-artifact" and (
+                output.get("mode") == "completed"
+                or (not critiques and output.get("mode") != "instructions")
+            ):
+                stream.dispatch(
+                    Event(
+                        type="TaskCompletedEvent",
+                        payload={"task_id": task_id, "output": output},
+                    )
+                )
+                clear_error_log(self.project_root, name)
+                return ToolCallResult(
+                    ok=True,
+                    output=output,
+                    task_id=task_id,
+                    state=TaskState.COMPLETED.value,
+                )
 
             if not critiques and output.get("mode") == "instructions":
                 stream.dispatch(
-                    Event(type="TaskCompletedEvent", payload={"task_id": task_id, "output": output})
+                    Event(
+                        type="TaskCompletedEvent",
+                        payload={"task_id": task_id, "output": output},
+                    )
                 )
-                return ToolCallResult(ok=True, output=output, task_id=task_id, state=TaskState.COMPLETED.value)
+                return ToolCallResult(
+                    ok=True,
+                    output=output,
+                    task_id=task_id,
+                    state=TaskState.COMPLETED.value,
+                )
 
             if not fail_checks and not critiques:
                 stream.dispatch(
-                    Event(type="TaskCompletedEvent", payload={"task_id": task_id, "output": output})
+                    Event(
+                        type="TaskCompletedEvent",
+                        payload={"task_id": task_id, "output": output},
+                    )
                 )
-                return ToolCallResult(ok=True, output=output, task_id=task_id, state=TaskState.COMPLETED.value)
+                return ToolCallResult(
+                    ok=True,
+                    output=output,
+                    task_id=task_id,
+                    state=TaskState.COMPLETED.value,
+                )
 
-            critique_blob = "; ".join(critiques) if critiques else output.get("error", "validation failed")
+            critique_blob = (
+                "; ".join(critiques)
+                if critiques
+                else output.get("error", "validation failed")
+            )
             if critiques == last_critiques and output == last_output:
                 stream.dispatch(
                     Event(
@@ -143,12 +191,17 @@ class OrchestratorEngine:
             last_critiques = list(critiques)
             last_output = output
             stream.dispatch(
-                Event(type="TaskFailedEvent", payload={"task_id": task_id, "critique": critique_blob})
+                Event(
+                    type="TaskFailedEvent",
+                    payload={"task_id": task_id, "critique": critique_blob},
+                )
             )
             task = stream.state.tasks[task_id]
 
             if task.state == TaskState.BLOCKED_REQUIRES_REVIEW:
-                write_error_log(self.project_root, name, critiques_to_error_log(critiques))
+                write_error_log(
+                    self.project_root, name, critiques_to_error_log(critiques)
+                )
                 return ToolCallResult(
                     ok=False,
                     output=output,
@@ -166,7 +219,9 @@ class OrchestratorEngine:
             output["prompt"] = self._compile_prompt(name, arguments, output)
             continue
 
-    def _compile_prompt(self, skill_name: str, arguments: dict[str, Any], output: dict[str, Any]) -> str:
+    def _compile_prompt(
+        self, skill_name: str, arguments: dict[str, Any], output: dict[str, Any]
+    ) -> str:
         file_path = arguments.get("file_path", "")
         record = None
         if file_path and Path(file_path).is_file():
@@ -195,7 +250,9 @@ class OrchestratorEngine:
             mistakes=mistakes,
         )
 
-    def compile_mailbox(self, skill_name: str, *, file_path: str, mode: str = "novo") -> Path:
+    def compile_mailbox(
+        self, skill_name: str, *, file_path: str, mode: str = "novo"
+    ) -> Path:
         output = execute_handler(
             skill_name,
             {"file_path": file_path},
@@ -212,14 +269,18 @@ class OrchestratorEngine:
         )
         return write_prompt(self.project_root, skill_name, prompt)
 
-    def evaluate_file(self, file_path: Path, *, skill_name: str = "validate-artifact") -> tuple[bool, str]:
+    def evaluate_file(
+        self, file_path: Path, *, skill_name: str = "validate-artifact"
+    ) -> tuple[bool, str]:
         record = ingest_file(file_path)
         results = validate_artifact(record)
         report = format_terminal_report(record, results)
         critiques = critiques_from_results(results)
         has_failures = any(r.result == "FAIL" for r in results)
         if has_failures:
-            write_error_log(self.project_root, skill_name, critiques_to_error_log(critiques))
+            write_error_log(
+                self.project_root, skill_name, critiques_to_error_log(critiques)
+            )
             return False, report
         clear_error_log(self.project_root, skill_name)
         return True, report

@@ -105,7 +105,9 @@ class TestAvailableHours(unittest.TestCase):
 
     def test_days_off_reduce_availability(self):
         """Two days of leave remove two days of capacity."""
-        away = _member(per_day=6.0, days_off=[DateRange(date(2026, 8, 5), date(2026, 8, 6))])
+        away = _member(
+            per_day=6.0, days_off=[DateRange(date(2026, 8, 5), date(2026, 8, 6))]
+        )
         self.assertEqual(available_hours(_sprint([away])), 48.0)
 
     def test_multiple_activities_sum_per_member(self):
@@ -179,7 +181,9 @@ class TestPlanIteration(unittest.TestCase):
     def test_utilisation_and_fit(self):
         """A sprint within capacity is not flagged as overcommitted."""
         sprint = _sprint([_member(per_day=6.0)])  # 60h available
-        plan = plan_iteration(sprint, [EstimableItem(item_id="1", remaining_hours=30.0)])
+        plan = plan_iteration(
+            sprint, [EstimableItem(item_id="1", remaining_hours=30.0)]
+        )
         self.assertEqual(plan.available_hours, 60.0)
         self.assertEqual(plan.planned_hours, 30.0)
         self.assertEqual(plan.utilisation, 0.5)
@@ -188,7 +192,9 @@ class TestPlanIteration(unittest.TestCase):
     def test_overcommitment_is_detected_and_warned(self):
         """Taking on more than the team can do produces an explicit warning."""
         sprint = _sprint([_member(per_day=6.0)])  # 60h
-        plan = plan_iteration(sprint, [EstimableItem(item_id="1", remaining_hours=90.0)])
+        plan = plan_iteration(
+            sprint, [EstimableItem(item_id="1", remaining_hours=90.0)]
+        )
         self.assertTrue(plan.overcommitted)
         self.assertTrue(any("overcommitted" in w for w in plan.warnings))
 
@@ -232,7 +238,9 @@ class TestPlanIteration(unittest.TestCase):
 
     def test_format_plan_renders_key_figures(self):
         """The terminal report shows the numbers a reader needs."""
-        plan = plan_iteration(_sprint([_member()]), [EstimableItem(item_id="1", remaining_hours=12.0)])
+        plan = plan_iteration(
+            _sprint([_member()]), [EstimableItem(item_id="1", remaining_hours=12.0)]
+        )
         report = format_plan(plan)
         self.assertIn("sprint-42", report)
         self.assertIn("Available", report)
@@ -240,7 +248,9 @@ class TestPlanIteration(unittest.TestCase):
 
     def test_format_plan_handles_undefined_utilisation(self):
         """A zero-capacity plan renders without dividing by zero."""
-        self.assertIn("n/a", format_plan(plan_iteration(IterationCapacity(iteration_ref="x"), [])))
+        self.assertIn(
+            "n/a", format_plan(plan_iteration(IterationCapacity(iteration_ref="x"), []))
+        )
 
 
 if __name__ == "__main__":

@@ -70,7 +70,9 @@ def calibrate(
 
     usable = _usable_items(_window(_usable_items(items), settings.window_iterations))
     if not usable:
-        return Calibration(None, 0, "none", "no completed items with both points and hours")
+        return Calibration(
+            None, 0, "none", "no completed items with both points and hours"
+        )
 
     total_points = sum(i.points for i in usable)
     total_hours = sum(i.actual_hours for i in usable)
@@ -86,7 +88,9 @@ def calibrate(
             "low",
             f"{sample} completed items, below min_sample={settings.min_sample}",
         )
-    return Calibration(ratio, sample, "high", f"{sample} completed items over {total_points:g} points")
+    return Calibration(
+        ratio, sample, "high", f"{sample} completed items over {total_points:g} points"
+    )
 
 
 def halstead_hours(effort: float) -> float | None:

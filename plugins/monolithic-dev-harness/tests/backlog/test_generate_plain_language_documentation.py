@@ -31,7 +31,9 @@ class TestPlainLanguageSkillFrontmatter(unittest.TestCase):
 
 class TestPlainLanguageSkillPhases(unittest.TestCase):
     def setUp(self) -> None:
-        self.skill_md = read_skill_text("generate-plain-language-documentation", "SKILL.md")
+        self.skill_md = read_skill_text(
+            "generate-plain-language-documentation", "SKILL.md"
+        )
 
     def test_required_phases_documented(self) -> None:
         for phase in REQUIRED_PHASES:
@@ -49,13 +51,17 @@ class TestPlainLanguageSkillPhases(unittest.TestCase):
 
 class TestPlainLanguageSkillReferences(unittest.TestCase):
     def setUp(self) -> None:
-        self.skill_md = read_skill_text("generate-plain-language-documentation", "SKILL.md")
+        self.skill_md = read_skill_text(
+            "generate-plain-language-documentation", "SKILL.md"
+        )
 
     def test_reference_files_exist(self) -> None:
         refs_dir = PLAIN_LANGUAGE_SKILL / "references"
         for name in REQUIRED_REFERENCE_FILES:
             with self.subTest(reference=name):
-                self.assertTrue((refs_dir / name).is_file(), f"missing references/{name}")
+                self.assertTrue(
+                    (refs_dir / name).is_file(), f"missing references/{name}"
+                )
 
     def test_skill_md_links_required_references(self) -> None:
         for name in (
@@ -83,9 +89,13 @@ class TestPlainLanguageSkillReferences(unittest.TestCase):
 
 class TestPlainLanguageSkillRules(unittest.TestCase):
     def setUp(self) -> None:
-        self.skill_md = read_skill_text("generate-plain-language-documentation", "SKILL.md")
+        self.skill_md = read_skill_text(
+            "generate-plain-language-documentation", "SKILL.md"
+        )
         self.principles = read_skill_text(
-            "generate-plain-language-documentation", "references", "plain-language-principles.md"
+            "generate-plain-language-documentation",
+            "references",
+            "plain-language-principles.md",
         )
 
     def test_plain_language_rules_referenced(self) -> None:
@@ -95,9 +105,14 @@ class TestPlainLanguageSkillRules(unittest.TestCase):
 
     def test_pt_br_glossary_lookup_documented(self) -> None:
         self.assertIn("pt-br", self.skill_md.lower())
-        self.assertIn("aliases", read_skill_text(
-            "generate-plain-language-documentation", "references", "glossary-usage.md"
-        ))
+        self.assertIn(
+            "aliases",
+            read_skill_text(
+                "generate-plain-language-documentation",
+                "references",
+                "glossary-usage.md",
+            ),
+        )
 
     def test_output_formats_include_work_item_prose(self) -> None:
         output_formats = read_skill_text(
@@ -115,7 +130,9 @@ class TestPlainLanguageSkillRules(unittest.TestCase):
 class TestPlainLanguageManifest(unittest.TestCase):
     def test_manifest_json_valid(self) -> None:
         manifest = load_json(PLAIN_LANGUAGE_SKILL / "manifest.json")
-        errors = validate_skill_manifest(manifest, expected_name="generate-plain-language-documentation")
+        errors = validate_skill_manifest(
+            manifest, expected_name="generate-plain-language-documentation"
+        )
         self.assertEqual(errors, [], msg="; ".join(errors))
 
     def test_manifest_language_and_document_type_enums(self) -> None:

@@ -25,7 +25,9 @@ from harness.config import load_policy  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--repo", default=".")
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--head", action="store_true")
@@ -41,14 +43,19 @@ def main(argv: list[str] | None = None) -> int:
         changed = gitstate.staged_paths(repo)
     else:
         if gitstate.git(repo, "status", "--porcelain", "--untracked-files=no"):
-            print("working tree has uncommitted changes; commit them or use --staged", file=sys.stderr)
+            print(
+                "working tree has uncommitted changes; commit them or use --staged",
+                file=sys.stderr,
+            )
             return 2
         tree = gitstate.head_tree(repo)
         changed = gitstate.branch_paths(repo, policy["git"]["base_branch"])
 
     selected = [
-        c for c in policy.get("checks", [])
-        if (args.only is None or c["name"] in args.only) and (not c.get("when") or globs.select(changed, c["when"]))
+        c
+        for c in policy.get("checks", [])
+        if (args.only is None or c["name"] in args.only)
+        and (not c.get("when") or globs.select(changed, c["when"]))
     ]
     if not selected:
         print("no configured checks apply to the changed files")
@@ -60,12 +67,20 @@ def main(argv: list[str] | None = None) -> int:
         started = time.monotonic()
         print(f"--- {check['name']}: {check['run']}", flush=True)
         try:
-            proc = subprocess.run(check["run"], shell=True, cwd=repo, timeout=args.timeout)
+            proc = subprocess.run(
+                check["run"], shell=True, cwd=repo, timeout=args.timeout
+            )
             code = proc.returncode
         except subprocess.TimeoutExpired:
             code = 124
-        results.append({"name": check["name"], "run": check["run"], "exit_code": code,
-                        "seconds": round(time.monotonic() - started, 1)})
+        results.append(
+            {
+                "name": check["name"],
+                "run": check["run"],
+                "exit_code": code,
+                "seconds": round(time.monotonic() - started, 1),
+            }
+        )
         print(f"--- {check['name']}: exit {code}", flush=True)
 
     path = state.record_checks(repo, tree, results)

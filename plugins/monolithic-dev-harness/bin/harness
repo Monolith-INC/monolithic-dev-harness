@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# harness: version, doctor, bootstrap. Installed on PATH by install.sh.
+set -euo pipefail
+SOURCE="${BASH_SOURCE[0]}"
+while [[ -L "$SOURCE" ]]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
+exec python3 "$ROOT/scripts/harness/cli.py" "$@"

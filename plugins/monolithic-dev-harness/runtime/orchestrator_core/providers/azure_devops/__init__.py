@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from typing import Any
 
-from ...capacity.model import EstimableItem, IterationCapacity
 from ..base import ProviderResult, WriteOp
 from . import fields as f
 from .client import AzureCapacityClient
@@ -60,7 +59,9 @@ class AzureDevOpsProvider:
             )
 
         if self.client is None:
-            return ProviderResult.failure("no payloads injected and no Azure client configured")
+            return ProviderResult.failure(
+                "no payloads injected and no Azure client configured"
+            )
 
         capacities, error = self.client.get_capacities(iteration_ref)
         if error:
@@ -92,7 +93,9 @@ class AzureDevOpsProvider:
             )
 
         if self.client is None:
-            return ProviderResult.failure("no payloads injected and no Azure client configured")
+            return ProviderResult.failure(
+                "no payloads injected and no Azure client configured"
+            )
 
         listing, error = self.client.get_iteration_work_items(iteration_ref)
         if error:
@@ -100,7 +103,9 @@ class AzureDevOpsProvider:
 
         ids = _extract_ids(listing)
         if not ids:
-            return ProviderResult.success([], warnings=("iteration contains no work items",))
+            return ProviderResult.success(
+                [], warnings=("iteration contains no work items",)
+            )
 
         detail, detail_error = self.client.get_work_items(ids)
         if detail_error:

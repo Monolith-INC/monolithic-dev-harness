@@ -52,8 +52,12 @@ class AzureConfig:
     """agile | scrum | cmmi -- decides whether Original Estimate exists on this project."""
 
     def as_dict(self) -> dict[str, str]:
-        pairs = (("org", self.org), ("project", self.project),
-                 ("team", self.team), ("process", self.process))
+        pairs = (
+            ("org", self.org),
+            ("project", self.project),
+            ("team", self.team),
+            ("process", self.process),
+        )
         return {k: v for k, v in pairs if v}
 
 
@@ -178,7 +182,12 @@ def org_from_mcp(data: dict[str, Any] | None) -> str | None:
             continue
         for candidate in reversed(args):
             text = _str_or_none(candidate)
-            if text and not text.startswith("-") and "/" not in text and not text.endswith(".js"):
+            if (
+                text
+                and not text.startswith("-")
+                and "/" not in text
+                and not text.endswith(".js")
+            ):
                 return text
     return None
 
@@ -264,6 +273,10 @@ def update_config(
     **azure: str | None,
 ) -> ProjectConfig:
     """Merge values into the stored config and persist. Used by lazy fill."""
-    config = load_project_config(project_root).with_azure(**azure).with_artifacts_path(artifacts_path)
+    config = (
+        load_project_config(project_root)
+        .with_azure(**azure)
+        .with_artifacts_path(artifacts_path)
+    )
     save_project_config(project_root, config)
     return config

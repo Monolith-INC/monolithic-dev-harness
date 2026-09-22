@@ -17,7 +17,10 @@ import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 from orchestrator_core.providers.azure_devops import AzureDevOpsProvider
-from orchestrator_core.providers.azure_devops.client import API_VERSION, AzureCapacityClient
+from orchestrator_core.providers.azure_devops.client import (
+    API_VERSION,
+    AzureCapacityClient,
+)
 
 CAPACITIES_BODY = {
     "count": 1,
@@ -96,7 +99,9 @@ class AzureHttpTestCase(unittest.TestCase):
     def client(self, **kwargs):
         kwargs.setdefault("pat", "secret-token")
         kwargs.setdefault("base_url", self.base_url)
-        return AzureCapacityClient(kwargs.pop("org", "myorg"), kwargs.pop("project", "myproj"), **kwargs)
+        return AzureCapacityClient(
+            kwargs.pop("org", "myorg"), kwargs.pop("project", "myproj"), **kwargs
+        )
 
     @property
     def last_path(self):
@@ -187,7 +192,9 @@ class TestResponseHandling(AzureHttpTestCase):
 
     def test_connection_refused_is_reported(self):
         """An unreachable host is a message, not an exception."""
-        client = AzureCapacityClient("org", "proj", pat="x", base_url="http://127.0.0.1:1")
+        client = AzureCapacityClient(
+            "org", "proj", pat="x", base_url="http://127.0.0.1:1"
+        )
         data, error = client.get_capacities("it1")
         self.assertIsNone(data)
         self.assertTrue(error)
@@ -235,7 +242,10 @@ class TestProviderOverHttp(AzureHttpTestCase):
         ROUTES["capacities"] = (200, CAPACITIES_BODY)
         ROUTES["teamsettings/iterations/it1?"] = (
             200,
-            {"id": "it1", "attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"}},
+            {
+                "id": "it1",
+                "attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"},
+            },
         )
         ROUTES["work/teamsettings?"] = (
             200,
@@ -260,12 +270,17 @@ class TestProviderOverHttp(AzureHttpTestCase):
         ROUTES["work/teamsettings?"] = (404, {})
         result = AzureDevOpsProvider(client=self.client()).fetch_iteration("it1")
         self.assertTrue(result.ok)
-        self.assertTrue(any("iteration dates unavailable" in w for w in result.warnings))
+        self.assertTrue(
+            any("iteration dates unavailable" in w for w in result.warnings)
+        )
         self.assertTrue(any("team settings unavailable" in w for w in result.warnings))
 
     def test_empty_iteration_reports_no_work_items(self):
         """An iteration with no contents is a warning, not an error."""
-        ROUTES["teamsettings/iterations/it1/workitems"] = (200, {"workItemRelations": []})
+        ROUTES["teamsettings/iterations/it1/workitems"] = (
+            200,
+            {"workItemRelations": []},
+        )
         result = AzureDevOpsProvider(client=self.client()).fetch_work_items("it1")
         self.assertTrue(result.ok)
         self.assertEqual(result.data, [])
@@ -284,8 +299,14 @@ class TestProviderOverHttp(AzureHttpTestCase):
             200,
             {
                 "value": [
-                    {"id": 101, "fields": {"Microsoft.VSTS.Scheduling.RemainingWork": 8}},
-                    {"id": 102, "fields": {"Microsoft.VSTS.Scheduling.RemainingWork": 4}},
+                    {
+                        "id": 101,
+                        "fields": {"Microsoft.VSTS.Scheduling.RemainingWork": 8},
+                    },
+                    {
+                        "id": 102,
+                        "fields": {"Microsoft.VSTS.Scheduling.RemainingWork": 4},
+                    },
                 ]
             },
         )

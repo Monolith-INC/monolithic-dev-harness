@@ -31,9 +31,16 @@ the policy and get a clear yes before running step 2.
 
 ## 2. Run
 
+From the repository root:
+
 ```bash
-python3 "<plugin root>/scripts/harness/bootstrap.py" --repo <repo root> --policy-from <policy file>
+harness bootstrap --policy-from <policy file>     # omit --policy-from to use the bundled example
 ```
+
+If the `harness` command is not on `PATH` (installed without the installer), run
+`python3 "<plugin root>/scripts/harness/bootstrap.py" --repo <repo root> --policy-from <policy file>`.
+`AZURE_DEVOPS_ORG` must be set when the policy leaves `azure.organization` empty. Check the result
+with `harness doctor`.
 
 Optional: `--branch-template` (must contain `{key}`; default `{category}/{key}-{slug}`), `--discover`
 (queries Azure DevOps for work-item types and states, which starts OAuth), `--force` (overwrite

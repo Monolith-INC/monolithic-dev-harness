@@ -9,7 +9,9 @@ from .engine import OrchestratorEngine
 
 
 def default_skills_dir() -> Path:
-    return Path(__file__).resolve().parents[2] / "skills"  # <plugin>/runtime/orchestrator_core → <plugin>/skills
+    return (
+        Path(__file__).resolve().parents[2] / "skills"
+    )  # <plugin>/runtime/orchestrator_core → <plugin>/skills
 
 
 def resolve_skills_dir() -> Path:
@@ -50,7 +52,10 @@ def process_message(line: str, engine: OrchestratorEngine) -> str:
             response["result"] = {
                 "protocolVersion": "2024-11-05",
                 "capabilities": {"tools": {}},
-                "serverInfo": {"name": "agile-backlog-toolkit-orchestrator", "version": "0.1.0"},
+                "serverInfo": {
+                    "name": "agile-backlog-toolkit-orchestrator",
+                    "version": "0.1.0",
+                },
             }
         elif method == "tools/list":
             response["result"] = {"tools": engine.list_tools()}
@@ -66,7 +71,10 @@ def process_message(line: str, engine: OrchestratorEngine) -> str:
         elif method == "notifications/initialized":
             return ""
         else:
-            response["error"] = {"code": -32601, "message": f"Method not found: {method}"}
+            response["error"] = {
+                "code": -32601,
+                "message": f"Method not found: {method}",
+            }
     except Exception as exc:
         response["error"] = {"code": -32603, "message": str(exc)}
     return json.dumps(response)

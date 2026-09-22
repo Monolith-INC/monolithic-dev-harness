@@ -42,7 +42,9 @@ def matches(path: str, patterns: Iterable[str]) -> bool:
     return any(_compile(normalize(p)).match(candidate) for p in patterns)
 
 
-def select(paths: Iterable[str], include: Iterable[str], exclude: Iterable[str] = ()) -> list[str]:
+def select(
+    paths: Iterable[str], include: Iterable[str], exclude: Iterable[str] = ()
+) -> list[str]:
     include = list(include)
     exclude = list(exclude)
     return [p for p in paths if matches(p, include) and not matches(p, exclude)]

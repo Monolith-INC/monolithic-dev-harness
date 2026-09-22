@@ -40,4 +40,3 @@ class TestSkillsDiscoveryLayout(unittest.TestCase):
                 and ":" in line
             }
             self.assertEqual(keys, PORTABLE_FM, msg=f"{name} keys={keys}")
-

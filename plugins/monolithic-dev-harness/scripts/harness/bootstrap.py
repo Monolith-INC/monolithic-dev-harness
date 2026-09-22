@@ -43,11 +43,17 @@ def _ensure_gitignore(repo: Path) -> bool:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("--repo", required=True)
     parser.add_argument("--policy-from", required=True)
     parser.add_argument("--branch-template", default="{category}/{key}-{slug}")
-    parser.add_argument("--discover", action="store_true", help="query Azure DevOps for capabilities (starts OAuth)")
+    parser.add_argument(
+        "--discover",
+        action="store_true",
+        help="query Azure DevOps for capabilities (starts OAuth)",
+    )
     parser.add_argument("--force", action="store_true")
     args = parser.parse_args(argv)
 
@@ -71,13 +77,20 @@ def main(argv: list[str] | None = None) -> int:
     if not policy["azure"]["organization"]:
         org = os.environ.get("AZURE_DEVOPS_ORG", "").strip()
         if not org:
-            print("no Azure DevOps organization: set azure.organization in the policy or AZURE_DEVOPS_ORG", file=sys.stderr)
+            print(
+                "no Azure DevOps organization: set azure.organization in the policy or AZURE_DEVOPS_ORG",
+                file=sys.stderr,
+            )
             return 2
         raw = json.loads(policy_path.read_text(encoding="utf-8"))
         raw.setdefault("azure", {})["organization"] = org
-        policy_path.write_text(json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        policy_path.write_text(
+            json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
         policy["azure"]["organization"] = org
-        print(f"recorded organization {org} (from AZURE_DEVOPS_ORG) in {POLICY_RELATIVE_PATH}")
+        print(
+            f"recorded organization {org} (from AZURE_DEVOPS_ORG) in {POLICY_RELATIVE_PATH}"
+        )
     if _ensure_gitignore(repo):
         print("added .harness/state/ to .gitignore")
 
@@ -107,18 +120,29 @@ def main(argv: list[str] | None = None) -> int:
     }
     missing = [key for key, value in pairs.items() if not value]
     if missing:
-        print(f"policy is missing values the backlog stage needs: {', '.join(missing)}", file=sys.stderr)
+        print(
+            f"policy is missing values the backlog stage needs: {', '.join(missing)}",
+            file=sys.stderr,
+        )
         return 2
     cli = PLUGIN_ROOT / "bin" / "agile-backlog-toolkit"
-    set_args = [arg for key, value in pairs.items() for arg in ("--set", f"{key}={value}")]
-    subprocess.run([str(cli), "config", *set_args], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+    set_args = [
+        arg for key, value in pairs.items() for arg in ("--set", f"{key}={value}")
+    ]
+    subprocess.run(
+        [str(cli), "config", *set_args], cwd=repo, check=True, stdout=subprocess.DEVNULL
+    )
     backlog_config = repo / ".agile-backlog-toolkit" / "config.json"
     data = json.loads(backlog_config.read_text(encoding="utf-8"))
     data["provider_mode"] = "azure"
     backlog_config.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     print("configured .agile-backlog-toolkit/config.json (provider_mode azure)")
 
-    print(json.dumps({"next": ["run the review-setup skill", "restart the agent session"]}))
+    print(
+        json.dumps(
+            {"next": ["run the review-setup skill", "restart the agent session"]}
+        )
+    )
     return 0
 
 

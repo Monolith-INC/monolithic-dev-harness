@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
-from .artifact_validator import critiques_from_results
 from .ingest import ArtifactRecord
 from .reflection import ReflectionDecision
 

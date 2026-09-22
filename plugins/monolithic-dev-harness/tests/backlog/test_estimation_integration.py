@@ -5,11 +5,14 @@ from pathlib import Path
 
 from orchestrator_core.artifact_validator import validate_artifact
 from orchestrator_core.handlers import HANDLERS, handle_plan_capacity
-from orchestrator_core.ingest import coerce_float, ingest_from_text, ingest_file
+from orchestrator_core.ingest import coerce_float, ingest_file, ingest_from_text
 from orchestrator_core.project_config import update_config
 
 AZURE_PAYLOADS = {
-    "iteration": {"id": "it1", "attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"}},
+    "iteration": {
+        "id": "it1",
+        "attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"},
+    },
     "capacities": {
         "value": [
             {
@@ -19,7 +22,9 @@ AZURE_PAYLOADS = {
             }
         ]
     },
-    "team_settings": {"workingDays": ["monday", "tuesday", "wednesday", "thursday", "friday"]},
+    "team_settings": {
+        "workingDays": ["monday", "tuesday", "wednesday", "thursday", "friday"]
+    },
     "work_items": {
         "value": [
             {
@@ -37,7 +42,11 @@ AZURE_PAYLOADS = {
 
 def _effort_check(text):
     record = ingest_from_text(text)
-    return next(c for c in validate_artifact(record) if c.name == "content-effort-hours-plausible")
+    return next(
+        c
+        for c in validate_artifact(record)
+        if c.name == "content-effort-hours-plausible"
+    )
 
 
 class TestCoerceFloat(unittest.TestCase):
@@ -60,18 +69,25 @@ class TestIngestEffortHours(unittest.TestCase):
 
     def test_effort_hours_read_from_frontmatter(self):
         """The new key lands on the record."""
-        record = ingest_from_text("---\nstory_points: 3\neffort_hours: 5\n---\n\n# Draft\n")
+        record = ingest_from_text(
+            "---\nstory_points: 3\neffort_hours: 5\n---\n\n# Draft\n"
+        )
         self.assertEqual(record.effort_hours, 5.0)
 
     def test_absent_effort_hours_is_none_not_zero(self):
         """Unestimated must be distinguishable from estimated-at-zero."""
-        self.assertIsNone(ingest_from_text("---\nstory_points: 3\n---\n\n# Draft\n").effort_hours)
+        self.assertIsNone(
+            ingest_from_text("---\nstory_points: 3\n---\n\n# Draft\n").effort_hours
+        )
 
     def test_file_reads_effort_hours(self):
         """The file path and the text path agree."""
         with tempfile.TemporaryDirectory() as tmpdir:
             path = Path(tmpdir) / "1234-draft.md"
-            path.write_text("---\nstory_points: 2\neffort_hours: 3.5\n---\n\n# Draft\n", encoding="utf-8")
+            path.write_text(
+                "---\nstory_points: 2\neffort_hours: 3.5\n---\n\n# Draft\n",
+                encoding="utf-8",
+            )
             self.assertEqual(ingest_file(path).effort_hours, 3.5)
 
 
@@ -80,11 +96,16 @@ class TestEffortHoursCheck(unittest.TestCase):
 
     def test_missing_estimate_skips_rather_than_fails(self):
         """Leaving the field empty is honest and must not fail validation."""
-        self.assertEqual(_effort_check("---\nstory_points: 3\n---\n\n# X\n").result, "SKIP")
+        self.assertEqual(
+            _effort_check("---\nstory_points: 3\n---\n\n# X\n").result, "SKIP"
+        )
 
     def test_plausible_estimate_passes(self):
         """A figure inside the band for its points is fine."""
-        self.assertEqual(_effort_check("---\nstory_points: 3\neffort_hours: 5\n---\n\n# X\n").result, "PASS")
+        self.assertEqual(
+            _effort_check("---\nstory_points: 3\neffort_hours: 5\n---\n\n# X\n").result,
+            "PASS",
+        )
 
     def test_implausible_estimate_warns(self):
         """A figure contradicting its own points is surfaced, not blocked."""
@@ -94,11 +115,16 @@ class TestEffortHoursCheck(unittest.TestCase):
 
     def test_non_positive_estimate_warns(self):
         """Zero hours is not a valid estimate."""
-        self.assertEqual(_effort_check("---\nstory_points: 3\neffort_hours: 0\n---\n\n# X\n").result, "WARN")
+        self.assertEqual(
+            _effort_check("---\nstory_points: 3\neffort_hours: 0\n---\n\n# X\n").result,
+            "WARN",
+        )
 
     def test_hours_without_points_passes(self):
         """With nothing to compare against, the check cannot object."""
-        self.assertEqual(_effort_check("---\neffort_hours: 7\n---\n\n# X\n").result, "PASS")
+        self.assertEqual(
+            _effort_check("---\neffort_hours: 7\n---\n\n# X\n").result, "PASS"
+        )
 
     def test_check_never_fails_validation(self):
         """This check is advisory by design; it must never emit FAIL."""
@@ -120,7 +146,9 @@ class TestEffortHoursCheck(unittest.TestCase):
                 "---\nstory_points: 3\neffort_hours: 40\n---\n\n# X\n"
             )
             checks = validate_artifact(record, state_dir=state_dir)
-            effort = next(c for c in checks if c.name == "content-effort-hours-plausible")
+            effort = next(
+                c for c in checks if c.name == "content-effort-hours-plausible"
+            )
             self.assertEqual(effort.result, "PASS")
 
     def test_validator_reports_rejected_estimation_bands(self):
@@ -128,10 +156,13 @@ class TestEffortHoursCheck(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             state_dir = Path(tmpdir)
             (state_dir / "estimation.json").write_text(
-                json.dumps({"bands": {"3": [4, 6], "five": "invalid"}}), encoding="utf-8"
+                json.dumps({"bands": {"3": [4, 6], "five": "invalid"}}),
+                encoding="utf-8",
             )
             checks = validate_artifact(ingest_from_text("# X\n"), state_dir=state_dir)
-            diagnostic = next(c for c in checks if c.name == "config-estimation-bands-valid")
+            diagnostic = next(
+                c for c in checks if c.name == "config-estimation-bands-valid"
+            )
             self.assertEqual(diagnostic.result, "WARN")
             self.assertIn("five", diagnostic.detail)
 
@@ -174,10 +205,16 @@ class TestPlanCapacityHandler(unittest.TestCase):
     def test_overcommitment_is_reported(self):
         """Planning beyond capacity is flagged on the result."""
         payloads = json.loads(json.dumps(AZURE_PAYLOADS))
-        payloads["work_items"]["value"][0]["fields"]["Microsoft.VSTS.Scheduling.RemainingWork"] = 90
+        payloads["work_items"]["value"][0]["fields"][
+            "Microsoft.VSTS.Scheduling.RemainingWork"
+        ] = 90
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self._run(
-                {"iteration_ref": "it1", "provider": "azure-devops", "payloads": payloads},
+                {
+                    "iteration_ref": "it1",
+                    "provider": "azure-devops",
+                    "payloads": payloads,
+                },
                 Path(tmpdir),
             )
             self.assertTrue(result["overcommitted"])
@@ -196,7 +233,9 @@ class TestPlanCapacityHandler(unittest.TestCase):
             tickets = Path(tmpdir) / "Tickets" / "Ready"
             tickets.mkdir(parents=True)
             (tickets / "1234-draft.md").write_text(draft, encoding="utf-8")
-            result = self._run({"provider": "filesystem"}, Path(tmpdir), artifacts_path=".")
+            result = self._run(
+                {"provider": "filesystem"}, Path(tmpdir), artifacts_path="."
+            )
             self.assertTrue(result["suggestions"])
             for suggestion in result["suggestions"]:
                 self.assertTrue(suggestion["requires_confirmation"])
@@ -209,7 +248,9 @@ class TestPlanCapacityHandler(unittest.TestCase):
             tickets = Path(tmpdir) / "Tickets" / "Ready"
             tickets.mkdir(parents=True)
             (tickets / "1234-draft.md").write_text(draft, encoding="utf-8")
-            result = self._run({"provider": "filesystem"}, Path(tmpdir), artifacts_path=".")
+            result = self._run(
+                {"provider": "filesystem"}, Path(tmpdir), artifacts_path="."
+            )
             self.assertEqual(result["suggestions"], [])
 
     def test_filesystem_provider_refuses_to_guess_a_location(self):

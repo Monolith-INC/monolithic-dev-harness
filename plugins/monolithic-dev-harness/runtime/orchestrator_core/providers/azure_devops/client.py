@@ -57,7 +57,11 @@ class AzureCapacityClient:
         return bool(self.organization and self.project and self.pat)
 
     def _scope(self) -> str:
-        parts = [self.base_url, urllib.parse.quote(self.organization), urllib.parse.quote(self.project)]
+        parts = [
+            self.base_url,
+            urllib.parse.quote(self.organization),
+            urllib.parse.quote(self.project),
+        ]
         if self.team:
             parts.append(urllib.parse.quote(self.team))
         return "/".join(parts)
@@ -70,7 +74,11 @@ class AzureCapacityClient:
     def _get(self, path: str) -> tuple[Any | None, str | None]:
         """GET a JSON document. Returns (data, error) -- never raises."""
         if not self.configured:
-            missing = "organization/project" if not (self.organization and self.project) else "PAT"
+            missing = (
+                "organization/project"
+                if not (self.organization and self.project)
+                else "PAT"
+            )
             return None, f"Azure client not configured: missing {missing}"
 
         url = f"{self._scope()}/_apis/{path.lstrip('/')}"
@@ -94,10 +102,14 @@ class AzureCapacityClient:
     # -- endpoints ---------------------------------------------------------
 
     def get_capacities(self, iteration_id: str) -> tuple[Any | None, str | None]:
-        return self._get(f"work/teamsettings/iterations/{urllib.parse.quote(iteration_id)}/capacities")
+        return self._get(
+            f"work/teamsettings/iterations/{urllib.parse.quote(iteration_id)}/capacities"
+        )
 
     def get_iteration(self, iteration_id: str) -> tuple[Any | None, str | None]:
-        return self._get(f"work/teamsettings/iterations/{urllib.parse.quote(iteration_id)}")
+        return self._get(
+            f"work/teamsettings/iterations/{urllib.parse.quote(iteration_id)}"
+        )
 
     def list_iterations(self) -> tuple[Any | None, str | None]:
         """List the team's iterations, so a caller can find an id without hunting for a GUID."""
@@ -110,8 +122,12 @@ class AzureCapacityClient:
     def get_team_settings(self) -> tuple[Any | None, str | None]:
         return self._get("work/teamsettings")
 
-    def get_iteration_work_items(self, iteration_id: str) -> tuple[Any | None, str | None]:
-        return self._get(f"work/teamsettings/iterations/{urllib.parse.quote(iteration_id)}/workitems")
+    def get_iteration_work_items(
+        self, iteration_id: str
+    ) -> tuple[Any | None, str | None]:
+        return self._get(
+            f"work/teamsettings/iterations/{urllib.parse.quote(iteration_id)}/workitems"
+        )
 
     def get_work_items(self, ids: list[str]) -> tuple[Any | None, str | None]:
         if not ids:

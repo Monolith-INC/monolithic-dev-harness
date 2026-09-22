@@ -28,7 +28,11 @@ REALISTIC_CAPACITY_ENTRY = {
     "teamMember": {
         "displayName": "Chuck Reinhart",
         "url": "https://sps1.vssps.vsts.me/A.../_apis/Identities/73a2309e",
-        "_links": {"avatar": {"href": "https://codedev.ms/fabrikam/_apis/GraphProfile/MemberAvatars/aad.Nz"}},
+        "_links": {
+            "avatar": {
+                "href": "https://codedev.ms/fabrikam/_apis/GraphProfile/MemberAvatars/aad.Nz"
+            }
+        },
         "id": "73a2309e-d0b3-6bf5-9500-9af8bcc805ec",
         "uniqueName": "fabrikamfiber3@hotmail.com",
         "imageUrl": "https://codedev.ms/fabrikam/_api/_common/identityImage?id=73a2309e",
@@ -53,12 +57,16 @@ class TestCapacityMapperDegradation(unittest.TestCase):
 
     def test_unknown_top_level_keys_are_ignored(self):
         """Extra keys the API adds later must not break the mapping."""
-        entry = dict(REALISTIC_CAPACITY_ENTRY, somethingNew={"nested": True}, anotherField=42)
+        entry = dict(
+            REALISTIC_CAPACITY_ENTRY, somethingNew={"nested": True}, anotherField=42
+        )
         self.assertEqual(len(map_capacities([entry])), 1)
 
     def test_missing_team_member_yields_blank_identity_not_a_crash(self):
         """A capacity row with no identity still maps, with empty ids."""
-        members = map_capacities([{"activities": [{"capacityPerDay": 5, "name": "Dev"}]}])
+        members = map_capacities(
+            [{"activities": [{"capacityPerDay": 5, "name": "Dev"}]}]
+        )
         self.assertEqual(members[0].member_id, "")
         self.assertEqual(members[0].daily_hours, 5.0)
 
@@ -75,27 +83,60 @@ class TestCapacityMapperDegradation(unittest.TestCase):
 
     def test_capacity_per_day_as_a_string_is_coerced(self):
         """Numbers arriving as strings are coerced rather than dropped."""
-        members = map_capacities([{"teamMember": {"id": "u1"}, "activities": [{"capacityPerDay": "6", "name": "Dev"}]}])
+        members = map_capacities(
+            [
+                {
+                    "teamMember": {"id": "u1"},
+                    "activities": [{"capacityPerDay": "6", "name": "Dev"}],
+                }
+            ]
+        )
         self.assertEqual(members[0].daily_hours, 6.0)
 
     def test_null_capacity_becomes_zero_not_an_error(self):
         """A null capacity is zero hours, not a crash."""
-        members = map_capacities([{"teamMember": {"id": "u1"}, "activities": [{"capacityPerDay": None, "name": "Dev"}]}])
+        members = map_capacities(
+            [
+                {
+                    "teamMember": {"id": "u1"},
+                    "activities": [{"capacityPerDay": None, "name": "Dev"}],
+                }
+            ]
+        )
         self.assertEqual(members[0].daily_hours, 0.0)
 
     def test_missing_activity_name_is_the_unassigned_bucket(self):
         """An activity with no name is Azure's unassigned bucket."""
-        members = map_capacities([{"teamMember": {"id": "u1"}, "activities": [{"capacityPerDay": 6}]}])
+        members = map_capacities(
+            [{"teamMember": {"id": "u1"}, "activities": [{"capacityPerDay": 6}]}]
+        )
         self.assertTrue(members[0].activities[0].is_unassigned)
 
     def test_null_activity_name_does_not_become_the_string_none(self):
         """A null name must not render as the literal text 'None'."""
-        members = map_capacities([{"teamMember": {"id": "u1"}, "activities": [{"capacityPerDay": 6, "name": None}]}])
+        members = map_capacities(
+            [
+                {
+                    "teamMember": {"id": "u1"},
+                    "activities": [{"capacityPerDay": 6, "name": None}],
+                }
+            ]
+        )
         self.assertEqual(members[0].activities[0].name, "")
 
     def test_hostile_inputs_return_empty(self):
         """Anything unmappable yields nothing rather than raising."""
-        for payload in (None, "text", 42, [], {}, {"value": None}, [None], [[]], {"value": "text"}):
+        for payload in (
+            None,
+            "text",
+            42,
+            [],
+            {},
+            {"value": None},
+            [None],
+            [[]],
+            {"value": "text"},
+        ):
             self.assertEqual(map_capacities(payload), ())
 
 
@@ -109,7 +150,9 @@ class TestDaysOffDegradation(unittest.TestCase):
     def test_partial_range_uses_start_for_both_ends(self):
         """A start with no end is a single day off."""
         ranges = map_days_off([{"start": "2026-08-05T00:00:00Z"}])
-        self.assertEqual((ranges[0].start, ranges[0].end), (date(2026, 8, 5), date(2026, 8, 5)))
+        self.assertEqual(
+            (ranges[0].start, ranges[0].end), (date(2026, 8, 5), date(2026, 8, 5))
+        )
 
     def test_null_start_is_dropped(self):
         """A range with no start cannot be placed, so it is dropped."""
@@ -117,7 +160,9 @@ class TestDaysOffDegradation(unittest.TestCase):
 
     def test_mixed_valid_and_invalid_keeps_the_valid(self):
         """One bad entry must not discard the good ones."""
-        ranges = map_days_off([{"start": "bad"}, {"start": "2026-08-05", "end": "2026-08-06"}])
+        ranges = map_days_off(
+            [{"start": "bad"}, {"start": "2026-08-05", "end": "2026-08-06"}]
+        )
         self.assertEqual(len(ranges), 1)
 
     def test_hostile_inputs_return_empty(self):
@@ -135,14 +180,24 @@ class TestWeekendDegradation(unittest.TestCase):
 
     def test_case_and_whitespace_tolerated(self):
         """Day names arrive in mixed case in practice."""
-        self.assertEqual(map_weekend_days({"workingDays": [" Monday ", "TUESDAY"]}), (2, 3, 4, 5, 6))
+        self.assertEqual(
+            map_weekend_days({"workingDays": [" Monday ", "TUESDAY"]}), (2, 3, 4, 5, 6)
+        )
 
     def test_all_seven_days_worked_means_no_weekend(self):
         """An empty tuple is a real answer, distinct from None: this team has no weekend.
 
         Collapsing it into 'unknown' silently deleted two days of their capacity.
         """
-        every = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"]
+        every = [
+            "monday",
+            "tuesday",
+            "wednesday",
+            "thursday",
+            "friday",
+            "saturday",
+            "sunday",
+        ]
         self.assertEqual(map_weekend_days({"workingDays": every}), ())
 
     def test_empty_working_days_does_not_declare_every_day_a_weekend(self):
@@ -150,7 +205,9 @@ class TestWeekendDegradation(unittest.TestCase):
         self.assertIsNone(map_weekend_days({"workingDays": []}))
         iteration = map_iteration(
             "it1",
-            iteration={"attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"}},
+            iteration={
+                "attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"}
+            },
             team_settings={"workingDays": []},
         )
         self.assertEqual(len(iteration.working_days()), 10)
@@ -173,14 +230,21 @@ class TestWorkItemDegradation(unittest.TestCase):
 
     def test_assigned_to_as_identity_object_or_string(self):
         """Assignment arrives as an object normally and a string in older payloads."""
-        as_object = map_work_item({"id": 1, "fields": {"System.AssignedTo": {"displayName": "Ana"}}})
+        as_object = map_work_item(
+            {"id": 1, "fields": {"System.AssignedTo": {"displayName": "Ana"}}}
+        )
         as_string = map_work_item({"id": 1, "fields": {"System.AssignedTo": "Ana"}})
         self.assertEqual(as_object.assigned_to, "Ana")
         self.assertEqual(as_string.assigned_to, "Ana")
 
     def test_assigned_to_falls_back_to_unique_name(self):
         """An identity with no display name still identifies someone."""
-        item = map_work_item({"id": 1, "fields": {"System.AssignedTo": {"uniqueName": "ana@example.com"}}})
+        item = map_work_item(
+            {
+                "id": 1,
+                "fields": {"System.AssignedTo": {"uniqueName": "ana@example.com"}},
+            }
+        )
         self.assertEqual(item.assigned_to, "ana@example.com")
 
     def test_numeric_fields_as_strings_are_coerced(self):
@@ -199,7 +263,9 @@ class TestWorkItemDegradation(unittest.TestCase):
 
     def test_zero_remaining_work_is_preserved_not_treated_as_absent(self):
         """A Task genuinely at zero hours differs from one never estimated."""
-        item = map_work_item({"id": 1, "fields": {"Microsoft.VSTS.Scheduling.RemainingWork": 0}})
+        item = map_work_item(
+            {"id": 1, "fields": {"Microsoft.VSTS.Scheduling.RemainingWork": 0}}
+        )
         self.assertEqual(item.remaining_hours, 0.0)
         self.assertTrue(item.has_estimate)
 
@@ -214,7 +280,9 @@ class TestWorkItemDegradation(unittest.TestCase):
 
     def test_explicit_zero_points_are_preserved(self):
         """A zero must survive: it is falsy, so a naive `or` chain would discard it."""
-        item = map_work_item({"id": 1, "fields": {"Microsoft.VSTS.Scheduling.StoryPoints": 0}})
+        item = map_work_item(
+            {"id": 1, "fields": {"Microsoft.VSTS.Scheduling.StoryPoints": 0}}
+        )
         self.assertEqual(item.points, 0.0)
 
     def test_zero_points_do_not_fall_through_to_another_process_field(self):
@@ -237,21 +305,32 @@ class TestWorkItemDegradation(unittest.TestCase):
             "Microsoft.VSTS.Scheduling.StoryPoints": 3,
             "Microsoft.VSTS.Scheduling.Effort": 8,
         }
-        self.assertEqual(map_work_item({"id": 1, "fields": fields}, process="agile").points, 3.0)
-        self.assertEqual(map_work_item({"id": 1, "fields": fields}, process="scrum").points, 8.0)
+        self.assertEqual(
+            map_work_item({"id": 1, "fields": fields}, process="agile").points, 3.0
+        )
+        self.assertEqual(
+            map_work_item({"id": 1, "fields": fields}, process="scrum").points, 8.0
+        )
 
     def test_cmmi_discipline_is_read_as_activity(self):
         """CMMI names the activity field Discipline."""
-        item = map_work_item({"id": 1, "fields": {"Microsoft.VSTS.Common.Discipline": "Analysis"}}, process="cmmi")
+        item = map_work_item(
+            {"id": 1, "fields": {"Microsoft.VSTS.Common.Discipline": "Analysis"}},
+            process="cmmi",
+        )
         self.assertEqual(item.activity, "Analysis")
 
     def test_empty_iteration_path_becomes_none(self):
         """An empty string is not an iteration."""
-        self.assertIsNone(map_work_item({"id": 1, "fields": {"System.IterationPath": ""}}).iteration)
+        self.assertIsNone(
+            map_work_item({"id": 1, "fields": {"System.IterationPath": ""}}).iteration
+        )
 
     def test_unknown_fields_are_ignored(self):
         """Custom organisation fields must not break the mapping."""
-        item = map_work_item({"id": 1, "fields": {"Custom.MyOrg.Whatever": "x", "System.Title": "T"}})
+        item = map_work_item(
+            {"id": 1, "fields": {"Custom.MyOrg.Whatever": "x", "System.Title": "T"}}
+        )
         self.assertEqual(item.title, "T")
 
     def test_hostile_inputs_return_none_or_empty(self):
@@ -276,17 +355,34 @@ class TestMcpServerShapes(unittest.TestCase):
     CAPACITY = {
         "teamMembers": [
             {
-                "teamMember": {"displayName": "Ana", "id": "u1", "uniqueName": "ana@example.com"},
+                "teamMember": {
+                    "displayName": "Ana",
+                    "id": "u1",
+                    "uniqueName": "ana@example.com",
+                },
                 "activities": [{"capacityPerDay": 5, "name": ""}],
                 "daysOff": [],
             },
             {
-                "teamMember": {"displayName": "Bruno", "id": "u2", "uniqueName": "bruno@example.com"},
+                "teamMember": {
+                    "displayName": "Bruno",
+                    "id": "u2",
+                    "uniqueName": "bruno@example.com",
+                },
                 "activities": [{"capacityPerDay": 3, "name": ""}],
-                "daysOff": [{"start": "2026-07-23T00:00:00.000Z", "end": "2026-07-23T00:00:00.000Z"}],
+                "daysOff": [
+                    {
+                        "start": "2026-07-23T00:00:00.000Z",
+                        "end": "2026-07-23T00:00:00.000Z",
+                    }
+                ],
             },
             {
-                "teamMember": {"displayName": "Carla", "id": "u3", "uniqueName": "carla@example.com"},
+                "teamMember": {
+                    "displayName": "Carla",
+                    "id": "u3",
+                    "uniqueName": "carla@example.com",
+                },
                 "activities": [
                     {"capacityPerDay": 0, "name": "Design"},
                     {"capacityPerDay": 0, "name": "Testing"},
@@ -306,7 +402,9 @@ class TestMcpServerShapes(unittest.TestCase):
     def test_mapped_total_agrees_with_azures_own_total(self):
         """Azure reports its own daily total; the mapping must reproduce it."""
         members = map_capacities(self.CAPACITY)
-        self.assertEqual(sum(m.daily_hours for m in members), reported_daily_total(self.CAPACITY))
+        self.assertEqual(
+            sum(m.daily_hours for m in members), reported_daily_total(self.CAPACITY)
+        )
 
     def test_reported_total_absent_is_none(self):
         """A payload without the total simply offers no cross-check."""
@@ -377,7 +475,9 @@ class TestFullPipelineDegradation(unittest.TestCase):
 
     def test_plan_survives_entirely_malformed_payloads(self):
         """Garbage in produces an empty plan with warnings, never an exception."""
-        iteration = map_iteration("it1", iteration="garbage", capacities="garbage", team_settings="garbage")
+        iteration = map_iteration(
+            "it1", iteration="garbage", capacities="garbage", team_settings="garbage"
+        )
         plan = plan_iteration(iteration, map_work_items("garbage"))
         self.assertEqual(plan.available_hours, 0.0)
         self.assertIsNone(plan.utilisation)
@@ -395,10 +495,14 @@ class TestFullPipelineDegradation(unittest.TestCase):
         """Items with no hours must contribute zero, not a guessed value."""
         iteration = map_iteration(
             "it1",
-            iteration={"attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"}},
+            iteration={
+                "attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"}
+            },
             capacities=[REALISTIC_CAPACITY_ENTRY],
         )
-        items = map_work_items({"value": [{"id": 1, "fields": {}}, {"id": 2, "fields": {}}]})
+        items = map_work_items(
+            {"value": [{"id": 1, "fields": {}}, {"id": 2, "fields": {}}]}
+        )
         plan = plan_iteration(iteration, items)
         self.assertEqual(plan.planned_hours, 0.0)
         self.assertEqual(plan.items_estimated, 0)

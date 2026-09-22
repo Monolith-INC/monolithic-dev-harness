@@ -75,7 +75,14 @@ class TestDriverMax(unittest.TestCase):
 
     def test_points_are_the_max_not_the_sum(self):
         """One hard dimension must not be diluted by easy ones."""
-        scores = {"escopo": 1, "incerteza": 1, "integracoes": 1, "dados": 1, "qa": 5, "rollout": 1}
+        scores = {
+            "escopo": 1,
+            "incerteza": 1,
+            "integracoes": 1,
+            "dados": 1,
+            "qa": 5,
+            "rollout": 1,
+        }
         self.assertEqual(story_points_from_drivers(scores), 5.0)
 
     def test_two_fives_stay_five(self):
@@ -113,7 +120,9 @@ class TestEstimationConfig(unittest.TestCase):
 
     def test_parse_config_reads_custom_bands(self):
         """Team-supplied bands replace the seed and change provenance."""
-        config = parse_config({"bands": {"1": {"low": 2, "high": 3}}}, source="team.json")
+        config = parse_config(
+            {"bands": {"1": {"low": 2, "high": 3}}}, source="team.json"
+        )
         self.assertEqual(config.band_for(1.0), (2.0, 3.0))
         self.assertEqual(config.source, "team.json")
 
@@ -193,7 +202,9 @@ class TestEstimateHours(unittest.TestCase):
 
     def test_configured_bands_change_provenance(self):
         """Team config is a stronger claim than a seed default."""
-        config = parse_config({"bands": {"3": {"low": 4, "high": 6}}}, source="team.json")
+        config = parse_config(
+            {"bands": {"3": {"low": 4, "high": 6}}}, source="team.json"
+        )
         estimate = estimate_hours(3.0, config=config)
         self.assertEqual(estimate.provenance, PROVENANCE_CONFIG)
         self.assertTrue(estimate.is_suggestion_only)  # still no sample behind it
@@ -209,7 +220,9 @@ class TestEstimateHours(unittest.TestCase):
         """A usable calibration wins over any band table."""
         history = [CompletedItem(points=2.0, actual_hours=6.0) for _ in range(10)]
         calibration = calibrate(history)
-        estimate = estimate_hours(2.0, config=EstimationConfig(), calibration=calibration)
+        estimate = estimate_hours(
+            2.0, config=EstimationConfig(), calibration=calibration
+        )
         self.assertEqual(estimate.provenance, PROVENANCE_CALIBRATED)
         self.assertEqual(estimate.hours, 6.0)
         self.assertFalse(estimate.is_suggestion_only)
@@ -268,7 +281,10 @@ class TestCalibration(unittest.TestCase):
     def test_window_keeps_only_recent_iterations(self):
         """Older iterations fall out of the rolling window."""
         history = [CompletedItem(points=1.0, actual_hours=100.0, iteration="s1")]
-        history += [CompletedItem(points=1.0, actual_hours=2.0, iteration=f"s{n}") for n in range(2, 6)]
+        history += [
+            CompletedItem(points=1.0, actual_hours=2.0, iteration=f"s{n}")
+            for n in range(2, 6)
+        ]
         calibration = calibrate(
             history, settings=CalibrationSettings(min_sample=1, window_iterations=2)
         )
@@ -304,8 +320,12 @@ class TestHalstead(unittest.TestCase):
     def test_over_and_under_estimated(self):
         """Divergence beyond the tolerance band is named in both directions."""
         effort = STROUD_NUMBER * 3600.0  # derives 1.0h
-        self.assertEqual(compare_to_halstead(10.0, effort=effort).verdict, "over-estimated")
-        self.assertEqual(compare_to_halstead(0.1, effort=effort).verdict, "under-estimated")
+        self.assertEqual(
+            compare_to_halstead(10.0, effort=effort).verdict, "over-estimated"
+        )
+        self.assertEqual(
+            compare_to_halstead(0.1, effort=effort).verdict, "under-estimated"
+        )
 
     def test_comparison_returns_none_without_inputs(self):
         """No effort or no estimate means no comparison."""

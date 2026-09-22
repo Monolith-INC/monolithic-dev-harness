@@ -58,7 +58,9 @@ class TestNoAssumedArtifactsLocation(ConfigTestCase):
         source = Path(__file__).resolve().parents[2] / (
             "runtime/orchestrator_core/project_config.py"
         )
-        names = re.findall(r'^([A-Z_]+)\s*=\s*[("\']', source.read_text(encoding="utf-8"), re.M)
+        names = re.findall(
+            r'^([A-Z_]+)\s*=\s*[("\']', source.read_text(encoding="utf-8"), re.M
+        )
         self.assertIn("PLUGIN_DIRNAME", names)
         self.assertEqual(PLUGIN_DIRNAME, ".agile-backlog-toolkit")
         # No constant may hold a candidate location for user artifacts.
@@ -76,7 +78,9 @@ class TestNoAssumedArtifactsLocation(ConfigTestCase):
         """Resolving a path must not bring it into existence."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            resolved = ProjectConfig(artifacts_path="nowhere/yet").resolve_artifacts_dir(root)
+            resolved = ProjectConfig(
+                artifacts_path="nowhere/yet"
+            ).resolve_artifacts_dir(root)
             self.assertEqual(resolved, root / "nowhere" / "yet")
             self.assertFalse(resolved.exists())
 
@@ -89,16 +93,22 @@ class TestArtifactsPathResolution(ConfigTestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             config = ProjectConfig(artifacts_path="docs/tickets")
-            self.assertEqual(config.resolve_artifacts_dir(root), root / "docs" / "tickets")
+            self.assertEqual(
+                config.resolve_artifacts_dir(root), root / "docs" / "tickets"
+            )
 
     def test_absolute_path_is_used_as_given(self):
         """An absolute path may point anywhere the user likes, including outside the repo."""
         config = ProjectConfig(artifacts_path="/somewhere/else")
-        self.assertEqual(config.resolve_artifacts_dir(Path("/project")), Path("/somewhere/else"))
+        self.assertEqual(
+            config.resolve_artifacts_dir(Path("/project")), Path("/somewhere/else")
+        )
 
     def test_user_home_is_expanded(self):
         """A ~ path resolves to the user's home."""
-        resolved = ProjectConfig(artifacts_path="~/notes").resolve_artifacts_dir(Path("/project"))
+        resolved = ProjectConfig(artifacts_path="~/notes").resolve_artifacts_dir(
+            Path("/project")
+        )
         self.assertEqual(resolved, Path.home() / "notes")
 
     def test_the_plugin_does_not_care_what_is_at_the_path(self):
@@ -122,7 +132,12 @@ class TestConfigFile(ConfigTestCase):
                 {
                     "artifacts_path": "docs/backlog",
                     "provider_mode": "both",
-                    "azure": {"org": "o", "project": "p", "team": "t", "process": "scrum"},
+                    "azure": {
+                        "org": "o",
+                        "project": "p",
+                        "team": "t",
+                        "process": "scrum",
+                    },
                     "linear": {"team": "linear-team"},
                 },
             )
@@ -165,14 +180,19 @@ class TestFallbackSources(ConfigTestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             _write(config_path(root), {"storage": "SomeFolder", "output_dir": "Other"})
-            _write(root / ".agile-backlog-toolkit.install.json", {"output_folder": "Third"})
+            _write(
+                root / ".agile-backlog-toolkit.install.json", {"output_folder": "Third"}
+            )
             self.assertIsNone(load_project_config(root).artifacts_path)
 
     def test_install_manifest_supplies_org(self):
         """A project installed by an older version still knows its organisation."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            _write(root / ".agile-backlog-toolkit.install.json", {"azure_devops_org": "legacy-org"})
+            _write(
+                root / ".agile-backlog-toolkit.install.json",
+                {"azure_devops_org": "legacy-org"},
+            )
             self.assertEqual(load_project_config(root).azure.org, "legacy-org")
 
     def test_canonical_file_wins_over_fallbacks(self):
@@ -180,7 +200,10 @@ class TestFallbackSources(ConfigTestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             _write(config_path(root), {"azure": {"org": "current"}})
-            _write(root / ".agile-backlog-toolkit.install.json", {"azure_devops_org": "stale"})
+            _write(
+                root / ".agile-backlog-toolkit.install.json",
+                {"azure_devops_org": "stale"},
+            )
             self.assertEqual(load_project_config(root).azure.org, "current")
 
     def test_sources_compose_across_files(self):
@@ -188,7 +211,9 @@ class TestFallbackSources(ConfigTestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             _write(config_path(root), {"azure": {"project": "p"}})
-            _write(root / ".agile-backlog-toolkit.install.json", {"azure_devops_org": "o"})
+            _write(
+                root / ".agile-backlog-toolkit.install.json", {"azure_devops_org": "o"}
+            )
             config = load_project_config(root)
             self.assertEqual((config.azure.org, config.azure.project), ("o", "p"))
 
@@ -198,27 +223,44 @@ class TestOrgFromMcp(ConfigTestCase):
 
     def test_npx_and_pinned_node_invocations(self):
         """The org is the trailing argument in both launch forms."""
-        npx = {"mcpServers": {"azure-devops": {"args": ["-y", "@azure-devops/mcp@2.7.0", "my-org"]}}}
-        node = {"mcpServers": {"azure-devops": {"args": ["/x/dist/index.js", "my-org"]}}}
+        npx = {
+            "mcpServers": {
+                "azure-devops": {"args": ["-y", "@azure-devops/mcp@2.7.0", "my-org"]}
+            }
+        }
+        node = {
+            "mcpServers": {"azure-devops": {"args": ["/x/dist/index.js", "my-org"]}}
+        }
         self.assertEqual(org_from_mcp(npx), "my-org")
         self.assertEqual(org_from_mcp(node), "my-org")
 
     def test_alternate_server_key(self):
         """Some setups name the server 'Azure DevOps'."""
         self.assertEqual(
-            org_from_mcp({"mcpServers": {"Azure DevOps": {"args": ["/x/dist/index.js", "org"]}}}), "org"
+            org_from_mcp(
+                {"mcpServers": {"Azure DevOps": {"args": ["/x/dist/index.js", "org"]}}}
+            ),
+            "org",
         )
 
     def test_hostile_inputs(self):
         """Malformed MCP files yield nothing rather than raising."""
-        for payload in (None, {}, {"mcpServers": None}, {"mcpServers": {"azure-devops": "text"}}):
+        for payload in (
+            None,
+            {},
+            {"mcpServers": None},
+            {"mcpServers": {"azure-devops": "text"}},
+        ):
             self.assertIsNone(org_from_mcp(payload))
 
     def test_org_recovered_from_mcp_wiring(self):
         """A project with only MCP wired still knows its organisation."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            _write(root / ".mcp.json", {"mcpServers": {"azure-devops": {"args": ["/x.js", "my-org"]}}})
+            _write(
+                root / ".mcp.json",
+                {"mcpServers": {"azure-devops": {"args": ["/x.js", "my-org"]}}},
+            )
             config = load_project_config(root)
             self.assertEqual(config.azure.org, "my-org")
             self.assertIn(".mcp.json", config.sources)
@@ -240,8 +282,12 @@ class TestEnvironmentOverrides(ConfigTestCase):
     def test_artifacts_path_can_be_overridden(self):
         """A one-off run can redirect output without editing anything."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            with patch.dict(os.environ, {"AGILE_WORKFLOW_ARTIFACTS_PATH": "/tmp/elsewhere"}):
-                self.assertEqual(load_project_config(Path(tmpdir)).artifacts_path, "/tmp/elsewhere")
+            with patch.dict(
+                os.environ, {"AGILE_WORKFLOW_ARTIFACTS_PATH": "/tmp/elsewhere"}
+            ):
+                self.assertEqual(
+                    load_project_config(Path(tmpdir)).artifacts_path, "/tmp/elsewhere"
+                )
 
     def test_ado_prefixed_vars_recognised(self):
         """The ADO_* names used by the live smoke test also work."""
@@ -274,7 +320,10 @@ class TestPersistence(ConfigTestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             save_project_config(
-                root, ProjectConfig(artifacts_path="docs", azure=AzureConfig(org="o", project="p"))
+                root,
+                ProjectConfig(
+                    artifacts_path="docs", azure=AzureConfig(org="o", project="p")
+                ),
             )
             config = load_project_config(root)
             self.assertEqual(config.artifacts_path, "docs")

@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import Any, Literal
 
 from .ingest import FILENAME_RE, ArtifactRecord
 
@@ -85,7 +86,7 @@ def _section_present(body: str, label: str) -> bool:
 
 
 def _section_content(body: str, label: str) -> str:
-    pattern = rf"(?im)^#{{1,3}}\s+{re.escape(label)}\s*$\n(.*?)(?=^#{1,3}\s|\Z)"
+    pattern = rf"(?im)^#{{1,3}}\s+{re.escape(label)}\s*$\n(.*?)(?=^#{1, 3}\s|\Z)"
     match = re.search(pattern, body, re.DOTALL)
     return match.group(1).strip() if match else ""
 
@@ -95,10 +96,14 @@ def _word_count(text: str) -> int:
 
 
 def _extract_h2_headings(body: str) -> list[str]:
-    return [m.group(1).strip() for m in re.finditer(r"^#{2}\s+(.+)$", body, re.MULTILINE)]
+    return [
+        m.group(1).strip() for m in re.finditer(r"^#{2}\s+(.+)$", body, re.MULTILINE)
+    ]
 
 
-BodyFormat = Literal["raw_generate", "enriched_story", "enriched_feature", "enriched_epic", "unknown"]
+BodyFormat = Literal[
+    "raw_generate", "enriched_story", "enriched_feature", "enriched_epic", "unknown"
+]
 
 
 def _detect_body_format(body: str) -> BodyFormat:
@@ -108,7 +113,9 @@ def _detect_body_format(body: str) -> BodyFormat:
     if "Requisitos" in h2:
         return "raw_generate"
     all_story_sections = {
-        section for sections in STORY_SECTIONS_BY_LANGUAGE.values() for section in sections
+        section
+        for sections in STORY_SECTIONS_BY_LANGUAGE.values()
+        for section in sections
     }
     if any(section in h2 for section in all_story_sections):
         return "enriched_story"
@@ -120,7 +127,11 @@ def _detect_body_format(body: str) -> BodyFormat:
 
 
 def _legacy_schema_message(frontmatter: dict[str, Any]) -> str | None:
-    legacy = [key for key in ("azure_id", "parent_feature", "parent_epic") if key in frontmatter]
+    legacy = [
+        key
+        for key in ("azure_id", "parent_feature", "parent_epic")
+        if key in frontmatter
+    ]
     if not legacy:
         return None
     return (
@@ -130,7 +141,9 @@ def _legacy_schema_message(frontmatter: dict[str, Any]) -> str | None:
     )
 
 
-def _effort_hours_check(record: ArtifactRecord, state_dir: Path | None = None) -> CheckResult:
+def _effort_hours_check(
+    record: ArtifactRecord, state_dir: Path | None = None
+) -> CheckResult:
     """Compare a declared duration against the band for its point value.
 
     Advisory only. An unestimated item SKIPs rather than FAILs: leaving the field empty is
@@ -145,20 +158,34 @@ def _effort_hours_check(record: ArtifactRecord, state_dir: Path | None = None) -
 
     hours = record.effort_hours
     if hours is None:
-        return CheckResult("content-effort-hours-plausible", "SKIP", "no effort estimate recorded", "CONTENT")
+        return CheckResult(
+            "content-effort-hours-plausible",
+            "SKIP",
+            "no effort estimate recorded",
+            "CONTENT",
+        )
     if hours <= 0:
         return CheckResult(
-            "content-effort-hours-plausible", "WARN", f"effort_hours is {hours:g}; expected a positive number", "CONTENT"
+            "content-effort-hours-plausible",
+            "WARN",
+            f"effort_hours is {hours:g}; expected a positive number",
+            "CONTENT",
         )
 
     expected = estimate_hours(record.story_points, config=config)
     if expected is None:
         return CheckResult(
-            "content-effort-hours-plausible", "PASS", f"{hours:g}h (no story points to compare against)", "CONTENT"
+            "content-effort-hours-plausible",
+            "PASS",
+            f"{hours:g}h (no story points to compare against)",
+            "CONTENT",
         )
     if expected.low <= hours <= expected.high:
         return CheckResult(
-            "content-effort-hours-plausible", "PASS", f"{hours:g}h within {expected.low:g}-{expected.high:g}h", "CONTENT"
+            "content-effort-hours-plausible",
+            "PASS",
+            f"{hours:g}h within {expected.low:g}-{expected.high:g}h",
+            "CONTENT",
         )
     return CheckResult(
         "content-effort-hours-plausible",
@@ -225,7 +252,9 @@ def validate_artifact(
             CheckResult(
                 "frontmatter-type-present",
                 "PASS" if record.frontmatter.get("type") else "FAIL",
-                "" if record.frontmatter.get("type") else "`type:` key missing from frontmatter",
+                ""
+                if record.frontmatter.get("type")
+                else "`type:` key missing from frontmatter",
                 "STRUCTURAL",
             )
         )
@@ -233,7 +262,9 @@ def validate_artifact(
             CheckResult(
                 "frontmatter-status-absent",
                 "FAIL" if "status" in record.frontmatter else "PASS",
-                "`status:` found in frontmatter" if "status" in record.frontmatter else "",
+                "`status:` found in frontmatter"
+                if "status" in record.frontmatter
+                else "",
                 "STRUCTURAL",
             )
         )
@@ -243,14 +274,22 @@ def validate_artifact(
                 CheckResult(
                     "filename-regex",
                     "PASS" if ok else "FAIL",
-                    "" if ok else f"filename `{record.filename}` does not match required pattern",
+                    ""
+                    if ok
+                    else f"filename `{record.filename}` does not match required pattern",
                     "STRUCTURAL",
                 )
             )
     else:
-        for name in ("frontmatter-type-present", "frontmatter-status-absent", "filename-regex"):
+        for name in (
+            "frontmatter-type-present",
+            "frontmatter-status-absent",
+            "filename-regex",
+        ):
             results.append(
-                CheckResult(name, "SKIP", "source is Azure, not a local file", "STRUCTURAL")
+                CheckResult(
+                    name, "SKIP", "source is Azure, not a local file", "STRUCTURAL"
+                )
             )
 
     body_format = _detect_body_format(record.body)
@@ -272,10 +311,14 @@ def validate_artifact(
 
             fmt_result = (
                 validate_ticket_structure_body(record.body, language=language)
-                if all(_section_present(record.body, section) for section in story_sections)
+                if all(
+                    _section_present(record.body, section) for section in story_sections
+                )
                 else validate_enrich_user_story_body(record.body)
             )
-            _append_format_validation(results, name="body-enriched-story-format", fmt_result=fmt_result)
+            _append_format_validation(
+                results, name="body-enriched-story-format", fmt_result=fmt_result
+            )
         else:
             missing_sections: list[str] = []
             for section in story_sections:
@@ -407,7 +450,9 @@ def validate_artifact(
             CheckResult(
                 "content-complexidade-breakdown",
                 "PASS" if drivers_ok else "FAIL",
-                "" if drivers_ok else f"missing one or more driver keywords in {section_labels['complexity']} section",
+                ""
+                if drivers_ok
+                else f"missing one or more driver keywords in {section_labels['complexity']} section",
                 "CONTENT",
             )
         )
@@ -421,12 +466,16 @@ def validate_artifact(
                 "CONTENT",
             )
         )
-        desc_orig = _section_content(record.body, section_labels["original_description"])
+        desc_orig = _section_content(
+            record.body, section_labels["original_description"]
+        )
         results.append(
             CheckResult(
                 "content-descricao-original-present",
                 "PASS" if desc_orig else "FAIL",
-                "" if desc_orig else f"{section_labels['original_description']} section is empty",
+                ""
+                if desc_orig
+                else f"{section_labels['original_description']} section is empty",
                 "CONTENT",
             )
         )

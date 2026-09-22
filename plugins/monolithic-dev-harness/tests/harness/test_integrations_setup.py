@@ -23,10 +23,19 @@ class TestConfigureIntegrations(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.repo = Path(self._tmp.name)
-        subprocess.run(["git", "init", "-q", "-b", "develop", str(self.repo)], check=True)
         subprocess.run(
-            ["git", "-C", str(self.repo), "remote", "add", "origin",
-             "https://dev.azure.com/contoso/shop/_git/shop-monorepo"],
+            ["git", "init", "-q", "-b", "develop", str(self.repo)], check=True
+        )
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(self.repo),
+                "remote",
+                "add",
+                "origin",
+                "https://dev.azure.com/contoso/shop/_git/shop-monorepo",
+            ],
             check=True,
         )
 
@@ -38,8 +47,12 @@ class TestConfigureIntegrations(unittest.TestCase):
             if "AZURE_DEVOPS_ORG" not in env:
                 os.environ.pop("AZURE_DEVOPS_ORG", None)
             path = configure_integrations(
-                self.repo, tracker="azure_devops", scm="azure_repos",
-                branch_template="{category}/{key}-{slug}", discover=False, runtime_dir=PLUGIN_ROOT,
+                self.repo,
+                tracker="azure_devops",
+                scm="azure_repos",
+                branch_template="{category}/{key}-{slug}",
+                discover=False,
+                runtime_dir=PLUGIN_ROOT,
             )
         return json.loads(path.read_text(encoding="utf-8"))
 
@@ -57,8 +70,13 @@ class TestConfigureIntegrations(unittest.TestCase):
 
     def test_branch_template_must_carry_the_work_item_key(self) -> None:
         with self.assertRaises(ValueError):
-            configure_integrations(self.repo, tracker="azure_devops", scm="azure_repos",
-                                   branch_template="{category}/{slug}", discover=False)
+            configure_integrations(
+                self.repo,
+                tracker="azure_devops",
+                scm="azure_repos",
+                branch_template="{category}/{slug}",
+                discover=False,
+            )
 
 
 if __name__ == "__main__":

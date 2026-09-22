@@ -28,7 +28,9 @@ def state_dir(repo: Path) -> Path:
 def _write(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    tmp.write_text(
+        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
     tmp.replace(path)
 
 
@@ -108,7 +110,8 @@ def record_manual(repo: Path, name: str, tree: str, note: str) -> None:
 
 
 def has_manual(repo: Path, name: str, tree: str) -> bool:
-    return (state_dir(repo) / "manual" / f"{safe_name(name)}-{tree}.json").is_file()
+    record = _read(state_dir(repo) / "manual" / f"{safe_name(name)}-{tree}.json")
+    return bool(record) and record.get("tree") == tree and record.get("name") == name
 
 
 # --- check evidence (guarded-paths, draft-reviewed-prs) ---------------------------------------
@@ -134,7 +137,15 @@ def record_review(repo: Path, head: str, verdict: str, summary: str) -> Path:
     if verdict not in {"ready", "blocked"}:
         raise ValueError("verdict must be 'ready' or 'blocked'")
     path = state_dir(repo) / "review" / f"{head}.json"
-    _write(path, {"head": head, "verdict": verdict, "summary": summary, "recorded": _now().isoformat()})
+    _write(
+        path,
+        {
+            "head": head,
+            "verdict": verdict,
+            "summary": summary,
+            "recorded": _now().isoformat(),
+        },
+    )
     return path
 
 

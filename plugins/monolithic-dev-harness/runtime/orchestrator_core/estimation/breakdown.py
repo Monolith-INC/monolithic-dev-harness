@@ -24,7 +24,6 @@ from ..capacity.planner import MemberAvailability
 from .config import EstimationConfig
 from .mapping import HourEstimate, distribute_hours, estimate_hours
 
-
 # Every breakdown appends the same three tasks, and they are not the same size as the work
 # they bracket. Splitting hours evenly across all of them would take real implementation time
 # and hand it to a Done marker.
@@ -54,7 +53,10 @@ def task_role(title: str | None) -> str:
     if not text:
         return ROLE_IMPLEMENTATION
     for role, names in _ROLE_TITLES.items():
-        if any(text == name or text.startswith(f"{name} ") or text.startswith(f"{name}:") for name in names):
+        if any(
+            text == name or text.startswith(f"{name} ") or text.startswith(f"{name}:")
+            for name in names
+        ):
             return role
     return ROLE_IMPLEMENTATION
 
@@ -190,7 +192,9 @@ class BreakdownEstimate:
 
         if self.blocked:
             lines.append("")
-            lines.append(f"  BLOCKED — exceeds remaining capacity by {self.overflow_hours:g}h.")
+            lines.append(
+                f"  BLOCKED — exceeds remaining capacity by {self.overflow_hours:g}h."
+            )
             lines.append("  Choose one before anything is written:")
             lines.extend(f"    - {option}" for option in self.resolution_options())
         elif self.changes:
@@ -237,7 +241,7 @@ def estimate_breakdown(
             previous_hours=task.current_hours,
             role=task.role,
         )
-        for task, hours in zip(tasks, shares)
+        for task, hours in zip(tasks, shares, strict=True)
     )
 
     warnings: list[str] = []

@@ -52,8 +52,24 @@ def load_policy(repo_root: Path) -> dict[str, Any]:
     except (OSError, json.JSONDecodeError) as exc:
         raise PolicyError(f"{POLICY_RELATIVE_PATH} is not valid JSON: {exc}") from exc
     if not isinstance(payload, dict) or payload.get("schemaVersion") != 1:
-        raise PolicyError(f"{POLICY_RELATIVE_PATH} must be an object with schemaVersion 1")
-    return _merge(DEFAULT_POLICY, payload)
+        raise PolicyError(
+            f"{POLICY_RELATIVE_PATH} must be an object with schemaVersion 1"
+        )
+    policy = _merge(DEFAULT_POLICY, payload)
+    check_names = {check.get("name") for check in policy.get("checks", [])}
+    for guard in policy.get("guarded_paths", []):
+        kind, _, name = str(guard.get("evidence", "")).partition(":")
+        if kind not in {"check", "manual"} or not name:
+            raise PolicyError(
+                f"guarded path {guard.get('path')!r}: evidence must be "
+                "check:<name> or manual:<name>"
+            )
+        if kind == "check" and name not in check_names:
+            raise PolicyError(
+                f"guarded path {guard.get('path')!r} needs check {name!r}, "
+                "which is not in checks"
+            )
+    return policy
 
 
 def protected_ids(policy: dict[str, Any]) -> set[int]:

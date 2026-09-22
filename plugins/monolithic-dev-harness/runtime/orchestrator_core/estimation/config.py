@@ -41,7 +41,9 @@ class CalibrationSettings:
 @dataclass(frozen=True)
 class EstimationConfig:
     scale: PointScale = DEFAULT_SCALE
-    bands: dict[float, tuple[float, float]] = field(default_factory=lambda: dict(SEED_BANDS))
+    bands: dict[float, tuple[float, float]] = field(
+        default_factory=lambda: dict(SEED_BANDS)
+    )
     calibration: CalibrationSettings = field(default_factory=CalibrationSettings)
     hours_per_day: float = 6.0
     source: str = "seed-default"

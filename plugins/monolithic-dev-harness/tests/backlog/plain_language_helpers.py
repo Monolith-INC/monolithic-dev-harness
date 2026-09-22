@@ -14,7 +14,9 @@ GLOSSARY_PATH = (
 )
 GLOSSARY_DOC_PATH = "./references/assets/tech-glossary-en-pt-br.json"
 
-INTEGRATION_NOTES_REL = "../generate-plain-language-documentation/references/integration-notes.md"
+INTEGRATION_NOTES_REL = (
+    "../generate-plain-language-documentation/references/integration-notes.md"
+)
 
 REQUIRED_PHASES = (
     "PHASE 0",

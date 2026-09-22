@@ -32,9 +32,13 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
 from harness import gitstate, rules, state  # noqa: E402
 from harness.config import POLICY_RELATIVE_PATH, PolicyError, load_policy  # noqa: E402
 
-APPROVE_RE = re.compile(r"\b(?:approve|aprovo|aprovado|aprovar)\s+(HB-[A-Z0-9]{4,12})\b", re.IGNORECASE)
+APPROVE_RE = re.compile(
+    r"\b(?:approve|aprovo|aprovado|aprovar)\s+(HB-[A-Z0-9]{4,12})\b", re.IGNORECASE
+)
 REVOKE_RE = re.compile(r"\bharness\s+revoke\b", re.IGNORECASE)
-MANUAL_RE = re.compile(r"\bharness\s+manual-check\s+([A-Za-z0-9._-]{1,60})\s+ok\b", re.IGNORECASE)
+MANUAL_RE = re.compile(
+    r"\bharness\s+manual-check\s+([A-Za-z0-9._-]{1,60})\s+ok\b", re.IGNORECASE
+)
 
 
 def _workspace(payload: dict[str, Any]) -> Path:
@@ -55,15 +59,24 @@ def _workspace(payload: dict[str, Any]) -> Path:
 def _tool_call(host: str, event: str, payload: dict[str, Any]) -> rules.ToolCall:
     if host == "cursor" and event == "shell":
         return rules.make_call("Shell", {"command": payload.get("command", "")})
-    tool_input = payload.get("tool_input") or payload.get("toolInput") or payload.get("input") or {}
+    tool_input = (
+        payload.get("tool_input")
+        or payload.get("toolInput")
+        or payload.get("input")
+        or {}
+    )
     if isinstance(tool_input, str):
         try:
             tool_input = json.loads(tool_input)
         except json.JSONDecodeError:
             tool_input = {"raw": tool_input}
-    name = payload.get("tool_name") or payload.get("toolName") or payload.get("tool") or ""
+    name = (
+        payload.get("tool_name") or payload.get("toolName") or payload.get("tool") or ""
+    )
     server = payload.get("server") or payload.get("server_name") or ""
-    return rules.make_call(str(name), tool_input if isinstance(tool_input, dict) else {}, str(server))
+    return rules.make_call(
+        str(name), tool_input if isinstance(tool_input, dict) else {}, str(server)
+    )
 
 
 def _emit_decision(host: str, decision: rules.Decision) -> None:
@@ -89,11 +102,15 @@ def _emit_decision(host: str, decision: rules.Decision) -> None:
     print(json.dumps(response))
 
 
-def _delegate_to_workflow_policy(host: str, payload: dict[str, Any], call: rules.ToolCall) -> int:
+def _delegate_to_workflow_policy(
+    host: str, payload: dict[str, Any], call: rules.ToolCall
+) -> int:
     os.environ["WORKFLOW_HOOK_CLIENT"] = host
     try:
         from scripts.hook_runtime import run
-    except Exception as exc:  # the runtime is part of this plugin; failing to import is a defect
+    except (
+        Exception
+    ) as exc:  # the runtime is part of this plugin; failing to import is a defect
         return _fail(host, call, f"workflow policy runtime unavailable: {exc}")
     try:
         return run(host, payload)
@@ -104,7 +121,13 @@ def _delegate_to_workflow_policy(host: str, payload: dict[str, Any], call: rules
 def _fail(host: str, call: rules.ToolCall, message: str) -> int:
     """Fail closed for writes, open for reads, so a broken rule never silently permits a write."""
     if rules.is_write_class(call):
-        _emit_decision(host, rules.Decision.deny("harness-error", f"{message}. Write-class calls are blocked until this is fixed."))
+        _emit_decision(
+            host,
+            rules.Decision.deny(
+                "harness-error",
+                f"{message}. Write-class calls are blocked until this is fixed.",
+            ),
+        )
     else:
         _emit_decision(host, rules.Decision.allow())
     return 0
@@ -144,10 +167,14 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     except (PolicyError, ValueError):
         window = 20
     if REVOKE_RE.search(prompt):
-        notes.append(f"[harness] revoked {state.revoke_approvals(repo)} open approval window(s).")
+        notes.append(
+            f"[harness] revoked {state.revoke_approvals(repo)} open approval window(s)."
+        )
     for approval_id in dict.fromkeys(m.upper() for m in APPROVE_RE.findall(prompt)):
         state.open_approval(repo, approval_id, window)
-        notes.append(f"[harness] approval {approval_id} recorded; tracker/SCM writes are open for {window} minutes.")
+        notes.append(
+            f"[harness] approval {approval_id} recorded; tracker/SCM writes are open for {window} minutes."
+        )
     for name in MANUAL_RE.findall(prompt):
         try:
             tree = gitstate.index_tree(repo)
@@ -155,7 +182,9 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
             notes.append(f"[harness] manual check {name} NOT recorded: {exc}")
             continue
         state.record_manual(repo, name, tree, prompt[:500])
-        notes.append(f"[harness] manual check {name} recorded for staged tree {tree[:12]}.")
+        notes.append(
+            f"[harness] manual check {name} recorded for staged tree {tree[:12]}."
+        )
     if host == "cursor":
         print(json.dumps({"continue": True}))
     elif notes:
@@ -166,7 +195,9 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", choices=("claude", "cursor"), required=True)
-    parser.add_argument("--event", choices=("pre-tool", "prompt", "shell", "mcp"), required=True)
+    parser.add_argument(
+        "--event", choices=("pre-tool", "prompt", "shell", "mcp"), required=True
+    )
     args = parser.parse_args(argv)
     try:
         payload = json.load(sys.stdin)

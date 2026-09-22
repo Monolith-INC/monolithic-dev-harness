@@ -50,7 +50,9 @@ def _identities(member: MemberCapacity) -> set[str]:
     return forms
 
 
-def find_member(iteration: IterationCapacity, reference: str | None) -> MemberCapacity | None:
+def find_member(
+    iteration: IterationCapacity, reference: str | None
+) -> MemberCapacity | None:
     """Match a work-item assignee to a team member.
 
     Tries the id, the display name, and the local part of an email-style unique name.
@@ -127,7 +129,9 @@ def available_by_activity(iteration: IterationCapacity) -> dict[str, float]:
             continue
         for activity in member.activities:
             key = UNASSIGNED_ACTIVITY if activity.is_unassigned else activity.name
-            totals[key] = round(totals.get(key, 0.0) + activity.capacity_per_day * days, 2)
+            totals[key] = round(
+                totals.get(key, 0.0) + activity.capacity_per_day * days, 2
+            )
     return totals
 
 
@@ -137,7 +141,11 @@ def planned_by_activity(items: list[EstimableItem]) -> dict[str, float]:
         hours = item.planned_hours
         if hours is None:
             continue
-        key = item.activity.strip() if item.activity and item.activity.strip() else UNASSIGNED_ACTIVITY
+        key = (
+            item.activity.strip()
+            if item.activity and item.activity.strip()
+            else UNASSIGNED_ACTIVITY
+        )
         totals[key] = round(totals.get(key, 0.0) + hours, 2)
     return totals
 
@@ -153,7 +161,9 @@ def _build_warnings(
     warnings: list[str] = []
 
     if iteration.start_date is None or iteration.finish_date is None:
-        warnings.append("iteration has no start/finish date; available hours cannot be computed")
+        warnings.append(
+            "iteration has no start/finish date; available hours cannot be computed"
+        )
     if not iteration.members:
         warnings.append("iteration has no team members with capacity set")
     if plan_available <= 0:
@@ -169,7 +179,9 @@ def _build_warnings(
 
     if plan_available > 0 and plan_planned > plan_available:
         over = round(plan_planned - plan_available, 2)
-        warnings.append(f"overcommitted by {over:g}h ({plan_planned:g}h planned vs {plan_available:g}h available)")
+        warnings.append(
+            f"overcommitted by {over:g}h ({plan_planned:g}h planned vs {plan_available:g}h available)"
+        )
 
     return tuple(warnings)
 
@@ -232,7 +244,11 @@ def format_plan(plan: CapacityPlan) -> str:
     ]
 
     util = plan.utilisation
-    lines.append(f"  Utilisation    : {util * 100:.0f}%" if util is not None else "  Utilisation    : n/a")
+    lines.append(
+        f"  Utilisation    : {util * 100:.0f}%"
+        if util is not None
+        else "  Utilisation    : n/a"
+    )
 
     coverage = plan.coverage
     if coverage is not None:

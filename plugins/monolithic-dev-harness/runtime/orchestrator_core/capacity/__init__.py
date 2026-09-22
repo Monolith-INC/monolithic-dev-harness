@@ -20,12 +20,12 @@ from .model import (
     parse_date,
 )
 from .planner import (
-    find_member,
     UNASSIGNED_ACTIVITY,
     MemberAvailability,
     availability_for,
     available_by_activity,
     available_hours,
+    find_member,
     format_plan,
     plan_iteration,
     planned_by_activity,

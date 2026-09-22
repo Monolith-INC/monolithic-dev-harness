@@ -19,8 +19,6 @@ from host_adapters import (
     parse_claude_payload,
     parse_cursor_payload,
 )
-from policy.git_branch_guard import evaluate_git_branch_guard
-
 from scripts import hook_runtime
 from scripts.hook_runtime import select_adapter
 from scripts.policy import CanonicalToolEvent

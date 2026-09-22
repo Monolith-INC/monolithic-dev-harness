@@ -175,7 +175,9 @@ def validate_enrich_user_story_body(body: str) -> FormatValidationResult:
         errors.append("Critérios de Aceite must use - [ ] checkbox items")
 
     complexidade = _section_content(body, "📊 Complexidade")
-    if complexidade and not all(driver in complexidade for driver in COMPLEXITY_DRIVERS):
+    if complexidade and not all(
+        driver in complexidade for driver in COMPLEXITY_DRIVERS
+    ):
         errors.append("Complexidade must mention all six drivers")
 
     desc_orig = _section_content(body, "📄 Descrição Original")
@@ -228,7 +230,9 @@ def validate_split_story_spike_body(body: str) -> FormatValidationResult:
 
     indices = [sections.index(s) for s in SPIKE_BOLD_SECTIONS if s in sections]
     if indices and indices != sorted(indices):
-        errors.append(f"spike sections out of order; expected {list(SPIKE_BOLD_SECTIONS)}")
+        errors.append(
+            f"spike sections out of order; expected {list(SPIKE_BOLD_SECTIONS)}"
+        )
 
     ac_match = re.search(
         r"(?is)\*\*✅ Critérios de Aceite\*\*\s*\n(.*?)(?=\n\*\*|\Z)",
@@ -246,7 +250,9 @@ def validate_validation_report_body(body: str) -> FormatValidationResult:
     lines = body.strip().splitlines()
 
     if not lines or not lines[0].startswith("Validating "):
-        errors.append("report must start with 'Validating <type> — \"<title>\" [<source>]'")
+        errors.append(
+            "report must start with 'Validating <type> — \"<title>\" [<source>]'"
+        )
 
     if len(lines) < 2 or lines[1] != "=" * 60:
         errors.append("second line must be 60 '=' characters")
@@ -260,13 +266,17 @@ def validate_validation_report_body(body: str) -> FormatValidationResult:
         if category not in body_text:
             errors.append(f"missing category block: {category}")
 
-    if not re.search(r"^Summary: \d+ passed · \d+ failed · \d+ warnings\s*$", body, re.M):
+    if not re.search(
+        r"^Summary: \d+ passed · \d+ failed · \d+ warnings\s*$", body, re.M
+    ):
         errors.append("missing Summary line")
 
     if not re.search(r"^Outcome: (PASS|FAIL)\s*$", body, re.M):
         errors.append("missing Outcome: PASS or Outcome: FAIL")
 
-    check_lines = [line for line in lines if re.match(r"^\s+\[(PASS|FAIL|WARN|SKIP)\]", line)]
+    check_lines = [
+        line for line in lines if re.match(r"^\s+\[(PASS|FAIL|WARN|SKIP)\]", line)
+    ]
     if not check_lines:
         errors.append("report must include at least one check result line")
 

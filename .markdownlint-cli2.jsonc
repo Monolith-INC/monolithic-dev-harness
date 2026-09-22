@@ -1,0 +1,14 @@
+{
+  // Lint the project's own documents; skill files follow their source toolkits' conventions.
+  "config": {
+    "default": true,
+    "MD013": false,
+    "MD024": { "siblings_only": true },
+    "MD033": false,
+    // documents carry both frontmatter `title` and a `# Heading`, per the documentation standard
+    "MD025": { "front_matter_title": "" },
+    // each table is internally consistent: aligned in README, compact in docs
+    "MD060": { "style": "consistent" }
+  },
+  "globs": ["README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "docs/**/*.md"]
+}

@@ -92,7 +92,9 @@ class FilesystemProvider:
         if not path.is_file():
             return ProviderResult.success(
                 IterationCapacity(iteration_ref=iteration_ref),
-                warnings=(f"no capacity file at {path}; iteration has no team or dates",),
+                warnings=(
+                    f"no capacity file at {path}; iteration has no team or dates",
+                ),
             )
         try:
             data = json.loads(path.read_text(encoding="utf-8"))
@@ -104,13 +106,18 @@ class FilesystemProvider:
             return ProviderResult.failure(f"capacity file is not an object: {path}")
 
         members: list[MemberCapacity] = []
-        for entry in data.get("members", []) if isinstance(data.get("members"), list) else []:
+        for entry in (
+            data.get("members", []) if isinstance(data.get("members"), list) else []
+        ):
             if not isinstance(entry, dict):
                 continue
             activities = tuple(
                 ActivityCapacity(
                     name=str(a.get("name", "")),
-                    capacity_per_day=_first_present(a, "capacityPerDay", "capacity_per_day") or 0.0,
+                    capacity_per_day=_first_present(
+                        a, "capacityPerDay", "capacity_per_day"
+                    )
+                    or 0.0,
                 )
                 for a in entry.get("activities", [])
                 if isinstance(a, dict)
@@ -120,7 +127,9 @@ class FilesystemProvider:
                     member_id=str(entry.get("id") or entry.get("name") or ""),
                     display_name=str(entry.get("name") or entry.get("id") or ""),
                     activities=activities,
-                    days_off=_ranges_from(entry.get("daysOff") or entry.get("days_off")),
+                    days_off=_ranges_from(
+                        entry.get("daysOff") or entry.get("days_off")
+                    ),
                 )
             )
 
@@ -128,9 +137,13 @@ class FilesystemProvider:
             IterationCapacity(
                 iteration_ref=iteration_ref,
                 start_date=parse_date(data.get("startDate") or data.get("start_date")),
-                finish_date=parse_date(data.get("finishDate") or data.get("finish_date")),
+                finish_date=parse_date(
+                    data.get("finishDate") or data.get("finish_date")
+                ),
                 members=tuple(members),
-                team_days_off=_ranges_from(data.get("teamDaysOff") or data.get("team_days_off")),
+                team_days_off=_ranges_from(
+                    data.get("teamDaysOff") or data.get("team_days_off")
+                ),
             )
         )
 
@@ -163,20 +176,30 @@ class FilesystemProvider:
                     continue
                 frontmatter, _ = parse_frontmatter(raw)
                 item_iteration = frontmatter.get("iteration")
-                item_iteration = str(item_iteration) if item_iteration is not None else None
+                item_iteration = (
+                    str(item_iteration) if item_iteration is not None else None
+                )
                 if iteration_ref and item_iteration != iteration_ref:
                     continue
                 items.append(
                     EstimableItem(
                         item_id=str(frontmatter.get("provider_id") or path.stem),
                         title=str(frontmatter.get("title") or path.stem),
-                        item_type=str(frontmatter.get("work_item_type") or frontmatter.get("type") or ""),
+                        item_type=str(
+                            frontmatter.get("work_item_type")
+                            or frontmatter.get("type")
+                            or ""
+                        ),
                         points=_as_float(frontmatter.get("story_points")),
                         estimated_hours=_as_float(frontmatter.get("effort_hours")),
                         remaining_hours=_as_float(frontmatter.get("remaining_hours")),
                         completed_hours=_as_float(frontmatter.get("completed_hours")),
-                        activity=str(frontmatter["activity"]) if frontmatter.get("activity") else None,
-                        assigned_to=str(frontmatter["assigned_to"]) if frontmatter.get("assigned_to") else None,
+                        activity=str(frontmatter["activity"])
+                        if frontmatter.get("activity")
+                        else None,
+                        assigned_to=str(frontmatter["assigned_to"])
+                        if frontmatter.get("assigned_to")
+                        else None,
                         state=str(frontmatter.get("state") or ""),
                         iteration=item_iteration,
                     )

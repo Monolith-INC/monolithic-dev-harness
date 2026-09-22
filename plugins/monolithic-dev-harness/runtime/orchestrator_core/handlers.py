@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-import json
 from pathlib import Path
 from typing import Any
 
-from .adapters import build_skill_prompt, critiques_to_error_log
 from .artifact_validator import critiques_from_results, validate_artifact
-from .ingest import ingest_from_text, ingest_file
-from .reflection import ReflectionState, append_mistake, evaluate_reflection, load_mistakes
+from .ingest import ingest_file, ingest_from_text
+from .reflection import (
+    ReflectionState,
+    append_mistake,
+    evaluate_reflection,
+    load_mistakes,
+)
 from .report_formatter import format_terminal_report, persist_report
 
 
@@ -32,14 +35,24 @@ def handle_validate_artifact(
         hierarchy_ok = bool(hierarchy_ok)
 
     if not file_path:
-        return {"ok": False, "error": "file_path is required", "instructions": instructions}
+        return {
+            "ok": False,
+            "error": "file_path is required",
+            "instructions": instructions,
+        }
 
     path = Path(file_path)
     if not path.is_file():
-        return {"ok": False, "error": f"file not found: {file_path}", "instructions": instructions}
+        return {
+            "ok": False,
+            "error": f"file not found: {file_path}",
+            "instructions": instructions,
+        }
 
     record = ingest_file(path)
-    results = validate_artifact(record, hierarchy_parent_is_feature=hierarchy_ok, state_dir=state_dir)
+    results = validate_artifact(
+        record, hierarchy_parent_is_feature=hierarchy_ok, state_dir=state_dir
+    )
     report = format_terminal_report(record, results)
     critiques = critiques_from_results(results)
     outcome = "pass" if not any(r.result == "FAIL" for r in results) else "fail"
@@ -90,11 +103,17 @@ def handle_auto_fix_artifact(
         }
 
     if draft_override:
-        record = ingest_from_text(draft_override, filename=Path(file_path).stem if file_path else None)
+        record = ingest_from_text(
+            draft_override, filename=Path(file_path).stem if file_path else None
+        )
     elif file_path:
         record = ingest_file(Path(file_path))
     else:
-        return {"ok": False, "error": "file_path or draft_content required", "instructions": instructions}
+        return {
+            "ok": False,
+            "error": "file_path or draft_content required",
+            "instructions": instructions,
+        }
 
     results = validate_artifact(record, state_dir=state_dir)
     critiques = critiques_from_results(results)
@@ -112,7 +131,9 @@ def handle_auto_fix_artifact(
             "instructions": instructions,
         }
 
-    decision = evaluate_reflection(critiques, state=state, max_attempts=max_attempts, has_draft=True)
+    decision = evaluate_reflection(
+        critiques, state=state, max_attempts=max_attempts, has_draft=True
+    )
 
     if decision.blocked and record_mistake and critiques:
         append_mistake(
@@ -162,9 +183,15 @@ def handle_plan_capacity(
     if provider_name == "azure-devops":
         payloads = arguments.get("payloads") or {}
         if not isinstance(payloads, dict):
-            return {"ok": False, "error": "payloads must be an object", "instructions": instructions}
+            return {
+                "ok": False,
+                "error": "payloads must be an object",
+                "instructions": instructions,
+            }
         provider_kwargs["payloads"] = payloads
-        provider_kwargs["process"] = arguments.get("process") or project_config.azure.process
+        provider_kwargs["process"] = (
+            arguments.get("process") or project_config.azure.process
+        )
 
         # Identity is only needed when the provider has to fetch for itself. With payloads
         # injected, the caller has already done the reading and none of this applies.
@@ -188,11 +215,19 @@ def handle_plan_capacity(
         **provider_kwargs,
     )
     if provider is None:
-        return {"ok": False, "error": f"unknown provider: {provider_name}", "instructions": instructions}
+        return {
+            "ok": False,
+            "error": f"unknown provider: {provider_name}",
+            "instructions": instructions,
+        }
 
     iteration_result = provider.fetch_iteration(iteration_ref)
     if not iteration_result.ok:
-        return {"ok": False, "error": iteration_result.error, "instructions": instructions}
+        return {
+            "ok": False,
+            "error": iteration_result.error,
+            "instructions": instructions,
+        }
 
     items_result = provider.fetch_work_items(iteration_ref)
     if not items_result.ok:
@@ -260,25 +295,46 @@ def handle_estimate_breakdown(
     `write_ops` is empty: work that cannot fit is never written.
     """
     from .capacity import availability_for
-    from .estimation import TaskInput, config_diagnostics, estimate_breakdown, load_config
+    from .estimation import (
+        TaskInput,
+        config_diagnostics,
+        estimate_breakdown,
+        load_config,
+    )
     from .project_config import load_project_config
     from .providers.azure_devops import AzureDevOpsProvider
     from .providers.azure_devops import fields as azure_fields
 
     if not isinstance(arguments, dict):
-        return {"ok": False, "error": "arguments must be an object", "instructions": instructions}
+        return {
+            "ok": False,
+            "error": "arguments must be an object",
+            "instructions": instructions,
+        }
 
     story_id = _as_text(arguments.get("story_id"))
     if not story_id:
-        return {"ok": False, "error": "story_id is required", "instructions": instructions}
+        return {
+            "ok": False,
+            "error": "story_id is required",
+            "instructions": instructions,
+        }
 
     raw_tasks = arguments.get("tasks")
     if not isinstance(raw_tasks, list) or not raw_tasks:
-        return {"ok": False, "error": "tasks must be a non-empty list", "instructions": instructions}
+        return {
+            "ok": False,
+            "error": "tasks must be a non-empty list",
+            "instructions": instructions,
+        }
 
     payloads = arguments.get("payloads") or {}
     if not isinstance(payloads, dict):
-        return {"ok": False, "error": "payloads must be an object", "instructions": instructions}
+        return {
+            "ok": False,
+            "error": "payloads must be an object",
+            "instructions": instructions,
+        }
 
     assignee = _as_text(arguments.get("assignee")) or None
 
@@ -293,7 +349,11 @@ def handle_estimate_breakdown(
         if isinstance(entry, dict)
     ]
     if not tasks:
-        return {"ok": False, "error": "no usable task entries", "instructions": instructions}
+        return {
+            "ok": False,
+            "error": "no usable task entries",
+            "instructions": instructions,
+        }
 
     # A Task with no id cannot be written, so its share would vanish from the board while
     # still counting toward the total. Refuse rather than silently under-record the Story.
@@ -325,16 +385,22 @@ def handle_estimate_breakdown(
             items_result = provider.fetch_work_items(iteration_ref or "current")
             provider_warnings.extend(items_result.warnings)
             if not items_result.ok:
-                capacity_errors.append(f"iteration items unreadable: {items_result.error}")
+                capacity_errors.append(
+                    f"iteration items unreadable: {items_result.error}"
+                )
             availability = availability_for(
                 iteration_result.data,
                 assignee,
                 items=items_result.data if items_result.ok else None,
             )
             if availability is None and assignee:
-                capacity_errors.append(f"assignee '{assignee}' not matched to a team member")
+                capacity_errors.append(
+                    f"assignee '{assignee}' not matched to a team member"
+                )
             elif availability is None:
-                capacity_errors.append("no assignee on the story, so capacity was not checked")
+                capacity_errors.append(
+                    "no assignee on the story, so capacity was not checked"
+                )
 
     config = load_config(state_dir)
     estimate = estimate_breakdown(
@@ -362,7 +428,11 @@ def handle_estimate_breakdown(
             if not task.changed:
                 continue
             ops = {azure_fields.field_ref(azure_fields.REMAINING_WORK): task.hours}
-            if azure_fields.supports_original_estimate(process) and task.is_new and task.hours > 0:
+            if (
+                azure_fields.supports_original_estimate(process)
+                and task.is_new
+                and task.hours > 0
+            ):
                 ops[azure_fields.field_ref(azure_fields.ORIGINAL_ESTIMATE)] = task.hours
             write_ops.append({"item_id": task.task_id, "fields": ops})
 

@@ -28,7 +28,13 @@ POLICY = {
         {"name": "unit", "run": "true", "when": ["lib/**"]},
         {"name": "rules", "run": "true", "when": ["security.rules"]},
     ],
-    "tests_required": [{"source": ["lib/**/*.dart"], "tests": ["test/**/*_test.dart"], "exclude": ["**/*.g.dart"]}],
+    "tests_required": [
+        {
+            "source": ["lib/**/*.dart"],
+            "tests": ["test/**/*_test.dart"],
+            "exclude": ["**/*.g.dart"],
+        }
+    ],
     "generated": ["**/*.g.dart"],
     "guarded_paths": [
         {"path": "security.rules", "evidence": "check:rules"},
@@ -39,14 +45,30 @@ INTEGRATIONS = {
     "schemaVersion": 1,
     "branchTemplate": "{category}/{key}-{slug}",
     "scm": {"adapter": "github", "connection": {"command": "true", "args": []}},
-    "tracker": {"adapter": "linear", "bindings": {}, "connection": {"command": "true", "args": []}},
+    "tracker": {
+        "adapter": "linear",
+        "bindings": {},
+        "connection": {"command": "true", "args": []},
+    },
     "tracking": {"mode": "skipped"},
 }
 
 
 def sh(repo: Path, *args: str) -> str:
-    env = {**os.environ, "GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
-    return subprocess.run(["git", "-C", str(repo), *args], check=True, capture_output=True, text=True, env=env).stdout
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@t",
+    }
+    return subprocess.run(
+        ["git", "-C", str(repo), *args],
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    ).stdout
 
 
 class HookTestCase(unittest.TestCase):
@@ -59,7 +81,9 @@ class HookTestCase(unittest.TestCase):
         (self.repo / ".harness").mkdir()
         (self.repo / ".harness" / "policy.json").write_text(json.dumps(POLICY))
         (self.repo / ".codex-workflows").mkdir()
-        (self.repo / ".codex-workflows" / "integrations.json").write_text(json.dumps(INTEGRATIONS))
+        (self.repo / ".codex-workflows" / "integrations.json").write_text(
+            json.dumps(INTEGRATIONS)
+        )
         sh(self.repo, "add", "-A")
         sh(self.repo, "commit", "-q", "-m", "init")
         sh(self.repo, "checkout", "-q", "-b", "feature/1-demo")
@@ -71,7 +95,11 @@ class HookTestCase(unittest.TestCase):
         payload = {"cwd": str(self.repo), **payload}
         proc = subprocess.run(
             [sys.executable, str(HOOK), "--host", host, "--event", event],
-            input=json.dumps(payload), capture_output=True, text=True, cwd=self.repo, timeout=30,
+            input=json.dumps(payload),
+            capture_output=True,
+            text=True,
+            cwd=self.repo,
+            timeout=30,
         )
         self.assertEqual(proc.returncode, 0, proc.stderr)
         out = proc.stdout.strip()
@@ -83,13 +111,18 @@ class HookTestCase(unittest.TestCase):
             return {"text": out}
 
     def claude(self, tool: str, tool_input: dict) -> dict | None:
-        return self.hook("claude", "pre-tool", {"tool_name": tool, "tool_input": tool_input})
+        return self.hook(
+            "claude", "pre-tool", {"tool_name": tool, "tool_input": tool_input}
+        )
 
     def assertDenied(self, result: dict | None, rule: str) -> None:
         self.assertIsNotNone(result, "expected a deny decision")
         if "hookSpecificOutput" in result:
             self.assertEqual(result["hookSpecificOutput"]["permissionDecision"], "deny")
-            self.assertIn(f"[harness {rule}]", result["hookSpecificOutput"]["permissionDecisionReason"])
+            self.assertIn(
+                f"[harness {rule}]",
+                result["hookSpecificOutput"]["permissionDecisionReason"],
+            )
         else:
             self.assertEqual(result.get("permission"), "deny")
             self.assertIn(f"[harness {rule}]", result["agent_message"])
@@ -98,7 +131,9 @@ class HookTestCase(unittest.TestCase):
         if result is None:
             return
         if "hookSpecificOutput" in result:
-            self.assertNotEqual(result["hookSpecificOutput"]["permissionDecision"], "deny", result)
+            self.assertNotEqual(
+                result["hookSpecificOutput"]["permissionDecision"], "deny", result
+            )
         else:
             self.assertEqual(result.get("permission"), "allow", result)
 
@@ -117,66 +152,171 @@ class HookTestCase(unittest.TestCase):
 class TestOptIn(HookTestCase):
     def test_repo_without_policy_is_not_governed(self) -> None:
         (self.repo / ".harness" / "policy.json").unlink()
-        self.assertAllowed(self.claude(AZ + "wit_work_item_write", {"action": "create"}))
-        self.assertAllowed(self.hook("cursor", "mcp", {"tool_name": "wit_work_item_write", "tool_input": "{}"}))
+        self.assertAllowed(
+            self.claude(AZ + "wit_work_item_write", {"action": "create"})
+        )
+        self.assertAllowed(
+            self.hook(
+                "cursor",
+                "mcp",
+                {"tool_name": "wit_work_item_write", "tool_input": "{}"},
+            )
+        )
 
     def test_read_calls_pass(self) -> None:
         self.assertAllowed(self.claude("Read", {"file_path": str(self.repo / "x")}))
-        self.assertAllowed(self.claude(AZ + "wit_work_item", {"action": "get", "id": 1001}))
+        self.assertAllowed(
+            self.claude(AZ + "wit_work_item", {"action": "get", "id": 1001})
+        )
 
 
 class TestHumanOwned(HookTestCase):
     def test_agent_cannot_write_approvals_or_policy(self) -> None:
-        self.assertDenied(self.claude("Write", {"file_path": str(self.repo / ".harness/state/approvals/HB-X.json")}), "human-owned")
-        self.assertDenied(self.claude("Edit", {"file_path": str(self.repo / ".harness/policy.json")}), "human-owned")
-        self.assertDenied(self.claude("Bash", {"command": "echo {} > .harness/state/manual/storage-abc.json"}), "human-owned")
+        self.assertDenied(
+            self.claude(
+                "Write",
+                {"file_path": str(self.repo / ".harness/state/approvals/HB-X.json")},
+            ),
+            "human-owned",
+        )
+        self.assertDenied(
+            self.claude("Edit", {"file_path": str(self.repo / ".harness/policy.json")}),
+            "human-owned",
+        )
+        self.assertDenied(
+            self.claude(
+                "Bash", {"command": "echo {} > .harness/state/manual/storage-abc.json"}
+            ),
+            "human-owned",
+        )
 
     def test_other_state_and_files_are_writable(self) -> None:
-        self.assertAllowed(self.claude("Write", {"file_path": str(self.repo / "lib/a.dart")}))
+        self.assertAllowed(
+            self.claude("Write", {"file_path": str(self.repo / "lib/a.dart")})
+        )
         self.assertAllowed(self.claude("Bash", {"command": "cat .harness/policy.json"}))
 
 
 class TestApproval(HookTestCase):
     def test_write_without_approval_is_denied_on_both_hosts(self) -> None:
-        self.assertDenied(self.claude(AZ + "wit_work_item_write", {"action": "create"}), "approval-required")
-        self.assertDenied(self.hook("cursor", "mcp", {"tool_name": "wit_work_item_write", "tool_input": '{"action":"create"}'}), "approval-required")
-        self.assertDenied(self.claude("mcp__plugin_monolithic-dev-harness_workflow-integrations__tracker_transition_work_item", {"ref": "12"}), "approval-required")
-        self.assertDenied(self.claude("mcp__plugin_monolithic-dev-harness_workflow-integrations__workflow_skip_tracker", {}), "approval-required")
+        self.assertDenied(
+            self.claude(AZ + "wit_work_item_write", {"action": "create"}),
+            "approval-required",
+        )
+        self.assertDenied(
+            self.hook(
+                "cursor",
+                "mcp",
+                {
+                    "tool_name": "wit_work_item_write",
+                    "tool_input": '{"action":"create"}',
+                },
+            ),
+            "approval-required",
+        )
+        self.assertDenied(
+            self.claude(
+                "mcp__plugin_monolithic-dev-harness_workflow-integrations__tracker_transition_work_item",
+                {"ref": "12"},
+            ),
+            "approval-required",
+        )
+        self.assertDenied(
+            self.claude(
+                "mcp__plugin_monolithic-dev-harness_workflow-integrations__workflow_skip_tracker",
+                {},
+            ),
+            "approval-required",
+        )
 
     def test_user_approval_opens_the_window_and_logs_writes(self) -> None:
         self.approve()
-        self.assertAllowed(self.claude(AZ + "wit_work_item_write", {"action": "create", "workItemType": "Epic"}))
+        self.assertAllowed(
+            self.claude(
+                AZ + "wit_work_item_write", {"action": "create", "workItemType": "Epic"}
+            )
+        )
         records = list((self.repo / ".harness/state/approvals").glob("*.json"))
         self.assertEqual(len(records), 1)
-        self.assertEqual(json.loads(records[0].read_text())["writes"][0]["tool"], "wit_work_item_write")
+        self.assertEqual(
+            json.loads(records[0].read_text())["writes"][0]["tool"],
+            "wit_work_item_write",
+        )
 
     def test_git_push_needs_the_window_too(self) -> None:
-        self.assertDenied(self.claude("Bash", {"command": "git push -u origin feature/1-demo"}), "approval-required")
-        self.assertDenied(self.hook("cursor", "shell", {"command": "git -C . push"}), "approval-required")
+        self.assertDenied(
+            self.claude("Bash", {"command": "git push -u origin feature/1-demo"}),
+            "approval-required",
+        )
+        self.assertDenied(
+            self.hook("cursor", "shell", {"command": "git -C . push"}),
+            "approval-required",
+        )
         self.approve()
-        self.assertAllowed(self.claude("Bash", {"command": "git push -u origin feature/1-demo"}))
+        self.assertAllowed(
+            self.claude("Bash", {"command": "git push -u origin feature/1-demo"})
+        )
         self.assertAllowed(self.claude("Bash", {"command": "git status && git log -1"}))
 
     def test_cursor_prompt_approval_and_revoke(self) -> None:
-        self.assertEqual(self.hook("cursor", "prompt", {"prompt": "aprovo HB-CUR01"}), {"continue": True})
-        self.assertAllowed(self.hook("cursor", "mcp", {"tool_name": "wit_work_item_link_write", "tool_input": "{}"}))
+        self.assertEqual(
+            self.hook("cursor", "prompt", {"prompt": "aprovo HB-CUR01"}),
+            {"continue": True},
+        )
+        self.assertAllowed(
+            self.hook(
+                "cursor",
+                "mcp",
+                {"tool_name": "wit_work_item_link_write", "tool_input": "{}"},
+            )
+        )
         self.hook("claude", "prompt", {"prompt": "harness revoke"})
-        self.assertDenied(self.hook("cursor", "mcp", {"tool_name": "wit_work_item_link_write", "tool_input": "{}"}), "approval-required")
+        self.assertDenied(
+            self.hook(
+                "cursor",
+                "mcp",
+                {"tool_name": "wit_work_item_link_write", "tool_input": "{}"},
+            ),
+            "approval-required",
+        )
 
 
 class TestProtected(HookTestCase):
     def test_protected_item_is_never_written_or_linked_even_with_approval(self) -> None:
         self.approve()
-        self.assertDenied(self.claude(AZ + "wit_work_item_write", {"action": "update", "id": 1001, "updates": []}), "protected-items")
         self.assertDenied(
-            self.claude(AZ + "wit_work_item_link_write", {"action": "link", "updates": [{"id": 9001, "linkToId": 1001, "type": "related"}]}),
+            self.claude(
+                AZ + "wit_work_item_write",
+                {"action": "update", "id": 1001, "updates": []},
+            ),
             "protected-items",
         )
-        self.assertDenied(self.claude(AZ + "wit_work_item_write", {"action": "add_child", "parentId": 1001, "items": []}), "protected-items")
+        self.assertDenied(
+            self.claude(
+                AZ + "wit_work_item_link_write",
+                {
+                    "action": "link",
+                    "updates": [{"id": 9001, "linkToId": 1001, "type": "related"}],
+                },
+            ),
+            "protected-items",
+        )
+        self.assertDenied(
+            self.claude(
+                AZ + "wit_work_item_write",
+                {"action": "add_child", "parentId": 1001, "items": []},
+            ),
+            "protected-items",
+        )
 
     def test_other_items_are_writable_with_approval(self) -> None:
         self.approve()
-        self.assertAllowed(self.claude(AZ + "wit_work_item_write", {"action": "update", "id": 9001, "updates": []}))
+        self.assertAllowed(
+            self.claude(
+                AZ + "wit_work_item_write",
+                {"action": "update", "id": 9001, "updates": []},
+            )
+        )
 
 
 class TestTestsRequired(HookTestCase):
@@ -201,13 +341,30 @@ class TestTestsRequired(HookTestCase):
 
 class TestGenerated(HookTestCase):
     def test_hand_edit_of_generated_file_is_denied(self) -> None:
-        self.assertDenied(self.claude("Edit", {"file_path": str(self.repo / "lib/a.g.dart")}), "generated-files")
-        self.assertDenied(self.hook("cursor", "pre-tool", {"tool_name": "StrReplace", "tool_input": {"path": "lib/x/b.g.dart"}}), "generated-files")
-        self.assertDenied(self.claude("Bash", {"command": "sed -i 's/a/b/' lib/a.g.dart"}), "generated-files")
+        self.assertDenied(
+            self.claude("Edit", {"file_path": str(self.repo / "lib/a.g.dart")}),
+            "generated-files",
+        )
+        self.assertDenied(
+            self.hook(
+                "cursor",
+                "pre-tool",
+                {"tool_name": "StrReplace", "tool_input": {"path": "lib/x/b.g.dart"}},
+            ),
+            "generated-files",
+        )
+        self.assertDenied(
+            self.claude("Bash", {"command": "sed -i 's/a/b/' lib/a.g.dart"}),
+            "generated-files",
+        )
 
     def test_regular_edit_and_generator_run_are_allowed(self) -> None:
-        self.assertAllowed(self.claude("Edit", {"file_path": str(self.repo / "lib/a.dart")}))
-        self.assertAllowed(self.claude("Bash", {"command": "dart run build_runner build"}))
+        self.assertAllowed(
+            self.claude("Edit", {"file_path": str(self.repo / "lib/a.dart")})
+        )
+        self.assertAllowed(
+            self.claude("Bash", {"command": "dart run build_runner build"})
+        )
 
 
 class TestGuarded(HookTestCase):
@@ -215,7 +372,19 @@ class TestGuarded(HookTestCase):
         self.write("security.rules")
         sh(self.repo, "add", "security.rules")
         self.assertDenied(self.commit_call(), "guarded-paths")
-        subprocess.run([sys.executable, str(CHECKS), "--repo", str(self.repo), "--staged", "--only", "rules"], check=True, capture_output=True)
+        subprocess.run(
+            [
+                sys.executable,
+                str(CHECKS),
+                "--repo",
+                str(self.repo),
+                "--staged",
+                "--only",
+                "rules",
+            ],
+            check=True,
+            capture_output=True,
+        )
         self.assertAllowed(self.commit_call())
         self.write("security.rules", "changed after the check\n")
         sh(self.repo, "add", "security.rules")
@@ -225,13 +394,20 @@ class TestGuarded(HookTestCase):
         self.write("infra/main.tf")
         sh(self.repo, "add", "infra/main.tf")
         self.assertDenied(self.commit_call(), "guarded-paths")
-        self.hook("claude", "prompt", {"prompt": "validated by hand: harness manual-check infra ok"})
+        self.hook(
+            "claude",
+            "prompt",
+            {"prompt": "validated by hand: harness manual-check infra ok"},
+        )
         self.assertAllowed(self.commit_call())
 
 
 class TestPullRequest(HookTestCase):
     def pr(self, **extra: object) -> dict | None:
-        return self.claude(AZ + "repo_pull_request_write", {"action": "create", "repositoryId": "r", **extra})
+        return self.claude(
+            AZ + "repo_pull_request_write",
+            {"action": "create", "repositoryId": "r", **extra},
+        )
 
     def ship_ready_commit(self) -> None:
         self.write("test/a_test.dart")
@@ -243,17 +419,55 @@ class TestPullRequest(HookTestCase):
         self.approve()
         self.ship_ready_commit()
         self.assertDenied(self.pr(isDraft=False), "draft-reviewed-prs")
-        self.assertDenied(self.pr(isDraft=True), "draft-reviewed-prs")  # no review verdict yet
-        subprocess.run([sys.executable, str(VERDICT), "--repo", str(self.repo), "--verdict", "ready", "--summary", "ok"], check=True, capture_output=True)
-        self.assertDenied(self.pr(isDraft=True), "draft-reviewed-prs")  # no check evidence yet
-        subprocess.run([sys.executable, str(CHECKS), "--repo", str(self.repo)], check=True, capture_output=True)
+        self.assertDenied(
+            self.pr(isDraft=True), "draft-reviewed-prs"
+        )  # no review verdict yet
+        subprocess.run(
+            [
+                sys.executable,
+                str(VERDICT),
+                "--repo",
+                str(self.repo),
+                "--verdict",
+                "ready",
+                "--summary",
+                "ok",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        self.assertDenied(
+            self.pr(isDraft=True), "draft-reviewed-prs"
+        )  # no check evidence yet
+        subprocess.run(
+            [sys.executable, str(CHECKS), "--repo", str(self.repo)],
+            check=True,
+            capture_output=True,
+        )
         self.assertAllowed(self.pr(isDraft=True))
 
     def test_new_commit_invalidates_the_verdict(self) -> None:
         self.approve()
         self.ship_ready_commit()
-        subprocess.run([sys.executable, str(VERDICT), "--repo", str(self.repo), "--verdict", "ready", "--summary", "ok"], check=True, capture_output=True)
-        subprocess.run([sys.executable, str(CHECKS), "--repo", str(self.repo)], check=True, capture_output=True)
+        subprocess.run(
+            [
+                sys.executable,
+                str(VERDICT),
+                "--repo",
+                str(self.repo),
+                "--verdict",
+                "ready",
+                "--summary",
+                "ok",
+            ],
+            check=True,
+            capture_output=True,
+        )
+        subprocess.run(
+            [sys.executable, str(CHECKS), "--repo", str(self.repo)],
+            check=True,
+            capture_output=True,
+        )
         self.write("lib/b.dart")
         sh(self.repo, "add", "-A")
         sh(self.repo, "commit", "-q", "-m", "more")
@@ -261,15 +475,48 @@ class TestPullRequest(HookTestCase):
 
     def test_publishing_and_voting_are_human_only(self) -> None:
         self.approve()
-        self.assertDenied(self.claude(AZ + "repo_pull_request_write", {"action": "update", "pullRequestId": 1, "isDraft": False}), "draft-reviewed-prs")
-        self.assertDenied(self.claude(AZ + "repo_pull_request_write", {"action": "vote", "pullRequestId": 1, "vote": "Approved"}), "draft-reviewed-prs")
+        self.assertDenied(
+            self.claude(
+                AZ + "repo_pull_request_write",
+                {"action": "update", "pullRequestId": 1, "isDraft": False},
+            ),
+            "draft-reviewed-prs",
+        )
+        self.assertDenied(
+            self.claude(
+                AZ + "repo_pull_request_write",
+                {"action": "vote", "pullRequestId": 1, "vote": "Approved"},
+            ),
+            "draft-reviewed-prs",
+        )
+
+
+class TestPolicyValidation(HookTestCase):
+    def test_guarded_path_naming_an_unknown_check_fails_closed(self) -> None:
+        policy = json.loads((self.repo / ".harness" / "policy.json").read_text())
+        policy["guarded_paths"].append(
+            {"path": "db/**", "evidence": "check:does-not-exist"}
+        )
+        (self.repo / ".harness" / "policy.json").write_text(json.dumps(policy))
+        self.assertDenied(
+            self.claude("Write", {"file_path": str(self.repo / "lib/a.dart")}),
+            "harness-error",
+        )
+        self.assertAllowed(
+            self.claude("Read", {"file_path": str(self.repo / "lib/a.dart")})
+        )
 
 
 class TestFailClosed(HookTestCase):
     def test_broken_policy_blocks_writes_but_not_reads(self) -> None:
         (self.repo / ".harness" / "policy.json").write_text("{not json")
-        self.assertDenied(self.claude("Write", {"file_path": str(self.repo / "lib/a.dart")}), "harness-error")
-        self.assertAllowed(self.claude("Read", {"file_path": str(self.repo / "lib/a.dart")}))
+        self.assertDenied(
+            self.claude("Write", {"file_path": str(self.repo / "lib/a.dart")}),
+            "harness-error",
+        )
+        self.assertAllowed(
+            self.claude("Read", {"file_path": str(self.repo / "lib/a.dart")})
+        )
 
 
 if __name__ == "__main__":

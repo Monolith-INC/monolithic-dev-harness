@@ -24,10 +24,18 @@ class TestClaudeHookSubprocess(unittest.TestCase):
         return process.stdout
 
     def test_bash_allow_emits_no_output(self):
-        self.assertEqual(self._run_hook({"tool_name": "Bash", "tool_input": {"command": "echo hi"}}), "")
+        self.assertEqual(
+            self._run_hook({"tool_name": "Bash", "tool_input": {"command": "echo hi"}}),
+            "",
+        )
 
     def test_markdown_read_is_allowed(self):
-        stdout = self._run_hook({"tool_name": "Read", "tool_input": {"file_path": str(PLUGIN_ROOT / "README.md")}})
+        stdout = self._run_hook(
+            {
+                "tool_name": "Read",
+                "tool_input": {"file_path": str(PLUGIN_ROOT / "README.md")},
+            }
+        )
         self.assertEqual(stdout, "")
 
 

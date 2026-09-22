@@ -18,11 +18,17 @@ COMMON = ROOT / "common"
 class TestIntegrationNotesContract(unittest.TestCase):
     def setUp(self) -> None:
         self.notes = read_skill_text(
-            "generate-plain-language-documentation", "references", "integration-notes.md"
+            "generate-plain-language-documentation",
+            "references",
+            "integration-notes.md",
         )
 
     def test_documents_all_sibling_hooks(self) -> None:
-        for section in ("## generate-work-item", "## enrich-work-item", "## decompose-backlog"):
+        for section in (
+            "## generate-work-item",
+            "## enrich-work-item",
+            "## decompose-backlog",
+        ):
             with self.subTest(section=section):
                 self.assertIn(section, self.notes)
 
@@ -41,7 +47,9 @@ class TestIntegrationNotesContract(unittest.TestCase):
                 "work-item-prose",
             ),
         )
-        self.assertEqual(missing, [], msg=f"missing in generate-work-item section: {missing}")
+        self.assertEqual(
+            missing, [], msg=f"missing in generate-work-item section: {missing}"
+        )
 
     def test_enrich_work_item_hook_details(self) -> None:
         section = self._section_after("## enrich-work-item")
@@ -53,7 +61,9 @@ class TestIntegrationNotesContract(unittest.TestCase):
                 "emoji headings",
             ),
         )
-        self.assertEqual(missing, [], msg=f"missing in enrich-work-item section: {missing}")
+        self.assertEqual(
+            missing, [], msg=f"missing in enrich-work-item section: {missing}"
+        )
 
     def test_decompose_backlog_hook_details(self) -> None:
         section = self._section_after("## decompose-backlog")
@@ -66,7 +76,9 @@ class TestIntegrationNotesContract(unittest.TestCase):
                 "ENRICH",
             ),
         )
-        self.assertEqual(missing, [], msg=f"missing in decompose-backlog section: {missing}")
+        self.assertEqual(
+            missing, [], msg=f"missing in decompose-backlog section: {missing}"
+        )
 
     def _section_after(self, heading: str) -> str:
         start = self.notes.index(heading)
@@ -78,8 +90,12 @@ class TestIntegrationNotesContract(unittest.TestCase):
 class TestGenerateWorkItemIntegration(unittest.TestCase):
     def setUp(self) -> None:
         self.skill_md = read_skill_text("generate-work-item", "SKILL.md")
-        self.pipeline = (COMMON / "workflows" / "generate-work-item.md").read_text(encoding="utf-8")
-        self.output_formats = (COMMON / "templates" / "output-formats.md").read_text(encoding="utf-8")
+        self.pipeline = (COMMON / "workflows" / "generate-work-item.md").read_text(
+            encoding="utf-8"
+        )
+        self.output_formats = (COMMON / "templates" / "output-formats.md").read_text(
+            encoding="utf-8"
+        )
 
     def test_skill_references_integration_notes(self) -> None:
         self.assertIn(INTEGRATION_NOTES_REL, self.skill_md)
@@ -100,7 +116,10 @@ class TestGenerateWorkItemIntegration(unittest.TestCase):
     def test_pipeline_and_output_formats_reference_plain_language(self) -> None:
         self.assertIn("generate-plain-language-documentation", self.pipeline)
         # common/workflows/ sits two levels below the plugin root, so its link differs from the skill's.
-        self.assertIn("../../skills/generate-plain-language-documentation/references/integration-notes.md", self.pipeline)
+        self.assertIn(
+            "../../skills/generate-plain-language-documentation/references/integration-notes.md",
+            self.pipeline,
+        )
         self.assertIn("generate-plain-language-documentation", self.output_formats)
         self.assertIn("work-item-prose", self.output_formats)
 
@@ -108,7 +127,9 @@ class TestGenerateWorkItemIntegration(unittest.TestCase):
 class TestEnrichWorkItemIntegration(unittest.TestCase):
     def setUp(self) -> None:
         self.skill_md = read_skill_text("enrich-work-item", "SKILL.md")
-        self.pipeline = (COMMON / "workflows" / "enrich-work-item.md").read_text(encoding="utf-8")
+        self.pipeline = (COMMON / "workflows" / "enrich-work-item.md").read_text(
+            encoding="utf-8"
+        )
 
     def test_skill_references_integration_notes(self) -> None:
         self.assertIn(INTEGRATION_NOTES_REL, self.skill_md)

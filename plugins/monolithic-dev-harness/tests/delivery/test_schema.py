@@ -1,6 +1,7 @@
 import unittest
 
 from scripts.orchestrator.schema import validate_inputs
+
 from tests.delivery.manifest_fixtures import capability
 
 

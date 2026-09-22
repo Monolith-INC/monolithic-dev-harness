@@ -56,7 +56,9 @@ def worktree_tree(repo: Path) -> str:
 
     Built in a throwaway index so the real index is never touched.
     """
-    real_index = Path(git(repo, "rev-parse", "--path-format=absolute", "--git-path", "index"))
+    real_index = Path(
+        git(repo, "rev-parse", "--path-format=absolute", "--git-path", "index")
+    )
     with tempfile.TemporaryDirectory(prefix="harness-index-") as tmp:
         temp_index = Path(tmp) / "index"
         if real_index.exists():
@@ -80,5 +82,10 @@ def branch_paths(repo: Path, base_branch: str) -> list[str]:
             merge_base = git(repo, "merge-base", base, "HEAD")
         except GitError:
             continue
-        return sorted(filter(None, git(repo, "diff", "--name-only", f"{merge_base}..HEAD").splitlines()))
+        return sorted(
+            filter(
+                None,
+                git(repo, "diff", "--name-only", f"{merge_base}..HEAD").splitlines(),
+            )
+        )
     return []

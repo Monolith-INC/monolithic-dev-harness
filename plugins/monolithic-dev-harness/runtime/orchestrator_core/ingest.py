@@ -5,7 +5,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 FILENAME_RE = re.compile(r"^(\d+|tech-debt|bug|task|spike)-[a-z0-9-]+$")
@@ -58,7 +57,9 @@ def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
         value = value.strip()
         if value.startswith("[") and value.endswith("]"):
             inner = value[1:-1].strip()
-            frontmatter[key] = [v.strip() for v in inner.split(",") if v.strip()] if inner else []
+            frontmatter[key] = (
+                [v.strip() for v in inner.split(",") if v.strip()] if inner else []
+            )
         elif value.isdigit():
             frontmatter[key] = int(value)
         else:
@@ -112,10 +113,14 @@ def _legacy_frontmatter_keys(frontmatter: dict[str, Any]) -> tuple[str, ...]:
 def ingest_from_text(text: str, *, filename: str | None = None) -> ArtifactRecord:
     frontmatter, body = parse_frontmatter(text)
     artifact_type = normalize_work_item_type(
-        str(frontmatter.get("work_item_type") or frontmatter.get("type") or "User Story")
+        str(
+            frontmatter.get("work_item_type") or frontmatter.get("type") or "User Story"
+        )
     )
     if artifact_type == "ticket":
-        artifact_type = normalize_work_item_type(str(frontmatter.get("work_item_type", "User Story")))
+        artifact_type = normalize_work_item_type(
+            str(frontmatter.get("work_item_type", "User Story"))
+        )
     title = extract_title(body, frontmatter)
     story_points = frontmatter.get("story_points")
     if isinstance(story_points, str) and story_points.replace(".", "", 1).isdigit():
@@ -124,7 +129,9 @@ def ingest_from_text(text: str, *, filename: str | None = None) -> ArtifactRecor
         type=artifact_type or "User Story",
         title=title,
         body=body,
-        story_points=float(story_points) if isinstance(story_points, (int, float)) else None,
+        story_points=float(story_points)
+        if isinstance(story_points, (int, float))
+        else None,
         parent_id=_text_or_none(frontmatter.get("parent_id")),
         provider=_text_or_none(frontmatter.get("provider")),
         provider_id=_text_or_none(frontmatter.get("provider_id")),
@@ -143,7 +150,9 @@ def ingest_file(path: Path) -> ArtifactRecord:
         str(frontmatter.get("work_item_type") or frontmatter.get("type") or "")
     )
     if artifact_type == "ticket":
-        artifact_type = normalize_work_item_type(str(frontmatter.get("work_item_type", "User Story")))
+        artifact_type = normalize_work_item_type(
+            str(frontmatter.get("work_item_type", "User Story"))
+        )
     title = extract_title(body, frontmatter)
     story_points = frontmatter.get("story_points")
     if isinstance(story_points, str) and story_points.replace(".", "", 1).isdigit():
@@ -152,7 +161,9 @@ def ingest_file(path: Path) -> ArtifactRecord:
         type=artifact_type or "User Story",
         title=title,
         body=body,
-        story_points=float(story_points) if isinstance(story_points, (int, float)) else None,
+        story_points=float(story_points)
+        if isinstance(story_points, (int, float))
+        else None,
         parent_id=_text_or_none(frontmatter.get("parent_id")),
         provider=_text_or_none(frontmatter.get("provider")),
         provider_id=_text_or_none(frontmatter.get("provider_id")),

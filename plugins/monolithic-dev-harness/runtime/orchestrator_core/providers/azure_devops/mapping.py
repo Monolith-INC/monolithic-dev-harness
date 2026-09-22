@@ -116,7 +116,9 @@ def map_capacities(payload: Any) -> tuple[MemberCapacity, ...]:
     """Map the teamsettings/iterations/{id}/capacities response."""
     members: list[MemberCapacity] = []
     for entry in _unwrap(payload):
-        team_member = entry.get("teamMember") if isinstance(entry.get("teamMember"), dict) else {}
+        team_member = (
+            entry.get("teamMember") if isinstance(entry.get("teamMember"), dict) else {}
+        )
         activities = []
         for activity in entry.get("activities", []):
             if not isinstance(activity, dict):
@@ -127,7 +129,9 @@ def map_capacities(payload: Any) -> tuple[MemberCapacity, ...]:
                 # totalCapacityPerDay cross-check below will catch the shortfall.
                 continue
             activities.append(
-                ActivityCapacity(name=str(activity.get("name", "") or ""), capacity_per_day=per_day)
+                ActivityCapacity(
+                    name=str(activity.get("name", "") or ""), capacity_per_day=per_day
+                )
             )
         activities = tuple(activities)
         members.append(
@@ -156,7 +160,9 @@ def current_iteration(payload: Any) -> dict[str, Any] | None:
         return None
     unmarked = []
     for entry in entries:
-        attributes = entry.get("attributes") if isinstance(entry.get("attributes"), dict) else {}
+        attributes = (
+            entry.get("attributes") if isinstance(entry.get("attributes"), dict) else {}
+        )
         marker = attributes.get("timeFrame")
         if marker == TIMEFRAME_CURRENT:
             return entry
@@ -193,7 +199,9 @@ def map_weekend_days(team_settings: Any) -> tuple[int, ...] | None:
     working = team_settings.get("workingDays")
     if not isinstance(working, list) or not working:
         return None
-    worked = {index for index in (_weekday_index(d) for d in working) if index is not None}
+    worked = {
+        index for index in (_weekday_index(d) for d in working) if index is not None
+    }
     if not worked:
         return None
     return tuple(sorted(set(range(7)) - worked))
@@ -209,7 +217,11 @@ def map_iteration(
     """Assemble an IterationCapacity from the three Azure payloads that describe a sprint."""
     start = finish = None
     if isinstance(iteration, dict):
-        attributes = iteration.get("attributes") if isinstance(iteration.get("attributes"), dict) else {}
+        attributes = (
+            iteration.get("attributes")
+            if isinstance(iteration.get("attributes"), dict)
+            else {}
+        )
         start = parse_date(attributes.get("startDate") or iteration.get("startDate"))
         finish = parse_date(attributes.get("finishDate") or iteration.get("finishDate"))
 
@@ -234,7 +246,9 @@ def map_work_item(payload: Any, *, process: str | None = None) -> EstimableItem 
     """Map one work item. Returns None when the payload carries no usable id."""
     if not isinstance(payload, dict):
         return None
-    raw_fields = payload.get("fields") if isinstance(payload.get("fields"), dict) else {}
+    raw_fields = (
+        payload.get("fields") if isinstance(payload.get("fields"), dict) else {}
+    )
     item_id = payload.get("id") or raw_fields.get("System.Id")
     if item_id is None:
         return None
@@ -249,7 +263,9 @@ def map_work_item(payload: Any, *, process: str | None = None) -> EstimableItem 
         item_id=str(item_id),
         title=str(raw_fields.get(f.TITLE, "") or ""),
         item_type=str(raw_fields.get(f.WORK_ITEM_TYPE, "") or ""),
-        points=_first_present(raw_fields, f.points_field(process), f.STORY_POINTS, f.EFFORT, f.SIZE),
+        points=_first_present(
+            raw_fields, f.points_field(process), f.STORY_POINTS, f.EFFORT, f.SIZE
+        ),
         estimated_hours=_as_float(raw_fields.get(f.ORIGINAL_ESTIMATE)),
         remaining_hours=_as_float(raw_fields.get(f.REMAINING_WORK)),
         completed_hours=_as_float(raw_fields.get(f.COMPLETED_WORK)),

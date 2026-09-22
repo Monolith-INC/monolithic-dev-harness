@@ -1,0 +1,38 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Version sources match the tag
+        run: python scripts/check_versions.py --tag "${GITHUB_REF_NAME}"
+      - name: Tests
+        run: |
+          pip install pytest
+          git config --global user.name "ci"
+          git config --global user.email "ci@example.invalid"
+          PYTHON=python plugins/monolithic-dev-harness/tests/run.sh
+      - name: Build the release archive
+        run: scripts/build_release.sh "${GITHUB_REF_NAME}"
+      - name: Release notes from CHANGELOG.md
+        run: python scripts/release_notes.py "${GITHUB_REF_NAME}" > "${RUNNER_TEMP}/notes.md"
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" dist/* \
+            --title "${GITHUB_REF_NAME}" \
+            --notes-file "${RUNNER_TEMP}/notes.md" \
+            --verify-tag

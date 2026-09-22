@@ -39,7 +39,9 @@ def _member(member_id="u1", name="Ana Silva", per_day=6.0, days_off=()):
 
 
 def _tasks(n=3, current=None):
-    return [TaskInput(f"t{i}", f"Task {i}", current_hours=current) for i in range(1, n + 1)]
+    return [
+        TaskInput(f"t{i}", f"Task {i}", current_hours=current) for i in range(1, n + 1)
+    ]
 
 
 class TestFindMember(unittest.TestCase):
@@ -56,7 +58,9 @@ class TestFindMember(unittest.TestCase):
 
     def test_match_is_case_insensitive(self):
         """Case differences between payloads must not lose a person."""
-        self.assertIsNotNone(find_member(_sprint([_member(name="Ana Silva")]), "ana silva"))
+        self.assertIsNotNone(
+            find_member(_sprint([_member(name="Ana Silva")]), "ana silva")
+        )
 
     def test_matches_email_local_part(self):
         """A unique name like ana@corp.com resolves to the member called ana."""
@@ -82,7 +86,9 @@ class TestAvailability(unittest.TestCase):
 
     def test_personal_days_off_reduce_only_that_person(self):
         """Leave comes off the individual's hours, not the team's."""
-        away = _member(per_day=5.0, days_off=[DateRange(date(2026, 8, 5), date(2026, 8, 6))])
+        away = _member(
+            per_day=5.0, days_off=[DateRange(date(2026, 8, 5), date(2026, 8, 6))]
+        )
         availability = availability_for(_sprint([away]), "Ana Silva")
         self.assertEqual(availability.working_days, 8)
         self.assertEqual(availability.days_off, 2)
@@ -92,9 +98,13 @@ class TestAvailability(unittest.TestCase):
         """A second Story is checked against what remains, not the full sprint."""
         items = [
             EstimableItem(item_id="1", remaining_hours=20.0, assigned_to="Ana Silva"),
-            EstimableItem(item_id="2", remaining_hours=99.0, assigned_to="Someone Else"),
+            EstimableItem(
+                item_id="2", remaining_hours=99.0, assigned_to="Someone Else"
+            ),
         ]
-        availability = availability_for(_sprint([_member(per_day=6.0)]), "Ana Silva", items=items)
+        availability = availability_for(
+            _sprint([_member(per_day=6.0)]), "Ana Silva", items=items
+        )
         self.assertEqual(availability.committed_hours, 20.0)
         self.assertEqual(availability.remaining_hours, 40.0)
 
@@ -110,8 +120,12 @@ class TestEstimateBreakdown(unittest.TestCase):
         """Rounding must never lose or invent time."""
         estimate = estimate_breakdown("US-1", 3.0, _tasks(3), config=EstimationConfig())
         self.assertEqual(len(estimate.tasks), 3)
-        self.assertEqual(round(sum(t.hours for t in estimate.tasks), 2), estimate.total_hours)
-        self.assertEqual(estimate.total_hours, 5.0)  # midpoint of the 4-6h band for 3 points
+        self.assertEqual(
+            round(sum(t.hours for t in estimate.tasks), 2), estimate.total_hours
+        )
+        self.assertEqual(
+            estimate.total_hours, 5.0
+        )  # midpoint of the 4-6h band for 3 points
 
     def test_weights_shift_the_split(self):
         """A Task known to be larger takes a larger share."""
@@ -152,21 +166,27 @@ class TestCapacityConstraint(unittest.TestCase):
 
     def test_fits_within_capacity(self):
         """A Story inside the assignee's hours is not blocked."""
-        estimate = estimate_breakdown("US-1", 3.0, _tasks(), availability=self._availability())
+        estimate = estimate_breakdown(
+            "US-1", 3.0, _tasks(), availability=self._availability()
+        )
         self.assertFalse(estimate.blocked)
         self.assertEqual(estimate.overflow_hours, 0.0)
         self.assertEqual(estimate.resolution_options(), ())
 
     def test_exceeding_capacity_blocks_with_the_overflow_named(self):
         """60h available, 21 points deriving 120h -> blocked by 60h."""
-        estimate = estimate_breakdown("US-1", 21.0, _tasks(), availability=self._availability())
+        estimate = estimate_breakdown(
+            "US-1", 21.0, _tasks(), availability=self._availability()
+        )
         self.assertTrue(estimate.blocked)
         self.assertEqual(estimate.overflow_hours, round(estimate.total_hours - 60.0, 2))
         self.assertIn("BLOCKED", estimate.describe())
 
     def test_blocked_estimate_offers_choices_and_decides_nothing(self):
         """The plugin names the options; a person picks."""
-        estimate = estimate_breakdown("US-1", 21.0, _tasks(), availability=self._availability())
+        estimate = estimate_breakdown(
+            "US-1", 21.0, _tasks(), availability=self._availability()
+        )
         options = estimate.resolution_options()
         self.assertTrue(any("split" in o for o in options))
         self.assertTrue(any("reassign" in o for o in options))
@@ -174,8 +194,12 @@ class TestCapacityConstraint(unittest.TestCase):
 
     def test_existing_commitments_count_against_the_ceiling(self):
         """A Story that would fit an empty sprint can still overflow a busy one."""
-        items = [EstimableItem(item_id="x", remaining_hours=58.0, assigned_to="Ana Silva")]
-        availability = availability_for(_sprint([_member(per_day=6.0)]), "Ana Silva", items=items)
+        items = [
+            EstimableItem(item_id="x", remaining_hours=58.0, assigned_to="Ana Silva")
+        ]
+        availability = availability_for(
+            _sprint([_member(per_day=6.0)]), "Ana Silva", items=items
+        )
         estimate = estimate_breakdown("US-1", 3.0, _tasks(), availability=availability)
         self.assertEqual(availability.remaining_hours, 2.0)
         self.assertTrue(estimate.blocked)
@@ -219,11 +243,15 @@ class TestRecompute(unittest.TestCase):
 
     def test_no_current_estimate_reports_nothing(self):
         """Nothing to say when there is no new estimate."""
-        self.assertEqual(recompute_breakdown(estimate_breakdown("US-1", 3.0, _tasks()), None), ())
+        self.assertEqual(
+            recompute_breakdown(estimate_breakdown("US-1", 3.0, _tasks()), None), ()
+        )
 
     def test_report_names_every_change(self):
         """The user is told what moved, since nothing asked their permission."""
-        estimate = estimate_breakdown("US-1", 3.0, [TaskInput("t1", "Wire it", current_hours=2.0)])
+        estimate = estimate_breakdown(
+            "US-1", 3.0, [TaskInput("t1", "Wire it", current_hours=2.0)]
+        )
         report = estimate.describe()
         self.assertIn("Wire it", report)
         self.assertIn("2h", report)
@@ -231,7 +259,9 @@ class TestRecompute(unittest.TestCase):
 
     def test_task_change_description_shows_both_figures(self):
         """Old and new appear together so a reader can judge the move."""
-        estimate = estimate_breakdown("US-1", 8.0, [TaskInput("t1", "Wire it", current_hours=2.0)])
+        estimate = estimate_breakdown(
+            "US-1", 8.0, [TaskInput("t1", "Wire it", current_hours=2.0)]
+        )
         self.assertIn("2h → 32h", estimate.tasks[0].describe_change())
 
 
@@ -256,7 +286,12 @@ class TestCurrentIteration(unittest.TestCase):
 
     def test_no_current_sprint_yields_none(self):
         """Between sprints there may be no active one."""
-        payload = {"value": [{"attributes": {"timeFrame": 0}}, {"attributes": {"timeFrame": 2}}]}
+        payload = {
+            "value": [
+                {"attributes": {"timeFrame": 0}},
+                {"attributes": {"timeFrame": 2}},
+            ]
+        }
         self.assertIsNone(current_iteration(payload))
 
     def test_hostile_inputs(self):
@@ -305,7 +340,11 @@ class TestRoleWeights(unittest.TestCase):
 
     def test_staging_and_review_are_lighter_than_implementation(self):
         """Bracketing tasks take a smaller share than the work itself."""
-        tasks = [TaskInput("1", "Wire it"), TaskInput("2", "Staging"), TaskInput("3", "Review")]
+        tasks = [
+            TaskInput("1", "Wire it"),
+            TaskInput("2", "Staging"),
+            TaskInput("3", "Review"),
+        ]
         estimate = estimate_breakdown("US-1", 5.0, tasks)
         hours = {t.title: t.hours for t in estimate.tasks}
         self.assertGreater(hours["Wire it"], hours["Staging"])
@@ -313,16 +352,23 @@ class TestRoleWeights(unittest.TestCase):
 
     def test_explicit_weight_overrides_the_role_default(self):
         """A caller that read the plan knows better than the title does."""
-        tasks = [TaskInput("1", "Breakdown", weight=2.0), TaskInput("2", "Wire it", weight=1.0)]
+        tasks = [
+            TaskInput("1", "Breakdown", weight=2.0),
+            TaskInput("2", "Wire it", weight=1.0),
+        ]
         estimate = estimate_breakdown("US-1", 3.0, tasks)
         hours = {t.title: t.hours for t in estimate.tasks}
         self.assertGreater(hours["Breakdown"], hours["Wire it"])
 
     def test_total_is_preserved_despite_zero_weights(self):
         """The parts still sum to the whole when one task is weighted out."""
-        tasks = [TaskInput(str(i), t) for i, t in enumerate(["A", "B", "C", "Breakdown"])]
+        tasks = [
+            TaskInput(str(i), t) for i, t in enumerate(["A", "B", "C", "Breakdown"])
+        ]
         estimate = estimate_breakdown("US-1", 8.0, tasks)
-        self.assertEqual(round(sum(t.hours for t in estimate.tasks), 2), estimate.total_hours)
+        self.assertEqual(
+            round(sum(t.hours for t in estimate.tasks), 2), estimate.total_hours
+        )
 
     def test_rounding_drift_never_lands_on_a_zero_weight_task(self):
         """The regression: drift used to go to the last entry, which is Breakdown."""
@@ -376,7 +422,10 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
     def test_new_zero_hour_task_is_not_written(self):
         """A Breakdown marker that never had hours needs no write."""
         base = dict(self.BASE)
-        base["tasks"] = [{"id": "101", "title": "Wire it"}, {"id": "102", "title": "Breakdown"}]
+        base["tasks"] = [
+            {"id": "101", "title": "Wire it"},
+            {"id": "102", "title": "Breakdown"},
+        ]
         result = self._run(base)
         self.assertNotIn("102", {op["item_id"] for op in result["write_ops"]})
 
@@ -400,13 +449,17 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
         agile = self._run(dict(self.BASE, process="agile"))
         scrum_paths = {f for op in scrum["write_ops"] for f in op["fields"]}
         agile_paths = {f for op in agile["write_ops"] for f in op["fields"]}
-        self.assertNotIn("/fields/Microsoft.VSTS.Scheduling.OriginalEstimate", scrum_paths)
+        self.assertNotIn(
+            "/fields/Microsoft.VSTS.Scheduling.OriginalEstimate", scrum_paths
+        )
         self.assertIn("/fields/Microsoft.VSTS.Scheduling.OriginalEstimate", agile_paths)
 
     def test_blocked_estimate_produces_no_write_ops(self):
         """Work that cannot fit is never written."""
         payloads = {
-            "iteration": {"attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"}},
+            "iteration": {
+                "attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"}
+            },
             "team_settings": {"workingDays": [1, 2, 3, 4, 5]},
             "capacities": {
                 "teamMembers": [
@@ -418,7 +471,9 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
                 ]
             },
         }
-        result = self._run(dict(self.BASE, story_points=21, assignee="Ana", payloads=payloads))
+        result = self._run(
+            dict(self.BASE, story_points=21, assignee="Ana", payloads=payloads)
+        )
         self.assertTrue(result["blocked"])
         self.assertEqual(result["write_ops"], [])
         self.assertTrue(result["resolution_options"])
@@ -442,7 +497,9 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
             "work_items": {"value": []},
         }
         result = self._run(dict(self.BASE, assignee="Ana", payloads=payloads))
-        self.assertTrue(any("capacity mismatch" in warning for warning in result["warnings"]))
+        self.assertTrue(
+            any("capacity mismatch" in warning for warning in result["warnings"])
+        )
 
     def test_missing_inputs_error_cleanly(self):
         """Bad arguments are an error message, not an exception."""

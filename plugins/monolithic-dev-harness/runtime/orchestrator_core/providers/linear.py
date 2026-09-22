@@ -15,7 +15,9 @@ from .work_items import LinearWorkItemAdapter
 class LinearProvider:
     name = "linear"
 
-    def __init__(self, *, payloads: dict[str, Any] | None = None, team: str | None = None) -> None:
+    def __init__(
+        self, *, payloads: dict[str, Any] | None = None, team: str | None = None
+    ) -> None:
         self.payloads = payloads or {}
         self.team = team
         self.work_items = LinearWorkItemAdapter()
@@ -24,7 +26,9 @@ class LinearProvider:
         if not self.team:
             return ProviderResult.failure("Linear team is not configured")
         try:
-            return ProviderResult.success(self.work_items.create_request(artifact, container_id=self.team))
+            return ProviderResult.success(
+                self.work_items.create_request(artifact, container_id=self.team)
+            )
         except ValueError as exc:
             return ProviderResult.failure(str(exc))
 
@@ -43,8 +47,14 @@ class LinearProvider:
         issues = self.payloads.get("issues")
         if not isinstance(issues, list):
             return ProviderResult.success([])
-        records = tuple(self.read_result(issue) for issue in issues if isinstance(issue, dict))
-        failures = tuple(result.error or "invalid Linear issue" for result in records if not result.ok)
+        records = tuple(
+            self.read_result(issue) for issue in issues if isinstance(issue, dict)
+        )
+        failures = tuple(
+            result.error or "invalid Linear issue"
+            for result in records
+            if not result.ok
+        )
         if failures:
             return ProviderResult.failure("; ".join(failures))
         return ProviderResult.success([result.data for result in records])

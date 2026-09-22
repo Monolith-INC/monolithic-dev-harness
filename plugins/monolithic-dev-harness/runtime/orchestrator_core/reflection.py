@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-
 MISTAKES_FILENAME = "mistakes.json"
 
 
@@ -61,13 +60,19 @@ def evaluate_reflection(
 ) -> ReflectionDecision:
     current = state or ReflectionState()
     if not has_draft:
-        return ReflectionDecision(critiques=[], reflection=current, mode="instructions", blocked=False)
+        return ReflectionDecision(
+            critiques=[], reflection=current, mode="instructions", blocked=False
+        )
     if not critiques:
-        return ReflectionDecision(critiques=[], reflection=current, mode="completed", blocked=False)
+        return ReflectionDecision(
+            critiques=[], reflection=current, mode="completed", blocked=False
+        )
     next_state = advance_reflection(current, critiques, max_attempts=max_attempts)
     blocked = next_state.blocked
     mode = "blocked_requires_review" if blocked else "correcao"
-    return ReflectionDecision(critiques=critiques, reflection=next_state, mode=mode, blocked=blocked)
+    return ReflectionDecision(
+        critiques=critiques, reflection=next_state, mode=mode, blocked=blocked
+    )
 
 
 def mistakes_path(state_dir: Path) -> Path:
@@ -79,7 +84,9 @@ def mistakes_path(state_dir: Path) -> Path:
     return state_dir / MISTAKES_FILENAME
 
 
-def load_mistakes(state_dir: Path, *, skill_name: str | None = None) -> list[dict[str, Any]]:
+def load_mistakes(
+    state_dir: Path, *, skill_name: str | None = None
+) -> list[dict[str, Any]]:
     path = mistakes_path(state_dir)
     if not path.is_file():
         return []
@@ -110,7 +117,9 @@ def append_mistake(
             existing = []
     existing.append({"flaw": flaw, "skill": skill_name, "artifact": artifact})
     try:
-        path.write_text(json.dumps({"mistakes": existing}, indent=2) + "\n", encoding="utf-8")
+        path.write_text(
+            json.dumps({"mistakes": existing}, indent=2) + "\n", encoding="utf-8"
+        )
     except OSError:
         return False
     return True

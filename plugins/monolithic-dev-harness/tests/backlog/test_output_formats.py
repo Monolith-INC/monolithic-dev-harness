@@ -31,7 +31,9 @@ def _read_unique_contract(skill: str, name: str) -> str:
 
 
 def _read_example(skill: str, name: str) -> str:
-    return (SKILLS / skill / "references" / "examples" / name).read_text(encoding="utf-8")
+    return (SKILLS / skill / "references" / "examples" / name).read_text(
+        encoding="utf-8"
+    )
 
 
 COMPLIANT_GENERATE = """\
@@ -145,16 +147,26 @@ Time-box: 2 dias.
 Precisamos cache distribuído mas não sabemos qual tecnologia usar.
 """
 
-COMPLIANT_REPORT = _read_unique_contract("validate-artifact", "canonical-validation-report.md").replace(
-    "{{ARTIFACT_TYPE}}", "User Story"
-).replace("{{TITLE}}", "Login field validation").replace("{{SOURCE}}", "file").replace(
-    "{{PASSED}}", "12"
-).replace("{{FAILED}}", "0").replace("{{WARNINGS}}", "0").replace("{{OUTCOME}}", "PASS")
+COMPLIANT_REPORT = (
+    _read_unique_contract("validate-artifact", "canonical-validation-report.md")
+    .replace("{{ARTIFACT_TYPE}}", "User Story")
+    .replace("{{TITLE}}", "Login field validation")
+    .replace("{{SOURCE}}", "file")
+    .replace("{{PASSED}}", "12")
+    .replace("{{FAILED}}", "0")
+    .replace("{{WARNINGS}}", "0")
+    .replace("{{OUTCOME}}", "PASS")
+)
 
 
 class TestGenerateWorkItemFormat(unittest.TestCase):
     def test_canonical_templates_pass(self) -> None:
-        for name in ("canonical-epic.md", "canonical-feature.md", "canonical-user-story.md", "canonical-task.md"):
+        for name in (
+            "canonical-epic.md",
+            "canonical-feature.md",
+            "canonical-user-story.md",
+            "canonical-task.md",
+        ):
             self.assertTrue(_read_template(name).strip(), msg=name)
 
     def test_compliant_synthetic_passes(self) -> None:
@@ -183,7 +195,9 @@ class TestGenerateWorkItemFormat(unittest.TestCase):
         self.assertTrue(any("forbidden" in e for e in result.errors))
 
     def test_missing_spec_wikilink_fails(self) -> None:
-        body = COMPLIANT_GENERATE.replace("[[Specs/6868-login-field-validation-spec]]\n\n", "")
+        body = COMPLIANT_GENERATE.replace(
+            "[[Specs/6868-login-field-validation-spec]]\n\n", ""
+        )
         result = validate_generate_work_item_body(body)
         self.assertFalse(result.ok)
         self.assertTrue(any("wikilink" in e for e in result.errors))
@@ -195,9 +209,7 @@ class TestEnrichWorkItemFormat(unittest.TestCase):
         self.assertTrue(result.ok, msg=str(result.errors))
 
     def test_canonical_feature_passes(self) -> None:
-        result = validate_enrich_feature_body(
-            _read_template("canonical-feature.md")
-        )
+        result = validate_enrich_feature_body(_read_template("canonical-feature.md"))
         self.assertTrue(result.ok, msg=str(result.errors))
 
     def test_canonical_user_story_passes(self) -> None:
@@ -225,7 +237,11 @@ class TestEnrichWorkItemFormat(unittest.TestCase):
         body = COMPLIANT_ENRICH_FEATURE.replace(
             "## 🎯 Objetivo",
             "## 📦 Escopo\n\n### Incluído\n- x\n\n### Excluído (Fora do Escopo)\n- y\n\n## 🎯 Objetivo",
-        ).replace("## 📦 Escopo\n\n### Incluído\n- Formulário", "## REMOVED\n\n### Incluído\n- Formulário", 1)
+        ).replace(
+            "## 📦 Escopo\n\n### Incluído\n- Formulário",
+            "## REMOVED\n\n### Incluído\n- Formulário",
+            1,
+        )
         result = validate_enrich_feature_body(body)
         self.assertFalse(result.ok)
 
@@ -248,17 +264,23 @@ class TestTicketStructureFormat(unittest.TestCase):
         self.assertTrue(validate_ticket_structure_body(COMPLIANT_TICKET_STRUCTURE).ok)
 
     def test_missing_complexidade_fails(self) -> None:
-        body = COMPLIANT_TICKET_STRUCTURE.replace("## 📊 Complexidade\n\n**2 pontos**", "")
+        body = COMPLIANT_TICKET_STRUCTURE.replace(
+            "## 📊 Complexidade\n\n**2 pontos**", ""
+        )
         result = validate_ticket_structure_body(body)
         self.assertFalse(result.ok)
         self.assertTrue(any("Complexidade" in e for e in result.errors))
 
     def test_pt_br_body_fails_when_language_en_requested(self) -> None:
-        result = validate_ticket_structure_body(COMPLIANT_TICKET_STRUCTURE, language="en")
+        result = validate_ticket_structure_body(
+            COMPLIANT_TICKET_STRUCTURE, language="en"
+        )
         self.assertFalse(result.ok)
 
     def test_en_compliant_passes_with_language_en(self) -> None:
-        result = validate_ticket_structure_body(COMPLIANT_TICKET_STRUCTURE_EN, language="en")
+        result = validate_ticket_structure_body(
+            COMPLIANT_TICKET_STRUCTURE_EN, language="en"
+        )
         self.assertTrue(result.ok, msg=str(result.errors))
 
     def test_en_body_fails_under_default_pt_br_language(self) -> None:
@@ -266,7 +288,9 @@ class TestTicketStructureFormat(unittest.TestCase):
         self.assertFalse(result.ok)
 
     def test_unknown_language_falls_back_to_pt_br(self) -> None:
-        result = validate_ticket_structure_body(COMPLIANT_TICKET_STRUCTURE, language="fr")
+        result = validate_ticket_structure_body(
+            COMPLIANT_TICKET_STRUCTURE, language="fr"
+        )
         self.assertTrue(result.ok, msg=str(result.errors))
 
 

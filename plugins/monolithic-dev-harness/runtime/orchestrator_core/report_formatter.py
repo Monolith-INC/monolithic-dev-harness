@@ -62,7 +62,7 @@ def persist_report(
     reports_dir = state_dir / "reports"
     reports_dir.mkdir(parents=True, exist_ok=True)
     slug = artifact_slug(record)
-    today = date.today().isoformat()
+    today = date.today().isoformat()  # noqa: DTZ011 -- report filenames use the user's local date
     prefix = "autofix" if skill == "auto-fix-artifact" else "validate"
     path = reports_dir / f"{today}-{prefix}-{slug}.md"
     outcome = "pass" if "Outcome: PASS" in terminal_output else "fail"

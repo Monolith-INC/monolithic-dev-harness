@@ -45,14 +45,20 @@ class PointScale:
         return math.ceil(points / self.ceiling)
 
 
-FIBONACCI = PointScale(name="fibonacci", values=(1.0, 2.0, 3.0, 5.0, 8.0, 13.0, 21.0), ceiling=5.0)
+FIBONACCI = PointScale(
+    name="fibonacci", values=(1.0, 2.0, 3.0, 5.0, 8.0, 13.0, 21.0), ceiling=5.0
+)
 
 # The per-driver scale scored by the 6-driver heuristic. A Story's points are the MAX across
 # drivers, with no exceptions -- two drivers at 5 is a 5-point Story, not an 8-point one. Two
 # hard dimensions show up in the split decision, not by inflating the score.
-DRIVER_MAX = PointScale(name="driver-max", values=(1.0, 2.0, 3.0, 5.0, 8.0), ceiling=5.0)
+DRIVER_MAX = PointScale(
+    name="driver-max", values=(1.0, 2.0, 3.0, 5.0, 8.0), ceiling=5.0
+)
 
-LINEAR = PointScale(name="linear", values=(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0), ceiling=5.0)
+LINEAR = PointScale(
+    name="linear", values=(1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0), ceiling=5.0
+)
 
 SCALES: dict[str, PointScale] = {
     FIBONACCI.name: FIBONACCI,
@@ -82,7 +88,11 @@ def story_points_from_drivers(scores: dict[str, float] | list[float]) -> float |
     Returns None for an empty or unusable set of scores.
     """
     values = list(scores.values()) if isinstance(scores, dict) else list(scores)
-    usable = [float(v) for v in values if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0]
+    usable = [
+        float(v)
+        for v in values
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and v > 0
+    ]
     return max(usable) if usable else None
 
 
@@ -91,4 +101,8 @@ def dominant_drivers(scores: dict[str, float]) -> list[str]:
     top = story_points_from_drivers(scores)
     if top is None:
         return []
-    return [name for name, value in scores.items() if isinstance(value, (int, float)) and value == top]
+    return [
+        name
+        for name, value in scores.items()
+        if isinstance(value, (int, float)) and value == top
+    ]

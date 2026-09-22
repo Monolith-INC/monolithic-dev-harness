@@ -1,0 +1,89 @@
+---
+title: Security Model
+status: active
+owner: monolithic-dev-harness maintainers
+last_reviewed: 2026-09-22
+---
+
+# Security Model
+
+## Scope
+
+The plugin on a developer's machine, its hooks, and the calls it makes to Azure DevOps with the
+developer's identity. Out of scope: the hosts themselves, Azure DevOps, and the model provider.
+
+## Assets / Authority
+
+| Asset | Why it matters |
+| --- | --- |
+| Azure Boards work items | the team's plan; protected items must stay intact |
+| Azure Repos branches and pull requests | what reaches review and production |
+| The repository's code and history | commits must meet the team's rules |
+| The developer's Azure DevOps session | every call runs as the developer |
+| `.harness/policy.json`, approvals, manual checks | the controls themselves |
+
+## Trust Boundaries
+
+```text
+untrusted                          |  trusted to decide
+-----------------------------------+-----------------------------------
+model output                       |  the hook runtime (code, tests)
+content the agent reads            |  the developer's own prompt
+(work items, web pages, files)     |  the committed policy
+tool results                       |  git ids
+```
+
+The model and everything it reads are treated as untrusted. Decisions come only from code, the
+committed policy, git, and the developer's prompt.
+
+## Role Permissions
+
+See [../01-architecture/system-context.md](../01-architecture/system-context.md#authority-boundaries).
+
+## Threats
+
+See [threat-model.md](threat-model.md).
+
+## Controls
+
+| Control | Rule / mechanism |
+| --- | --- |
+| No tracker/SCM write or push without a person's approval | `approval-required`; windows exist only from the prompt hook |
+| The agent cannot approve itself or weaken the policy | `human-owned` |
+| Protected items are never modified, even indirectly by links | `protected-items` |
+| Nothing unreviewed reaches a pull request; people publish and approve | `draft-reviewed-prs` |
+| Code ships with tests; generated files are not hand-edited | `tests-with-code`, `generated-files` |
+| Sensitive paths need evidence for the exact change | `guarded-paths` |
+| Branch, state, spec, and evidence discipline | workflow policy |
+| Reviewer subagents have no file-edit tools | `tools:` in their frontmatter (Read, Grep, Glob, Bash, Skill, WebFetch); their Bash calls still pass the hooks |
+| No stored credentials | the Azure DevOps server uses interactive OAuth; no PAT |
+
+## Host Enforcement Differences
+
+Both hosts run the same runtime. Claude Code's `PreToolUse` matcher covers Bash, file edits, and
+every MCP tool. Cursor's `preToolUse`, `beforeShellExecution`, and `beforeMCPExecution` cover the
+same classes; enforcement in a live Cursor session is pending first observation.
+
+## Fail-closed Behavior
+
+If the policy is invalid or any rule or the workflow runtime raises, write-class calls (file
+edits, commits, pushes, merges, tracker/SCM writes) are denied with `harness-error`; reads continue.
+Corrupt state files are treated as absent, which can only cause a deny.
+
+## Supply-chain Validation
+
+- Releases are built by CI from a tagged commit with `git archive` (committed files only).
+- `install.sh` verifies the archive's SHA-256 against the release's `SHA256SUMS` before installing.
+- The hook runtime and installer use the Python standard library only.
+- Vendored sources and their licenses are listed in `THIRD_PARTY_NOTICES.md`.
+- `@azure-devops/mcp` is fetched by `npx` at run time and is the one unpinned runtime dependency.
+
+## Residual Risks
+
+- An approval window covers any tracker/SCM write for its duration, not only the batch shown.
+- Shell commands that write files are matched by pattern for `generated-files` and `human-owned`;
+  an unusual command form could slip past, so commits are also checked.
+- The workflow runtime writes a debug log to `/tmp/codex_hook_debug.log`, readable by other local
+  users on shared machines.
+- `@azure-devops/mcp` is not pinned to a version.
+- Report vulnerabilities privately to the maintainers; do not open a public issue.

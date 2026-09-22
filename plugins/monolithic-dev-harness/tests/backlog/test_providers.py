@@ -32,7 +32,9 @@ CAPACITIES_PAYLOAD = {
                 {"capacityPerDay": 5, "name": "Development"},
                 {"capacityPerDay": 3, "name": "Testing"},
             ],
-            "daysOff": [{"start": "2026-08-05T00:00:00Z", "end": "2026-08-06T00:00:00Z"}],
+            "daysOff": [
+                {"start": "2026-08-05T00:00:00Z", "end": "2026-08-06T00:00:00Z"}
+            ],
         },
         {
             "teamMember": {"id": "u2", "displayName": "Ana Souza"},
@@ -45,7 +47,10 @@ CAPACITIES_PAYLOAD = {
 ITERATION_PAYLOAD = {
     "id": "it1",
     "name": "Sprint 42",
-    "attributes": {"startDate": "2026-08-03T00:00:00Z", "finishDate": "2026-08-14T00:00:00Z"},
+    "attributes": {
+        "startDate": "2026-08-03T00:00:00Z",
+        "finishDate": "2026-08-14T00:00:00Z",
+    },
 }
 
 TEAM_SETTINGS_PAYLOAD = {
@@ -128,8 +133,15 @@ class TestLinearWorkItemHierarchy(unittest.TestCase):
                 )
                 create = provider.create_request(artifact)
                 self.assertTrue(create.ok, create.error)
-                self.assertEqual(create.data.payload["labels"], [f"agile:{item_type.lower().replace(' ', '-')}"])
-                self.assertNotIn("project", create.data.payload, "Linear Projects are not Agile Epics")
+                self.assertEqual(
+                    create.data.payload["labels"],
+                    [f"agile:{item_type.lower().replace(' ', '-')}"],
+                )
+                self.assertNotIn(
+                    "project",
+                    create.data.payload,
+                    "Linear Projects are not Agile Epics",
+                )
                 self.assertEqual(create.data.payload.get("parentId"), parent_id)
 
                 read = provider.read_result(
@@ -143,7 +155,12 @@ class TestLinearWorkItemHierarchy(unittest.TestCase):
                 )
                 self.assertTrue(read.ok, read.error)
                 self.assertEqual(
-                    (read.data.type, read.data.provider, read.data.provider_id, read.data.parent_id),
+                    (
+                        read.data.type,
+                        read.data.provider,
+                        read.data.provider_id,
+                        read.data.parent_id,
+                    ),
                     (item_type, "linear", provider_id, parent_id),
                 )
 
@@ -178,7 +195,10 @@ class TestAzureFields(unittest.TestCase):
 
     def test_field_ref_builds_patch_path(self):
         """Writes address fields by JSON-Patch path."""
-        self.assertEqual(f.field_ref(f.REMAINING_WORK), "/fields/Microsoft.VSTS.Scheduling.RemainingWork")
+        self.assertEqual(
+            f.field_ref(f.REMAINING_WORK),
+            "/fields/Microsoft.VSTS.Scheduling.RemainingWork",
+        )
 
 
 class TestAzureMapping(unittest.TestCase):
@@ -220,7 +240,16 @@ class TestAzureMapping(unittest.TestCase):
 
     def test_map_weekend_days_six_day_week(self):
         """A team working Saturdays leaves only Sunday as weekend."""
-        settings = {"workingDays": ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]}
+        settings = {
+            "workingDays": [
+                "monday",
+                "tuesday",
+                "wednesday",
+                "thursday",
+                "friday",
+                "saturday",
+            ]
+        }
         self.assertEqual(map_weekend_days(settings), (6,))
 
     def test_map_iteration_assembles_dates_and_team(self):
@@ -326,11 +355,15 @@ class TestAzureProvider(unittest.TestCase):
         agile = AzureDevOpsProvider(process="Agile").plan_hour_write("1", 4.0)
         scrum = AzureDevOpsProvider(process="Scrum").plan_hour_write("1", 4.0)
         self.assertIn(f.field_ref(f.ORIGINAL_ESTIMATE), [o.field_path for o in agile])
-        self.assertNotIn(f.field_ref(f.ORIGINAL_ESTIMATE), [o.field_path for o in scrum])
+        self.assertNotIn(
+            f.field_ref(f.ORIGINAL_ESTIMATE), [o.field_path for o in scrum]
+        )
 
     def test_plan_hour_write_includes_activity_when_given(self):
         """Activity is written only when the caller could determine one."""
-        with_activity = self._provider().plan_hour_write("1", 4.0, activity="Development")
+        with_activity = self._provider().plan_hour_write(
+            "1", 4.0, activity="Development"
+        )
         without = self._provider().plan_hour_write("1", 4.0)
         self.assertIn(f.field_ref(f.ACTIVITY), [o.field_path for o in with_activity])
         self.assertNotIn(f.field_ref(f.ACTIVITY), [o.field_path for o in without])
@@ -361,8 +394,13 @@ class TestAzureClientConfiguration(unittest.TestCase):
 
     def test_scope_includes_team_when_given(self):
         """Capacity endpoints are team-scoped when a team is supplied."""
-        self.assertNotIn("/myteam", AzureCapacityClient("org", "proj", pat="x")._scope())
-        self.assertIn("/myteam", AzureCapacityClient("org", "proj", team="myteam", pat="x")._scope())
+        self.assertNotIn(
+            "/myteam", AzureCapacityClient("org", "proj", pat="x")._scope()
+        )
+        self.assertIn(
+            "/myteam",
+            AzureCapacityClient("org", "proj", team="myteam", pat="x")._scope(),
+        )
 
 
 class TestFilesystemProvider(unittest.TestCase):
@@ -377,7 +415,9 @@ class TestFilesystemProvider(unittest.TestCase):
         if capacity is not None:
             meta = artifacts
             meta.mkdir(exist_ok=True)
-            (meta / "capacity-sprint-1.json").write_text(json.dumps(capacity), encoding="utf-8")
+            (meta / "capacity-sprint-1.json").write_text(
+                json.dumps(capacity), encoding="utf-8"
+            )
         return artifacts
 
     def test_reads_points_and_hours_from_frontmatter(self):
@@ -395,8 +435,12 @@ class TestFilesystemProvider(unittest.TestCase):
         in_sprint = "---\nstory_points: 2\niteration: sprint-1\n---\n\n# In\n"
         other = "---\nstory_points: 2\niteration: sprint-9\n---\n\n# Out\n"
         with tempfile.TemporaryDirectory() as tmpdir:
-            artifacts = self._artifacts(tmpdir, {"1-in.md": in_sprint, "2-out.md": other})
-            self.assertEqual(len(FilesystemProvider(artifacts).fetch_work_items("sprint-1").data), 1)
+            artifacts = self._artifacts(
+                tmpdir, {"1-in.md": in_sprint, "2-out.md": other}
+            )
+            self.assertEqual(
+                len(FilesystemProvider(artifacts).fetch_work_items("sprint-1").data), 1
+            )
 
     def test_empty_directory_warns_but_succeeds(self):
         """An empty directory is a warning, not a failure."""
@@ -419,7 +463,13 @@ class TestFilesystemProvider(unittest.TestCase):
         capacity = {
             "startDate": "2026-08-03",
             "finishDate": "2026-08-14",
-            "members": [{"id": "u1", "name": "Ana", "activities": [{"name": "Development", "capacityPerDay": 6}]}],
+            "members": [
+                {
+                    "id": "u1",
+                    "name": "Ana",
+                    "activities": [{"name": "Development", "capacityPerDay": 6}],
+                }
+            ],
         }
         with tempfile.TemporaryDirectory() as tmpdir:
             artifacts = self._artifacts(tmpdir, {}, capacity=capacity)
@@ -430,7 +480,9 @@ class TestFilesystemProvider(unittest.TestCase):
     def test_plan_hour_write_targets_frontmatter(self):
         """The filesystem adapter writes to frontmatter keys, not Azure fields."""
         with tempfile.TemporaryDirectory() as tmpdir:
-            ops = FilesystemProvider(Path(tmpdir)).plan_hour_write("1", 4.0, activity="Development")
+            ops = FilesystemProvider(Path(tmpdir)).plan_hour_write(
+                "1", 4.0, activity="Development"
+            )
             self.assertEqual(ops[0].field_path, "frontmatter.effort_hours")
             self.assertEqual(ops[1].field_path, "frontmatter.activity")
 

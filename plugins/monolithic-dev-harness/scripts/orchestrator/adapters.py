@@ -26,7 +26,6 @@ def to_anthropic_dialect(instructions: str, task: Task) -> str:
     return prompt
 
 
-
 def to_anthropic_tool(manifest: dict[str, Any]) -> dict[str, Any]:
     """Translates a skill manifest into an Anthropic tool schema."""
     return {
@@ -34,5 +33,3 @@ def to_anthropic_tool(manifest: dict[str, Any]) -> dict[str, Any]:
         "description": manifest.get("description", ""),
         "input_schema": manifest.get("input_schema", {}),
     }
-
-

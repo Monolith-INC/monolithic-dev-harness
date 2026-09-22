@@ -16,7 +16,11 @@ from .azure_devops import AzureDevOpsProvider
 from .base import ProviderResult, WorkItemWriter, WriteOp
 from .filesystem import FilesystemProvider
 from .linear import LinearProvider
-from .work_items import AzureWorkItemAdapter, LinearWorkItemAdapter, ProviderCreateRequest
+from .work_items import (
+    AzureWorkItemAdapter,
+    LinearWorkItemAdapter,
+    ProviderCreateRequest,
+)
 
 __all__ = [
     "AzureDevOpsProvider",

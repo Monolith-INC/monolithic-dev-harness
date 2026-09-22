@@ -74,8 +74,7 @@ class WorkItemWriter(Protocol):
         *,
         activity: str | None = None,
         provenance: str = "",
-    ) -> list[WriteOp]:
-        ...
+    ) -> list[WriteOp]: ...
 
 
 __all__ = [

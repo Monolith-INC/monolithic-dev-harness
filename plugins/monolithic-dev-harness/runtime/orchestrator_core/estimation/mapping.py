@@ -82,7 +82,9 @@ def estimate_hours(
         return None
 
     low, high = band
-    provenance = PROVENANCE_SEED if config.source == "seed-default" else PROVENANCE_CONFIG
+    provenance = (
+        PROVENANCE_SEED if config.source == "seed-default" else PROVENANCE_CONFIG
+    )
     return HourEstimate(
         points=points,
         hours=_band_midpoint(low, high),
@@ -95,7 +97,9 @@ def estimate_hours(
     )
 
 
-def _interpolate_band(points: float, config: EstimationConfig) -> tuple[float, float] | None:
+def _interpolate_band(
+    points: float, config: EstimationConfig
+) -> tuple[float, float] | None:
     """Derive a band for an off-scale point value from the nearest configured neighbour.
 
     Scales the neighbouring band linearly. This is a fallback for values the team's own

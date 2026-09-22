@@ -321,7 +321,4 @@ def _is_shell_write(command: str) -> bool:
 
 def _is_bootstrap_or_repair(command: str | None) -> bool:
     text = command or ""
-    return (
-        "scripts/harness/bootstrap.py" in text
-        or "workflow-integrations" in text
-    )
+    return "scripts/harness/bootstrap.py" in text or "workflow-integrations" in text

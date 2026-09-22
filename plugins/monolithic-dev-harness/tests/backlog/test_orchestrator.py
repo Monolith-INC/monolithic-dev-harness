@@ -9,9 +9,12 @@ from orchestrator_core.artifact_validator import (
     validate_artifact,
 )
 from orchestrator_core.engine import OrchestratorEngine
-from orchestrator_core.ingest import ingest_from_text, ingest_file
-from orchestrator_core.reflection import ReflectionState, advance_reflection, evaluate_reflection
-
+from orchestrator_core.ingest import ingest_file, ingest_from_text
+from orchestrator_core.reflection import (
+    ReflectionState,
+    advance_reflection,
+    evaluate_reflection,
+)
 
 FIXTURE = Path(__file__).resolve().parents[2] / (
     "tests/backlog/fixtures/6869-login-form-validation.md"
@@ -85,7 +88,9 @@ class TestArtifactValidator(unittest.TestCase):
         self.assertEqual(outcome_from_results(results), "PASS")
 
     def test_raw_generate_story_passes(self) -> None:
-        record = ingest_from_text(RAW_GENERATE_STORY, filename="6869-login-form-validation")
+        record = ingest_from_text(
+            RAW_GENERATE_STORY, filename="6869-login-form-validation"
+        )
         results = validate_artifact(record)
         self.assertEqual(outcome_from_results(results), "PASS")
         names = [r.name for r in results if r.result == "FAIL"]
@@ -107,7 +112,8 @@ class TestArtifactValidator(unittest.TestCase):
 
     def test_en_story_fails_without_language_frontmatter(self) -> None:
         record = ingest_from_text(
-            "---\ntype: ticket\nwork_item_type: User Story\nstory_points: 2\n---\n\n" + EN_STORY_BODY,
+            "---\ntype: ticket\nwork_item_type: User Story\nstory_points: 2\n---\n\n"
+            + EN_STORY_BODY,
             filename="0000-en-story",
         )
         results = validate_artifact(record)
@@ -115,7 +121,11 @@ class TestArtifactValidator(unittest.TestCase):
         names = [r.name for r in results if r.result == "FAIL"]
         # Default language is pt-BR; EN headings route as enriched_story and fail format checks.
         self.assertTrue(
-            any(name.startswith("body-section-missing: 🎯") or name == "body-enriched-story-format" for name in names)
+            any(
+                name.startswith("body-section-missing: 🎯")
+                or name == "body-enriched-story-format"
+                for name in names
+            )
         )
 
     def test_en_story_passes_with_language_en_frontmatter(self) -> None:
@@ -129,7 +139,9 @@ class TestArtifactValidator(unittest.TestCase):
 
     def test_pt_br_story_fails_when_declared_language_is_en(self) -> None:
         record = ingest_file(FIXTURE)
-        mislabeled = replace(record, frontmatter={**record.frontmatter, "language": "en"})
+        mislabeled = replace(
+            record, frontmatter={**record.frontmatter, "language": "en"}
+        )
         results = validate_artifact(mislabeled)
         self.assertEqual(outcome_from_results(results), "FAIL")
 
@@ -138,7 +150,11 @@ class TestArtifactValidator(unittest.TestCase):
         warned = replace(record, body=f"{record.body}\nRef: /home/user/projects/repo\n")
         results = validate_artifact(warned)
         self.assertEqual(outcome_from_results(results), "PASS")
-        self.assertTrue(any("content-no-machine-paths" in c for c in critiques_from_results(results)))
+        self.assertTrue(
+            any(
+                "content-no-machine-paths" in c for c in critiques_from_results(results)
+            )
+        )
 
 
 class TestOrchestratorEngine(unittest.TestCase):

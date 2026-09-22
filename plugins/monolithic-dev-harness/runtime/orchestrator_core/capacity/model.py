@@ -88,7 +88,11 @@ class IterationCapacity:
     def working_days(self) -> list[date]:
         if self.start_date is None or self.finish_date is None:
             return []
-        return [d for d in DateRange(self.start_date, self.finish_date).days() if self.is_working_day(d)]
+        return [
+            d
+            for d in DateRange(self.start_date, self.finish_date).days()
+            if self.is_working_day(d)
+        ]
 
     def working_days_for(self, member: MemberCapacity) -> list[date]:
         return [d for d in self.working_days() if not member.is_off(d)]
