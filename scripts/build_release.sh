@@ -29,6 +29,17 @@ git archive --format=tar --prefix="${NAME}/" HEAD \
   | gzip -9 > "${DIST}/${NAME}.tar.gz"
 cp install.sh "${DIST}/install.sh"
 
+# Refuse to publish an archive the hosts cannot load.
+contents="$(tar -tzf "${DIST}/${NAME}.tar.gz")"
+for required in .claude-plugin/marketplace.json .cursor-plugin/marketplace.json \
+    plugins/monolithic-dev-harness/.claude-plugin/plugin.json \
+    plugins/monolithic-dev-harness/.cursor-plugin/plugin.json \
+    plugins/monolithic-dev-harness/.mcp.json plugins/monolithic-dev-harness/cursor.mcp.json \
+    plugins/monolithic-dev-harness/hooks/hooks.json plugins/monolithic-dev-harness/hooks/cursor.hooks.json \
+    plugins/monolithic-dev-harness/bin/harness; do
+  grep -qx "${NAME}/${required}" <<<"$contents" || { echo "archive is missing ${required}" >&2; exit 1; }
+done
+
 cd "$DIST"
 if command -v sha256sum >/dev/null 2>&1; then
   sha256sum "${NAME}.tar.gz" install.sh > SHA256SUMS

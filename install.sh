@@ -249,6 +249,11 @@ install_claude() {
     claude plugin install "$PLUGIN_ID" >/dev/null
   fi
   claude plugin list --json 2>/dev/null | grep -q "\"${PLUGIN_ID}\"" || die "Claude Code did not report the plugin as installed"
+  local details
+  details="$(claude plugin details "$PLUGIN_ID" 2>/dev/null || true)"
+  if grep -q "Hooks (0)" <<<"$details" || grep -q "MCP servers (0)" <<<"$details"; then
+    die "Claude Code loaded the plugin without its hooks or MCP servers; the release is incomplete"
+  fi
   if [[ -n "$ORG" ]]; then
     claude_settings_env set "$ORG"
     say "Claude Code: AZURE_DEVOPS_ORG=${ORG} recorded in ${CLAUDE_SETTINGS}"

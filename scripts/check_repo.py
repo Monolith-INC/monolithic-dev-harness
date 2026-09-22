@@ -3,6 +3,7 @@
 
     check_repo.py
 
+- every file the plugin must ship is tracked by git;
 - every tracked *.json file parses;
 - the example policy validates against the policy schema (needs `jsonschema`);
 - every skill's frontmatter `name` matches its folder;
@@ -22,6 +23,18 @@ ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "plugins" / "monolithic-dev-harness"
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 FRONTMATTER_KEYS = ("title", "status", "owner", "last_reviewed")
+# Files the hosts load from the plugin. A global gitignore once kept hooks/ and .mcp.json out of a
+# release, so their presence in git is checked, not assumed.
+REQUIRED_PLUGIN_FILES = (
+    ".claude-plugin/plugin.json",
+    ".cursor-plugin/plugin.json",
+    ".mcp.json",
+    "cursor.mcp.json",
+    "hooks/hooks.json",
+    "hooks/cursor.hooks.json",
+    "bin/harness",
+    "scripts/harness/hook.py",
+)
 
 
 def tracked(pattern: str) -> list[Path]:
@@ -41,6 +54,22 @@ def tracked(pattern: str) -> list[Path]:
         check=True,
     ).stdout
     return [ROOT / line for line in out.splitlines() if line]
+
+
+def check_required_files(problems: list[str]) -> None:
+    tracked_files = set(
+        subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files", "plugins/monolithic-dev-harness"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()
+    )
+    for rel in REQUIRED_PLUGIN_FILES:
+        if f"plugins/monolithic-dev-harness/{rel}" not in tracked_files:
+            problems.append(
+                f"plugins/monolithic-dev-harness/{rel} is not tracked by git"
+            )
 
 
 def check_json(problems: list[str]) -> None:
@@ -114,7 +143,13 @@ def check_links(problems: list[str]) -> None:
 
 def main() -> int:
     problems: list[str] = []
-    for check in (check_json, check_skills, check_docs, check_links):
+    for check in (
+        check_required_files,
+        check_json,
+        check_skills,
+        check_docs,
+        check_links,
+    ):
         check(problems)
     for problem in problems:
         print(f"FAIL {problem}")

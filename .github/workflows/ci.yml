@@ -88,6 +88,10 @@ jobs:
           mkdir -p "$HOME/.cursor"
           bash dist/install.sh --source dist/monolithic-dev-harness-*.tar.gz --host all --org contoso --yes
           claude plugin list --json | grep -q '"monolithic-dev-harness@monolithic-dev-harness"'
+          details="$(claude plugin details monolithic-dev-harness@monolithic-dev-harness)"
+          echo "$details" | grep -E "Skills|Agents|Hooks|MCP servers"
+          echo "$details" | grep -qE "Hooks \([1-9]" || { echo "hooks were not loaded"; exit 1; }
+          echo "$details" | grep -q "MCP servers (4)" || { echo "MCP servers were not loaded"; exit 1; }
           test -f "$HOME/.cursor/plugins/local/monolithic-dev-harness/.cursor-plugin/plugin.json"
           grep -q '"contoso"' "$HOME/.cursor/plugins/local/monolithic-dev-harness/cursor.mcp.json"
           AZURE_DEVOPS_ORG=contoso "$HOME/.local/bin/harness" doctor

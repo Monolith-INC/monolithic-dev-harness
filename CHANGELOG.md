@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-09-22
+
+### Fixed
+
+- The release archive now contains `hooks/` and `.mcp.json`. A global gitignore had kept them out of
+  git, so 0.1.0 installed with no hooks and no MCP servers: the rules never ran and the Azure DevOps
+  and orchestrator servers never started. The repository's `.gitignore` now re-includes them.
+
+### Added
+
+- Guards so an incomplete release cannot ship: `check_repo.py` fails when a required plugin file is
+  not tracked, `build_release.sh` refuses an archive without it, CI asserts that Claude Code loads
+  the plugin's hooks and all four MCP servers, and `install.sh` fails if it does not.
+
 ## [0.1.0] - 2026-09-22
 
 First release.
@@ -42,5 +56,6 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.0

@@ -3,3 +3,8 @@ __pycache__/
 .pytest_cache/
 .harness/state/
 dist/
+
+# The plugin ships these. Keep them tracked even when a global gitignore excludes hooks/ or .mcp*.
+!plugins/monolithic-dev-harness/hooks/
+!plugins/monolithic-dev-harness/hooks/**
+!plugins/monolithic-dev-harness/.mcp.json
