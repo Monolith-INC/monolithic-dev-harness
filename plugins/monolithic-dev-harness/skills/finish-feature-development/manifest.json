@@ -1,0 +1,39 @@
+{
+  "name": "finish-feature-development",
+  "version": "1.0.0",
+  "description": "Close an Active Feature stack with Feature→trunk PR after Stories merge into Feature.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "feature_id": {
+        "type": "string",
+        "description": "Feature work-item identifier or name."
+      },
+      "feature_branch": {
+        "type": "string",
+        "description": "Optional Feature branch name if already known."
+      },
+      "main_work_branch": {
+        "type": "string",
+        "description": "Optional confirmed trunk branch (cut-from / final PR target)."
+      }
+    },
+    "required": []
+  },
+  "output_signature": {
+    "type": "object",
+    "properties": {
+      "feature_branch": { "type": "string" },
+      "main_work_branch": { "type": "string" },
+      "feature_pr_url": { "type": "string" }
+    }
+  },
+  "tools": [],
+  "stage": {
+    "name": "finish-feature-development",
+    "workflow": "skills/codex_workflows/resources/workflows-finish-feature-development.md",
+    "rules": "skills/codex_workflows/rules/rules-finish-feature-development.ts",
+    "installed_workflow": ".agent/workflows/workflows-finish-feature-development.md",
+    "installed_rules": ".agent/rules/rules-finish-feature-development.ts"
+  }
+}

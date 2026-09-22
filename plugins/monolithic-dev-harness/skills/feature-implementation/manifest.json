@@ -1,0 +1,32 @@
+{
+  "name": "feature-implementation",
+  "version": "1.1.0",
+  "description": "Start an Active Feature: Phase 0–4 plan plus start-stage stacked Feature/Story branches. Mid-stack sync → reconcile-feature-stack; closeout → finish-feature-development.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "feature_id": {
+        "type": "string",
+        "description": "Feature work-item identifier or name."
+      }
+    },
+    "required": ["feature_id"]
+  },
+  "output_signature": {
+    "type": "object",
+    "properties": {
+      "feature_id": { "type": "string" },
+      "plan_path": { "type": "string" },
+      "feature_branch": { "type": "string" },
+      "mode": { "type": "string" }
+    }
+  },
+  "tools": [],
+  "stage": {
+    "name": "start-feature-development",
+    "workflow": "skills/codex_workflows/resources/workflows-start-feature-development.md",
+    "rules": "skills/codex_workflows/rules/rules-start-feature-development.ts",
+    "installed_workflow": ".agent/workflows/workflows-start-feature-development.md",
+    "installed_rules": ".agent/rules/rules-start-feature-development.ts"
+  }
+}

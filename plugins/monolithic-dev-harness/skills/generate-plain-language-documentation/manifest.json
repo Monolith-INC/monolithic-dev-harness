@@ -1,0 +1,31 @@
+{
+  "name": "generate-plain-language-documentation",
+  "description": "Plain-language prose for human-facing documents and work-item narrative; glossary-verified EN/pt-BR.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "source": {
+        "type": "string",
+        "description": "Inline text, local path, or URL of source material to rewrite"
+      },
+      "audience": {
+        "type": "string",
+        "description": "Least technical reader profile (default: feature owner)"
+      },
+      "language": {
+        "type": "string",
+        "enum": ["en", "pt-br"],
+        "description": "Output language; pt-br triggers glossary verification"
+      },
+      "document_type": {
+        "type": "string",
+        "enum": ["general", "report", "guide", "work-item-prose"],
+        "description": "Deliverable shape selector"
+      }
+    },
+    "required": ["source"]
+  },
+  "output_signature": {
+    "required": ["body", "language"]
+  }
+}

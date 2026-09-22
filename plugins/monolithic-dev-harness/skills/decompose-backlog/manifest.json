@@ -1,0 +1,30 @@
+{
+  "name": "decompose-backlog",
+  "description": "Decompose a parent Feature/Epic into right-sized child Stories with Azure create and audit.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "parent": {
+        "type": "string",
+        "description": "Parent Epic/Feature id, URL, or local draft path"
+      },
+      "language": {
+        "type": "string",
+        "enum": [
+          "en",
+          "pt-br"
+        ],
+        "description": "Output language"
+      }
+    },
+    "required": [
+      "parent"
+    ]
+  },
+  "output_signature": {
+    "required": [
+      "stories",
+      "audit"
+    ]
+  }
+}

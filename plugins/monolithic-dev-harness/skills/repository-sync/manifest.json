@@ -1,0 +1,14 @@
+{
+  "name": "repository-sync",
+  "version": "1.0.0",
+  "description": "Synchronize the repository with the source branch and local policy.",
+  "input_schema": {
+    "type": "object",
+    "properties": {}
+  },
+  "output_signature": {
+    "type": "object",
+    "properties": {}
+  },
+  "tools": []
+}

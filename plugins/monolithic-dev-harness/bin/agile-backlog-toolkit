@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Backlog orchestrator CLI (config, validate, estimate, capacity). The package lives in runtime/.
+set -euo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+export PYTHONPATH="${ROOT}/runtime${PYTHONPATH:+:$PYTHONPATH}"
+exec python3 -m orchestrator_core "$@"

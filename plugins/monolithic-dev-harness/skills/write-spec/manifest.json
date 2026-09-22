@@ -1,0 +1,39 @@
+{
+  "name": "write-spec",
+  "version": "1.0.0",
+  "description": "Generate adversarially reviewed specification artifacts for a work item using Actor-Critic reflection.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "ticket_id": {
+        "type": "string",
+        "description": "Provider work-item identifier."
+      },
+      "spec_kind": {
+        "type": "string",
+        "description": "Template kind: rfc, adr, design-doc, tech-spec, srs, implementation-plan, bugfix-spec, api-contract."
+      },
+      "draft_content": {
+        "type": "string",
+        "description": "Optional draft markdown for Critic evaluation (Actor-Critic loop)."
+      },
+      "attempt": {
+        "type": "number",
+        "description": "Reflection attempt counter (managed by orchestrator retries)."
+      }
+    },
+    "required": ["ticket_id", "spec_kind"]
+  },
+  "output_signature": {
+    "type": "object",
+    "required": ["ticket_id", "spec_kind", "artifact_scope", "mode"],
+    "properties": {
+      "ticket_id": { "type": "string" },
+      "spec_kind": { "type": "string" },
+      "artifact_scope": { "type": "string" },
+      "mode": { "type": "string" },
+      "critiques": { "type": "string" }
+    }
+  },
+  "tools": []
+}

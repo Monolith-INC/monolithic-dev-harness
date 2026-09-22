@@ -1,0 +1,1002 @@
+{
+  "title": "EN -> pt-BR technical translation glossary",
+  "source_url": "https://levysiqueira.com.br/texts/es-portugues/",
+  "author": "Levy Siqueira",
+  "origin": "Technical review of the pt-BR translation of Sommerville, Software Engineering (10th ed., Pearson)",
+  "retrieved": "2026-06-22",
+  "schema": {
+    "shape": "terms is an object keyed by the lowercased English term; each value has pt + source.",
+    "lookup_exact_en_pt": "jq -r --arg t Feature '(.aliases[$t] // ($t|ascii_downcase)) as $k | .terms[$k].pt' tech-glossary-en-pt-br.json",
+    "lookup_substring": "jq -r '.terms | to_entries[] | select(.key|contains(\"commit\")) | \"\\(.key) -> \\(.value.pt)\"' tech-glossary-en-pt-br.json",
+    "lookup_reverse_pt_en": "jq -r '.terms | to_entries[] | select(.value.pt|test(\"confiabilidade\";\"i\")) | \"\\(.key) -> \\(.value.pt)\"' tech-glossary-en-pt-br.json",
+    "aliases_note": "aliases maps original-cased/acronym forms (ATM, I/O) to their lowercased key.",
+    "upgrade_path": "If indexed reverse/fuzzy lookup becomes a hot path, convert to SQLite (table: en TEXT PRIMARY KEY, pt TEXT, source TEXT; index on pt). ~10-line migration."
+  },
+  "count": 236,
+  "aliases": {
+    "ATM": "atm",
+    "And": "gherkin and",
+    "Background": "gherkin background",
+    "But": "gherkin but",
+    "Enterprise Resource Planning (ERP) systems": "enterprise resource planning (erp) systems",
+    "Examples": "gherkin examples",
+    "Extreme Programming": "extreme programming",
+    "Feature": "gherkin feature",
+    "Given": "gherkin given",
+    "Host/target": "host/target",
+    "I/O": "i/o",
+    "IDE": "ide",
+    "N-version programming": "n-version programming",
+    "Rational Unified Process": "rational unified process",
+    "Rule": "gherkin rule",
+    "Scaling out": "scaling out",
+    "Scaling up": "scaling up",
+    "Scenario": "gherkin scenario",
+    "Scenario Outline": "gherkin scenario outline",
+    "Scenario Template": "gherkin scenario template",
+    "Scrum team": "scrum team",
+    "ScrumMaster": "scrummaster",
+    "Then": "gherkin then",
+    "When": "gherkin when",
+    "state chart (UML)": "state chart (uml)",
+    "Uniform Resource Identifier": "uniform resource identifier"
+  },
+  "terms": {
+    "activity diagram": {
+      "pt": "diagrama de atividades",
+      "source": ""
+    },
+    "agile software development methods": {
+      "pt": "métodos de desenvolvimento ágil de software",
+      "source": "WBMA / AgilCoop"
+    },
+    "aplications": {
+      "pt": "aplicações",
+      "source": ""
+    },
+    "application domain": {
+      "pt": "domínio da aplicação",
+      "source": ""
+    },
+    "architectural design": {
+      "pt": "projeto de arquitetura",
+      "source": ""
+    },
+    "array": {
+      "pt": "vetor",
+      "source": ""
+    },
+    "atm": {
+      "pt": "caixa eletrônico",
+      "source": ""
+    },
+    "attacker": {
+      "pt": "atacante",
+      "source": "Goodrich, M.T.; Tamassia, R. Introdução à Segurança de Computadores. Bookman, 2013."
+    },
+    "avoidance": {
+      "pt": "prevenção",
+      "source": ""
+    },
+    "baseline": {
+      "pt": "baseline",
+      "source": "ISO 12207"
+    },
+    "black-box test": {
+      "pt": "teste caixa-preta",
+      "source": "Delamaro; Maldonado e Jino (2016)"
+    },
+    "brownfield": {
+      "pt": "brownfield",
+      "source": ""
+    },
+    "buffer": {
+      "pt": "buffer",
+      "source": ""
+    },
+    "buffer overflow": {
+      "pt": "estouro de buffer",
+      "source": "[https://www.symantec.com/pt/br/security\\_response/glossary/define.jsp?letter=b&word=buffer-overflow](https://www.symantec.com/pt/br/security_response/glossary/define.jsp?letter=b&word=buffer-overflow)"
+    },
+    "build": {
+      "pt": "build (se produto) / versão / construção (se processo)",
+      "source": "ISO 12207"
+    },
+    "business applications": {
+      "pt": "aplicações corporativas",
+      "source": ""
+    },
+    "business process": {
+      "pt": "processo de negócio",
+      "source": ""
+    },
+    "business systems": {
+      "pt": "sistemas de negócio",
+      "source": ""
+    },
+    "business value": {
+      "pt": "valor de negócio",
+      "source": ""
+    },
+    "capability maturity": {
+      "pt": "maturidade da capacidade",
+      "source": "SOFTEX. Guia Geral MPS de Software. 2016."
+    },
+    "change proposal": {
+      "pt": "proposta de mudança",
+      "source": ""
+    },
+    "change request": {
+      "pt": "solicitação de mudança",
+      "source": ""
+    },
+    "check": {
+      "pt": "conferir, examinar, checar",
+      "source": ""
+    },
+    "check in": {
+      "pt": "*check-in* / fazer *check-in*",
+      "source": ""
+    },
+    "check out": {
+      "pt": "*check-out* / fazer *check-out*",
+      "source": ""
+    },
+    "checklist": {
+      "pt": "checklist",
+      "source": "Houaiss (checklist é uma palavra válida)"
+    },
+    "checkpoint": {
+      "pt": "checkpoint",
+      "source": ""
+    },
+    "checksum": {
+      "pt": "soma de verificação *(checksum*)",
+      "source": ""
+    },
+    "class diagram": {
+      "pt": "diagrama de classes",
+      "source": ""
+    },
+    "cluster": {
+      "pt": "*cluster*",
+      "source": ""
+    },
+    "collective ownership": {
+      "pt": "propriedade coletiva",
+      "source": ""
+    },
+    "commit": {
+      "pt": "efetivar (commit)",
+      "source": ""
+    },
+    "compliance": {
+      "pt": "conformidade",
+      "source": ""
+    },
+    "compromise": {
+      "pt": "conciliação / solução conciliatória / acordar",
+      "source": ""
+    },
+    "computationally intensive": {
+      "pt": "computacionalmente intensivo",
+      "source": ""
+    },
+    "computer based systems": {
+      "pt": "sistemas computacionais",
+      "source": ""
+    },
+    "computer-aided design": {
+      "pt": "desenho auxiliado por computador",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "confidentiality": {
+      "pt": "confidencialidade",
+      "source": ""
+    },
+    "configuration management": {
+      "pt": "gerenciamento de configuração",
+      "source": "(de configuração: ISO 12207)"
+    },
+    "consistent": {
+      "pt": "consistente",
+      "source": ""
+    },
+    "constraint": {
+      "pt": "restrição",
+      "source": ""
+    },
+    "continuous integration": {
+      "pt": "integração contínua",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "critical region": {
+      "pt": "região crítica",
+      "source": ""
+    },
+    "cross-site scripting attacks": {
+      "pt": "ataques de script entre sites",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "cyberattack": {
+      "pt": "ciberataque",
+      "source": ""
+    },
+    "cybersecurity": {
+      "pt": "cibersegurança",
+      "source": ""
+    },
+    "data encapsulation": {
+      "pt": "encapsulamento de dados",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "data feed": {
+      "pt": "feed de dados",
+      "source": ""
+    },
+    "data structure": {
+      "pt": "estrutura de dados",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "database schema": {
+      "pt": "esquema de banco de dados",
+      "source": ""
+    },
+    "deliverables": {
+      "pt": "entregáveis",
+      "source": ""
+    },
+    "delivery": {
+      "pt": "entrega",
+      "source": ""
+    },
+    "denial-of-service": {
+      "pt": "negação de serviço",
+      "source": ""
+    },
+    "dependability": {
+      "pt": "dependabilidade (*dependability*)",
+      "source": "NBR IEC 60300-1 (2009), Sugestão do prof. Dr. João Batista Camargo Júnior"
+    },
+    "dependable": {
+      "pt": "considerando a dependabilidade / sistemas confiáveis",
+      "source": "Não traduzir diretamente (sugestão do prof. Dr. João Batista Camargo Júnior) / prof. Dr. Eduardo A. P. Alchieri (SBC)"
+    },
+    "deploy": {
+      "pt": "implantar",
+      "source": ""
+    },
+    "design": {
+      "pt": "projeto / projeto (*design*)",
+      "source": ""
+    },
+    "development testing": {
+      "pt": "teste de desenvolvimento",
+      "source": ""
+    },
+    "direct memory access": {
+      "pt": "acesso direto à memória",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "dispatcher": {
+      "pt": "despachante",
+      "source": "Tanembaum e Bos (2015)"
+    },
+    "disposal": {
+      "pt": "desativação",
+      "source": "NBR ISO 12207 (2009)"
+    },
+    "download": {
+      "pt": "baixar",
+      "source": ""
+    },
+    "downtime": {
+      "pt": "tempo de parada",
+      "source": ""
+    },
+    "dynamic programming": {
+      "pt": "programação dinâmica",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "dynamically typed languages": {
+      "pt": "linguagens dinamicamente tipadas",
+      "source": ""
+    },
+    "elicitation": {
+      "pt": "elicitação",
+      "source": ""
+    },
+    "embedded": {
+      "pt": "embarcados",
+      "source": ""
+    },
+    "emergency fix": {
+      "pt": "correção de emergência",
+      "source": ""
+    },
+    "emergent": {
+      "pt": "emergente",
+      "source": ""
+    },
+    "encapsulation": {
+      "pt": "encapsulamento",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "end-user": {
+      "pt": "usuário final",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "enterprise resource planning (erp) systems": {
+      "pt": "sistemas ERP / planejamento de recursos empresariais",
+      "source": "(2a: site do SAP)"
+    },
+    "enterprise systems": {
+      "pt": "sistemas corporativos",
+      "source": ""
+    },
+    "equivalence partition": {
+      "pt": "partição de equivalência",
+      "source": ""
+    },
+    "equivalence partitioning": {
+      "pt": "particionamento de equivalência",
+      "source": "Delamaro; Maldonado e Jino (2016)"
+    },
+    "extreme programming": {
+      "pt": "Progração Extrema",
+      "source": ""
+    },
+    "facility": {
+      "pt": "recurso / instalação (quando se refere a ambiente físico)",
+      "source": ""
+    },
+    "fail-safe": {
+      "pt": "à prova de falhas",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "failure": {
+      "pt": "falha",
+      "source": "NBR ISO 25000 (2008), Delamaro; Maldonado e Jino (2016)"
+    },
+    "fault": {
+      "pt": "defeito",
+      "source": "NBR ISO 25000 (2008), Delamaro; Maldonado e Jino (2016)"
+    },
+    "fault tolerance": {
+      "pt": "tolerância a defeitos",
+      "source": ""
+    },
+    "fault-free": {
+      "pt": "livre de defeitos",
+      "source": ""
+    },
+    "feature": {
+      "pt": "característica / característica (*feature*)",
+      "source": ""
+    },
+    "feedback": {
+      "pt": "feedback",
+      "source": ""
+    },
+    "field-programmable gate arrays": {
+      "pt": "matrizes de portas programáveis em campo",
+      "source": "Tradução do Tocci, Widmer e Moss (2011)"
+    },
+    "flow": {
+      "pt": "fluxo",
+      "source": ""
+    },
+    "framework": {
+      "pt": "*framework* / arcabouço",
+      "source": ""
+    },
+    "gherkin and": {
+      "pt": "E",
+      "source": "Cucumber Gherkin — gherkin-languages.json (pt)"
+    },
+    "gherkin background": {
+      "pt": "Contexto / Cenário de Fundo / Cenario de Fundo / Fundo",
+      "source": "Cucumber Gherkin — gherkin-languages.json (pt)"
+    },
+    "gherkin but": {
+      "pt": "Mas",
+      "source": "Cucumber Gherkin — gherkin-languages.json (pt)"
+    },
+    "gherkin examples": {
+      "pt": "Exemplos / Cenários / Cenarios",
+      "source": "Cucumber Gherkin — gherkin-languages.json (pt)"
+    },
+    "gherkin feature": {
+      "pt": "Funcionalidade / Característica / Caracteristica",
+      "source": "Cucumber Gherkin — gherkin-languages.json (pt)"
+    },
+    "gherkin given": {
+      "pt": "Dado / Dada / Dados / Dadas",
+      "source": "Cucumber Gherkin — gherkin-languages.json (pt)"
+    },
+    "gherkin rule": {
+      "pt": "Regra",
+      "source": "Cucumber Gherkin — gherkin-languages.json (pt)"
+    },
+    "gherkin scenario": {
+      "pt": "Exemplo / Cenário / Cenario",
+      "source": "Cucumber Gherkin — gherkin-languages.json (pt)"
+    },
+    "gherkin scenario outline": {
+      "pt": "Esquema do Cenário / Esquema do Cenario / Delineação do Cenário / Delineacao do Cenario",
+      "source": "Cucumber Gherkin — gherkin-languages.json (pt)"
+    },
+    "gherkin scenario template": {
+      "pt": "Esquema do Cenário / Esquema do Cenario / Delineação do Cenário / Delineacao do Cenario",
+      "source": "Cucumber Gherkin — gherkin-languages.json (pt)"
+    },
+    "gherkin then": {
+      "pt": "Então / Entao",
+      "source": "Cucumber Gherkin — gherkin-languages.json (pt)"
+    },
+    "gherkin when": {
+      "pt": "Quando",
+      "source": "Cucumber Gherkin — gherkin-languages.json (pt)"
+    },
+    "functional design": {
+      "pt": "design funcional",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "functional programming": {
+      "pt": "programação funcional",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "gateway": {
+      "pt": "gateway",
+      "source": ""
+    },
+    "go live": {
+      "pt": "colocar em operação / colocar em produção",
+      "source": ""
+    },
+    "goal": {
+      "pt": "meta",
+      "source": ""
+    },
+    "greedy algorithm": {
+      "pt": "algoritmo guloso",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "guideline": {
+      "pt": "diretriz",
+      "source": ""
+    },
+    "hard real-time system": {
+      "pt": "sistema de tempo real crítico",
+      "source": "Tanembaum e Bos (2015); Carlos Maziero"
+    },
+    "hash table": {
+      "pt": "tabela hash ou de dispersão",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "high-level": {
+      "pt": "alto nível",
+      "source": ""
+    },
+    "host/target": {
+      "pt": "Host/target",
+      "source": ""
+    },
+    "i/o": {
+      "pt": "E/S",
+      "source": ""
+    },
+    "ide": {
+      "pt": "IDE",
+      "source": ""
+    },
+    "implementation": {
+      "pt": "implementação",
+      "source": ""
+    },
+    "input": {
+      "pt": "entrada",
+      "source": ""
+    },
+    "interoperability": {
+      "pt": "interoperabilidade",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "iterative": {
+      "pt": "iterativo",
+      "source": ""
+    },
+    "iterative model": {
+      "pt": "modelo iterativo",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "key phrase": {
+      "pt": "senha",
+      "source": ""
+    },
+    "laptop": {
+      "pt": "notebook",
+      "source": ""
+    },
+    "legacy software": {
+      "pt": "software legado",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "loosely coupled": {
+      "pt": "fracamente acoplados",
+      "source": ""
+    },
+    "mainframe": {
+      "pt": "mainframe",
+      "source": ""
+    },
+    "maintainability": {
+      "pt": "manutenibilidade",
+      "source": "NBR ISO 25030 (2008)"
+    },
+    "malware": {
+      "pt": "malware",
+      "source": "NBR ISO 27002"
+    },
+    "management": {
+      "pt": "gerenciamento",
+      "source": "PMBOK"
+    },
+    "manager": {
+      "pt": "gerente",
+      "source": ""
+    },
+    "milestone": {
+      "pt": "marco",
+      "source": "MS Project"
+    },
+    "misuse case": {
+      "pt": "caso de mau uso",
+      "source": "Orientado do prof. Dr. Julio Leite"
+    },
+    "model checking": {
+      "pt": "verificação de modelos",
+      "source": ""
+    },
+    "model-driven engineering": {
+      "pt": "engenharia dirigida por modelos",
+      "source": ""
+    },
+    "n-version programming": {
+      "pt": "programação N-versões",
+      "source": ""
+    },
+    "non-functional requirements": {
+      "pt": "requisitos não funcionais",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "object code": {
+      "pt": "código objeto",
+      "source": ""
+    },
+    "object-oriented design": {
+      "pt": "projeto orientado a objetos",
+      "source": ""
+    },
+    "off-the-shelf": {
+      "pt": "de prateleira",
+      "source": ""
+    },
+    "off-the-shelf software": {
+      "pt": "software de prateleira",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "open source": {
+      "pt": "código aberto *(open source*)",
+      "source": ""
+    },
+    "open source development": {
+      "pt": "desenvolvimento de código aberto *(open source*)",
+      "source": ""
+    },
+    "output": {
+      "pt": "saída",
+      "source": ""
+    },
+    "overhead": {
+      "pt": "sobrecarga",
+      "source": ""
+    },
+    "pair programming": {
+      "pt": "programação em pares",
+      "source": ""
+    },
+    "peer review": {
+      "pt": "revisão por pares",
+      "source": ""
+    },
+    "perfective (maintenance)": {
+      "pt": "perfectiva",
+      "source": ""
+    },
+    "persistence": {
+      "pt": "persistência",
+      "source": ""
+    },
+    "pipe and filter": {
+      "pt": "duto e filtro",
+      "source": ""
+    },
+    "pipeline": {
+      "pt": "pipeline",
+      "source": ""
+    },
+    "plan-driven process": {
+      "pt": "processo dirigido por plano",
+      "source": "O plano dirige o processo (“dirigido a plano” é popular, mas inadequado)"
+    },
+    "platform independent model": {
+      "pt": "modelo independente de plataforma",
+      "source": ""
+    },
+    "plugability": {
+      "pt": "conectividade",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "portable": {
+      "pt": "portável",
+      "source": ""
+    },
+    "proceedings": {
+      "pt": "anais",
+      "source": ""
+    },
+    "product backlog": {
+      "pt": "backlog do produto",
+      "source": "Guia do Scrum (2017)"
+    },
+    "product owner": {
+      "pt": "Product Owner / Product Owner (dono do produto)",
+      "source": "Guia do Scrum (2017)"
+    },
+    "prototyping": {
+      "pt": "prototipação",
+      "source": ""
+    },
+    "quality assurance": {
+      "pt": "garantia de qualidade",
+      "source": "(de qualidade: NBR ISO 12207)"
+    },
+    "quality control": {
+      "pt": "controle de qualidade",
+      "source": ""
+    },
+    "quality management": {
+      "pt": "gerenciamento da qualidade",
+      "source": "(da qualidade: NBR ISO 12207)"
+    },
+    "rational unified process": {
+      "pt": "Rational Unified Process",
+      "source": "Nome de um produto"
+    },
+    "rationale": {
+      "pt": "racional",
+      "source": ""
+    },
+    "read-only memory": {
+      "pt": "memória somente leitura",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "real-time systems": {
+      "pt": "sistemas de tempo real",
+      "source": ""
+    },
+    "refinement-based development": {
+      "pt": "desenvolvimento baseado em refinamento",
+      "source": ""
+    },
+    "release": {
+      "pt": "lançamento / lançamento (*release*)",
+      "source": "Livro: Entrega contínua"
+    },
+    "reliability": {
+      "pt": "confiabilidade",
+      "source": "NBR ISO 25030 (2008)"
+    },
+    "requirements management": {
+      "pt": "gerenciamento de requisitos",
+      "source": ""
+    },
+    "requirements specification": {
+      "pt": "especificação de requisitos (fase) / especificação dos requisitos (artefato)",
+      "source": ""
+    },
+    "retirement": {
+      "pt": "desativação",
+      "source": "NBR ISO 12207 (2009)"
+    },
+    "reuse": {
+      "pt": "reúso",
+      "source": ""
+    },
+    "rich interface": {
+      "pt": "interface dinâmica",
+      "source": ""
+    },
+    "runtime": {
+      "pt": "tempo de execução",
+      "source": ""
+    },
+    "runtime system": {
+      "pt": "sistema de execução",
+      "source": ""
+    },
+    "safety": {
+      "pt": "segurança (*safety*)",
+      "source": "Sugestão do prof. Dr. João Batista Camargo Júnior"
+    },
+    "safety critical control systems": {
+      "pt": "sistemas de controle críticos em segurança",
+      "source": "Sugestão do prof. Dr. João Batista Camargo Júnior"
+    },
+    "safety critical systems": {
+      "pt": "sistemas críticos em segurança",
+      "source": ""
+    },
+    "scale up": {
+      "pt": "escalar",
+      "source": ""
+    },
+    "scaling out": {
+      "pt": "escalar horizontalmente",
+      "source": ""
+    },
+    "scaling up": {
+      "pt": "escalar verticalmente",
+      "source": ""
+    },
+    "scrapped": {
+      "pt": "descartado",
+      "source": ""
+    },
+    "scrum team": {
+      "pt": "time Scrum",
+      "source": "Guia do Scrum (2017)"
+    },
+    "scrummaster": {
+      "pt": "Scrum Master",
+      "source": "Guia do Scrum (2017)"
+    },
+    "security": {
+      "pt": "segurança da informação (*security*)",
+      "source": "Sugestão do prof. Dr. Marcos Antônio Simplício Júnior"
+    },
+    "semantic data model": {
+      "pt": "modelo semântico de dados",
+      "source": ""
+    },
+    "semaphor": {
+      "pt": "semáforo",
+      "source": ""
+    },
+    "service-oriented": {
+      "pt": "orientada a serviços",
+      "source": ""
+    },
+    "service-oriented software engineering": {
+      "pt": "engenharia de software orientada a serviços",
+      "source": ""
+    },
+    "servicing": {
+      "pt": "em serviço",
+      "source": ""
+    },
+    "soft real-time system": {
+      "pt": "sistema de tempo real não crítico",
+      "source": "Tanembaum e Bos (2015); prof. Dr. Carlos Maziero"
+    },
+    "software as a service": {
+      "pt": "Software como serviço",
+      "source": ""
+    },
+    "software requirements": {
+      "pt": "requisitos de software",
+      "source": ""
+    },
+    "software-intensive systems": {
+      "pt": "sistemas intensivos de software",
+      "source": "NBR ISO 12207 (2009)"
+    },
+    "sprint": {
+      "pt": "sprint",
+      "source": "Guia do Scrum (2017)"
+    },
+    "stakeholders": {
+      "pt": "stakeholders",
+      "source": "Glintz, M. A Glossary of Requirements Engineering Terminology. IREB, 2012."
+    },
+    "stand-alone": {
+      "pt": "*stand-alone*",
+      "source": ""
+    },
+    "state chart (uml)": {
+      "pt": "diagrama de máquina de estados",
+      "source": "UML 2.5.1 / Wazlawick (2011)"
+    },
+    "state diagram": {
+      "pt": "diagrama de máquina de estados",
+      "source": ""
+    },
+    "stateful": {
+      "pt": "com estado",
+      "source": ""
+    },
+    "stateless": {
+      "pt": "sem estado",
+      "source": ""
+    },
+    "statement": {
+      "pt": "comando (quando relativo a um comando do código fonte)",
+      "source": ""
+    },
+    "static variables": {
+      "pt": "variáveis estáticas",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "step": {
+      "pt": "passo",
+      "source": ""
+    },
+    "stepwise refinement": {
+      "pt": "refinamento gradual",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "stub": {
+      "pt": "stub",
+      "source": ""
+    },
+    "subflow": {
+      "pt": "subfluxo",
+      "source": "Maestro Docs — runFlow"
+    },
+    "subflow chaining": {
+      "pt": "encadeamento de subfluxos",
+      "source": "Maestro Docs — runFlow"
+    },
+    "system boundary": {
+      "pt": "limite do sistema",
+      "source": "Glintz, M. A Glossary of Requirements Engineering Terminology. IREB, 2012."
+    },
+    "system requirements": {
+      "pt": "requisitos de sistema",
+      "source": ""
+    },
+    "team": {
+      "pt": "time / equipe",
+      "source": "Seguindo uma visão ágil, *time* quando for a equipe de desenvolvimento de software; *equipe* nos outros casos."
+    },
+    "template": {
+      "pt": "template",
+      "source": ""
+    },
+    "tap": {
+      "pt": "gesto de toque",
+      "source": "Android Developers — Gestures"
+    },
+    "test-driven development": {
+      "pt": "desenvolvimento dirigido por testes",
+      "source": ""
+    },
+    "test-first development": {
+      "pt": "desenvolvimento com testes a priori (test-first development)",
+      "source": "prof. Dr. Fábio Kon / WBMA"
+    },
+    "threads": {
+      "pt": "threads",
+      "source": ""
+    },
+    "throughput": {
+      "pt": "vazão (throughput)",
+      "source": ""
+    },
+    "time-to-market": {
+      "pt": "tempo de lançamento do produto no mercado (*time-to-market*)",
+      "source": ""
+    },
+    "timestamp": {
+      "pt": "*timestamp*",
+      "source": ""
+    },
+    "timing analysis": {
+      "pt": "análise temporal",
+      "source": ""
+    },
+    "token": {
+      "pt": "token",
+      "source": ""
+    },
+    "top-down": {
+      "pt": "top-down / top-down (de cima para baixo)",
+      "source": ""
+    },
+    "trace": {
+      "pt": "rastrear (imperativo: rastreie)",
+      "source": ""
+    },
+    "traceability": {
+      "pt": "rastreabilidade",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "trust": {
+      "pt": "confiança",
+      "source": ""
+    },
+    "uniform resource identifier": {
+      "pt": "Identificador de Recurso Uniforme",
+      "source": "(o identificador de recursos que é uniforme) http://www.ietf.org/rfc/rfc2396.txt"
+    },
+    "unit testing": {
+      "pt": "teste de unidade",
+      "source": "NBR ISO 12207 (2009), Delamaro; Maldonado e Jino (2016)"
+    },
+    "upload": {
+      "pt": "enviar",
+      "source": ""
+    },
+    "user interface": {
+      "pt": "interface com o usuário",
+      "source": ""
+    },
+    "user requirements": {
+      "pt": "requisitos de usuário",
+      "source": ""
+    },
+    "user stories": {
+      "pt": "histórias do usuário",
+      "source": ""
+    },
+    "user testing": {
+      "pt": "teste de usuário",
+      "source": ""
+    },
+    "viewpoint": {
+      "pt": "ponto de vista",
+      "source": ""
+    },
+    "waterfall model": {
+      "pt": "modelo em cascata",
+      "source": "Nação Fluente — Inglês Técnico: Engenharia de Software (Expressões)"
+    },
+    "wearable device": {
+      "pt": "dispositivos vestíveis (*wearables*)",
+      "source": ""
+    },
+    "web service": {
+      "pt": "web service",
+      "source": "http://www.w3c.br"
+    },
+    "web-based system": {
+      "pt": "sistema web",
+      "source": ""
+    },
+    "white-box test": {
+      "pt": "teste caixa-branca",
+      "source": ""
+    },
+    "wicked problem": {
+      "pt": "problema traiçoeiro",
+      "source": "Lessa (2013)"
+    },
+    "workflow": {
+      "pt": "fluxo de trabalho",
+      "source": ""
+    }
+  },
+  "sources": [
+    {
+      "label": "Levy Siqueira",
+      "url": "https://levysiqueira.com.br/texts/es-portugues/",
+      "note": "Technical review of the pt-BR translation of Sommerville, Software Engineering (10th ed., Pearson)"
+    },
+    {
+      "label": "Nação Fluente",
+      "file": "software-engineering-glossary.pdf",
+      "note": "Inglês Técnico booklet; Expressões section (EN→pt-BR pairs) merged; Glossário definitions intentionally not merged (definition-only, no translation)."
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Agile Backlog Toolkit artifact frontmatter",
+  "type": "object",
+  "required": ["type", "work_item_type", "provider"],
+  "properties": {
+    "type": {"const": "ticket"},
+    "work_item_type": {
+      "enum": ["Epic", "Feature", "User Story", "Task"]
+    },
+    "provider": {
+      "enum": ["local", "azure-devops", "linear"]
+    },
+    "provider_id": {"type": "string", "minLength": 1},
+    "parent_id": {"type": "string", "minLength": 1},
+    "story_points": {"type": "number", "exclusiveMinimum": 0}
+  },
+  "allOf": [
+    {
+      "if": {"properties": {"work_item_type": {"const": "Epic"}}},
+      "then": {"not": {"required": ["parent_id"]}}
+    },
+    {
+      "if": {
+        "properties": {
+          "work_item_type": {"enum": ["Feature", "User Story", "Task"]}
+        }
+      },
+      "then": {"required": ["parent_id"]}
+    }
+  ],
+  "not": {
+    "anyOf": [
+      {"required": ["azure_id"]},
+      {"required": ["parent_feature"]},
+      {"required": ["parent_epic"]}
+    ]
+  },
+  "additionalProperties": true
+}

@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "monolithic-dev-harness repository policy (.harness/policy.json)",
+  "type": "object",
+  "required": [
+    "schemaVersion"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "azure": {
+      "type": "object",
+      "properties": {
+        "organization": {
+          "type": "string"
+        },
+        "project": {
+          "type": "string"
+        },
+        "team": {
+          "type": "string"
+        },
+        "repository": {
+          "type": "string"
+        },
+        "protected_work_items": {
+          "type": "array",
+          "items": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "description": "protected-items: never written, linked, or parented."
+        }
+      }
+    },
+    "git": {
+      "type": "object",
+      "properties": {
+        "base_branch": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "approvals": {
+      "type": "object",
+      "properties": {
+        "window_minutes": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 240
+        }
+      }
+    },
+    "checks": {
+      "type": "array",
+      "description": "guarded-paths/draft-reviewed-prs evidence producers, run by scripts/harness/checks.py.",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "run"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9._-]{1,80}$"
+          },
+          "run": {
+            "type": "string",
+            "minLength": 1
+          },
+          "when": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "tests_required": {
+      "type": "array",
+      "description": "tests-with-code source ↔ test globs.",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "tests"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "source": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "tests": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "exclude": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      }
+    },
+    "generated": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "description": "generated-files: never edited by hand."
+    },
+    "guarded_paths": {
+      "type": "array",
+      "description": "guarded-paths: evidence is check:<check name> or manual:<name>.",
+      "items": {
+        "type": "object",
+        "required": [
+          "path",
+          "evidence"
+        ],
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "type": "string"
+          },
+          "evidence": {
+            "type": "string",
+            "pattern": "^(check|manual):[A-Za-z0-9._-]{1,60}$"
+          }
+        }
+      }
+    },
+    "pull_requests": {
+      "type": "object",
+      "properties": {
+        "require_draft": {
+          "type": "boolean"
+        },
+        "require_review_verdict": {
+          "type": "boolean"
+        }
+      }
+    },
+    "backlog": {
+      "type": "object",
+      "properties": {
+        "artifacts_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Where backlog drafts, plans, and reports live (the repository's vault or docs folder)."
+        }
+      }
+    }
+  }
+}

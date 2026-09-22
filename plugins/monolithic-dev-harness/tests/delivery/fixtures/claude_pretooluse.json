@@ -1,0 +1,8 @@
+{
+  "toolCall": {
+    "name": "Bash",
+    "args": {
+      "command": "mv /workspace/project/work-items/task-123.md /workspace/project/work-items/task-123.md"
+    }
+  }
+}

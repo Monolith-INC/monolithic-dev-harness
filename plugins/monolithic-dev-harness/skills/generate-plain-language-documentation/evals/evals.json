@@ -1,0 +1,23 @@
+{
+  "skill_name": "generate-plain-language-documentation",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Document why our login page shows a blank screen after the OAuth token expires — write it so our feature owner can understand without reading the code.",
+      "expected_output": "Plain-language report with problems explained in prose, no ticket ids, inline term explanations, and code-path or official-doc references only.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Rewrite these requirement bullets in pt-BR for stakeholders: 'Implement circuit breaker on the payment API; retry with exponential backoff; surface degraded mode in the admin dashboard.'",
+      "expected_output": "pt-BR bullets using glossary-verified terms (no calques like 'gate' or literal 'circuit breaker' if glossary specifies otherwise), repository terms explained on first use.",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "Polish the Requisitos and Critérios de Aceite for a user story about validating email and password on the login form — keep the three-part ticket shape.",
+      "expected_output": "work-item-prose sub-pass: ## Requisitos and ## Critérios de Aceite with WHAT-not-HOW bullets and testable checkboxes, no enricher emoji sections.",
+      "files": []
+    }
+  ]
+}

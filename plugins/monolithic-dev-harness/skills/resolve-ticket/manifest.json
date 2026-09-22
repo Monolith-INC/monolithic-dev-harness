@@ -1,0 +1,43 @@
+{
+  "name": "resolve-ticket",
+  "version": "1.1.0",
+  "description": "Resolve a tracker work item with an Actor-Critic resolution artifact and verification evidence.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "ticket_id": {
+        "type": "string",
+        "description": "The ID of the ticket to resolve."
+      },
+      "implementation_summary": {
+        "type": "string",
+        "description": "Optional walkthrough of what was implemented."
+      },
+      "draft_content": {
+        "type": "string",
+        "description": "Resolution report draft for Critic review."
+      },
+      "attempt": {
+        "type": "integer",
+        "description": "Reflection attempt counter from prior orchestrator retries."
+      },
+      "max_attempts": {
+        "type": "integer",
+        "description": "Circuit breaker threshold (default 3)."
+      }
+    },
+    "required": ["ticket_id"]
+  },
+  "output_signature": {
+    "type": "object",
+    "required": ["ticket_id", "artifact_scope", "mode"],
+    "properties": {
+      "ticket_id": { "type": "string" },
+      "mode": { "type": "string" },
+      "artifact_scope": { "type": "string" },
+      "resolution_required": { "type": "boolean" },
+      "critiques": { "type": "string" }
+    }
+  },
+  "tools": []
+}

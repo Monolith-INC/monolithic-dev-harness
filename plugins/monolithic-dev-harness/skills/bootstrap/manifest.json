@@ -1,0 +1,14 @@
+{
+  "name": "bootstrap",
+  "version": "1.0.0",
+  "description": "Select and configure tracker, SCM, provider mappings, and branch conventions.",
+  "input_schema": {
+    "type": "object",
+    "properties": {}
+  },
+  "output_signature": {
+    "type": "object",
+    "properties": {}
+  },
+  "tools": []
+}

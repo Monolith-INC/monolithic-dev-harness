@@ -1,0 +1,126 @@
+#!/usr/bin/env python3
+"""Opt a repository into the harness: write its policy and the per-component configuration.
+
+    bootstrap.py --repo <dir> --policy-from <policy.json> [--branch-template '{category}/{key}-{slug}']
+                 [--discover] [--force]
+
+Writes, once (existing files are kept unless --force):
+  .harness/policy.json                     the harness rules (copied from --policy-from)
+  .gitignore                               ignores .harness/state/
+  .codex-workflows/integrations.json       delivery: Azure Boards tracker + Azure Repos SCM
+  .agile-backlog-toolkit/config.json       backlog: org / project / team
+
+Review configuration (.monolithic-code-review/sources.json) is interactive: run the `review-setup`
+skill afterwards. Hooks and MCP servers come from the plugin itself; nothing is wired into the
+repository's host settings.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+PLUGIN_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PLUGIN_ROOT))
+sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
+
+from harness.config import POLICY_RELATIVE_PATH, PolicyError, load_policy  # noqa: E402
+
+
+def _ensure_gitignore(repo: Path) -> bool:
+    path = repo / ".gitignore"
+    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
+    if ".harness/state/" in lines:
+        return False
+    lines.append(".harness/state/")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return True
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--repo", required=True)
+    parser.add_argument("--policy-from", required=True)
+    parser.add_argument("--branch-template", default="{category}/{key}-{slug}")
+    parser.add_argument("--discover", action="store_true", help="query Azure DevOps for capabilities (starts OAuth)")
+    parser.add_argument("--force", action="store_true")
+    args = parser.parse_args(argv)
+
+    repo = Path(args.repo).resolve()
+    if not (repo / ".git").exists():
+        print(f"{repo} is not a git repository root", file=sys.stderr)
+        return 2
+
+    policy_path = repo / POLICY_RELATIVE_PATH
+    if policy_path.exists() and not args.force:
+        print(f"kept existing {POLICY_RELATIVE_PATH}")
+    else:
+        policy_path.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(args.policy_from, policy_path)
+        print(f"wrote {POLICY_RELATIVE_PATH}")
+    try:
+        policy = load_policy(repo)
+    except PolicyError as exc:
+        print(f"policy is invalid: {exc}", file=sys.stderr)
+        return 2
+    if not policy["azure"]["organization"]:
+        org = os.environ.get("AZURE_DEVOPS_ORG", "").strip()
+        if not org:
+            print("no Azure DevOps organization: set azure.organization in the policy or AZURE_DEVOPS_ORG", file=sys.stderr)
+            return 2
+        raw = json.loads(policy_path.read_text(encoding="utf-8"))
+        raw.setdefault("azure", {})["organization"] = org
+        policy_path.write_text(json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+        policy["azure"]["organization"] = org
+        print(f"recorded organization {org} (from AZURE_DEVOPS_ORG) in {POLICY_RELATIVE_PATH}")
+    if _ensure_gitignore(repo):
+        print("added .harness/state/ to .gitignore")
+
+    azure = policy["azure"]
+    integrations = repo / ".codex-workflows" / "integrations.json"
+    if integrations.exists() and not args.force:
+        print("kept existing .codex-workflows/integrations.json")
+    else:
+        from harness.integrations_setup import configure_integrations
+
+        configure_integrations(
+            repo,
+            tracker="azure_devops",
+            scm="azure_repos",
+            branch_template=args.branch_template,
+            discover=args.discover,
+            runtime_dir=PLUGIN_ROOT,
+        )
+        print("wrote .codex-workflows/integrations.json (azure_devops + azure_repos)")
+
+    backlog = policy.get("backlog", {})
+    pairs = {
+        "azure.org": azure["organization"],
+        "azure.project": azure["project"],
+        "azure.team": azure["team"],
+        "artifacts_path": backlog.get("artifacts_path", ""),
+    }
+    missing = [key for key, value in pairs.items() if not value]
+    if missing:
+        print(f"policy is missing values the backlog stage needs: {', '.join(missing)}", file=sys.stderr)
+        return 2
+    cli = PLUGIN_ROOT / "bin" / "agile-backlog-toolkit"
+    set_args = [arg for key, value in pairs.items() for arg in ("--set", f"{key}={value}")]
+    subprocess.run([str(cli), "config", *set_args], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+    backlog_config = repo / ".agile-backlog-toolkit" / "config.json"
+    data = json.loads(backlog_config.read_text(encoding="utf-8"))
+    data["provider_mode"] = "azure"
+    backlog_config.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    print("configured .agile-backlog-toolkit/config.json (provider_mode azure)")
+
+    print(json.dumps({"next": ["run the review-setup skill", "restart the agent session"]}))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

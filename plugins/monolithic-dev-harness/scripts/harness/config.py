@@ -1,0 +1,66 @@
+"""Load the per-repository harness policy (`.harness/policy.json`)."""
+
+from __future__ import annotations
+
+import copy
+import json
+from pathlib import Path
+from typing import Any
+
+POLICY_RELATIVE_PATH = Path(".harness") / "policy.json"
+
+DEFAULT_POLICY: dict[str, Any] = {
+    "schemaVersion": 1,
+    "azure": {
+        "organization": "",
+        "project": "",
+        "team": "",
+        "repository": "",
+        "protected_work_items": [],
+    },
+    "backlog": {"artifacts_path": ""},
+    "git": {"base_branch": "develop"},
+    "approvals": {"window_minutes": 20},
+    "checks": [],
+    "tests_required": [],
+    "generated": [],
+    "guarded_paths": [],
+    "pull_requests": {"require_draft": True, "require_review_verdict": True},
+}
+
+
+class PolicyError(ValueError):
+    """The repository's policy file exists but cannot be used."""
+
+
+def _merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    merged = copy.deepcopy(base)
+    for key, value in override.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def load_policy(repo_root: Path) -> dict[str, Any]:
+    path = repo_root / POLICY_RELATIVE_PATH
+    if not path.is_file():
+        return copy.deepcopy(DEFAULT_POLICY)
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise PolicyError(f"{POLICY_RELATIVE_PATH} is not valid JSON: {exc}") from exc
+    if not isinstance(payload, dict) or payload.get("schemaVersion") != 1:
+        raise PolicyError(f"{POLICY_RELATIVE_PATH} must be an object with schemaVersion 1")
+    return _merge(DEFAULT_POLICY, payload)
+
+
+def protected_ids(policy: dict[str, Any]) -> set[int]:
+    ids: set[int] = set()
+    for value in policy.get("azure", {}).get("protected_work_items", []):
+        try:
+            ids.add(int(value))
+        except (TypeError, ValueError):
+            continue
+    return ids

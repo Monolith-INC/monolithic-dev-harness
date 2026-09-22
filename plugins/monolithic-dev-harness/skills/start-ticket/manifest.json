@@ -1,0 +1,28 @@
+{
+  "name": "start-ticket",
+  "version": "1.1.0",
+  "description": "Start a tracker work item and return the specification and branch actions required before implementation.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "ticket_id": {
+        "type": "string",
+        "description": "The provider work-item identifier."
+      }
+    },
+    "required": [
+      "ticket_id"
+    ]
+  },
+  "output_signature": {
+    "type": "object",
+    "required": ["ticket_id", "transition_required", "mode"],
+    "properties": {
+      "ticket_id": { "type": "string" },
+      "transition_required": { "type": "string" },
+      "mode": { "type": "string" },
+      "generation_required": { "type": "boolean" }
+    }
+  },
+  "tools": []
+}

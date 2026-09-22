@@ -1,0 +1,9 @@
+{
+  "mistakes": [
+    {
+      "flaw": "Example: shipped tech spec without rollback plan",
+      "spec_kind": "tech-spec",
+      "ticket": "EXAMPLE-0"
+    }
+  ]
+}

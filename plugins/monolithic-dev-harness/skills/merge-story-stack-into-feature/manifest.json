@@ -1,0 +1,36 @@
+{
+  "name": "merge-story-stack-into-feature",
+  "version": "1.0.0",
+  "description": "Merge stacked Story branches into the Feature branch in stack order with merge commits only.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "feature_id": {
+        "type": "string",
+        "description": "Feature work-item identifier or name."
+      },
+      "feature_branch": {
+        "type": "string",
+        "description": "Optional Feature branch name if already known."
+      }
+    },
+    "required": []
+  },
+  "output_signature": {
+    "type": "object",
+    "properties": {
+      "feature_branch": { "type": "string" },
+      "merged_stories": { "type": "array", "items": { "type": "string" } },
+      "skipped_already_merged": { "type": "array", "items": { "type": "string" } },
+      "conflicts_resolved": { "type": "boolean" }
+    }
+  },
+  "tools": [],
+  "stage": {
+    "name": "merge-story-stack-into-feature",
+    "workflow": "skills/codex_workflows/resources/workflows-merge-story-stack-into-feature.md",
+    "rules": "skills/codex_workflows/rules/rules-merge-story-stack-into-feature.ts",
+    "installed_workflow": ".agent/workflows/workflows-merge-story-stack-into-feature.md",
+    "installed_rules": ".agent/rules/rules-merge-story-stack-into-feature.ts"
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "name": "review-pr",
+  "version": "1.1.0",
+  "description": "Retrieve pull-request review threads through the configured SCM adapter, classify them, apply confirmed edits, and publish decisions to the tracker.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "pr_number": {
+        "type": "string",
+        "description": "The PR number to review."
+      }
+    },
+    "required": ["pr_number"]
+  },
+  "output_signature": {
+    "type": "object",
+    "properties": {}
+  },
+  "tools": []
+}

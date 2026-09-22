@@ -1,0 +1,9 @@
+{
+  "hook_event_name": "preToolUse",
+  "tool_name": "Shell",
+  "tool_input": {
+    "command": "mv /workspace/project/work-items/task-123.md /workspace/project/work-items/task-123.md",
+    "working_directory": "/workspace/project"
+  },
+  "transcript_path": "/home/agentrick/.cursor/projects/example/agent-transcripts/session.jsonl"
+}
