@@ -6,6 +6,29 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.5] - 2026-09-23
+
+### Fixed
+
+- The four stacked-Feature skills (`feature-implementation`, `reconcile-feature-stack`,
+  `merge-story-stack-into-feature`, `finish-feature-development`) pointed the agent at procedures
+  under `.agent/`, a folder the harness never creates. Each skill now contains its own procedure and
+  rules ([ADR-0008](docs/01-architecture/decisions/ADR-0008-the-harness-owns-its-files.md)).
+- `reconcile-feature-stack` merges only; it no longer offers rebase, which its own rules forbade.
+- `feature-implementation` no longer opens every Story's pull request up front. Each Story's draft
+  pull request comes from its review stage, the only point the harness allows one.
+
+### Removed
+
+- `skills/codex_workflows/`, a leftover of a source plugin's layout (45 skills, down from 46), the
+  manifests' unused `stage` blocks, and `scripts/validate_plugin.py`.
+
+### Documentation
+
+- README: the Story and Feature implementation workflows, and answers to common questions about
+  the harness, including what it does not do yet.
+- ADR-0008: the harness owns its files, and the gaps found while documenting the workflow.
+
 ## [0.1.4] - 2026-09-23
 
 ### Fixed
@@ -175,7 +198,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.4...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.5...HEAD
+[0.1.5]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.5
 [0.1.4]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.4
 [0.1.3]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.3
 [0.1.2]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.2

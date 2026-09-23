@@ -19,18 +19,25 @@
   "output_signature": {
     "type": "object",
     "properties": {
-      "feature_branch": { "type": "string" },
-      "merged_stories": { "type": "array", "items": { "type": "string" } },
-      "skipped_already_merged": { "type": "array", "items": { "type": "string" } },
-      "conflicts_resolved": { "type": "boolean" }
+      "feature_branch": {
+        "type": "string"
+      },
+      "merged_stories": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "skipped_already_merged": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "conflicts_resolved": {
+        "type": "boolean"
+      }
     }
   },
-  "tools": [],
-  "stage": {
-    "name": "merge-story-stack-into-feature",
-    "workflow": "skills/codex_workflows/resources/workflows-merge-story-stack-into-feature.md",
-    "rules": "skills/codex_workflows/rules/rules-merge-story-stack-into-feature.ts",
-    "installed_workflow": ".agent/workflows/workflows-merge-story-stack-into-feature.md",
-    "installed_rules": ".agent/rules/rules-merge-story-stack-into-feature.ts"
-  }
+  "tools": []
 }
