@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import os
-import shlex
 import subprocess
 import sys
 from collections.abc import Callable
@@ -24,6 +23,7 @@ from integrations.adapters import tracker_adapter
 from integrations.config import load_config
 from integrations.contracts import IntegrationError
 from policy import CanonicalToolEvent, PolicyDecision
+from policy.commands import git_commands, writes_inside
 from policy.git_branch_guard import evaluate_git_branch_guard
 
 LOG_FILE = "/tmp/codex_hook_debug.log"
@@ -131,7 +131,7 @@ def evaluate_event(
         checkout_decision = _validate_checkout_convention(command, event.workspace_root)
         if checkout_decision.is_denied():
             return checkout_decision
-        if _is_mutating_git(command) or _is_shell_write(command):
+        if _is_mutating_git(command) or writes_inside(command, event.workspace_root):
             return _evaluate_work_context(event)
         return PolicyDecision.allow()
 
@@ -201,22 +201,23 @@ def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
         )
 
 
-def _validate_checkout_convention(command: str, project_root: str) -> PolicyDecision:
-    try:
-        tokens = shlex.split(command)
-    except ValueError:
-        tokens = command.split()
-    if not any(token in {"checkout", "switch"} for token in tokens):
-        return PolicyDecision.allow()
-    target = ""
+def _created_branch(argv: list[str]) -> str:
+    """The branch a `git checkout -b` / `git switch -c` would create, or ``""``."""
+    if not argv or argv[0] not in {"checkout", "switch"}:
+        return ""
     for flag in ("-b", "-B", "-c", "-C", "--create"):
-        if flag in tokens:
-            index = tokens.index(flag)
-            if index + 1 < len(tokens):
-                target = tokens[index + 1]
-                break
-    if not target:
+        if flag in argv:
+            index = argv.index(flag)
+            if index + 1 < len(argv):
+                return argv[index + 1]
+    return ""
+
+
+def _validate_checkout_convention(command: str, project_root: str) -> PolicyDecision:
+    targets = [name for name in map(_created_branch, git_commands(command)) if name]
+    if not targets:
         return PolicyDecision.allow()
+    target = targets[0]
     try:
         config = load_config(Path(project_root))
         if not config.tracking_enabled:
@@ -299,20 +300,7 @@ def _normalized_tool_name(name: str) -> str:
 
 
 def _is_mutating_git(command: str) -> bool:
-    try:
-        tokens = shlex.split(command)
-    except ValueError:
-        tokens = command.split()
-    for index, token in enumerate(tokens):
-        if token == "git" and index + 1 < len(tokens):
-            return tokens[index + 1] in _MUTATING_GIT
-    return False
-
-
-def _is_shell_write(command: str) -> bool:
-    return any(
-        token in command for token in (">", ">>", "tee ", "sed -i", "apply_patch")
-    )
+    return any(argv and argv[0] in _MUTATING_GIT for argv in git_commands(command))
 
 
 def _is_bootstrap_or_repair(command: str | None) -> bool:
