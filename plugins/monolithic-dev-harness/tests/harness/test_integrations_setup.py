@@ -175,6 +175,14 @@ class TestRepairIntegrations(unittest.TestCase):
         self.assertEqual(config["tracker"]["mappings"], {"kinds": {"epic": "Epic"}})
         self.assertEqual(len(repairs), 5)
 
+    def test_a_broken_file_is_reported_not_rewritten(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "integrations.json"
+            path.write_text("{not json", encoding="utf-8")
+            (message,) = repair_integrations(path, self.AZURE)
+            self.assertTrue(message.startswith("not repaired"))
+            self.assertEqual(path.read_text(encoding="utf-8"), "{not json")
+
     def test_a_current_config_is_left_alone(self) -> None:
         current = {
             "tracker": {"adapter": "azure_devops", "project": "fabrikam"},

@@ -150,7 +150,13 @@ def repair_integrations(path: Path, azure: dict) -> list[str]:
     """
     from scripts.integrations.discovery import FIXED_TOOL_ADAPTERS
 
-    payload = json.loads(path.read_text(encoding="utf-8"))
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        # A file a person broke by hand is theirs to fix; bootstrap reports it and moves on.
+        return [f"not repaired: {path.name} could not be read ({exc})"]
+    if not isinstance(payload, dict):
+        return [f"not repaired: {path.name} is not a JSON object"]
     repairs: list[str] = []
     tracker = payload.get("tracker") if isinstance(payload.get("tracker"), dict) else {}
     scm = payload.get("scm") if isinstance(payload.get("scm"), dict) else {}

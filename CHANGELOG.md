@@ -8,49 +8,59 @@ All notable changes to this project are documented here. The format follows
 
 ## [0.1.3] - 2026-09-23
 
-A second review of 0.1.2 found holes in the rules it had just rewritten. Upgrade: 0.1.2 is not safe
-to rely on.
+Reviews of 0.1.2 found holes in the rules it had just rewritten. Upgrade: 0.1.2 is not safe to rely
+on. The shell-command checks remain best-effort — they catch the ways an agent plausibly retries a
+blocked action, not deliberate evasion; the fix that would make them complete is tracked in
+[issue 7](https://github.com/Monolith-INC/monolithic-dev-harness/issues/7).
 
 ### Security
 
+- **The hook fails closed.** A crash, or rules running past a 10-second budget, used to exit in a
+  way the host treats as "no decision", letting the call run. Now every shell command, file edit,
+  and tracker/SCM write is refused with `harness-error` instead.
 - **An agent could approve itself.** `cp x .harness/state/checks/../approvals/HB-1.json` was
-  allowed: `..` was not collapsed before the path check, and `checks/` is agent-writable. Paths are
-  now normalized, for shell commands and for edit tools that pass relative paths.
-- **A push could skip approval.** `sudo git push`, `env X=1 git push`, `(git push)`, a push inside
-  `if` or a loop, `bash -c 'git push'`, and `xargs git push` were not recognized as pushes. This
-  was already true in 0.1.1. Every rule now reads commands through the same parser.
-- More writes to human-owned files are caught: behind `timeout` or `nice`, via `dd of=`,
-  `--directory=` and `--target-directory=`, `yq -i`, `sort -o`, `git checkout -- <path>`,
-  `git apply`, a patch or archive that carries the file, globs, and removing the whole tree
-  (`rm -rf .`, `git clean -fdx`, `git stash -u`).
-- Relative paths in a shell command resolve from the directory the session runs in, not the
+  allowed. Paths are now normalized and symlinks resolved, for shell commands and edit tools.
+- **A push could skip approval.** `(git push)`, `bash -c 'git push'`, `env X=1 git push`,
+  `time git push`, `{ git push; }`, `` echo `git push` ``, and pushes inside `if` or loops were not
+  recognized — already true in 0.1.1. Every rule now reads commands through one parser.
+- **More writes to human-owned files are caught:** after a `cd` that fails; with `2>/dev/null`;
+  behind `timeout`, `nice`, `$(…)`, or backticks; via `dd of=`, `--directory=`, `1<>`, `yq -i`,
+  `sort -o`, `uniq`, `xxd -r`, `tree -o`; `git checkout`/`restore` of a directory; `git apply` and
+  `patch` (the patch is read, and one that cannot be read counts as writing its whole directory);
+  archive extraction (members are listed); globs; and removing the whole tree.
+- Relative paths in a shell command resolve from the session's working directory, not the
   repository root.
-- `protected-items` checks `AB#<id>` when a commit is made, not only when the same call pushes it,
-  and refuses setting the parent field (`System.Parent`, the gateway's `parentRef`).
-- `generated-files` honours the same fail-closed rule as `human-owned`: `eval 'cp x a.g.dart'` is a
-  write.
-- Tracker errors are fenced as untrusted content, like tracker results. Harness-owned results
-  (tracking status) are not.
+- `protected-items` checks commit messages when the commit is made, for `#<id>` as well as
+  `AB#<id>` (Azure Repos' commit mention linking turns both into links), and refuses setting the
+  parent field (`System.Parent`, the gateway's `parentRef`).
+- `generated-files` fails closed the same way as `human-owned`.
+- Tracker errors are fenced as untrusted content, like tracker results.
 
 ### Fixed
 
-- Reads that 0.1.2 still refused are allowed: behind `timeout`, through `bat`, `xxd`, `realpath`,
-  `tar -t`, a pipe into `python3 -c`, a heredoc that mentions a protected path as data,
-  `find … -exec grep`, and after a subshell's `cd`. `mkdir -p .harness/state` is allowed.
+- Reads that 0.1.2 refused are allowed: behind `timeout`, through `bat`, `realpath`, `tar -t`, a pipe
+  into `python3 -c`, a heredoc that mentions a protected path as data, `find … -exec grep`, and after
+  a subshell's `cd`. `mkdir -p .harness/state` is allowed.
 - Re-running bootstrap repairs a 0.1.1 `.codex-workflows/integrations.json` in place: it fills
   `tracker.project`, corrects an organization misread as `v3`, and drops unused bindings. Before,
-  every tracker call failed with `tracker.project is not set`.
+  every tracker call failed with `tracker.project is not set`. A file broken by hand is reported,
+  not rewritten.
 - `bootstrap --force` never replaces an existing `.harness/policy.json`; it rewrites only the
   integrations file.
 - `search_work_items` accepts conditions on custom fields (`[Custom.Team] = 'A'`).
 - If Azure creates a pull request but reading it back fails, the error names the pull request.
 - Status `0` maps to `notSet` / `unknown` instead of the string `"0"`.
 
+### Changed
+
+- A command the shell reader does not recognize is treated as writing every path it names. That
+  fails closed: a harmless new reader that names `.harness/` is refused until it is listed.
+
 ### Corrections to 0.1.2
 
 - It said `human-owned` "decides from what a command writes, not from the paths it mentions". A
-  command the reader does not know is still treated as writing what it names; that default is
-  deliberate and now documented.
+  command the reader does not know is treated as writing what it names; that default is deliberate.
+- It said a bare `#<id>` in a commit message links nothing. With commit mention linking on, it does.
 - It said `protected-items` "detects every form that links a work item". It missed the parent
   field and commit messages not pushed in the same call.
 - It said a truncated artifact list "says so". Only `search_work_items` reports truncation;

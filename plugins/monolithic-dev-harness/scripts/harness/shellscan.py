@@ -28,11 +28,11 @@ from __future__ import annotations
 import posixpath
 import re
 import shlex
+import stat
 import tarfile
 import zipfile
 from collections.abc import Iterator
 from dataclasses import dataclass, field
-from fnmatch import fnmatch
 from itertools import islice
 from pathlib import Path
 
@@ -85,9 +85,8 @@ NON_WRITERS = frozenset(
             "tr",
             "tree",
             "true",
-            "uniq",
         ),
-        *("wc", "which", "xxd", "[", "type"),
+        *("wc", "which", "[", "type"),
         *("b2sum", "cksum", "md5sum", "sha1sum", "sha224sum", "sha256sum", "sha384sum"),
         *("sha512sum", "shasum"),
     }
@@ -102,6 +101,8 @@ IN_PLACE_FLAGS = {
 # Readers that write only the file named by one of these options.
 OUTPUT_OPTIONS = {
     "sort": ("-o", "--output"),
+    "tree": ("-o",),
+    "less": ("-o", "-O", "--log-file", "--LOG-FILE"),
     "curl": ("-o", "--output"),
     "wget": ("-O", "--output-document"),
 }
@@ -125,25 +126,38 @@ WRAPPERS = {
     "stdbuf": frozenset({"-i", "-o", "-e"}),
     "sudo": frozenset({"-u", "-g", "-C", "-D", "-h", "-p", "-U", "-r", "-t", "-T"}),
     "timeout": frozenset({"-s", "--signal", "-k", "--kill-after"}),
+    "time": frozenset({"-f", "--format", "-o", "--output"}),
+    "exec": frozenset({"-a"}),
+    "builtin": frozenset(),
 }
+# Nesting beyond this (eval inside eval inside `sh -c` …) is refused rather than followed.
+MAX_DEPTH = 8
 # Git subcommands that write working-tree paths they are given.
 GIT_PATH_WRITERS = frozenset({"checkout", "restore", "rm", "mv"})
 # Git subcommands that apply a patch file to the working tree.
 GIT_PATCHERS = frozenset({"apply", "am"})
-# Owned-looking file names a `find -name` pattern must not be able to match.
-_PROBE_NAMES = ("policy.json", "HB-7Q2K.json", "storage-rules-0a1b2c.json")
+# A `find -name` pattern ending in a literal extension other than this one cannot select the
+# harness's own records, which are all `.json` files.
+_RECORD_EXTENSION = ".json"
+_LITERAL_EXTENSION = re.compile(r"\.[A-Za-z0-9_]+$")
 
-_REDIRECT_OUT = frozenset({">", ">>", ">|", "&>", "&>>", ">&"})
+_REDIRECT_OUT = frozenset({">", ">>", ">|", "&>", "&>>", ">&", "<>"})
 _CONTROL = frozenset({"&&", "||", ";", ";;", "&", "|", "|&", "(", ")"})
+# Words that start or end a compound command; skipped where a command name would be.
 _KEYWORDS = frozenset(
-    {"if", "then", "else", "elif", "fi", "do", "done", "while", "until", "!", "time"}
+    {"if", "then", "else", "elif", "fi", "do", "done", "while", "until", "!", "{", "}"}
 )
+# `2>/dev/null`, `1>&2`, `3<>file`: the number names a file descriptor, not an argument.
+_FD_PREFIX = re.compile(r"(^|[\s;&|(])\d+(?=[<>])")
+# A heredoc delimiter is a word; `$((1<<2))` is arithmetic, not a heredoc.
+_DELIMITER = re.compile(r"-?[A-Za-z_][A-Za-z0-9_]*")
 _ASSIGNMENT = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*=")
 _SUBSTITUTION = ("$", "`")
 _WORD_SPLIT = re.compile(r"[\s'\"`;&|()<>,{}=\[\]]+")
 _PATCH_PATH = re.compile(
-    r"^(?:\+\+\+|---) (?:[ab]/)?(\S+)|^diff --git a/(\S+) b/(\S+)|^rename to (\S+)"
+    r"^(?:\+\+\+|---) \"?([^\t\"]+)|^diff --git (\S+) (\S+)|^(?:rename|copy) to (.+)$"
 )
+_PATCH_LIMIT = 2_000_000  # bytes; a larger patch is not read and counts as unreadable
 _ARCHIVE_MEMBER_LIMIT = 50_000
 
 
@@ -197,6 +211,7 @@ _OPERATORS = sorted(
         "<<<",
         "<<",
         "<&",
+        "<>",
         "(",
         ")",
         ";",
@@ -224,9 +239,13 @@ def _split_operators(token: str) -> list[str]:
 
 
 def _tokens(line: str) -> tuple[list[str], bool]:
+    line = _FD_PREFIX.sub(r"\1", line)
     try:
         lexer = shlex.shlex(line, posix=True, punctuation_chars=True)
         lexer.whitespace_split = True
+        # shlex would end the line at any `#`, even inside a word (`a#b; git push`). Keeping
+        # comments as words can only make a command look like it names more, never less.
+        lexer.commenters = ""
         return [part for token in lexer for part in _split_operators(token)], True
     except ValueError:
         # An unbalanced quote. Keep going on whitespace so a `git push` or a redirect after it is
@@ -262,10 +281,12 @@ def _parse_line(
             current = flush("pipe")
         elif token in _CONTROL:
             current = flush("end")
+        elif token in {"<", ">"} and following == "(":
+            pass  # process substitution: the `(` that follows opens its own command
         elif token in _REDIRECT_OUT or token == "<":
             current.redirects.append((token, following))
             position += 1
-        elif token == "<<":
+        elif token == "<<" and _DELIMITER.fullmatch(following):
             # `<<-EOF` tokenizes as `<<` then `-EOF`; quotes around the delimiter are already gone.
             current.heredoc_delimiters.append(
                 (following.lstrip("-"), following.startswith("-"))
@@ -285,11 +306,17 @@ def _parse_line(
 
 def _segments(command: str) -> Iterator[tuple[str, _Segment | None, bool]]:
     """Yield ("run", segment, parsed), or ("pipe" | "end" | "open" | "close", None, parsed)."""
-    lines = command.replace("\\\n", " ").split("\n")
+    lines = command.split("\n")
     index = 0
     while index < len(lines):
-        tokens, parsed = _tokens(lines[index])
+        line = lines[index]
         index += 1
+        # A trailing backslash continues the command; inside a heredoc body it is just text,
+        # so continuations are joined here and not before the body is read.
+        while line.endswith("\\") and index < len(lines):
+            line = line[:-1] + " " + lines[index]
+            index += 1
+        tokens, parsed = _tokens(line)
         segments, events = _parse_line(tokens)
         # A heredoc's body is the lines that follow, up to its delimiter.
         for segment in segments:
@@ -318,6 +345,9 @@ def _unwrap(words: list[str]) -> list[str]:
         takes_value = WRAPPERS[wrapper]
         while words and words[0].startswith("-") and words[0] != "--":
             flag = words.pop(0)
+            if wrapper == "env" and flag in {"-S", "--split-string"} and words:
+                words = shlex.split(words[0]) + words[1:]
+                continue
             if flag in takes_value and words:
                 words.pop(0)
         if words and words[0] == "--":
@@ -338,9 +368,33 @@ def _resolve(path: str, cwd: str | None) -> str:
 resolve = _resolve  # noqa: E305 - public alias for the rules
 
 
-def invocations(command: str, cwd: str | None = "") -> list[Invocation]:
+def _substitutions(command: str) -> list[str]:
+    """The commands inside `$(…)` and backticks, which run before the command that holds them."""
+    found = []
+    for match in re.finditer(r"`([^`]*)`", command):
+        found.append(match.group(1))
+    position = 0
+    while (start := command.find("$(", position)) != -1:
+        if command.startswith("$((", start):
+            position = start + 3  # arithmetic, not a command
+            continue
+        depth, index = 1, start + 2
+        while index < len(command) and depth:
+            depth += {"(": 1, ")": -1}.get(command[index], 0)
+            index += 1
+        found.append(command[start + 2 : index - 1])
+        position = index
+    return found
+
+
+def invocations(command: str, cwd: str | None = "", depth: int = 0) -> list[Invocation]:
     """Every simple command `command` runs, in order, including nested and dispatched ones."""
+    if depth > MAX_DEPTH:
+        # Raising makes the hook refuse the call, as it does for any command it cannot read.
+        raise ValueError(f"the command nests more than {MAX_DEPTH} levels deep")
     found: list[Invocation] = []
+    for inner in _substitutions(command):
+        found.extend(invocations(inner, cwd, depth + 1))
     stack: list[str | None] = []
     pipeline: list[str] = []
     for kind, segment, parsed in _segments(command):
@@ -377,22 +431,23 @@ def invocations(command: str, cwd: str | None = "") -> list[Invocation]:
             parsed=parsed,
         )
         found.append(invocation)
-        found.extend(_dispatched(invocation))
+        found.extend(_dispatched(invocation, depth))
         pipeline.extend(segment.words)
     return found
 
 
-def _dispatched(invocation: Invocation) -> list[Invocation]:
+def _dispatched(invocation: Invocation, depth: int = 0) -> list[Invocation]:
     """Commands another command runs for it: `sh -c`, `eval`, `xargs`, `find -exec`."""
     name, args = invocation.name, list(invocation.args)
     if name in SHELLS:
         if "-c" in args[:-1]:
-            return invocations(args[args.index("-c") + 1], invocation.cwd)
+            script = next((a for a in args[args.index("-c") + 1 :] if a != "--"), "")
+            return invocations(script, invocation.cwd, depth + 1)
         if invocation.stdin_text and not any(not a.startswith("-") for a in args):
-            return invocations(invocation.stdin_text, invocation.cwd)
+            return invocations(invocation.stdin_text, invocation.cwd, depth + 1)
         return []
     if name == "eval":
-        return invocations(" ".join(args), invocation.cwd)
+        return invocations(" ".join(args), invocation.cwd, depth + 1)
     if name == "xargs":
         words = list(args)
         while words and words[0].startswith("-"):
@@ -469,35 +524,66 @@ def _option_values(args: tuple[str, ...], options: tuple[str, ...]) -> list[str]
     return values
 
 
-def _patch_paths(path: str, cwd: str | None, base: Path | None) -> list[str] | None:
-    """Paths a patch file would write, or None if it cannot be read."""
+def _regular_file(
+    path: str, cwd: str | None, base: Path | None, limit: int
+) -> Path | None:
+    """The file behind `path` if it is a regular file no larger than `limit` bytes."""
     resolved = _resolve(path, cwd)
+    candidate = (
+        base / resolved if base and not resolved.startswith("/") else Path(resolved)
+    )
     try:
-        text = (
-            base / resolved if base and not path.startswith("/") else Path(resolved)
-        ).read_text(encoding="utf-8", errors="replace")
+        info = candidate.stat()
+    except OSError:
+        return None
+    return candidate if stat.S_ISREG(info.st_mode) and info.st_size <= limit else None
+
+
+def _patch_paths(path: str, cwd: str | None, base: Path | None) -> list[str] | None:
+    """Every path a patch file could write, or None if it cannot be read.
+
+    Prefixes are stripped by `-p`, which the reader does not track, so each path is reported with
+    every leading component removed in turn.
+    """
+    file = _regular_file(path, cwd, base, _PATCH_LIMIT)
+    if file is None:
+        return None
+    try:
+        text = file.read_text(encoding="utf-8", errors="replace")
     except OSError:
         return None
     found = []
     for line in text.splitlines():
         match = _PATCH_PATH.match(line)
-        if match:
-            candidate = next(group for group in match.groups() if group)
-            if candidate != "/dev/null":
-                found.append(_resolve(candidate, cwd))
+        if not match:
+            continue
+        for candidate in (group for group in match.groups() if group):
+            candidate = candidate.strip().strip('"')
+            if candidate == "/dev/null":
+                continue
+            parts = candidate.split("/")
+            found.extend(_resolve("/".join(parts[i:]), cwd) for i in range(len(parts)))
     return found
 
 
-def _archive_members(path: str, base: Path | None) -> list[str] | None:
-    archive = base / path if base and not path.startswith("/") else Path(path)
+def _archive_members(path: str, cwd: str | None, base: Path | None) -> list[str] | None:
+    """Member names of an archive, or None if it cannot be listed completely and safely."""
+    archive = _regular_file(path, cwd, base, 1 << 34)
+    if archive is None:
+        return None
     try:
         if zipfile.is_zipfile(archive):
             with zipfile.ZipFile(archive) as handle:
-                return handle.namelist()[:_ARCHIVE_MEMBER_LIMIT]
-        with tarfile.open(archive) as handle:
-            return [m.name for m in islice(handle, _ARCHIVE_MEMBER_LIMIT)]
+                names = handle.namelist()
+        else:
+            with tarfile.open(archive) as handle:
+                members = list(islice(handle, _ARCHIVE_MEMBER_LIMIT + 1))
+                if any(m.issym() or m.islnk() for m in members):
+                    return None  # a link member can point a later write anywhere
+                names = [m.name for m in members]
     except (OSError, tarfile.TarError, zipfile.BadZipFile, EOFError):
         return None
+    return None if len(names) > _ARCHIVE_MEMBER_LIMIT else names
 
 
 def _classify(
@@ -509,35 +595,45 @@ def _classify(
 ) -> None:
     name, args, cwd = invocation.name, invocation.args, invocation.cwd
 
+    def places(path: str) -> list[str]:
+        # A `cd` that fails leaves the shell where it was, so a relative path is checked both
+        # from the tracked directory and from where the command started.
+        resolved = [_resolve(path, cwd)]
+        if cwd and not path.startswith(("/", "~")):
+            resolved.append(_resolve(path, ""))
+        return resolved
+
     def target(path: str) -> None:
-        writes.targets.append(_resolve(path, cwd))
-        if cwd is None:
-            writes.unresolved.append(path)
+        if cwd is None or any(mark in path for mark in _SUBSTITUTION):
+            unresolved(whole)
+        writes.targets.extend(places(path))
 
     def tree(path: str) -> None:
-        writes.trees.append(_resolve(path, cwd))
-        if cwd is None:
-            writes.unresolved.append(path)
+        if cwd is None or any(mark in path for mark in _SUBSTITUTION):
+            unresolved(whole)
+        writes.trees.extend(places(path))
 
     def unresolved(*texts: str) -> None:
+        # A name inside inline code or a script's arguments is relative to where it runs.
         for text in texts:
-            writes.unresolved.extend(words_in(text))
+            for word in words_in(text):
+                writes.unresolved.append(word)
+                if cwd:
+                    writes.unresolved.append(_resolve(word, cwd))
 
     for operator, path in invocation.redirects:
         if operator == "<" or not path:
             continue
         if operator == ">&" and path.isdigit():
             continue
-        if path.startswith(_SUBSTITUTION):
-            # The path is in a variable, which could have been set anywhere on the line.
-            unresolved(whole)
-        elif path != "/dev/null":
+        if path != "/dev/null":
+            # `target` treats a `$VAR` or backtick in the path as naming anything on the line.
             target(path)
     if not invocation.parsed:
         unresolved(" ".join((name, *args)))
     if (
         not probing
-        and any(arg.startswith(_SUBSTITUTION) for arg in args)
+        and any(mark in arg for arg in args for mark in _SUBSTITUTION)
         and _writes_operands(invocation)
     ):
         unresolved(whole)
@@ -560,7 +656,7 @@ def _classify(
         _classify_find(args, tree, target)
         return
     if name == "git":
-        _classify_git(args, cwd, base, writes)
+        _classify_git(invocation, base, writes, whole)
         return
     if name in {"tar", "bsdtar"}:
         mode, archive, destinations = _tar_options(args)
@@ -586,13 +682,9 @@ def _classify(
     if name == "patch":
         sources = _option_values(args, ("-i", "--input"))
         sources += [path for op, path in invocation.redirects if op == "<"]
-        paths = [_patch_paths(source, cwd, base) for source in sources]
-        if not sources or any(p is None for p in paths):
-            unresolved(
-                " ".join(args), invocation.stdin_text, " ".join(invocation.piped_from)
-            )
-        for group in paths:
-            writes.targets.extend(group or [])
+        directory = _option_values(args, ("-d", "--directory"))
+        into = _resolve(directory[-1], cwd) if directory and cwd is not None else cwd
+        _apply_patches(sources, into, base, writes, whole, invocation)
         return
     if name == "dd":
         for arg in args:
@@ -648,10 +740,13 @@ def _classify_find(args, tree, target) -> None:
     patterns = [
         args[i + 1] for i, a in enumerate(args[:-1]) if a in {"-name", "-iname"}
     ]
+    # `-name '*.tmp'` cannot select a `.json` record; `-name 'HB-*'` or `-iname '*.JSON'` can.
     narrowed = (
         bool(patterns)
-        and not any(
-            fnmatch(probe, pattern) for pattern in patterns for probe in _PROBE_NAMES
+        and all(
+            (match := _LITERAL_EXTENSION.search(pattern)) is not None
+            and match.group().lower() != _RECORD_EXTENSION
+            for pattern in patterns
         )
         and not any(
             a in {"-path", "-ipath", "-regex", "-iregex", "-wholename"} for a in args
@@ -681,8 +776,36 @@ def _exec_writes(rest: tuple[str, ...]) -> bool:
     return name not in NON_WRITERS
 
 
-def _classify_git(args, cwd, base, writes: _Writes) -> None:
-    rest = list(args)
+def _apply_patches(
+    sources: list[str],
+    cwd: str | None,
+    base: Path | None,
+    writes: _Writes,
+    whole: str,
+    invocation: Invocation,
+) -> None:
+    """A patch writes the paths it names.
+
+    One that cannot be read now — piped in, missing, too large, or written earlier in the same
+    command (so what is read here is not what gets applied) — could write anything under the
+    directory it is applied in. Writing the patch and applying it in two steps avoids that.
+    """
+    written_here = set(writes.targets)
+    readable = [
+        _patch_paths(source, cwd, base)
+        if _resolve(source, cwd) not in written_here
+        else None
+        for source in sources
+    ]
+    if not sources or any(paths is None for paths in readable):
+        writes.trees.append(_resolve(".", cwd) if cwd is not None else ".")
+        writes.unresolved.extend(words_in(whole))
+    for paths in readable:
+        writes.targets.extend(paths or [])
+
+
+def _classify_git(invocation: Invocation, base, writes: _Writes, whole: str) -> None:
+    cwd, rest = invocation.cwd, list(invocation.args)
     while rest and rest[0].startswith("-"):
         flag = rest.pop(0)
         if flag in {"-C", "-c", "--git-dir", "--work-tree", "--namespace"} and rest:
@@ -693,12 +816,13 @@ def _classify_git(args, cwd, base, writes: _Writes) -> None:
         return
     subcommand, options = rest[0], tuple(rest[1:])
     if subcommand in GIT_PATH_WRITERS:
+        # A pathspec can be a directory (`git checkout -- .`), so each one is a whole tree.
         paths = (
             list(options[options.index("--") + 1 :])
             if "--" in options
             else _operands(options)
         )
-        writes.targets.extend(_resolve(path, cwd) for path in paths)
+        writes.trees.extend(_resolve(path, cwd) for path in paths)
     elif subcommand == "clean":
         writes.trees.extend(_resolve(path, cwd) for path in _operands(options) or ["."])
     elif subcommand == "stash" and any(
@@ -706,14 +830,11 @@ def _classify_git(args, cwd, base, writes: _Writes) -> None:
     ):
         writes.trees.append(_resolve(".", cwd))
     elif subcommand in GIT_PATCHERS:
-        patches = _operands(options)
-        if not patches:
-            writes.unresolved.extend(words_in(" ".join(options)))
-        for patch in patches:
-            paths = _patch_paths(patch, cwd, base)
-            if paths is None:
-                writes.unresolved.append(patch)
-            writes.targets.extend(paths or [])
+        directory = _option_values(options, ("--directory",))
+        into = _resolve(directory[-1], cwd) if directory and cwd is not None else cwd
+        sources = [a for a in _operands(options) if not a.startswith("--")]
+        sources += [path for op, path in invocation.redirects if op == "<"]
+        _apply_patches(sources, into, base, writes, whole, invocation)
 
 
 def _tar_options(args) -> tuple[str, str | None, list[str]]:
@@ -765,7 +886,7 @@ def _tar_options(args) -> tuple[str, str | None, list[str]]:
 
 def _extract(archive, destinations, cwd, base, writes: _Writes) -> None:
     """An extraction writes its members; if they cannot be listed, anything under the directory."""
-    members = _archive_members(_resolve(archive, cwd), base) if archive else None
+    members = _archive_members(archive, cwd, base) if archive else None
     for destination in destinations:
         if members is None:
             writes.trees.append(_resolve(destination, cwd))
@@ -796,5 +917,7 @@ def scan(command: str, cwd: str | None = "", base: Path | None = None) -> ShellW
         if invocation.operands_from_pipe and _writes_operands(invocation):
             writes.unresolved.extend(words_in(" ".join(invocation.piped_from)))
     return ShellWrites(
-        tuple(writes.targets), tuple(writes.trees), tuple(writes.unresolved)
+        tuple(dict.fromkeys(writes.targets)),
+        tuple(dict.fromkeys(writes.trees)),
+        tuple(dict.fromkeys(writes.unresolved)),
     )

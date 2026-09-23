@@ -39,7 +39,6 @@ HUMAN_OWNED_READS = (
     "shasum .harness/policy.json",
     "shellcheck .harness/policy.json",
     "bat .harness/policy.json",
-    "xxd .harness/policy.json",
     "realpath .harness/policy.json",
     "tar -tf safe.tar -C .harness",
     # A subshell's `cd` ends with the subshell.
@@ -54,6 +53,11 @@ HUMAN_OWNED_READS = (
     "find . -name '*.tmp' -delete",
     "git apply ok.patch",
     "tar -xf safe.tar",
+    # `$((1<<2))` is arithmetic, not a heredoc; a `#` inside a word is not a comment.
+    "echo $((1<<2))\ncat .harness/policy.json",
+    "echo a#b; cat .harness/policy.json",
+    # `find -name` with a non-json extension cannot select a record.
+    "find .harness -name '*.tmp' -delete",
 )
 
 HUMAN_OWNED_WRITES = (
@@ -107,6 +111,37 @@ HUMAN_OWNED_WRITES = (
     "git checkout other -- .harness/policy.json",
     "git apply p.patch",
     "tar -xf evil.tar",
+    # Third review: file-descriptor redirects, failed or unknown `cd`, `..` out and back in.
+    "cp x .harness/policy.json 2>/dev/null",
+    "cp x .harness/policy.json 2>&1",
+    "cd no_such_dir; rm -rf .harness",
+    "cd /nonexistent; cp x .harness/policy.json",
+    "true | cd /tmp; cp x .harness/policy.json",
+    "D=.harness; cd $D && cp x policy.json",
+    "cp x ../repo/.harness/policy.json",
+    "echo {} 1<>.harness/policy.json",
+    "cp evil .harness/$F",
+    # Substitutions run too.
+    'echo "$(cp x .harness/policy.json)"',
+    "echo `rm .harness/policy.json`",
+    "x=$(rm .harness/policy.json)",
+    "diff <(cp x .harness/policy.json) y",
+    "sh -c -- 'cp x .harness/policy.json'",
+    "env -S 'cp x .harness/policy.json'",
+    "cd .harness && python3 -c \"open('policy.json','w')\"",
+    # Readers that write when given a second operand or an output option.
+    "uniq x .harness/policy.json",
+    "xxd -r dump .harness/policy.json",
+    "tree -o .harness/policy.json",
+    # Patches and git that write through a directory, a prefix, or a missing file.
+    "git apply --directory=.harness ok.patch",
+    "git apply missing.patch",
+    "cat p.patch | git apply",
+    "git checkout HEAD -- .",
+    "git restore --source=main .",
+    # `find` patterns that can select a record.
+    "find .harness/state/approvals -name 'HB-?????.json' -exec sed -i s/a/b/ {} +",
+    "find . -iname POLICY.JSON -delete",
 )
 
 REMOTE_WRITES = (
@@ -118,6 +153,14 @@ REMOTE_WRITES = (
     "if true; then git push; fi",
     "echo x | xargs git push",
     "bash -c 'git push origin HEAD'",
+    "time -p git push",
+    "/usr/bin/time git push",
+    "{ git push; }",
+    "echo `git push`",
+    "echo $(git push)",
+    "exec git push",
+    "echo a#b; git push",
+    "echo $((1<<2))\ngit push",
     # An unbalanced quote still shows the push after it.
     "git commit -m 'oops && git push",
 )
@@ -126,8 +169,8 @@ REMOTE_WRITES = (
 class ShellscanTestCase(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
-        self.repo = Path(self._tmp.name)
-        (self.repo / ".harness").mkdir()
+        self.repo = Path(self._tmp.name) / "repo"
+        (self.repo / ".harness").mkdir(parents=True)
         (self.repo / "p.patch").write_text(
             "--- a/.harness/policy.json\n+++ b/.harness/policy.json\n@@\n"
         )

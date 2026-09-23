@@ -408,18 +408,25 @@ class TestProtected(HookTestCase):
                     "protected-items",
                 )
 
-    def test_commit_messages_link_only_through_the_ab_form(self) -> None:
+    def test_commit_messages_link_through_any_mention_form(self) -> None:
         self.approve()
-        # Azure Repos links a commit through `AB#<id>`; a bare `#<id>` there links nothing.
-        self.assertAllowed(
-            self.claude("Bash", {"command": "git commit -m 'closes #1001' && git push"})
-        )
-        self.assertDenied(
-            self.claude(
-                "Bash", {"command": "git commit -m 'AB#1001 done' && git push"}
-            ),
-            "protected-items",
-        )
+        # With Azure Repos' commit mention linking on, `#<id>` links as well as `AB#<id>`.
+        for command in (
+            "git commit -m 'closes #1001' && git push",
+            "git commit -m 'Refs #1001'",
+            "git commit -m 'AB#1001 done' && git push",
+        ):
+            with self.subTest(command=command):
+                self.assertDenied(
+                    self.claude("Bash", {"command": command}), "protected-items"
+                )
+        # Other items, and ids in plain text, are fine.
+        for command in (
+            "git commit -m 'closes #9001'",
+            "git commit -m 'copy of Idea 1001'",
+        ):
+            with self.subTest(command=command):
+                self.assertAllowed(self.claude("Bash", {"command": command}))
 
     def test_a_commit_mentioning_a_protected_item_is_denied_before_any_push(
         self,
@@ -461,6 +468,19 @@ class TestProtected(HookTestCase):
         ):
             with self.subTest(tool=tool, payload=payload):
                 self.assertDenied(self.claude(tool, payload), "protected-items")
+
+    def test_setting_an_unprotected_parent_is_allowed(self) -> None:
+        self.approve()
+        self.assertAllowed(
+            self.claude(
+                AZ + "wit_work_item_write",
+                {
+                    "action": "create",
+                    "workItemType": "User Story",
+                    "fields": [{"name": "System.Parent", "value": "9001"}],
+                },
+            )
+        )
 
     def test_plain_text_names_and_html_entities_are_allowed(self) -> None:
         self.approve()
@@ -704,6 +724,67 @@ class TestPolicyValidation(HookTestCase):
 
 
 class TestFailClosed(HookTestCase):
+    @staticmethod
+    def _hook_module():
+        import importlib
+
+        return importlib.import_module("scripts.harness.hook")
+
+    def _in_process(self, tool: str, tool_input: dict) -> dict:
+        """Run the hook in this process, so a rule can be made to crash or stall."""
+        import contextlib
+        import io
+
+        hook = self._hook_module()
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            hook.handle_pre_tool(
+                "claude",
+                "pre-tool",
+                {"cwd": str(self.repo), "tool_name": tool, "tool_input": tool_input},
+            )
+        return json.loads(out.getvalue())
+
+    def test_a_crash_in_the_rules_blocks_shell_commands(self) -> None:
+        from unittest import mock
+
+        hook = self._hook_module()
+        with mock.patch.object(
+            hook.rules, "evaluate", side_effect=RuntimeError("boom")
+        ):
+            result = self._in_process("Bash", {"command": "ls"})
+        self.assertDenied(result, "harness-error")
+
+    def test_running_out_of_time_blocks_writes(self) -> None:
+        import time
+        from unittest import mock
+
+        hook = self._hook_module()
+        with (
+            mock.patch.object(hook, "RULES_BUDGET_SECONDS", 1),
+            mock.patch.object(
+                hook.rules, "evaluate", side_effect=lambda *a: time.sleep(3)
+            ),
+        ):
+            result = self._in_process("Write", {"file_path": str(self.repo / "a")})
+        self.assertDenied(result, "harness-error")
+
+    def test_a_command_nested_too_deep_to_read_is_blocked(self) -> None:
+        self.assertDenied(
+            self.claude(
+                "Bash", {"command": "eval " * 20 + "cp x .harness/policy.json"}
+            ),
+            "harness-error",
+        )
+
+    def test_a_long_script_is_read_within_the_budget(self) -> None:
+        import time
+
+        script = "\n".join(f'cp "$A/f{i}" "$B/"' for i in range(300))
+        started = time.monotonic()
+        self.assertAllowed(self.claude("Bash", {"command": script}))
+        self.assertLess(time.monotonic() - started, 5)
+
     def test_broken_policy_blocks_writes_but_not_reads(self) -> None:
         (self.repo / ".harness" / "policy.json").write_text("{not json")
         self.assertDenied(

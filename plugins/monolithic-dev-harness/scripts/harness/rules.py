@@ -45,6 +45,23 @@ EDIT_TOOLS = frozenset(
     }
 )
 SHELL_TOOLS = frozenset({"Bash", "Shell", "run_terminal_cmd", "shell", "run_command"})
+# Tools that cannot change anything. If the rules fail, only these go through.
+READ_ONLY_TOOLS = frozenset(
+    {
+        "Read",
+        "Glob",
+        "Grep",
+        "LS",
+        "WebSearch",
+        "WebFetch",
+        "read_file",
+        "list_dir",
+        "grep_search",
+        "file_search",
+        "codebase_search",
+        "ToolSearch",
+    }
+)
 AZURE_EXTRA_WRITES = frozenset(
     {"repo_create_branch", "pipelines_run", "wiki_upsert_page"}
 )
@@ -87,8 +104,6 @@ _TEXT_REFERENCE = re.compile(
     r"|vstfs:///WorkItemTracking/WorkItem/(\d+)",
     re.IGNORECASE,
 )
-# In a commit message or branch name, only the `AB#123` form creates a link.
-_COMMIT_REFERENCE = re.compile(r"(?<![&\w])(?:AB|US)#([1-9]\d*)\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -181,12 +196,13 @@ def is_remote_write(call: ToolCall) -> bool:
 
 
 def is_write_class(call: ToolCall) -> bool:
-    """Calls that must fail closed if the rules themselves cannot run."""
-    if is_remote_write(call) or call.name in EDIT_TOOLS:
+    """Calls that must fail closed if the rules themselves cannot run.
+
+    Every shell command counts: if the rules could not read it, nothing says it only reads.
+    """
+    if call.name in EDIT_TOOLS or call.name in SHELL_TOOLS:
         return True
-    return call.name in SHELL_TOOLS and bool(
-        git_subcommands(call.command) & {"commit", "push", "merge"}
-    )
+    return is_remote_write(call)
 
 
 # --- helpers ------------------------------------------------------------------------------
@@ -270,6 +286,14 @@ def _relative(repo: Path, path: str) -> str:
         except ValueError:
             return candidate.as_posix()
     normalized = posixpath.normpath(globs.normalize(path)) if path else ""
+    if normalized == "..":
+        normalized = "../."
+    if normalized.startswith("../"):
+        # It left the repository and may have come back in (`../repo/.harness`): resolve it.
+        try:
+            return (repo / normalized).resolve().relative_to(repo.resolve()).as_posix()
+        except ValueError:
+            return normalized
     return "" if normalized == "." else normalized
 
 
@@ -277,7 +301,11 @@ def _shell_start(call: ToolCall, repo: Path) -> str:
     """Where the shell starts, relative to the repository (`""` for its root)."""
     if not call.cwd:
         return ""
-    relative = posixpath.normpath(os.path.relpath(call.cwd, repo))
+    # Both sides resolved: the repository root comes from git, which resolves symlinks, and a
+    # session opened through a symlinked path would otherwise seem to sit outside it.
+    relative = posixpath.normpath(
+        os.path.relpath(Path(call.cwd).resolve(), repo.resolve())
+    )
     return "" if relative == "." else relative
 
 
@@ -422,20 +450,20 @@ def rule_protected_items(call: ToolCall, policy: dict[str, Any]) -> Decision:
 
 
 def _shell_protected_mentions(call: ToolCall, protected: set[int]) -> Decision:
-    """A commit message (or tag) links a work item through `AB#123` once it is pushed.
+    """A commit message (or tag) links a work item through `#123` or `AB#123` once pushed.
 
     Checked when the commit is made, not only when it is pushed: the harness's own flow commits
     and pushes in separate calls, and the push itself carries no text.
     """
     if not git_subcommands(call.command) & {"commit", "push", "tag", "notes", "merge"}:
         return Decision.allow()
-    mentioned = mentioned_ids(call.command, _COMMIT_REFERENCE) & protected
+    mentioned = mentioned_ids(call.command) & protected
     if mentioned:
         return Decision.deny(
             "protected-items",
-            f"this commit or push mentions protected work item(s) {sorted(mentioned)} as `AB#<id>`, "
-            "which Azure Repos turns into a link on the protected item. Name it in plain text "
-            "instead, for example 'Idea 4007'.",
+            f"this commit or push mentions protected work item(s) {sorted(mentioned)} "
+            "(`#<id>`, `AB#<id>`, or a work item URL), which Azure Repos turns into a link on the "
+            "protected item. Name it in plain text instead, for example 'Idea 4007'.",
         )
     return Decision.allow()
 
