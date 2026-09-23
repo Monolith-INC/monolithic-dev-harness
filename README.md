@@ -210,8 +210,37 @@ no approved spec, it stops and asks for one.
 **What you get back:** per Task, the commit, the test that failed and then passed, and the checks
 run. Per Story, the evidence and the observed behavior.
 
-For a Feature with several Stories, `feature-implementation` runs this once per Story on stacked
-branches, then merges them into the Feature branch.
+### Implementing a Feature
+
+A Feature with several Stories runs the Story workflow once per Story, on branches stacked under
+one Feature branch:
+
+```text
+develop
+  +-- feature/1200-short-title          <- Feature branch
+        +-- userstory/1201-...          <- Story 1, branched from the Feature
+        +-- userstory/1202-...          <- Story 2
+        +-- userstory/1203-...          <- Story 3
+```
+
+1. **Plan** (`feature-implementation`): read the Feature and its Stories from Azure DevOps, confirm
+   their states and acceptance criteria, create the Feature branch, and publish an implementation
+   plan on the Feature.
+2. **Each Story, in stack order:** start the Story (approved), write the spec (gate G2), implement
+   it on a Story branch cut from the Feature branch, then review it. Review ends in a draft pull
+   request from the Story branch **into the Feature branch**, not into `develop`.
+3. **Reconcile** (`reconcile-feature-stack`): when an earlier Story changes after later ones were
+   branched from it, carry that change forward into the later branches in order, then re-run the
+   checks.
+4. **Land the stack** (`merge-story-stack-into-feature`): merge the Story pull requests into the
+   Feature branch oldest to newest, with merge commits only. While this runs, a hook blocks rebase,
+   squash, and force-push.
+5. **Finish** (`finish-feature-development`): once every Story has landed, open the Feature →
+   `develop` pull request, link it to the Feature, post a closing summary, and move the Feature to
+   done.
+
+Every board write, push, and pull request along the way needs a person's `approve HB-XXXX`, the
+same as for a single Story.
 
 ## Repository layout
 
