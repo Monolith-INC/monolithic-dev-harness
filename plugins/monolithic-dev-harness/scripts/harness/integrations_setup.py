@@ -141,6 +141,50 @@ def configure_integrations(
     return path
 
 
+def repair_integrations(path: Path, azure: dict) -> list[str]:
+    """Bring an existing Azure config up to what this version needs, without rewriting the rest.
+
+    Configs written by 0.1.1 have no `tracker.project` (every tracker call now needs it), may carry
+    the organization as `v3` from a misread SSH remote, and name tools the adapters no longer
+    read. Returns one line per repair; an empty list means nothing changed.
+    """
+    from scripts.integrations.discovery import FIXED_TOOL_ADAPTERS
+
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    repairs: list[str] = []
+    tracker = payload.get("tracker") if isinstance(payload.get("tracker"), dict) else {}
+    scm = payload.get("scm") if isinstance(payload.get("scm"), dict) else {}
+    if (
+        tracker.get("adapter") == "azure_devops"
+        and not tracker.get("project")
+        and azure.get("project")
+    ):
+        tracker["project"] = azure["project"]
+        repairs.append(f"tracker.project = {azure['project']}")
+    if scm.get("adapter") == "azure_repos":
+        misread = scm.get("organization") == "v3"
+        for key in ("organization", "project", "repository"):
+            if (
+                azure.get(key)
+                and (misread or not scm.get(key))
+                and scm.get(key) != azure[key]
+            ):
+                scm[key] = azure[key]
+                repairs.append(f"scm.{key} = {azure[key]}")
+    for section, name in ((tracker, "tracker"), (scm, "scm")):
+        if section.get("adapter") in FIXED_TOOL_ADAPTERS and section.pop(
+            "bindings", None
+        ):
+            repairs.append(
+                f"{name}.bindings removed (the adapter calls its tools by name)"
+            )
+    if repairs:
+        path.write_text(
+            json.dumps(payload, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+    return repairs
+
+
 def _default_tracker_config(
     provider: str,
     scope: str,

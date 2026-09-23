@@ -318,6 +318,10 @@ class AdapterContractTests(unittest.TestCase):
             "AND ([System.WorkItemType] = 'Epic')",
             wiql_for("[System.WorkItemType] = 'Epic'"),
         )
+        self.assertIn("AND ([Custom.Team] = 'A')", wiql_for("[Custom.Team] = 'A'"))
+        self.assertIn(
+            "[System.Title] CONTAINS 'bug [urgent]'", wiql_for("bug [urgent]")
+        )
         statement = "SELECT [System.Id] FROM WorkItems"
         self.assertEqual(wiql_for(statement), statement)
 

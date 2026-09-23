@@ -70,6 +70,30 @@ If the policy is invalid or any rule or the workflow runtime raises, write-class
 edits, commits, pushes, merges, tracker/SCM writes) are denied with `harness-error`; reads continue.
 Corrupt state files are treated as absent, which can only cause a deny.
 
+## How Shell Commands Are Read
+
+`generated-files`, `human-owned`, `approval-required`, and `protected-items` all need to know what a
+`Bash` call runs and what it writes. `scripts/harness/shellscan.py` tokenizes the command once and
+answers both:
+
+- It walks every command the shell would run: each line, continuations, subshells, `if` and loop
+  bodies, wrappers (`sudo`, `env`, `timeout`, `nice`), `sh -c`, `eval`, `xargs`, and `find -exec`.
+  So `sudo git push` and `(git push)` are pushes, and need approval like `git push`.
+- It resolves each path against the directory the command runs in (`cd`, the session's working
+  directory) and collapses `..`, so `.harness/state/checks/../approvals/x.json` is an approval.
+- A command it does not know is treated as writing every path it names. Readers are listed
+  explicitly; a new reader that names a protected file is refused until it is added.
+- Where it cannot follow a write (inline interpreter code, a script, a path in a variable, `xargs`
+  fed from a pipe), it treats any protected path named on the line as written.
+- It reads the patch behind `git apply` and `patch`, and the member list of an archive being
+  extracted, to see which files they would write.
+
+## Tracker Text Is Fenced
+
+Work-item titles, descriptions, and review comments reach the agent through the
+`workflow-integrations` server wrapped in an untrusted-content fence with a random nonce, the same
+way the Azure DevOps server fences its own output. Errors from those tools are fenced too.
+
 ## Supply-chain Validation
 
 - Releases are built by CI from a tagged commit with `git archive` (committed files only).
@@ -81,8 +105,9 @@ Corrupt state files are treated as absent, which can only cause a deny.
 ## Residual Risks
 
 - An approval window covers any tracker/SCM write for its duration, not only the batch shown.
-- Shell commands that write files are matched by pattern for `generated-files` and `human-owned`;
-  an unusual command form could slip past, so commits are also checked.
+- The shell reader is a guard against a model that routes around a rule, not a sandbox. A
+  script run by path, a merge or pull that brings in a changed policy, and a commit message read
+  from a file with `git commit -F` are not inspected. Commits are also checked.
 - The workflow runtime writes a debug log to `/tmp/codex_hook_debug.log`, readable by other local
   users on shared machines.
 - `@azure-devops/mcp` is not pinned to a version.

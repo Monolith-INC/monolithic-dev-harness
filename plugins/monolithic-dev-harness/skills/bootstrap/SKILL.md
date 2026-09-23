@@ -43,8 +43,9 @@ If the `harness` command is not on `PATH` (installed without the installer), run
 with `harness doctor`.
 
 Optional: `--branch-template` (must contain `{key}`; default `{category}/{key}-{slug}`), `--discover`
-(queries Azure DevOps for work-item types and states, which starts OAuth), `--force` (overwrite
-existing configuration).
+(queries Azure DevOps for work-item types and states, which starts OAuth), `--force` (rewrite
+`.codex-workflows/integrations.json` from scratch). An existing policy is never replaced; re-running
+bootstrap on an opted-in repository repairs its integrations file in place instead.
 
 ## 3. Finish
 

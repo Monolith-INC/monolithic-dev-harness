@@ -6,6 +6,56 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.3] - 2026-09-23
+
+A second review of 0.1.2 found holes in the rules it had just rewritten. Upgrade: 0.1.2 is not safe
+to rely on.
+
+### Security
+
+- **An agent could approve itself.** `cp x .harness/state/checks/../approvals/HB-1.json` was
+  allowed: `..` was not collapsed before the path check, and `checks/` is agent-writable. Paths are
+  now normalized, for shell commands and for edit tools that pass relative paths.
+- **A push could skip approval.** `sudo git push`, `env X=1 git push`, `(git push)`, a push inside
+  `if` or a loop, `bash -c 'git push'`, and `xargs git push` were not recognized as pushes. This
+  was already true in 0.1.1. Every rule now reads commands through the same parser.
+- More writes to human-owned files are caught: behind `timeout` or `nice`, via `dd of=`,
+  `--directory=` and `--target-directory=`, `yq -i`, `sort -o`, `git checkout -- <path>`,
+  `git apply`, a patch or archive that carries the file, globs, and removing the whole tree
+  (`rm -rf .`, `git clean -fdx`, `git stash -u`).
+- Relative paths in a shell command resolve from the directory the session runs in, not the
+  repository root.
+- `protected-items` checks `AB#<id>` when a commit is made, not only when the same call pushes it,
+  and refuses setting the parent field (`System.Parent`, the gateway's `parentRef`).
+- `generated-files` honours the same fail-closed rule as `human-owned`: `eval 'cp x a.g.dart'` is a
+  write.
+- Tracker errors are fenced as untrusted content, like tracker results. Harness-owned results
+  (tracking status) are not.
+
+### Fixed
+
+- Reads that 0.1.2 still refused are allowed: behind `timeout`, through `bat`, `xxd`, `realpath`,
+  `tar -t`, a pipe into `python3 -c`, a heredoc that mentions a protected path as data,
+  `find … -exec grep`, and after a subshell's `cd`. `mkdir -p .harness/state` is allowed.
+- Re-running bootstrap repairs a 0.1.1 `.codex-workflows/integrations.json` in place: it fills
+  `tracker.project`, corrects an organization misread as `v3`, and drops unused bindings. Before,
+  every tracker call failed with `tracker.project is not set`.
+- `bootstrap --force` never replaces an existing `.harness/policy.json`; it rewrites only the
+  integrations file.
+- `search_work_items` accepts conditions on custom fields (`[Custom.Team] = 'A'`).
+- If Azure creates a pull request but reading it back fails, the error names the pull request.
+- Status `0` maps to `notSet` / `unknown` instead of the string `"0"`.
+
+### Corrections to 0.1.2
+
+- It said `human-owned` "decides from what a command writes, not from the paths it mentions". A
+  command the reader does not know is still treated as writing what it names; that default is
+  deliberate and now documented.
+- It said `protected-items` "detects every form that links a work item". It missed the parent
+  field and commit messages not pushed in the same call.
+- It said a truncated artifact list "says so". Only `search_work_items` reports truncation;
+  `list_artifacts` reads up to 200 comments and does not.
+
 ## [0.1.2] - 2026-09-23
 
 ### Security
@@ -106,7 +156,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.3
 [0.1.2]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.0

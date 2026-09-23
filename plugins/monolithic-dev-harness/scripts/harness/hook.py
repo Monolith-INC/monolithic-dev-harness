@@ -57,8 +57,11 @@ def _workspace(payload: dict[str, Any]) -> Path:
 
 
 def _tool_call(host: str, event: str, payload: dict[str, Any]) -> rules.ToolCall:
+    cwd = str(payload.get("cwd") or "")
     if host == "cursor" and event == "shell":
-        return rules.make_call("Shell", {"command": payload.get("command", "")})
+        return rules.make_call(
+            "Shell", {"command": payload.get("command", "")}, cwd=cwd
+        )
     tool_input = (
         payload.get("tool_input")
         or payload.get("toolInput")
@@ -75,7 +78,10 @@ def _tool_call(host: str, event: str, payload: dict[str, Any]) -> rules.ToolCall
     )
     server = payload.get("server") or payload.get("server_name") or ""
     return rules.make_call(
-        str(name), tool_input if isinstance(tool_input, dict) else {}, str(server)
+        str(name),
+        tool_input if isinstance(tool_input, dict) else {},
+        str(server),
+        cwd=cwd,
     )
 
 

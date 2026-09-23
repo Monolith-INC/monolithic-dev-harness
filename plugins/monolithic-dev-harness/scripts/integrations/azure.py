@@ -41,11 +41,13 @@ WORK_ITEM_FIELDS = (
 )
 _BATCH_LIMIT = 200
 _COMMENT_LIMIT = 200
-# A WIQL condition names a field; anything else is search text, brackets or not.
-_WIQL_FIELD = re.compile(r"\[(System|Microsoft)\.[A-Za-z.]+\]")
+# A WIQL condition names a field (`[System.State]`, `[Custom.Team]`); anything else, brackets or
+# not, is search text.
+_WIQL_FIELD = re.compile(r"\[[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+\]")
 # `status` is a numeric enum on some payloads; the server also sends the name.
-_PR_STATUS = {1: "active", 2: "abandoned", 3: "completed"}
+_PR_STATUS = {0: "notSet", 1: "active", 2: "abandoned", 3: "completed"}
 _THREAD_STATUS = {
+    0: "unknown",
     1: "active",
     2: "fixed",
     3: "wontFix",
@@ -388,7 +390,15 @@ class AzureReposScmAdapter(ScmAdapter):
                 "provider_error",
                 "Azure DevOps did not return the created pull request.",
             )
-        return self.get_pull_request(str(number))
+        try:
+            return self.get_pull_request(str(number))
+        except IntegrationError as exc:
+            # The pull request exists; say which one, so nobody creates it again.
+            raise IntegrationError(
+                exc.code,
+                f"created pull request {number}, but reading it back failed: {exc}",
+                retryable=exc.retryable,
+            ) from exc
 
     def list_review_threads(self, ref: str) -> list[ReviewThread]:
         result = self._ado(

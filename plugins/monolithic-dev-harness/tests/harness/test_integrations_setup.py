@@ -16,7 +16,11 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
     if str(entry) not in sys.path:
         sys.path.insert(0, str(entry))
 
-from harness.integrations_setup import configure_integrations  # noqa: E402
+from harness.integrations_setup import (  # noqa: E402
+    _azure_remote,
+    configure_integrations,
+    repair_integrations,
+)
 
 
 class TestConfigureIntegrations(unittest.TestCase):
@@ -77,6 +81,110 @@ class TestConfigureIntegrations(unittest.TestCase):
                 branch_template="{category}/{slug}",
                 discover=False,
             )
+
+
+def _repo_with_remote(root: Path, url: str) -> Path:
+    subprocess.run(["git", "init", "-q", str(root)], check=True)
+    subprocess.run(["git", "-C", str(root), "remote", "add", "origin", url], check=True)
+    return root
+
+
+class TestAzureRemote(unittest.TestCase):
+    def test_ssh_and_https_remotes_give_org_project_repo(self) -> None:
+        for url in (
+            "git@ssh.dev.azure.com:v3/contoso/fabrikam/web-app",
+            "https://contoso@dev.azure.com/contoso/fabrikam/_git/web-app",
+        ):
+            with self.subTest(url=url), tempfile.TemporaryDirectory() as tmp:
+                repo = _repo_with_remote(Path(tmp), url)
+                self.assertEqual(
+                    _azure_remote(repo), ("contoso", "fabrikam", "web-app")
+                )
+
+
+class TestBootstrapProject(unittest.TestCase):
+    def test_bootstrap_writes_the_project_the_policy_names(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = _repo_with_remote(
+                Path(tmp), "git@ssh.dev.azure.com:v3/contoso/from-remote/web-app"
+            )
+            path = configure_integrations(
+                repo,
+                tracker="azure_devops",
+                scm="azure_repos",
+                branch_template="{category}/{key}-{slug}",
+                discover=False,
+                runtime_dir=PLUGIN_ROOT,
+                project="fabrikam",
+                repository="monorepo",
+            )
+            config = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(config["tracker"]["project"], "fabrikam")
+        self.assertEqual(
+            (config["scm"]["project"], config["scm"]["repository"]),
+            ("fabrikam", "monorepo"),
+        )
+        # The Azure adapters call their tools by name, so nothing is bound.
+        self.assertNotIn("bindings", config["tracker"])
+        self.assertNotIn("bindings", config["scm"])
+
+
+class TestRepairIntegrations(unittest.TestCase):
+    """A config written by 0.1.1 is brought up to date in place."""
+
+    AZURE = {
+        "organization": "contoso",
+        "project": "fabrikam",
+        "repository": "monorepo",
+    }
+
+    def _write(self, directory: str, config: dict) -> Path:
+        path = Path(directory) / "integrations.json"
+        path.write_text(json.dumps(config), encoding="utf-8")
+        return path
+
+    def test_fills_the_project_and_fixes_a_misread_ssh_remote(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(
+                tmp,
+                {
+                    "schemaVersion": 1,
+                    "branchTemplate": "{category}/{key}-{slug}",
+                    "tracker": {
+                        "adapter": "azure_devops",
+                        "bindings": {"get_work_item": "wit_get_work_item"},
+                        "mappings": {"kinds": {"epic": "Epic"}},
+                    },
+                    "scm": {
+                        "adapter": "azure_repos",
+                        "organization": "v3",
+                        "project": "contoso",
+                        "repository": "fabrikam",
+                    },
+                },
+            )
+            repairs = repair_integrations(path, self.AZURE)
+            config = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual(config["tracker"]["project"], "fabrikam")
+        self.assertEqual(
+            [config["scm"][k] for k in ("organization", "project", "repository")],
+            ["contoso", "fabrikam", "monorepo"],
+        )
+        self.assertNotIn("bindings", config["tracker"])
+        # Everything else is left as it was.
+        self.assertEqual(config["tracker"]["mappings"], {"kinds": {"epic": "Epic"}})
+        self.assertEqual(len(repairs), 5)
+
+    def test_a_current_config_is_left_alone(self) -> None:
+        current = {
+            "tracker": {"adapter": "azure_devops", "project": "fabrikam"},
+            "scm": {"adapter": "azure_repos", **self.AZURE},
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            path = self._write(tmp, current)
+            before = path.read_text(encoding="utf-8")
+            self.assertEqual(repair_integrations(path, self.AZURE), [])
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
 
 
 if __name__ == "__main__":

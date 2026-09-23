@@ -54,7 +54,11 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="query Azure DevOps for capabilities (starts OAuth)",
     )
-    parser.add_argument("--force", action="store_true")
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="rewrite .codex-workflows/integrations.json from scratch (the policy is never replaced)",
+    )
     args = parser.parse_args(argv)
 
     repo = Path(args.repo).resolve()
@@ -63,7 +67,8 @@ def main(argv: list[str] | None = None) -> int:
         return 2
 
     policy_path = repo / POLICY_RELATIVE_PATH
-    if policy_path.exists() and not args.force:
+    if policy_path.exists():
+        # The policy is human-owned: an existing one is kept even with --force.
         print(f"kept existing {POLICY_RELATIVE_PATH}")
     else:
         policy_path.parent.mkdir(parents=True, exist_ok=True)
@@ -97,7 +102,13 @@ def main(argv: list[str] | None = None) -> int:
     azure = policy["azure"]
     integrations = repo / ".codex-workflows" / "integrations.json"
     if integrations.exists() and not args.force:
-        print("kept existing .codex-workflows/integrations.json")
+        from harness.integrations_setup import repair_integrations
+
+        repairs = repair_integrations(integrations, azure)
+        for repair in repairs:
+            print(f"repaired .codex-workflows/integrations.json: {repair}")
+        if not repairs:
+            print("kept existing .codex-workflows/integrations.json")
     else:
         from harness.integrations_setup import configure_integrations
 

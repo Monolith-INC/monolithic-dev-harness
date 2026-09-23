@@ -295,17 +295,21 @@ def process_message(line: str, *, project_root: Path | None = None) -> str:
             response["result"] = {"tools": _tools_for_project(project_root)}
         elif method == "tools/call":
             params = message.get("params") or {}
+            name = str(params.get("name"))
+            # Tracker and SCM text is written by whoever can edit the tracker or the repository.
+            provider_text = name.startswith(("tracker_", "scm_"))
             try:
                 result = handle_call(
-                    str(params.get("name")),
+                    name,
                     params.get("arguments") or {},
                     project_root=project_root,
                 )
+                text = json.dumps(result, default=_json_default)
                 response["result"] = {
                     "content": [
                         {
                             "type": "text",
-                            "text": _fenced(json.dumps(result, default=_json_default)),
+                            "text": _fenced(text) if provider_text else text,
                         }
                     ]
                 }
@@ -319,9 +323,16 @@ def process_message(line: str, *, project_root: Path | None = None) -> str:
                         "error_code": exc.code,
                     }
                 )
+                # A provider's error message can carry its own text back, so it is fenced too.
+                text = json.dumps(exc.to_dict())
                 response["result"] = {
                     "isError": True,
-                    "content": [{"type": "text", "text": json.dumps(exc.to_dict())}],
+                    "content": [
+                        {
+                            "type": "text",
+                            "text": _fenced(text) if provider_text else text,
+                        }
+                    ],
                 }
         elif method == "notifications/initialized":
             return ""

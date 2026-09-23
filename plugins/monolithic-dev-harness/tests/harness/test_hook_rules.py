@@ -242,6 +242,20 @@ class TestHumanOwned(HookTestCase):
 
 
 class TestApproval(HookTestCase):
+    def test_every_form_of_git_push_needs_approval(self) -> None:
+        for command in (
+            "git push",
+            "sudo git push",
+            "env X=1 git push",
+            "(git push)",
+            "if true; then git push; fi",
+            "bash -c 'git push origin HEAD'",
+        ):
+            with self.subTest(command=command):
+                self.assertDenied(
+                    self.claude("Bash", {"command": command}), "approval-required"
+                )
+
     def test_write_without_approval_is_denied_on_both_hosts(self) -> None:
         self.assertDenied(
             self.claude(AZ + "wit_work_item_write", {"action": "create"}),
@@ -406,6 +420,47 @@ class TestProtected(HookTestCase):
             ),
             "protected-items",
         )
+
+    def test_a_commit_mentioning_a_protected_item_is_denied_before_any_push(
+        self,
+    ) -> None:
+        # The harness commits and pushes in separate calls; the push carries no text to check.
+        self.assertDenied(
+            self.claude("Bash", {"command": "git commit -m 'AB#1001 done'"}),
+            "protected-items",
+        )
+        self.assertDenied(
+            self.claude("Bash", {"command": "sudo git commit -m 'AB#1001 done'"}),
+            "protected-items",
+        )
+
+    def test_setting_the_parent_field_is_linking(self) -> None:
+        self.approve()
+        for tool, payload in (
+            (
+                AZ + "wit_work_item_write",
+                {
+                    "action": "create",
+                    "workItemType": "User Story",
+                    "fields": [{"name": "System.Parent", "value": "1001"}],
+                },
+            ),
+            (
+                AZ + "wit_work_item_write",
+                {
+                    "action": "update",
+                    "id": 9001,
+                    "updates": [{"path": "/fields/System.Parent", "value": "1001"}],
+                },
+            ),
+            (
+                "mcp__plugin_monolithic-dev-harness_workflow-integrations__"
+                "tracker_create_work_item",
+                {"kind": "user_story", "title": "x", "parentRef": "1001"},
+            ),
+        ):
+            with self.subTest(tool=tool, payload=payload):
+                self.assertDenied(self.claude(tool, payload), "protected-items")
 
     def test_plain_text_names_and_html_entities_are_allowed(self) -> None:
         self.approve()
