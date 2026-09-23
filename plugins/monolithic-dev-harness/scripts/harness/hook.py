@@ -20,6 +20,7 @@ import argparse
 import json
 import os
 import re
+import signal
 import sys
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,19 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
 
 from harness import gitstate, rules, state  # noqa: E402
 from harness.config import POLICY_RELATIVE_PATH, PolicyError, load_policy  # noqa: E402
+
+# The hosts give the hook 15 seconds and treat a timeout as "no decision", which lets the call
+# through. The rules get less than that, and running out counts as a failure.
+RULES_BUDGET_SECONDS = 10
+
+
+class _OutOfTime(Exception):
+    pass
+
+
+def _out_of_time(_signum: int, _frame: Any) -> None:
+    raise _OutOfTime(f"the rules took longer than {RULES_BUDGET_SECONDS}s")
+
 
 APPROVE_RE = re.compile(
     r"\b(?:approve|aprovo|aprovado|aprovar)\s+(HB-[A-Z0-9]{4,12})\b", re.IGNORECASE
@@ -57,8 +71,11 @@ def _workspace(payload: dict[str, Any]) -> Path:
 
 
 def _tool_call(host: str, event: str, payload: dict[str, Any]) -> rules.ToolCall:
+    cwd = str(payload.get("cwd") or "")
     if host == "cursor" and event == "shell":
-        return rules.make_call("Shell", {"command": payload.get("command", "")})
+        return rules.make_call(
+            "Shell", {"command": payload.get("command", "")}, cwd=cwd
+        )
     tool_input = (
         payload.get("tool_input")
         or payload.get("toolInput")
@@ -75,7 +92,10 @@ def _tool_call(host: str, event: str, payload: dict[str, Any]) -> rules.ToolCall
     )
     server = payload.get("server") or payload.get("server_name") or ""
     return rules.make_call(
-        str(name), tool_input if isinstance(tool_input, dict) else {}, str(server)
+        str(name),
+        tool_input if isinstance(tool_input, dict) else {},
+        str(server),
+        cwd=cwd,
     )
 
 
@@ -120,7 +140,12 @@ def _delegate_to_workflow_policy(
 
 def _fail(host: str, call: rules.ToolCall, message: str) -> int:
     """Fail closed for writes, open for reads, so a broken rule never silently permits a write."""
-    if rules.is_write_class(call):
+    try:
+        write_class = rules.is_write_class(call)
+    except Exception:
+        # The classifier broke too: only calls that plainly cannot write go through.
+        write_class = call.name not in rules.READ_ONLY_TOOLS
+    if write_class:
         _emit_decision(
             host,
             rules.Decision.deny(
@@ -140,11 +165,22 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
         # Not a governed repository: the harness is opt-in per repo (bootstrap writes the policy).
         _emit_decision(host, rules.Decision.allow())
         return 0
+    timed = hasattr(signal, "SIGALRM")
+    if timed:
+        signal.signal(signal.SIGALRM, _out_of_time)
+        signal.setitimer(signal.ITIMER_REAL, RULES_BUDGET_SECONDS)
     try:
         policy = load_policy(repo)
         decision = rules.evaluate(call, repo, policy)
-    except (PolicyError, gitstate.GitError, OSError, ValueError, KeyError) as exc:
-        return _fail(host, call, f"harness rules could not run: {exc}")
+    except (Exception, _OutOfTime) as exc:
+        # Any failure of the rules, including a crash or running out of time, blocks writes.
+        # A hook that exits with an error or times out is not a block: the host lets the call run.
+        return _fail(
+            host, call, f"harness rules could not run: {type(exc).__name__}: {exc}"
+        )
+    finally:
+        if timed:
+            signal.setitimer(signal.ITIMER_REAL, 0)
     if not decision.allowed:
         _emit_decision(host, decision)
         return 0
@@ -207,7 +243,16 @@ def main(argv: list[str] | None = None) -> int:
         payload = {}
     if args.event == "prompt":
         return handle_prompt(args.host, payload)
-    return handle_pre_tool(args.host, args.event, payload)
+    try:
+        return handle_pre_tool(args.host, args.event, payload)
+    except Exception as exc:
+        # Last resort: anything that escaped the rules still fails closed.
+        call = rules.make_call(
+            str(payload.get("tool_name") or payload.get("toolName") or "Bash"), {}
+        )
+        return _fail(
+            args.host, call, f"harness hook failed: {type(exc).__name__}: {exc}"
+        )
 
 
 if __name__ == "__main__":

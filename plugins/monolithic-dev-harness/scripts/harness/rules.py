@@ -12,9 +12,11 @@ draft-reviewed-prs  Pull requests are created as drafts, only with a `ready` rev
 
 from __future__ import annotations
 
+import os
+import posixpath
 import re
-import shlex
 from dataclasses import dataclass, field
+from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +45,23 @@ EDIT_TOOLS = frozenset(
     }
 )
 SHELL_TOOLS = frozenset({"Bash", "Shell", "run_terminal_cmd", "shell", "run_command"})
+# Tools that cannot change anything. If the rules fail, only these go through.
+READ_ONLY_TOOLS = frozenset(
+    {
+        "Read",
+        "Glob",
+        "Grep",
+        "LS",
+        "WebSearch",
+        "WebFetch",
+        "read_file",
+        "list_dir",
+        "grep_search",
+        "file_search",
+        "codebase_search",
+        "ToolSearch",
+    }
+)
 AZURE_EXTRA_WRITES = frozenset(
     {"repo_create_branch", "pipelines_run", "wiki_upsert_page"}
 )
@@ -68,8 +87,11 @@ _ID_KEYS = frozenset(
         "ref",
         "work_item_ref",
         "workItems",
+        "parentRef",
     }
 )
+# Field names and patch paths that set a work item's parent.
+_PARENT_FIELDS = frozenset({"System.Parent"})
 _NESTED_ID_LISTS = ("batchUpdates", "updates", "items")
 # Text that links a work item when Azure DevOps saves it: a `#123` / `AB#123` mention (not an HTML
 # entity such as `&#127919;`, and not a `#004007` colour, which no work-item id looks like) or a
@@ -82,8 +104,6 @@ _TEXT_REFERENCE = re.compile(
     r"|vstfs:///WorkItemTracking/WorkItem/(\d+)",
     re.IGNORECASE,
 )
-# In a commit message or branch name, only the `AB#123` form creates a link.
-_COMMIT_REFERENCE = re.compile(r"(?<![&\w])(?:AB|US)#([1-9]\d*)\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -92,6 +112,7 @@ class ToolCall:
     name: str
     server: str = ""
     tool_input: dict[str, Any] = field(default_factory=dict)
+    cwd: str = ""  # where the host runs the tool; a shell's relative paths start here
 
     @property
     def command(self) -> str:
@@ -143,7 +164,7 @@ def split_tool_name(raw: str) -> tuple[str, str]:
 
 
 def make_call(
-    raw_name: str, tool_input: dict[str, Any] | None, server: str = ""
+    raw_name: str, tool_input: dict[str, Any] | None, server: str = "", cwd: str = ""
 ) -> ToolCall:
     parsed_server, name = split_tool_name(raw_name)
     return ToolCall(
@@ -151,6 +172,7 @@ def make_call(
         name=name,
         server=server or parsed_server,
         tool_input=tool_input or {},
+        cwd=cwd,
     )
 
 
@@ -174,12 +196,13 @@ def is_remote_write(call: ToolCall) -> bool:
 
 
 def is_write_class(call: ToolCall) -> bool:
-    """Calls that must fail closed if the rules themselves cannot run."""
-    if is_remote_write(call) or call.name in EDIT_TOOLS:
+    """Calls that must fail closed if the rules themselves cannot run.
+
+    Every shell command counts: if the rules could not read it, nothing says it only reads.
+    """
+    if call.name in EDIT_TOOLS or call.name in SHELL_TOOLS:
         return True
-    return call.name in SHELL_TOOLS and bool(
-        git_subcommands(call.command) & {"commit", "push", "merge"}
-    )
+    return is_remote_write(call)
 
 
 # --- helpers ------------------------------------------------------------------------------
@@ -210,31 +233,44 @@ def referenced_ids(tool_input: dict[str, Any]) -> set[int]:
             if isinstance(entry, dict):
                 for nested_key in ("id", "linkToId", "parentId"):
                     found |= _ints(entry.get(nested_key))
+    # Setting the parent field is linking, whether as a create field or an update patch.
+    for entry in [
+        *(tool_input.get("fields") or []),
+        *(tool_input.get("updates") or []),
+        *(tool_input.get("batchUpdates") or []),
+    ]:
+        if not isinstance(entry, dict):
+            continue
+        field_name = str(entry.get("name") or entry.get("path") or "").rsplit("/", 1)[
+            -1
+        ]
+        if field_name in _PARENT_FIELDS:
+            found |= _ints(entry.get("value"))
     return found
 
 
-def git_invocations(command: str) -> list[tuple[str | None, list[str]]]:
-    """Every `git` invocation in a shell command: (the -C directory or None, argv after options)."""
-    invocations: list[tuple[str | None, list[str]]] = []
-    for segment in re.split(r"&&|\|\||;|\||\n", command):
-        try:
-            tokens = shlex.split(segment)
-        except ValueError:
-            tokens = segment.split()
-        while tokens and re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", tokens[0]):
-            tokens = tokens[1:]
-        if not tokens or Path(tokens[0]).name != "git":
+def git_invocations(
+    command: str, cwd: str | None = ""
+) -> list[tuple[str | None, list[str]]]:
+    """Every `git` the command runs: (its directory relative to `cwd`'s base, argv after options).
+
+    Walks the same invocations as the write rules, so `sudo git push`, `(git push)`, and
+    `if …; then git push; fi` are all seen.
+    """
+    found: list[tuple[str | None, list[str]]] = []
+    for invocation in shellscan.invocations(command, cwd):
+        if invocation.name != "git":
             continue
-        directory: str | None = None
-        rest = tokens[1:]
+        directory = invocation.cwd or None
+        rest = list(invocation.args)
         while rest and rest[0].startswith("-"):
             flag = rest.pop(0)
             if flag in {"-C", "-c", "--git-dir", "--work-tree"} and rest:
                 value = rest.pop(0)
                 if flag == "-C":
-                    directory = value
-        invocations.append((directory, rest))
-    return invocations
+                    directory = shellscan.resolve(value, directory or "")
+        found.append((directory, rest))
+    return found
 
 
 def git_subcommands(command: str) -> set[str]:
@@ -242,61 +278,111 @@ def git_subcommands(command: str) -> set[str]:
 
 
 def _relative(repo: Path, path: str) -> str:
+    """`path` relative to the repository, with `.` and `..` collapsed so they cannot hide a target."""
     candidate = Path(path)
     if candidate.is_absolute():
         try:
             return candidate.resolve().relative_to(repo.resolve()).as_posix()
         except ValueError:
             return candidate.as_posix()
-    return globs.normalize(path)
+    normalized = posixpath.normpath(globs.normalize(path)) if path else ""
+    if normalized == "..":
+        normalized = "../."
+    if normalized.startswith("../"):
+        # It left the repository and may have come back in (`../repo/.harness`): resolve it.
+        try:
+            return (repo / normalized).resolve().relative_to(repo.resolve()).as_posix()
+        except ValueError:
+            return normalized
+    return "" if normalized == "." else normalized
+
+
+def _shell_start(call: ToolCall, repo: Path) -> str:
+    """Where the shell starts, relative to the repository (`""` for its root)."""
+    if not call.cwd:
+        return ""
+    # Both sides resolved: the repository root comes from git, which resolves symlinks, and a
+    # session opened through a symlinked path would otherwise seem to sit outside it.
+    relative = posixpath.normpath(
+        os.path.relpath(Path(call.cwd).resolve(), repo.resolve())
+    )
+    return "" if relative == "." else relative
 
 
 # --- rules --------------------------------------------------------------------------------
 
 
-_HUMAN_OWNED = (
-    ".harness/policy.json",
-    ".harness/state/approvals/**",
-    ".harness/state/manual/**",
-)
+# Human-owned paths, as components under the repository root. A write into `.harness/` or
+# `.harness/state/` could create one; anything under the last two is a record.
+_OWNED_FILES = ((".harness",), (".harness", "state"), (".harness", "policy.json"))
+_OWNED_DIRS = ((".harness", "state", "approvals"), (".harness", "state", "manual"))
 
 
-def _is_human_owned_target(target: str) -> bool:
-    """The policy, an approval, a manual-check record, or a directory a write could create one in."""
-    parts = [
-        part for part in globs.normalize(target).split("/") if part not in ("", ".")
-    ]
-    if ".harness" not in parts:
-        return False
-    inner = parts[parts.index(".harness") + 1 :]
-    return (
-        inner in ([], ["state"], ["policy.json"])
-        or inner[:2] == ["state", "approvals"]
-        or inner[:2] == ["state", "manual"]
+def _components_match(names: tuple[str, ...], patterns: list[str]) -> bool:
+    """Whether a (possibly globbed) path's components can name `names`."""
+    return len(names) == len(patterns) and all(
+        fnmatch(name, pattern) for name, pattern in zip(names, patterns, strict=True)
     )
 
 
-def shell_writes_human_owned(command: str) -> bool:
-    """True when a shell command could write the policy, an approval, or a manual-check record.
+def is_human_owned(relative: str, tree: bool = False) -> bool:
+    """Whether writing `relative` could change the policy, an approval, or a manual-check record.
 
-    Reading them is fine. A command whose write vector cannot be followed (`eval`, `sh -c`, an
-    interpreter running inline code) counts as a write whenever the command text names one of
-    these paths, or `.harness/` itself.
+    `tree` means the write reaches everything under `relative` (`rm -r`, `git clean`), so an
+    ancestor of `.harness/` counts too. Globs count when they could match.
     """
-    if ".harness" not in command:
+    parts = [part for part in relative.split("/") if part not in ("", ".")]
+    if parts[:1] == [".."] or relative.startswith(("/", "~")):
         return False
-    writes = shellscan.scan(command)
-    if any(_is_human_owned_target(target) for target in writes.targets):
-        return True
-    return writes.opaque
+    for owned in _OWNED_FILES:
+        if _components_match(owned, parts):
+            return True
+    for owned in _OWNED_DIRS:
+        if len(parts) >= len(owned) and _components_match(owned, parts[: len(owned)]):
+            return True
+        if len(parts) == len(owned) - 1 and _components_match(owned[:-1], parts):
+            return True
+    if tree:
+        deepest = _OWNED_DIRS[0]
+        return len(parts) < len(deepest) and _components_match(
+            deepest[: len(parts)], parts
+        )
+    return False
 
 
-def shell_writes_matching(command: str, repo: Path, patterns: list[str]) -> str | None:
-    """The first path a shell command would write that matches `patterns`, if any."""
-    writes = shellscan.scan(command)
-    for target in writes.targets:
-        relative = _relative(repo, target)
-        if globs.matches(relative, patterns):
+def _names_harness(word: str) -> bool:
+    return any(fnmatch(".harness", part) for part in word.split("/") if part)
+
+
+def shell_human_owned_write(call: ToolCall, repo: Path) -> str | None:
+    """The human-owned path a shell command could write, if any."""
+    writes = shellscan.scan(call.command, _shell_start(call, repo), repo)
+    for path in writes.targets:
+        if is_human_owned(_relative(repo, path)):
+            return _relative(repo, path)
+    for path in writes.trees:
+        if is_human_owned(_relative(repo, path), tree=True):
+            return _relative(repo, path) or "the repository root"
+    return next((word for word in writes.unresolved if _names_harness(word)), None)
+
+
+def shell_writes_human_owned(command: str, repo: Path | None = None) -> bool:
+    return (
+        shell_human_owned_write(
+            make_call("Bash", {"command": command}), repo or Path(".")
+        )
+        is not None
+    )
+
+
+def shell_writes_matching(
+    call: ToolCall, repo: Path, patterns: list[str]
+) -> str | None:
+    """The first path a shell command could write that matches `patterns`, if any."""
+    writes = shellscan.scan(call.command, _shell_start(call, repo), repo)
+    for path in (*writes.targets, *writes.unresolved):
+        relative = _relative(repo, path)
+        if relative and globs.matches(relative, patterns):
             return relative
     return None
 
@@ -305,17 +391,19 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
     """Approvals, manual-check records, and the policy itself are written by humans (via prompts/bootstrap)."""
     if call.name in EDIT_TOOLS:
         for path in call.file_paths:
-            if globs.matches(_relative(repo, path), _HUMAN_OWNED):
+            if is_human_owned(_relative(repo, path)):
                 return Decision.deny(
                     "human-owned",
                     f"{_relative(repo, path)} is human-owned. Approvals and manual checks are recorded from the "
                     "user's own prompt; the policy is edited by a person (or created once by bootstrap).",
                 )
-    if call.name in SHELL_TOOLS and shell_writes_human_owned(call.command):
-        return Decision.deny(
-            "human-owned",
-            "this command would write human-owned harness state or policy.",
-        )
+    if call.name in SHELL_TOOLS:
+        written = shell_human_owned_write(call, repo)
+        if written:
+            return Decision.deny(
+                "human-owned",
+                f"this command could write {written}, which is human-owned harness state or policy.",
+            )
     return Decision.allow()
 
 
@@ -337,9 +425,11 @@ def mentioned_ids(value: Any, pattern: re.Pattern[str] = _TEXT_REFERENCE) -> set
 
 
 def rule_protected_items(call: ToolCall, policy: dict[str, Any]) -> Decision:
+    protected = protected_ids(policy)
+    if call.name in SHELL_TOOLS:
+        return _shell_protected_mentions(call, protected)
     if not is_remote_write(call):
         return Decision.allow()
-    protected = protected_ids(policy)
     hit = referenced_ids(call.tool_input) & protected
     if hit:
         return Decision.deny(
@@ -348,15 +438,32 @@ def rule_protected_items(call: ToolCall, policy: dict[str, Any]) -> Decision:
             "linked, or parented — not even with approval (links are two-way and would change them). "
             "Name the item in plain text instead, for example 'Idea 4007', without '#' or a link.",
         )
-    # A commit message or branch name only links through `AB#123`; a tracker field links `#123` too.
-    pattern = _COMMIT_REFERENCE if call.name in SHELL_TOOLS else _TEXT_REFERENCE
-    mentioned = mentioned_ids(call.tool_input, pattern) & protected
+    mentioned = mentioned_ids(call.tool_input) & protected
     if mentioned:
         return Decision.deny(
             "protected-items",
             f"the text mentions protected work item(s) {sorted(mentioned)} as '#<id>' or by URL. "
             "Azure DevOps turns a mention into a link, which changes the protected item. Name it in "
             "plain text instead, for example 'Idea 4007', without '#' or a link.",
+        )
+    return Decision.allow()
+
+
+def _shell_protected_mentions(call: ToolCall, protected: set[int]) -> Decision:
+    """A commit message (or tag) links a work item through `#123` or `AB#123` once pushed.
+
+    Checked when the commit is made, not only when it is pushed: the harness's own flow commits
+    and pushes in separate calls, and the push itself carries no text.
+    """
+    if not git_subcommands(call.command) & {"commit", "push", "tag", "notes", "merge"}:
+        return Decision.allow()
+    mentioned = mentioned_ids(call.command) & protected
+    if mentioned:
+        return Decision.deny(
+            "protected-items",
+            f"this commit or push mentions protected work item(s) {sorted(mentioned)} "
+            "(`#<id>`, `AB#<id>`, or a work item URL), which Azure Repos turns into a link on the "
+            "protected item. Name it in plain text instead, for example 'Idea 4007'.",
         )
     return Decision.allow()
 
@@ -468,7 +575,7 @@ def rule_generated_files(
                     f"{rel} is generated. Change its source and re-run the generator instead of editing it.",
                 )
     if call.name in SHELL_TOOLS:
-        written = shell_writes_matching(call.command, repo, patterns)
+        written = shell_writes_matching(call, repo, patterns)
         if written:
             return Decision.deny(
                 "generated-files",
@@ -480,7 +587,7 @@ def rule_generated_files(
 def commit_rules(call: ToolCall, repo: Path, policy: dict[str, Any]) -> Decision:
     if call.name not in SHELL_TOOLS:
         return Decision.allow()
-    for directory, argv in git_invocations(call.command):
+    for directory, argv in git_invocations(call.command, _shell_start(call, repo)):
         if not argv or argv[0] != "commit":
             continue
         target = (

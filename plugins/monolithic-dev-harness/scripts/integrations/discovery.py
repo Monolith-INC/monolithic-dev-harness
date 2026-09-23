@@ -166,6 +166,9 @@ class DiscoveryResult:
     missing_capabilities: tuple[str, ...]
     provider: str
     kind: str
+    fixed_tools: bool = (
+        False  # the adapter calls its tools by name; there is nothing to bind
+    )
 
 
 def mapping_presets(adapter: str) -> dict[str, dict[str, str]]:
@@ -231,7 +234,8 @@ def discover_provider_capabilities(
             ),
             missing_capabilities=(),
             provider=adapter,
-            kind=adapter if adapter == "github" else kind,
+            kind=kind,
+            fixed_tools=True,
         )
     tools = discovered_tools
     if tools is None:
@@ -272,7 +276,7 @@ def validate_bindings(
     bindings: Mapping[str, Any], *, kind: str, adapter: str = ""
 ) -> tuple[str, ...]:
     required = REQUIRED_TRACKER_OPS if kind == "tracker" else REQUIRED_SCM_OPS
-    if kind == "github" or adapter in FIXED_TOOL_ADAPTERS:
+    if adapter in FIXED_TOOL_ADAPTERS:
         return ()
     return tuple(op for op in required if not str(bindings.get(op) or "").strip())
 
@@ -286,15 +290,21 @@ def apply_discovery_to_config(
     result = dict(config)
     if tracker_discovery is not None:
         tracker = dict(result.get("tracker") or {})
-        tracker["bindings"] = dict(tracker_discovery.resolved_bindings)
+        if tracker_discovery.fixed_tools:
+            tracker.pop("bindings", None)
+        else:
+            tracker["bindings"] = dict(tracker_discovery.resolved_bindings)
         tracker["mappings"] = {
             "kinds": dict(tracker_discovery.suggested_mappings.get("kinds") or {}),
             "states": dict(tracker_discovery.suggested_mappings.get("states") or {}),
         }
         result["tracker"] = tracker
-    if scm_discovery is not None and scm_discovery.kind != "github":
+    if scm_discovery is not None:
         scm = dict(result.get("scm") or {})
-        scm["bindings"] = dict(scm_discovery.resolved_bindings)
+        if scm_discovery.fixed_tools:
+            scm.pop("bindings", None)
+        else:
+            scm["bindings"] = dict(scm_discovery.resolved_bindings)
         result["scm"] = scm
     return result
 
