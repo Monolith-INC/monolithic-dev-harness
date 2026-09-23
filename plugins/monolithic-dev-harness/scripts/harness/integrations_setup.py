@@ -29,6 +29,8 @@ def configure_integrations(
     discover: bool = True,
     confirm_mappings: dict | None = None,
     runtime_dir: Path | None = None,
+    project: str = "",
+    repository: str = "",
 ) -> Path:
     """Write provider-neutral setup while keeping provider details adapter-owned."""
     from scripts.integrations.discovery import (
@@ -61,14 +63,16 @@ def configure_integrations(
         if "{key}" not in branch_template:
             raise ValueError("branch template must contain {key}")
         tracker_config = _default_tracker_config(
-            tracker, tracker_scope, project_dest, runtime_dir
+            tracker, tracker_scope, project_dest, runtime_dir, project=project
         )
         tracker_config["branchPattern"] = branch_template
         payload = {
             "schemaVersion": 1,
             "branchTemplate": branch_template,
             "tracker": tracker_config,
-            "scm": _default_scm_config(scm, project_dest),
+            "scm": _default_scm_config(
+                scm, project_dest, project=project, repository=repository
+            ),
         }
 
     payload = _with_local_tracker_transport(
@@ -142,6 +146,7 @@ def _default_tracker_config(
     scope: str,
     project_dest: Path | None = None,
     runtime_dir: Path | None = None,
+    project: str = "",
 ) -> dict:
     from scripts.integrations.discovery import mapping_presets
 
@@ -182,17 +187,9 @@ def _default_tracker_config(
                     "repositories",
                 ],
             },
+            "project": project
+            or (_azure_remote(project_dest)[1] if project_dest else ""),
             "mappings": presets,
-            "bindings": {
-                "get_work_item": "wit_get_work_item",
-                "search_work_items": "wit_query_by_wiql",
-                "create_work_item": "wit_create_work_item",
-                "list_children": "wit_get_work_items",
-                "transition_work_item": "wit_update_work_item",
-                "publish_artifact": "wit_add_work_item_comment",
-                "list_artifacts": "wit_get_work_item_comments",
-                "link_development_artifact": "wit_add_artifact_link",
-            },
         }
     if provider == "local_tracker":
         return {
@@ -286,7 +283,9 @@ def _set_local_tracker_ignore(project_dest: Path, ignored: bool) -> None:
         path.write_text(content, encoding="utf-8")
 
 
-def _default_scm_config(provider: str, project_dest: Path) -> dict:
+def _default_scm_config(
+    provider: str, project_dest: Path, *, project: str = "", repository: str = ""
+) -> dict:
     if provider == "github":
         owner, repo = _github_remote(project_dest)
         return {
@@ -297,12 +296,12 @@ def _default_scm_config(provider: str, project_dest: Path) -> dict:
             "bindings": {},
         }
     if provider == "azure_repos":
-        org, project, repo = _azure_remote(project_dest)
+        org, azure_project, azure_repository = _azure_remote(project_dest)
         return {
             "adapter": "azure_repos",
             "organization": org,
-            "project": project,
-            "repository": repo,
+            "project": project or azure_project,
+            "repository": repository or azure_repository,
             "connection": {
                 "command": "npx",
                 "args": [
@@ -314,13 +313,6 @@ def _default_scm_config(provider: str, project_dest: Path) -> dict:
                     "repositories",
                     "work-items",
                 ],
-            },
-            "bindings": {
-                "get_pull_request": "repo_get_pull_request_by_id",
-                "create_pull_request": "repo_create_pull_request",
-                "list_review_threads": "repo_list_pull_request_threads",
-                "reply_to_thread": "repo_reply_to_comment",
-                "link_work_item": "wit_link_work_item_to_pull_request",
             },
         }
     raise ValueError(f"unsupported SCM: {provider}")
@@ -372,8 +364,12 @@ def _azure_remote(project_dest: Path) -> tuple[str, str, str]:
         return "", "", ""
     value = remote.removesuffix(".git")
     if "dev.azure.com" in value:
+        # https://[user@]dev.azure.com/<org>/<project>/_git/<repo>
+        # git@ssh.dev.azure.com:v3/<org>/<project>/<repo>
         tail = value.split("dev.azure.com", 1)[-1].lstrip(":/")
         parts = [part for part in tail.split("/") if part and part != "_git"]
+        if value.split("dev.azure.com", 1)[0].endswith("ssh.") and parts[:1] == ["v3"]:
+            parts = parts[1:]
         if len(parts) >= 3:
             return parts[0], parts[1], parts[2]
     if "visualstudio.com" in value:

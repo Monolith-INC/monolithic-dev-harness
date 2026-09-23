@@ -18,7 +18,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from . import gitstate, globs, state
+from . import gitstate, globs, shellscan, state
 from .config import protected_ids
 
 EDIT_TOOLS = frozenset(
@@ -71,6 +71,19 @@ _ID_KEYS = frozenset(
     }
 )
 _NESTED_ID_LISTS = ("batchUpdates", "updates", "items")
+# Text that links a work item when Azure DevOps saves it: a `#123` / `AB#123` mention (not an HTML
+# entity such as `&#127919;`, and not a `#004007` colour, which no work-item id looks like) or a
+# work item URL in any of its forms.
+_TEXT_REFERENCE = re.compile(
+    r"(?<![&\w])(?:AB|US)?#([1-9]\d*)\b"
+    r"|_workitems/edit/(\d+)"
+    r"|_workitems[^\s]*[?&]id=(\d+)"
+    r"|/_apis/wit/workItems/(\d+)"
+    r"|vstfs:///WorkItemTracking/WorkItem/(\d+)",
+    re.IGNORECASE,
+)
+# In a commit message or branch name, only the `AB#123` form creates a link.
+_COMMIT_REFERENCE = re.compile(r"(?<![&\w])(?:AB|US)#([1-9]\d*)\b", re.IGNORECASE)
 
 
 @dataclass(frozen=True)
@@ -248,6 +261,46 @@ _HUMAN_OWNED = (
 )
 
 
+def _is_human_owned_target(target: str) -> bool:
+    """The policy, an approval, a manual-check record, or a directory a write could create one in."""
+    parts = [
+        part for part in globs.normalize(target).split("/") if part not in ("", ".")
+    ]
+    if ".harness" not in parts:
+        return False
+    inner = parts[parts.index(".harness") + 1 :]
+    return (
+        inner in ([], ["state"], ["policy.json"])
+        or inner[:2] == ["state", "approvals"]
+        or inner[:2] == ["state", "manual"]
+    )
+
+
+def shell_writes_human_owned(command: str) -> bool:
+    """True when a shell command could write the policy, an approval, or a manual-check record.
+
+    Reading them is fine. A command whose write vector cannot be followed (`eval`, `sh -c`, an
+    interpreter running inline code) counts as a write whenever the command text names one of
+    these paths, or `.harness/` itself.
+    """
+    if ".harness" not in command:
+        return False
+    writes = shellscan.scan(command)
+    if any(_is_human_owned_target(target) for target in writes.targets):
+        return True
+    return writes.opaque
+
+
+def shell_writes_matching(command: str, repo: Path, patterns: list[str]) -> str | None:
+    """The first path a shell command would write that matches `patterns`, if any."""
+    writes = shellscan.scan(command)
+    for target in writes.targets:
+        relative = _relative(repo, target)
+        if globs.matches(relative, patterns):
+            return relative
+    return None
+
+
 def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
     """Approvals, manual-check records, and the policy itself are written by humans (via prompts/bootstrap)."""
     if call.name in EDIT_TOOLS:
@@ -258,16 +311,7 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
                     f"{_relative(repo, path)} is human-owned. Approvals and manual checks are recorded from the "
                     "user's own prompt; the policy is edited by a person (or created once by bootstrap).",
                 )
-    if (
-        call.name in SHELL_TOOLS
-        and re.search(
-            r"\.harness/state/(approvals|manual)|\.harness/policy\.json", call.command
-        )
-        and re.search(
-            r">|\btee\b|\bcp\b|\bmv\b|\brm\b|sed\s+-[a-zA-Z]*i|touch|python|node",
-            call.command,
-        )
-    ):
+    if call.name in SHELL_TOOLS and shell_writes_human_owned(call.command):
         return Decision.deny(
             "human-owned",
             "this command would write human-owned harness state or policy.",
@@ -275,16 +319,44 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
     return Decision.allow()
 
 
+def mentioned_ids(value: Any, pattern: re.Pattern[str] = _TEXT_REFERENCE) -> set[int]:
+    """Work item ids that text in a payload would link: `#123` mentions and work item URLs."""
+    if isinstance(value, str):
+        return {
+            int(next(group for group in match.groups() if group))
+            for match in pattern.finditer(value)
+        }
+    if isinstance(value, dict):
+        value = list(value.values())
+    if isinstance(value, list):
+        found: set[int] = set()
+        for item in value:
+            found |= mentioned_ids(item, pattern)
+        return found
+    return set()
+
+
 def rule_protected_items(call: ToolCall, policy: dict[str, Any]) -> Decision:
     if not is_remote_write(call):
         return Decision.allow()
-    hit = referenced_ids(call.tool_input) & protected_ids(policy)
+    protected = protected_ids(policy)
+    hit = referenced_ids(call.tool_input) & protected
     if hit:
         return Decision.deny(
             "protected-items",
             f"work item(s) {sorted(hit)} are protected in .harness/policy.json and are never written, "
             "linked, or parented — not even with approval (links are two-way and would change them). "
-            "Reference the item by URL in the new item's description instead.",
+            "Name the item in plain text instead, for example 'Idea 4007', without '#' or a link.",
+        )
+    # A commit message or branch name only links through `AB#123`; a tracker field links `#123` too.
+    pattern = _COMMIT_REFERENCE if call.name in SHELL_TOOLS else _TEXT_REFERENCE
+    mentioned = mentioned_ids(call.tool_input, pattern) & protected
+    if mentioned:
+        return Decision.deny(
+            "protected-items",
+            f"the text mentions protected work item(s) {sorted(mentioned)} as '#<id>' or by URL. "
+            "Azure DevOps turns a mention into a link, which changes the protected item. Name it in "
+            "plain text instead, for example 'Idea 4007', without '#' or a link.",
         )
     return Decision.allow()
 
@@ -395,15 +467,13 @@ def rule_generated_files(
                     "generated-files",
                     f"{rel} is generated. Change its source and re-run the generator instead of editing it.",
                 )
-    if call.name in SHELL_TOOLS and re.search(
-        r"sed\s+(-[a-zA-Z]*i|--in-place)|perl\s+-[a-z]*i|\btee\b|>", call.command
-    ):
-        for token in re.split(r"[\s'\"<>|;&]+", call.command):
-            if token and globs.matches(_relative(repo, token), patterns):
-                return Decision.deny(
-                    "generated-files",
-                    f"{token} is generated; this command would edit it by hand.",
-                )
+    if call.name in SHELL_TOOLS:
+        written = shell_writes_matching(call.command, repo, patterns)
+        if written:
+            return Decision.deny(
+                "generated-files",
+                f"{written} is generated; this command would edit it by hand.",
+            )
     return Decision.allow()
 
 

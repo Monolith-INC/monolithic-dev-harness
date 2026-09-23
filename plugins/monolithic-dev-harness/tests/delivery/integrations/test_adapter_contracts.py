@@ -5,10 +5,13 @@ from pathlib import Path
 from typing import Any
 
 from scripts.integrations.adapters import (
-    AzureDevOpsTrackerAdapter,
-    AzureReposScmAdapter,
     GitHubScmAdapter,
     LinearTrackerAdapter,
+)
+from scripts.integrations.azure import (
+    AzureDevOpsTrackerAdapter,
+    AzureReposScmAdapter,
+    wiql_for,
 )
 from scripts.integrations.contracts import (
     ArtifactRef,
@@ -219,27 +222,13 @@ class AdapterContractTests(unittest.TestCase):
         reused = adapter.publish_artifact("ENG-1", "spec", "Spec", "body", "1")
         self.assertEqual(reused.outcome, "reused")
 
-    def test_azure_devops_list_children(self):
-        client = FakeClient(
-            {
-                "wit_get_work_items": {
-                    "items": [
-                        {
-                            "id": 2,
-                            "title": "Story",
-                            "type": "User Story",
-                            "state": "Approved",
-                            "parentId": 1,
-                        },
-                    ]
-                }
-            }
-        )
+    def _azure_tracker(self, client: FakeClient) -> AzureDevOpsTrackerAdapter:
         adapter = AzureDevOpsTrackerAdapter(
             {
                 "adapter": "azure_devops",
+                "project": "proj",
                 "connection": {"command": "true", "args": []},
-                "bindings": {"list_children": "wit_get_work_items"},
+                "bindings": {},
                 "mappings": {
                     "kinds": {
                         "user_story": "User Story",
@@ -259,35 +248,129 @@ class AdapterContractTests(unittest.TestCase):
             }
         )
         adapter.client = client
-        children = adapter.list_children("1")
-        self.assertEqual(children[0].kind, WorkItemKind.USER_STORY)
+        return adapter
 
-    def test_azure_repos_pr_ops(self):
+    @staticmethod
+    def _ado_item(item_id: int, work_type: str, state: str, parent: int | None = None):
+        fields = {
+            "System.Id": item_id,
+            "System.Title": f"Item {item_id}",
+            "System.WorkItemType": work_type,
+            "System.State": state,
+        }
+        if parent:
+            fields["System.Parent"] = parent
+        return {"id": item_id, "rev": 1, "fields": fields}
+
+    def test_azure_devops_uses_current_server_tools(self):
+        def wit_work_item(args):
+            if args["action"] == "get":
+                return self._ado_item(args["id"], "Feature", "New")
+            if args["action"] == "get_batch":
+                return [
+                    self._ado_item(i, "User Story", "Active", parent=1)
+                    for i in args["ids"]
+                ]
+            return {"comments": [{"id": 9, "text": "hello"}]}
+
         client = FakeClient(
             {
-                "repo_get_pull_request_by_id": {
-                    "id": 7,
-                    "number": 7,
-                    "title": "PR",
-                    "url": "https://example/pr/7",
-                    "sourceBranch": "feature/1",
-                    "targetBranch": "main",
-                    "state": "active",
+                "wit_work_item": wit_work_item,
+                "wit_query": {"workItems": [{"id": 2}, {"id": 3}]},
+                "wit_work_item_write": {"id": 10, "fields": {}},
+            }
+        )
+        adapter = self._azure_tracker(client)
+
+        children = adapter.list_children("1")
+        self.assertEqual([c.kind for c in children], [WorkItemKind.USER_STORY] * 2)
+        self.assertEqual(children[0].state, LogicalState.IN_PROGRESS)
+        self.assertEqual(children[0].parent_id, "1")
+        query = next(args for tool, args in client.calls if tool == "wit_query")
+        self.assertEqual((query["action"], query["project"]), ("wiql", "proj"))
+        self.assertIn("[System.Parent] = 1", query["wiql"])
+
+        created = adapter.create_work_item("feature", "New feature", "body")
+        self.assertEqual(created.kind, WorkItemKind.FEATURE)
+        writes = [args for tool, args in client.calls if tool == "wit_work_item_write"]
+        self.assertEqual(
+            (writes[0]["action"], writes[0]["workItemType"]), ("create", "Feature")
+        )
+        self.assertNotIn("parentId", writes[0])
+
+        adapter.create_work_item("user_story", "Story", "body", parent_ref="10")
+        writes = [args for tool, args in client.calls if tool == "wit_work_item_write"]
+        self.assertEqual(
+            (writes[-1]["action"], writes[-1]["parentId"]), ("add_child", 10)
+        )
+
+        adapter.transition_work_item("10", "in_progress")
+        writes = [args for tool, args in client.calls if tool == "wit_work_item_write"]
+        self.assertEqual(writes[-1]["updates"][0]["value"], "Active")
+
+        self.assertEqual(adapter.list_artifacts("10")[0].id, "9")
+
+    def test_azure_devops_search_accepts_text_conditions_and_wiql(self):
+        self.assertIn(
+            "[System.Title] CONTAINS 'foto d''estudante'", wiql_for("foto d'estudante")
+        )
+        self.assertIn(
+            "AND ([System.WorkItemType] = 'Epic')",
+            wiql_for("[System.WorkItemType] = 'Epic'"),
+        )
+        statement = "SELECT [System.Id] FROM WorkItems"
+        self.assertEqual(wiql_for(statement), statement)
+
+    def test_azure_devops_requires_project(self):
+        adapter = self._azure_tracker(FakeClient({}))
+        adapter.config = {**adapter.config, "project": ""}
+        with self.assertRaises(IntegrationError):
+            adapter.get_work_item("1")
+
+    def test_azure_repos_pr_ops(self):
+        pull_request = {
+            "pullRequestId": 7,
+            "title": "PR",
+            "sourceRefName": "refs/heads/feature/1",
+            "targetRefName": "refs/heads/develop",
+            "status": "active",
+            "repository": {
+                "id": "repo-guid",
+                "webUrl": "https://dev.azure.com/o/p/_git/repo",
+                "project": {"id": "project-guid"},
+            },
+        }
+        client = FakeClient(
+            {
+                # `get` answers for whichever pull request was asked for.
+                "repo_pull_request": lambda args: {
+                    **pull_request,
+                    "pullRequestId": args["pullRequestId"],
                 },
-                "repo_create_pull_request": {
-                    "id": 8,
-                    "number": 8,
+                # `create` returns Azure's trimmed shape: repository is a name, and there is no URL.
+                "repo_pull_request_write": {
+                    "pullRequestId": 8,
                     "title": "New",
-                    "url": "https://example/pr/8",
-                    "source": "feature/2",
-                    "target": "main",
-                    "state": "active",
+                    "sourceRefName": "refs/heads/feature/2",
+                    "targetRefName": "refs/heads/develop",
+                    "status": 1,
+                    "repository": "repo",
                 },
-                "repo_list_pull_request_threads": {
-                    "items": [{"id": "t1", "comment": "nit", "status": "active"}]
-                },
-                "repo_reply_to_comment": {"ok": True},
-                "wit_link_work_item_to_pull_request": {"linked": True},
+                "repo_pull_request_thread": [
+                    {
+                        "id": 5,
+                        "status": "active",
+                        "threadContext": {
+                            "filePath": "/a.dart",
+                            "rightFileStart": {"line": 3},
+                        },
+                        "comments": [
+                            {"content": "nit", "author": {"displayName": "Ana"}}
+                        ],
+                    }
+                ],
+                "repo_pull_request_thread_write": {"id": 1},
+                "wit_work_item_link_write": {"linked": True},
             }
         )
         adapter = AzureReposScmAdapter(
@@ -296,24 +379,43 @@ class AdapterContractTests(unittest.TestCase):
                 "repository": "repo",
                 "project": "proj",
                 "connection": {"command": "true", "args": []},
-                "bindings": {
-                    "get_pull_request": "repo_get_pull_request_by_id",
-                    "create_pull_request": "repo_create_pull_request",
-                    "list_review_threads": "repo_list_pull_request_threads",
-                    "reply_to_thread": "repo_reply_to_comment",
-                    "link_work_item": "wit_link_work_item_to_pull_request",
-                },
+                "bindings": {},
             }
         )
         adapter.client = client
+
         pr = adapter.get_pull_request("7")
-        self.assertEqual(pr.number, "7")
-        created = adapter.create_pull_request("New", "body", "feature/2", "main")
+        self.assertEqual((pr.number, pr.source_branch), ("7", "feature/1"))
+        self.assertEqual(pr.url, "https://dev.azure.com/o/p/_git/repo/pullrequest/7")
+
+        created = adapter.create_pull_request("New", "body", "feature/2", "develop")
         self.assertEqual(created.number, "8")
+        # The trimmed create payload has no URL; the read-back supplies one.
+        self.assertEqual(
+            created.url, "https://dev.azure.com/o/p/_git/repo/pullrequest/8"
+        )
+        self.assertEqual(created.state, "active")
+        create = next(a for t, a in client.calls if t == "repo_pull_request_write")
+        self.assertEqual((create["action"], create["isDraft"]), ("create", True))
+        self.assertEqual(create["sourceRefName"], "refs/heads/feature/2")
+
         threads = adapter.list_review_threads("7")
-        self.assertEqual(threads[0].id, "t1")
-        self.assertEqual(adapter.reply_to_thread("7", "t1", "ack")["ok"], True)
+        self.assertEqual(
+            (threads[0].id, threads[0].reviewer, threads[0].line), ("5", "Ana", 3)
+        )
+
+        adapter.reply_to_thread("7", "5", "ack")
+        reply = next(
+            a for t, a in client.calls if t == "repo_pull_request_thread_write"
+        )
+        self.assertEqual((reply["action"], reply["threadId"]), ("reply", 5))
+
         self.assertEqual(adapter.link_work_item("7", "42")["linked"], True)
+        link = next(a for t, a in client.calls if t == "wit_work_item_link_write")
+        self.assertEqual(
+            (link["action"], link["repositoryId"], link["projectId"]),
+            ("link_to_pull_request", "repo-guid", "project-guid"),
+        )
 
     def test_github_adapter_uses_injected_runner(self):
         adapter = GitHubScmAdapter(

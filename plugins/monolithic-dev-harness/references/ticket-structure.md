@@ -17,7 +17,7 @@ type: ticket            # REQUIRED — the frontmatter hook rejects drafts missi
 work_item_type: <Epic|Feature|User Story|Task>
 provider: <local|azure-devops|linear>
 provider_id: "<provider identifier; omit before provider creation>"
-parent_id: "<immediate parent identifier; omit for Epic>"
+parent_id: "<immediate parent identifier; omit when the item has no parent>"
 story_points: <number>  # REQUIRED for User Story — the validator fails a draft without it
 effort_hours: <number>  # optional — estimated duration; omit when nobody has estimated it
 activity: Development   # optional — capacity activity bucket (Azure `Microsoft.VSTS.Common.Activity`)
@@ -37,10 +37,12 @@ in `Tickets/`. Lifecycle lives in the selected provider, not in frontmatter.
 
 ## Filename (hook-validated)
 
-Regex: `^(\d+|tech-debt|bug|task|spike)-[a-z0-9-]+`, all lowercase.
+Regex: `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+`, all lowercase.
 
 Until a provider assigns the real id, prefix with the immediate parent id (for example,
-`6868-us1-...`). After creation, rename with the provider identifier and set `provider_id`.
+`6868-us1-...`). An item with no parent (an Epic, or a standalone Feature or Story) uses `draft-`
+(for example, `draft-login-oauth.md`). After creation, rename with the provider identifier and set
+`provider_id`.
 Provider identifiers and `parent_id` are strings. Legacy keys `azure_id`, `parent_feature`, and
 `parent_epic` are invalid.
 

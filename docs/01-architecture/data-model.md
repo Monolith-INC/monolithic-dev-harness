@@ -24,14 +24,15 @@ written by scripts the agent runs.
 
 ```text
 Epic
- `-- Feature                 (parent link: Epic)
-      `-- User Story         (parent link: Feature; Story Points required)
+ `-- Feature                 (parent link: Epic, optional)
+      `-- User Story         (parent link: Feature, optional; Story Points required)
            |-- Task ...      (one per acceptance-criterion step)
            |-- Staging
            |-- Review
            `-- Breakdown     (done when the breakdown is created)
 ```
 
+A Feature and a Story may each stand alone, with no parent. A Task always has a Story parent.
 A Story never attaches to an Epic. Points go into the process's points field
 (`Microsoft.VSTS.Scheduling.StoryPoints` on Agile, `Effort` on Scrum, `Size` on CMMI).
 

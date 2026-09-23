@@ -108,6 +108,8 @@ def main(argv: list[str] | None = None) -> int:
             branch_template=args.branch_template,
             discover=args.discover,
             runtime_dir=PLUGIN_ROOT,
+            project=str(azure.get("project") or ""),
+            repository=str(azure.get("repository") or ""),
         )
         print("wrote .codex-workflows/integrations.json (azure_devops + azure_repos)")
 

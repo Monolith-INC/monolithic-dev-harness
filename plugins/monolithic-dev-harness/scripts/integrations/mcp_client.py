@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import select
 import subprocess
 import time
@@ -159,21 +160,41 @@ def client_from_connection(connection: dict[str, Any]) -> StdioMcpClient:
     )
 
 
+_MARKER_LINE = re.compile(
+    r"^\s*<</?[^<>\n]*>>.*<</?[^<>\n]*>>\s*$|^\s*<</?[^<>\n]*>>\s*$"
+)
+
+
 def _decode_content(content: Any, fallback: Any) -> Any:
     text = _content_text(content)
     if text:
         try:
             return json.loads(text)
         except json.JSONDecodeError:
-            return text
+            return _embedded_json(text)
     return fallback
+
+
+def _embedded_json(text: str) -> Any:
+    """JSON between marker lines: the Azure DevOps server fences its output as untrusted content,
+    `<<id>> [UNTRUSTED ...] <<id>>` before the payload and `<</id>>` after it."""
+    body = "\n".join(line for line in text.splitlines() if not _MARKER_LINE.match(line))
+    if body.strip() == text.strip():
+        return text
+    try:
+        return json.loads(body)
+    except json.JSONDecodeError:
+        return text
 
 
 def _integration_error_from_content(content: Any) -> IntegrationError:
     text = _content_text(content)
     try:
-        payload = json.loads(text)
+        payload: Any = json.loads(text)
     except json.JSONDecodeError:
+        # Error responses carry the same untrusted-content fence as successful ones.
+        payload = _embedded_json(text)
+    if not isinstance(payload, dict):
         return IntegrationError("provider_error", text)
     if isinstance(payload, dict) and payload.get("code"):
         return IntegrationError(

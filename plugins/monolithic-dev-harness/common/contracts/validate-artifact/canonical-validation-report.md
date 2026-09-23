@@ -20,7 +20,6 @@ DoR
   [PASS]  dor-title-clear
   [PASS]  dor-description-present
   [PASS]  dor-story-points-set
-  [PASS]  dor-linked-to-feature
 
 ------------------------------------------------------------
 Summary: {{PASSED}} passed · {{FAILED}} failed · {{WARNINGS}} warnings

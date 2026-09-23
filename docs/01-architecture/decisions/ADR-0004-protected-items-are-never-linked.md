@@ -20,8 +20,9 @@ its revision.
 ## Decision
 
 Ids in `azure.protected_work_items` are refused by the `protected-items` rule for any write, link,
-unlink, child creation, or comment, even inside an approval window. A copy cites the original by
-URL in its description instead of linking to it.
+unlink, child creation, or comment, even inside an approval window. The rule also refuses text
+that mentions a protected id as `#<id>` or by work item URL, because Azure DevOps turns a mention
+into a link. A copy names the original in plain text (for example `Idea 4007`) instead.
 
 ## Options Considered
 
@@ -36,7 +37,7 @@ URL in its description instead of linking to it.
 
 ### Trade-offs
 
-- The copy has no navigable link back; the URL in the description replaces it.
+- The copy has no navigable link back; the plain-text name in the description replaces it.
 
 ## Host-specific Impact
 

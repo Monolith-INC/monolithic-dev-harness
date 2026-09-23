@@ -7,7 +7,7 @@ from typing import Any
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
-FILENAME_RE = re.compile(r"^(\d+|tech-debt|bug|task|spike)-[a-z0-9-]+$")
+FILENAME_RE = re.compile(r"^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+$")
 LEGACY_FRONTMATTER_KEYS = ("azure_id", "parent_feature", "parent_epic")
 
 

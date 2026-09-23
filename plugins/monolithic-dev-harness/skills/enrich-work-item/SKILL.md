@@ -40,7 +40,7 @@ Gather inputs **one at a time** via the host UI. Each step: brief purpose, requi
 | --- | --- | --- |
 | `source` | yes | `url` \| local `path` \| pasted `text` — the material to enrich |
 | `work_item_type` | yes | `epic` \| `feature` \| `user-story` \| `task` |
-| `parent` | when type ≠ epic | Parent id or Azure URL for hierarchy context |
+| `parent` | only for a Task | Parent id or Azure URL for hierarchy context; Features and Stories may have none |
 | `attachment` | no | Extra doc URL or path |
 
 Accept `/enrich-work-item` flags or conversational inference (see Examples).

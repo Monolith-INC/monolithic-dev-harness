@@ -6,6 +6,56 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.2] - 2026-09-23
+
+### Security
+
+- `human-owned` decides from what a command *writes*, not from the paths it mentions. The old check
+  denied any line containing `>`, and missed a write it could not see on one: a second line, a
+  wrapper (`sudo`, `env`), a dispatcher (`xargs`, `eval`), a loop or conditional, a substituted
+  target, or a directory target such as `cp policy.json .harness/`. Command parsing now lives in
+  `scripts/harness/shellscan.py`, and a write it cannot follow fails closed.
+- `protected-items` detects every form that links a work item: `#123`, `AB#123`, `US#123`, all
+  three work item URL shapes, and `vstfs:` URIs. In a commit message only `AB#123` links, so that
+  is all it blocks there. An HTML entity and a `#004007` colour are not mentions.
+- The gateway hands tracker text to the agent fenced as untrusted data. It parses the Azure DevOps
+  server's own fence off to read a payload, and now puts its own back.
+
+### Changed
+
+- A Feature no longer needs a parent Epic, and a User Story no longer needs a parent Feature. The
+  backlog skills stop asking for one, the Definition of Ready no longer requires the link, and the
+  validator passes a Story with no parent. A parent, when given, must still be the right type
+  (a Story is never placed under an Epic), and a Task still needs its Story.
+- Drafts with no parent and no id yet are named `draft-<slug>.md`.
+
+### Fixed
+
+- `protected-items` now also refuses a write whose text mentions a protected work item as `#<id>`
+  or by work item URL. Azure DevOps turns such a mention into a link, so copying a description
+  that mentioned the original would have changed it. Name the original in plain text instead.
+- The tracker and pull-request tools (`workflow-integrations`) now call the current
+  `@azure-devops/mcp` tools (`wit_query`, `wit_work_item_write`, `repo_pull_request_write`, ...)
+  and read Azure's real payloads. They used the retired tool names and failed with "tool not
+  found".
+- Bootstrap reads `git@ssh.dev.azure.com:v3/<org>/<project>/<repo>` remotes correctly, and takes
+  the Azure project and repository from the policy it just read instead of guessing again.
+- The Azure adapters no longer carry `bindings`. They call their tools by name, so a binding could
+  only drift from the code, and bootstrap could fail on one nothing reads.
+- `scm_create_pull_request` accepts `isDraft`, which `draft-reviewed-prs` requires; before, a pull
+  request could not be opened through it at all.
+- `human-owned` no longer blocks reading `.harness/` (for example `cat .harness/policy.json
+  2>/dev/null`); it parses the command and blocks only writes.
+- `generated-files` likewise fires on writes only: a read-only `grep --include=*.g.dart` was
+  refused because the line contained a redirect.
+- A pull request can actually be opened. `repo_pull_request_write[create]` returns a trimmed
+  payload whose `repository` is a string, which crashed the adapter *after* Azure had created the
+  pull request; it is now read back, which also gives it a URL.
+- Azure enum fields (pull request and thread status) come back as names, not numbers.
+- `list_artifacts` asks for enough comments to find an artifact it published earlier, instead of
+  the server's default of 50, and a truncated search says so.
+- Provider errors are unwrapped from the untrusted-content fence, so `code` and `retryable` survive.
+
 ## [0.1.1] - 2026-09-22
 
 ### Fixed
@@ -56,6 +106,7 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.0

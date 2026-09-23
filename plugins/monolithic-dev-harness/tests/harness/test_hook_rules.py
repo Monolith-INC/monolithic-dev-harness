@@ -189,12 +189,56 @@ class TestHumanOwned(HookTestCase):
             ),
             "human-owned",
         )
+        for command in (
+            "cp /tmp/p.json .harness/policy.json",
+            "sed -i 's/4007//' .harness/policy.json",
+            "python3 -c \"open('.harness/policy.json', 'w').write('{}')\"",
+            "echo '{}' | tee .harness/state/approvals/HB-1.json",
+            "cd .harness/state/approvals && echo '{}' > HB-2.json",
+            "ls 2>/dev/null; echo x >> .harness/policy.json",
+            # A second line is a second command, not more arguments to the first.
+            "echo hi\ncp /tmp/p.json .harness/policy.json",
+            "cd .harness\necho '{}' > policy.json",
+            # Wrappers, dispatchers, and compound commands run the writer all the same.
+            "env X=1 cp /tmp/p.json .harness/policy.json",
+            "sudo tee .harness/policy.json",
+            "echo .harness/policy.json | xargs rm",
+            "eval 'cp /tmp/p .harness/policy.json'",
+            "for f in a; do cp $f .harness/policy.json; done",
+            "if true; then cp /tmp/p .harness/policy.json; fi",
+            "(cd .harness && rm policy.json)",
+            "P=.harness/policy.json; echo x > $P",
+            # A directory target lands on the policy just as well as naming it.
+            "cp /tmp/policy.json .harness/",
+            "rsync -a /tmp/h/ .harness/",
+            "tar -xf p.tar -C .harness",
+            "unzip -o p.zip -d .harness",
+            "ln -s .harness /tmp/h",
+            "find .harness -name policy.json -delete",
+        ):
+            with self.subTest(command=command):
+                self.assertDenied(
+                    self.claude("Bash", {"command": command}), "human-owned"
+                )
 
     def test_other_state_and_files_are_writable(self) -> None:
         self.assertAllowed(
             self.claude("Write", {"file_path": str(self.repo / "lib/a.dart")})
         )
         self.assertAllowed(self.claude("Bash", {"command": "cat .harness/policy.json"}))
+        # Reading them is always fine, whatever else is on the line.
+        for command in (
+            "ls -la .harness/ && cat .harness/policy.json 2>/dev/null | head -80",
+            "cd .harness && cat policy.json 2>&1 | head",
+            "cd .harness && ls -la > /tmp/listing",
+            "jq .azure .harness/policy.json > /tmp/azure.json",
+            "shasum .harness/policy.json",
+            "shellcheck .harness/policy.json",
+            "git diff .harness/policy.json",
+            "python3 -m json.tool .harness/state/approvals/HB-7Q2K.json",
+        ):
+            with self.subTest(command=command):
+                self.assertAllowed(self.claude("Bash", {"command": command}))
 
 
 class TestApproval(HookTestCase):
@@ -309,6 +353,81 @@ class TestProtected(HookTestCase):
             "protected-items",
         )
 
+    def test_mentioning_a_protected_item_in_text_is_denied(self) -> None:
+        self.approve()
+        for text in (
+            "Copia da Idea #1001",
+            "Origem: https://dev.azure.com/org/demo/_workitems/edit/1001",
+        ):
+            self.assertDenied(
+                self.claude(
+                    AZ + "wit_work_item_write",
+                    {
+                        "action": "create",
+                        "workItemType": "Feature",
+                        "fields": [{"name": "System.Description", "value": text}],
+                    },
+                ),
+                "protected-items",
+            )
+
+    def test_every_linking_form_of_a_protected_id_is_denied(self) -> None:
+        self.approve()
+        for text in (
+            "Copia da Idea #1001",
+            "AB#1001 origem",
+            "US#1001",
+            "Origem: https://dev.azure.com/org/demo/_workitems/edit/1001",
+            "Origem: https://dev.azure.com/org/demo/_workitems/?_a=edit&id=1001",
+            "vstfs:///WorkItemTracking/WorkItem/1001",
+        ):
+            with self.subTest(text=text):
+                self.assertDenied(
+                    self.claude(
+                        AZ + "wit_work_item_write",
+                        {
+                            "action": "create",
+                            "workItemType": "Feature",
+                            "fields": [{"name": "System.Description", "value": text}],
+                        },
+                    ),
+                    "protected-items",
+                )
+
+    def test_commit_messages_link_only_through_the_ab_form(self) -> None:
+        self.approve()
+        # Azure Repos links a commit through `AB#<id>`; a bare `#<id>` there links nothing.
+        self.assertAllowed(
+            self.claude("Bash", {"command": "git commit -m 'closes #1001' && git push"})
+        )
+        self.assertDenied(
+            self.claude(
+                "Bash", {"command": "git commit -m 'AB#1001 done' && git push"}
+            ),
+            "protected-items",
+        )
+
+    def test_plain_text_names_and_html_entities_are_allowed(self) -> None:
+        self.approve()
+        self.assertAllowed(
+            self.claude(
+                AZ + "wit_work_item_write",
+                {
+                    "action": "create",
+                    "workItemType": "Feature",
+                    "fields": [
+                        {
+                            "name": "System.Description",
+                            "value": (
+                                "## &#1001; Origem\n"
+                                "Copia da Idea 1001, cor #001001, relacionada a #9001"
+                            ),
+                        }
+                    ],
+                },
+            )
+        )
+
     def test_other_items_are_writable_with_approval(self) -> None:
         self.approve()
         self.assertAllowed(
@@ -365,6 +484,28 @@ class TestGenerated(HookTestCase):
         self.assertAllowed(
             self.claude("Bash", {"command": "dart run build_runner build"})
         )
+
+    def test_reading_generated_files_is_allowed(self) -> None:
+        # The rule fires on what a command writes, not on the paths it mentions.
+        for command in (
+            "grep -rn --include=*.g.dart buildWhen lib 2>/dev/null",
+            "cat lib/a.g.dart | head -40",
+            "ls lib/*.g.dart > /tmp/generated.txt",
+            "git diff lib/a.g.dart",
+        ):
+            with self.subTest(command=command):
+                self.assertAllowed(self.claude("Bash", {"command": command}))
+
+    def test_shell_writes_to_generated_files_are_denied(self) -> None:
+        for command in (
+            "echo x > lib/a.g.dart",
+            "cp /tmp/a.dart lib/a.g.dart",
+            "cd lib\nsed -i 's/a/b/' a.g.dart",
+        ):
+            with self.subTest(command=command):
+                self.assertDenied(
+                    self.claude("Bash", {"command": command}), "generated-files"
+                )
 
 
 class TestGuarded(HookTestCase):

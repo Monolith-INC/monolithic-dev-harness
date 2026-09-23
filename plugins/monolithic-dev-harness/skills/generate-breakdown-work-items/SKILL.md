@@ -78,8 +78,9 @@ Read `./references/plan-generation.md` § PHASE 1.
 
 1. Resolve `work_item_ref` to a work item (Azure id/url or artifacts path/filesystem path).
 2. If type is **Feature** or **Epic**: go to PHASE 5 (fan-out). Do not draft a parent-level plan.
-3. If type is **User Story**: read the **parent Feature body** and the **Story body** before any
-   plan drafting. STOP if the Feature cannot be resolved or if acceptance criteria are missing.
+3. If type is **User Story**: read the **Story body**, and the **parent Feature body** when the Story
+   has a parent, before any plan drafting. A Story with no parent is valid. STOP if a named parent
+   cannot be read or if acceptance criteria are missing.
 4. Extract `acceptance_criteria` **verbatim** (en/pt-BR section labels per
    `../../references/ticket-structure.md`). Never invent or rewrite ACs.
 
