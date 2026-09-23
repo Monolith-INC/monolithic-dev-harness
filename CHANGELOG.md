@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-09-23
+
+### Fixed
+
+- Bootstrap no longer edits the repository's shared `.gitignore`. It keeps `.harness/state/` out of
+  git through `.git/info/exclude`, which belongs to the local clone, so setting a repository up
+  leaves no change to commit. `review-setup` keeps `.harness/review/` out of git the same way.
+
 ## [0.1.8] - 2026-09-23
 
 ### Added
