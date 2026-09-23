@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-09-23
+
 ### Changed
 
 - Everything the harness keeps in a repository now lives under `.harness/` (ADR-0008), instead of
@@ -215,7 +217,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.6
 [0.1.5]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.5
 [0.1.4]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.4
 [0.1.3]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.3
