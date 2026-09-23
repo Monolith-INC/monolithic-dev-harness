@@ -7,8 +7,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from scripts.hook_runtime import _is_mutating_git
 from scripts import hook_runtime
+from scripts.hook_runtime import _is_mutating_git
 from scripts.policy import CanonicalToolEvent
 from scripts.policy.commands import is_code, writes_code
 from scripts.policy.git_branch_guard import evaluate_git_branch_guard
@@ -74,7 +74,9 @@ class SpecBeforeCodeCoversCodeOnlyTests(unittest.TestCase):
                 with self.subTest(command=command):
                     self.assertTrue(writes_code(command, tmp, CODE))
 
-    def test_without_code_globs_every_file_but_gits_and_the_harnesss_is_code(self) -> None:
+    def test_without_code_globs_every_file_but_gits_and_the_harnesss_is_code(
+        self,
+    ) -> None:
         self.assertTrue(is_code("README.md", None))
         self.assertFalse(is_code(".git/info/exclude", None))
         self.assertFalse(is_code(".harness/state/x.json", None))
@@ -91,7 +93,10 @@ class SpecBeforeCodeCoversCodeOnlyTests(unittest.TestCase):
             def edits_code(path: str | None) -> bool:
                 return hook_runtime._edits_code(
                     CanonicalToolEvent(
-                        client="claude", tool_name="Write", file_path=path, workspace_root=tmp
+                        client="claude",
+                        tool_name="Write",
+                        file_path=path,
+                        workspace_root=tmp,
                     )
                 )
 

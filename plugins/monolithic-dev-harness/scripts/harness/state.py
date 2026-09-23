@@ -107,7 +107,10 @@ def log_write(path: Path, record: dict[str, Any], tool: str) -> None:
 
 
 def mark_asked(repo: Path, name: str) -> None:
-    _write(state_dir(repo) / "asked" / f"{safe_name(name)}.json", {"asked": _now().isoformat()})
+    _write(
+        state_dir(repo) / "asked" / f"{safe_name(name)}.json",
+        {"asked": _now().isoformat()},
+    )
 
 
 def take_asked(repo: Path, name: str) -> bool:

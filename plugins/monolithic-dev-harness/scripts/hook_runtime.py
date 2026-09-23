@@ -13,6 +13,7 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
+from harness.config import PolicyError, load_policy
 from host_adapters import (
     format_claude_decision,
     format_cursor_decision,
@@ -23,7 +24,6 @@ from integrations.adapters import tracker_adapter
 from integrations.config import load_config
 from integrations.contracts import IntegrationError
 from policy import CanonicalToolEvent, PolicyDecision
-from harness.config import PolicyError, load_policy
 from policy.commands import git_commands, is_code, writes_code
 from policy.git_branch_guard import evaluate_git_branch_guard
 

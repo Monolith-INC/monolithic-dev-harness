@@ -30,7 +30,9 @@ def is_code(relative: str, patterns: Sequence[str] | None, tree: bool = False) -
     every file but git's and the harness's counts. `tree` means the write reaches everything under
     `relative` (`rm -r`), so it counts when a code file could live under it.
     """
-    parts = [part for part in globs.normalize(relative).split("/") if part not in ("", ".")]
+    parts = [
+        part for part in globs.normalize(relative).split("/") if part not in ("", ".")
+    ]
     if parts[:1] == [".."]:
         return False
     if parts[:1] and parts[0] in _NOT_CODE:
@@ -49,7 +51,9 @@ def is_code(relative: str, patterns: Sequence[str] | None, tree: bool = False) -
     return False
 
 
-def writes_code(command: str, root: str | Path | None, patterns: Sequence[str] | None) -> bool:
+def writes_code(
+    command: str, root: str | Path | None, patterns: Sequence[str] | None
+) -> bool:
     """Whether the command plainly writes a code file inside the repository.
 
     A code path named where its write cannot be followed (inline interpreter code, a script's
@@ -58,7 +62,11 @@ def writes_code(command: str, root: str | Path | None, patterns: Sequence[str] |
     base = Path(root).resolve() if root else None
     writes = shellscan.scan(command, "", base, unknown_writes=False)
     unresolved = writes.unresolved if patterns is not None else ()
-    for paths, tree in ((writes.targets, False), (writes.trees, True), (unresolved, False)):
+    for paths, tree in (
+        (writes.targets, False),
+        (writes.trees, True),
+        (unresolved, False),
+    ):
         for path in paths:
             relative = _inside(path, base)
             if relative is not None and is_code(relative, patterns, tree):

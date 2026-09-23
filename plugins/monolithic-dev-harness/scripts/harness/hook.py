@@ -247,7 +247,8 @@ def handle_ask(payload: dict[str, Any]) -> int:
     found = questions.problems(tool_input)
     if found:
         _emit_decision(
-            "claude", rules.Decision.deny("plain-questions", questions.rewrite_reason(found))
+            "claude",
+            rules.Decision.deny("plain-questions", questions.rewrite_reason(found)),
         )
         return 0
     tool_use_id = str(payload.get("tool_use_id") or "")
@@ -294,7 +295,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", choices=("claude", "cursor"), required=True)
     parser.add_argument(
-        "--event", choices=("pre-tool", "prompt", "shell", "mcp", "ask", "answer"), required=True
+        "--event",
+        choices=("pre-tool", "prompt", "shell", "mcp", "ask", "answer"),
+        required=True,
     )
     args = parser.parse_args(argv)
     try:
@@ -307,7 +310,9 @@ def main(argv: list[str] | None = None) -> int:
         return handle_prompt(args.host, payload)
     if args.event in ("ask", "answer"):
         try:
-            return handle_ask(payload) if args.event == "ask" else handle_answer(payload)
+            return (
+                handle_ask(payload) if args.event == "ask" else handle_answer(payload)
+            )
         except Exception:
             # A question is not a write: a broken check shows it as asked. Its answer then opens
             # nothing, because only a question the check let through is honoured.

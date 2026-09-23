@@ -39,7 +39,10 @@ _JARGON = (
     (re.compile(r"`"), "code formatting (backticks)"),
     (re.compile(r"\bHB-[A-Z0-9]+", re.IGNORECASE), "a batch id"),
     (re.compile(r"\bmcp__\w+"), "a tool name"),
-    (re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b"), "an identifier with underscores"),
+    (
+        re.compile(r"\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b"),
+        "an identifier with underscores",
+    ),
     (re.compile(r"(?<![\w.])\.[A-Za-z][\w.-]*"), "a dotfile or folder name"),
     (re.compile(r"(?:^|\s)(?:~|\.{1,2})?/[\w.-]"), "a path"),
     (re.compile(r"\b[\w-]+/[\w./-]*\.\w{1,5}\b"), "a path"),
@@ -48,7 +51,10 @@ _JARGON = (
         "a file name",
     ),
     (re.compile(r"\bG[1-4]\b"), "a gate number"),
-    (re.compile(r"\b(?:" + "|".join(map(re.escape, _RULE_NAMES)) + r")\b"), "a rule name"),
+    (
+        re.compile(r"\b(?:" + "|".join(map(re.escape, _RULE_NAMES)) + r")\b"),
+        "a rule name",
+    ),
 )
 
 
@@ -63,13 +69,17 @@ def _jargon(text: str) -> list[str]:
 def problems(tool_input: dict[str, Any]) -> list[str]:
     """What makes this question hard for a person to answer; empty when it is fine."""
     if tool_input.get("answers"):
-        return ["it arrives with answers already filled in; only the user answers a question"]
+        return [
+            "it arrives with answers already filled in; only the user answers a question"
+        ]
     questions = tool_input.get("questions")
     if not isinstance(questions, list) or not questions:
         return []
     found: list[str] = []
     if len(questions) > 1:
-        found.append(f"it asks {len(questions)} questions at once; ask one, then the next")
+        found.append(
+            f"it asks {len(questions)} questions at once; ask one, then the next"
+        )
     for question in questions:
         if not isinstance(question, dict):
             continue
@@ -91,7 +101,9 @@ def problems(tool_input: dict[str, Any]) -> list[str]:
                     f"the description of {option.get('label')!r} has {_words(description)} words; "
                     f"keep each under {MAX_DESCRIPTION_WORDS}"
                 )
-        for label in dict.fromkeys(label for piece in pieces for label in _jargon(piece)):
+        for label in dict.fromkeys(
+            label for piece in pieces for label in _jargon(piece)
+        ):
             found.append(f"it contains {label}")
     return list(dict.fromkeys(found))
 

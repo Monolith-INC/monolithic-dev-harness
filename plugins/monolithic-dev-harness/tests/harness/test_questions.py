@@ -55,7 +55,10 @@ class ProblemsTests(unittest.TestCase):
 
     def test_what_a_person_would_have_to_decode_is_sent_back(self) -> None:
         for text, expected in (
-            ("Reply approve HB-4TRK to write .harness/review/sources.json?", "batch id"),
+            (
+                "Reply approve HB-4TRK to write .harness/review/sources.json?",
+                "batch id",
+            ),
             ("Run workflow_skip_tracker first?", "underscores"),
             ("Revert the line in `.gitignore`?", "backticks"),
             ("Move the rule into .git/info/exclude?", "dotfile"),
@@ -102,7 +105,9 @@ class ApprovalByClickTests(unittest.TestCase):
         )
 
     def test_clicking_approve_opens_a_window(self) -> None:
-        self.assertIsNone(run(self.repo, "ask", {"tool_use_id": "toolu_1", "tool_input": ask()}))
+        self.assertIsNone(
+            run(self.repo, "ask", {"tool_use_id": "toolu_1", "tool_input": ask()})
+        )
         out = self._answer("Approve")
         self.assertIn("approved", out["hookSpecificOutput"]["additionalContext"])
         active = state.active_approval(self.repo)
@@ -132,7 +137,9 @@ class ApprovalByClickTests(unittest.TestCase):
 
     def test_a_question_sent_back_is_not_marked(self) -> None:
         out = run(
-            self.repo, "ask", {"tool_use_id": "toolu_2", "tool_input": ask("Write `x`?")}
+            self.repo,
+            "ask",
+            {"tool_use_id": "toolu_2", "tool_input": ask("Write `x`?")},
         )
         self.assertEqual(out["hookSpecificOutput"]["permissionDecision"], "deny")
         self.assertIsNone(self._answer("Approve", tool_use_id="toolu_2"))
@@ -141,7 +148,9 @@ class ApprovalByClickTests(unittest.TestCase):
         payload = {
             "cwd": str(self.repo),
             "tool_name": "Bash",
-            "tool_input": {"command": "mkdir -p .harness/state/asked && touch .harness/state/asked/x.json"},
+            "tool_input": {
+                "command": "mkdir -p .harness/state/asked && touch .harness/state/asked/x.json"
+            },
         }
         proc = subprocess.run(
             [sys.executable, str(HOOK), "--host", "claude", "--event", "pre-tool"],
@@ -155,7 +164,11 @@ class ApprovalByClickTests(unittest.TestCase):
     def test_ungoverned_repositories_are_left_alone(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             self.assertIsNone(
-                run(Path(tmp), "ask", {"tool_use_id": "t", "tool_input": ask("Write `x`?")})
+                run(
+                    Path(tmp),
+                    "ask",
+                    {"tool_use_id": "t", "tool_input": ask("Write `x`?")},
+                )
             )
 
 
