@@ -173,7 +173,7 @@ Story's Tasks into one tested, checked commit.
 Tasks (breakdown), and the spec approved at gate G2. It doesn't re-decide any of these. If there is
 no approved spec, it stops and asks for one.
 
-**Start of the Story**
+#### Start of the Story
 
 1. Move the Story to Active in Azure DevOps. That's a board write, so a person approves it
    (`approve HB-XXXX`).
@@ -181,7 +181,7 @@ no approved spec, it stops and asks for one.
 3. Read the repository's `AGENTS.md` once and note the rules that apply: tests for new code,
    generated files, guarded paths.
 
-**Then each Task, in order, fully finished before the next one starts:**
+#### Each Task, in order, finished before the next one starts
 
 1. **Design first**, only if the Task changes an interface: sketch the types and signatures.
 2. **Write a failing test** for the Task's acceptance criterion.
@@ -193,7 +193,7 @@ no approved spec, it stops and asks for one.
 7. **Mark the Task done** in Azure DevOps. That's a board write, so a person approves it; several
    finished Tasks can share one approval.
 
-**While it works, the hooks block it from:**
+#### What the hooks block while it works
 
 - committing code without tests (`tests-with-code`)
 - editing generated files (`generated-files`)
@@ -201,7 +201,7 @@ no approved spec, it stops and asks for one.
   (`guarded-paths`)
 - writing to the board or pushing without approval (`approval-required`)
 
-**End of the Story**
+#### End of the Story
 
 1. Run the checks once more on the final code, and record the result.
 2. Run the real thing (app, emulator, endpoint) and write down what actually happened.
