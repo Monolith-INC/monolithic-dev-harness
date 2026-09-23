@@ -28,6 +28,9 @@ REQUIRED_SCM_OPS = (
     "link_work_item",
 )
 
+# Adapters that call provider tools by name instead of through configured bindings.
+FIXED_TOOL_ADAPTERS = frozenset({"github", "azure_devops", "azure_repos"})
+
 REQUIRED_KIND_KEYS = ("epic", "feature", "user_story", "task", "bug")
 REQUIRED_STATE_KEYS = ("backlog", "ready", "in_progress", "done", "canceled")
 
@@ -216,14 +219,19 @@ def discover_provider_capabilities(
     discovered_tools: Mapping[str, Any] | list[str] | None = None,
     client: StdioMcpClient | None = None,
 ) -> DiscoveryResult:
-    if adapter == "github":
+    if adapter in FIXED_TOOL_ADAPTERS:
+        # These adapters call their provider's tools by name, so there is nothing to bind.
         return DiscoveryResult(
-            discovered_tools=("github",),
+            discovered_tools=(adapter,),
             resolved_bindings={},
-            suggested_mappings={"kinds": {}, "states": {}},
+            suggested_mappings=(
+                mapping_presets(adapter)
+                if kind == "tracker"
+                else {"kinds": {}, "states": {}}
+            ),
             missing_capabilities=(),
-            provider="github",
-            kind="github",
+            provider=adapter,
+            kind=adapter if adapter == "github" else kind,
         )
     tools = discovered_tools
     if tools is None:
@@ -260,9 +268,11 @@ def validate_tracker_mappings(mappings: Mapping[str, Any]) -> tuple[str, ...]:
     return tuple(missing)
 
 
-def validate_bindings(bindings: Mapping[str, Any], *, kind: str) -> tuple[str, ...]:
+def validate_bindings(
+    bindings: Mapping[str, Any], *, kind: str, adapter: str = ""
+) -> tuple[str, ...]:
     required = REQUIRED_TRACKER_OPS if kind == "tracker" else REQUIRED_SCM_OPS
-    if kind == "github":
+    if kind == "github" or adapter in FIXED_TOOL_ADAPTERS:
         return ()
     return tuple(op for op in required if not str(bindings.get(op) or "").strip())
 
@@ -295,31 +305,36 @@ def verify_integration_capabilities(
     problems: list[str] = []
     tracker = config.get("tracker") if isinstance(config.get("tracker"), dict) else {}
     scm = config.get("scm") if isinstance(config.get("scm"), dict) else {}
+    tracker_adapter = str(tracker.get("adapter") or "")
     problems.extend(
         f"tracker missing binding: {op}"
-        for op in validate_bindings(tracker.get("bindings") or {}, kind="tracker")
+        for op in validate_bindings(
+            tracker.get("bindings") or {}, kind="tracker", adapter=tracker_adapter
+        )
     )
     problems.extend(
         f"tracker mapping missing: {key}"
         for key in validate_tracker_mappings(tracker.get("mappings") or {})
     )
     scm_adapter = str(scm.get("adapter") or "")
-    if scm_adapter not in {"", "github"}:
+    if scm_adapter:
         problems.extend(
             f"scm missing binding: {op}"
-            for op in validate_bindings(scm.get("bindings") or {}, kind="scm")
+            for op in validate_bindings(
+                scm.get("bindings") or {}, kind="scm", adapter=scm_adapter
+            )
         )
     if not probe:
         return problems
     try:
-        if tracker.get("connection"):
+        if tracker.get("connection") and tracker_adapter not in FIXED_TOOL_ADAPTERS:
             names = set(client_from_connection(tracker["connection"]).list_tools())
             for op, tool in (tracker.get("bindings") or {}).items():
                 if tool and tool not in names:
                     problems.append(
                         f"tracker binding {op} -> {tool} not advertised by provider"
                     )
-        if scm_adapter not in {"", "github"} and scm.get("connection"):
+        if scm_adapter not in FIXED_TOOL_ADAPTERS and scm.get("connection"):
             names = set(client_from_connection(scm["connection"]).list_tools())
             for op, tool in (scm.get("bindings") or {}).items():
                 if tool and tool not in names:

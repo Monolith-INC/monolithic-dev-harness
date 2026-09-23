@@ -4,6 +4,7 @@ import json
 import re
 import subprocess
 from abc import ABC, abstractmethod
+from dataclasses import replace
 from typing import Any
 
 from .contracts import (
@@ -43,10 +44,50 @@ class TrackerAdapter(ABC):
     @abstractmethod
     def transition_work_item(self, ref: str, state: str) -> WorkItem: ...
 
-    @abstractmethod
     def publish_artifact(
         self, ref: str, kind: str, title: str, content: str, revision: str
-    ) -> ArtifactRef: ...
+    ) -> ArtifactRef:
+        """Publish once per (title, revision): the envelope is how a re-run recognizes its own."""
+        from .publish import publish_artifact_idempotent
+
+        envelope = _encode_artifact_envelope(
+            kind=kind, title=title, revision=revision, content=content
+        )
+        result = publish_artifact_idempotent(
+            list_fn=lambda: self.list_artifacts(ref, kind),
+            create_fn=lambda: _artifact(
+                self._create_artifact(
+                    ref, envelope, kind=kind, title=title, revision=revision
+                ),
+                fallback_kind=kind,
+                fallback_title=title,
+                fallback_revision=revision,
+            ),
+            title=title,
+            revision=revision,
+        )
+        artifact = result["artifact"]
+        return replace(
+            artifact,
+            kind=artifact.kind or kind,
+            title=artifact.title or title,
+            revision=artifact.revision or revision,
+            outcome=result["outcome"],
+            attempts=result["attempts"],
+        )
+
+    def _create_artifact(
+        self, ref: str, envelope: str, *, kind: str, title: str, revision: str
+    ) -> Any:
+        """Create the provider's artifact (a comment, usually) carrying `envelope`.
+
+        Only `publish_artifact` calls this, so a provider whose store handles idempotency itself
+        overrides that instead and never needs this.
+        """
+        raise IntegrationError(
+            "unsupported_capability",
+            f"{type(self).__name__} cannot publish artifacts.",
+        )
 
     @abstractmethod
     def list_artifacts(
@@ -64,6 +105,12 @@ class TrackerAdapter(ABC):
             "link_development_artifact",
             {"work_item": ref, "url": artifact_url, "type": artifact_type},
         )
+
+    def _provider_kind(self, kind: str) -> str:
+        return str(self.mappings.get("kinds", {}).get(kind, kind))
+
+    def _provider_state(self, state: str) -> str:
+        return str(self.mappings.get("states", {}).get(state, state))
 
     def resolve_branch_key(self, branch: str) -> str | None:
         pattern = self.config.get("branchPattern") or self.config.get("branch_template")
@@ -141,52 +188,20 @@ class LinearTrackerAdapter(TrackerAdapter):
         ]
         return [_work_item(item, self.mappings) for item in (selected or items)]
 
-    def publish_artifact(
-        self, ref: str, kind: str, title: str, content: str, revision: str
-    ) -> ArtifactRef:
-        from .publish import publish_artifact_idempotent
-
-        envelope = _encode_artifact_envelope(
-            kind=kind, title=title, revision=revision, content=content
+    def _create_artifact(
+        self, ref: str, envelope: str, *, kind: str, title: str, revision: str
+    ) -> Any:
+        return self._call(
+            "publish_artifact",
+            {
+                "issueId": ref,
+                "kind": kind,
+                "title": title,
+                "content": envelope,
+                "body": envelope,
+                "revision": revision,
+            },
         )
-        result = publish_artifact_idempotent(
-            list_fn=lambda: self.list_artifacts(ref, kind),
-            create_fn=lambda: _artifact(
-                self._call(
-                    "publish_artifact",
-                    {
-                        "issueId": ref,
-                        "kind": kind,
-                        "title": title,
-                        "content": envelope,
-                        "body": envelope,
-                        "revision": revision,
-                    },
-                ),
-                fallback_kind=kind,
-                fallback_title=title,
-                fallback_revision=revision,
-            ),
-            title=title,
-            revision=revision,
-        )
-        artifact = result["artifact"]
-        return ArtifactRef(
-            artifact.id,
-            artifact.kind or kind,
-            artifact.title or title,
-            artifact.revision or revision,
-            artifact.url,
-            dict(artifact.provider_data),
-            result["outcome"],
-            result["attempts"],
-        )
-
-    def _provider_kind(self, kind: str) -> str:
-        return str(self.mappings.get("kinds", {}).get(kind, kind))
-
-    def _provider_state(self, state: str) -> str:
-        return str(self.mappings.get("states", {}).get(state, state))
 
 
 class ScmAdapter:

@@ -29,6 +29,8 @@ def configure_integrations(
     discover: bool = True,
     confirm_mappings: dict | None = None,
     runtime_dir: Path | None = None,
+    project: str = "",
+    repository: str = "",
 ) -> Path:
     """Write provider-neutral setup while keeping provider details adapter-owned."""
     from scripts.integrations.discovery import (
@@ -61,14 +63,16 @@ def configure_integrations(
         if "{key}" not in branch_template:
             raise ValueError("branch template must contain {key}")
         tracker_config = _default_tracker_config(
-            tracker, tracker_scope, project_dest, runtime_dir
+            tracker, tracker_scope, project_dest, runtime_dir, project=project
         )
         tracker_config["branchPattern"] = branch_template
         payload = {
             "schemaVersion": 1,
             "branchTemplate": branch_template,
             "tracker": tracker_config,
-            "scm": _default_scm_config(scm, project_dest),
+            "scm": _default_scm_config(
+                scm, project_dest, project=project, repository=repository
+            ),
         }
 
     payload = _with_local_tracker_transport(
@@ -142,6 +146,7 @@ def _default_tracker_config(
     scope: str,
     project_dest: Path | None = None,
     runtime_dir: Path | None = None,
+    project: str = "",
 ) -> dict:
     from scripts.integrations.discovery import mapping_presets
 
@@ -182,18 +187,9 @@ def _default_tracker_config(
                     "repositories",
                 ],
             },
-            "project": _azure_remote(project_dest)[1] if project_dest else "",
+            "project": project
+            or (_azure_remote(project_dest)[1] if project_dest else ""),
             "mappings": presets,
-            "bindings": {
-                "get_work_item": "wit_work_item",
-                "search_work_items": "wit_query",
-                "create_work_item": "wit_work_item_write",
-                "list_children": "wit_query",
-                "transition_work_item": "wit_work_item_write",
-                "publish_artifact": "wit_work_item_comment_write",
-                "list_artifacts": "wit_work_item",
-                "link_development_artifact": "wit_work_item_link_write",
-            },
         }
     if provider == "local_tracker":
         return {
@@ -287,7 +283,9 @@ def _set_local_tracker_ignore(project_dest: Path, ignored: bool) -> None:
         path.write_text(content, encoding="utf-8")
 
 
-def _default_scm_config(provider: str, project_dest: Path) -> dict:
+def _default_scm_config(
+    provider: str, project_dest: Path, *, project: str = "", repository: str = ""
+) -> dict:
     if provider == "github":
         owner, repo = _github_remote(project_dest)
         return {
@@ -298,12 +296,12 @@ def _default_scm_config(provider: str, project_dest: Path) -> dict:
             "bindings": {},
         }
     if provider == "azure_repos":
-        org, project, repo = _azure_remote(project_dest)
+        org, azure_project, azure_repository = _azure_remote(project_dest)
         return {
             "adapter": "azure_repos",
             "organization": org,
-            "project": project,
-            "repository": repo,
+            "project": project or azure_project,
+            "repository": repository or azure_repository,
             "connection": {
                 "command": "npx",
                 "args": [
@@ -315,13 +313,6 @@ def _default_scm_config(provider: str, project_dest: Path) -> dict:
                     "repositories",
                     "work-items",
                 ],
-            },
-            "bindings": {
-                "get_pull_request": "repo_pull_request",
-                "create_pull_request": "repo_pull_request_write",
-                "list_review_threads": "repo_pull_request_thread",
-                "reply_to_thread": "repo_pull_request_thread_write",
-                "link_work_item": "wit_work_item_link_write",
             },
         }
     raise ValueError(f"unsupported SCM: {provider}")

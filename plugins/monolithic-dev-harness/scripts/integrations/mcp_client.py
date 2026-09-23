@@ -190,8 +190,11 @@ def _embedded_json(text: str) -> Any:
 def _integration_error_from_content(content: Any) -> IntegrationError:
     text = _content_text(content)
     try:
-        payload = json.loads(text)
+        payload: Any = json.loads(text)
     except json.JSONDecodeError:
+        # Error responses carry the same untrusted-content fence as successful ones.
+        payload = _embedded_json(text)
+    if not isinstance(payload, dict):
         return IntegrationError("provider_error", text)
     if isinstance(payload, dict) and payload.get("code"):
         return IntegrationError(

@@ -262,7 +262,7 @@ resolve to something.
 | ---------------- | ------------------------------------ | --------------------------------------- | ----------------------------------- |
 | Linear MCP       | `get_issue`                          | `get_issue` on `parent.id`; milestone for feature scope | `list_documents`, issue attachments |
 | Jira MCP         | `getJiraIssue`                       | issue link of type *parent*             | remote links, attachments           |
-| Azure DevOps MCP | `wit_get_work_item`                  | `System.Parent` relation                | work item `relations[]`             |
+| Azure DevOps MCP | `wit_work_item[get]`                 | `System.Parent` relation                | work item `relations[]`             |
 | YouTrack         | issue by id                          | `parent` link                           | issue attachments                   |
 | GitHub issues    | `gh issue view <n> --json title,body` | parent from tracking checklist or label | links parsed from the issue body    |
 | Local vault      | read `<stories>/**/{id}*.md`         | `feature:` frontmatter key              | `## Specs` links in the ledger      |

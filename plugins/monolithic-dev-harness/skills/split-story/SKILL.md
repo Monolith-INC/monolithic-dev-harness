@@ -153,7 +153,8 @@ before writing any files.
 **Spike mode** (Branch B confirmed):
 
 1. Draft one local file at:
-   `<artifacts>/Tickets/Ready/<parent_id>-spike-<slug>.md`
+   `<artifacts>/Tickets/Ready/<parent_id>-spike-<slug>.md`, or
+   `<artifacts>/Tickets/Ready/draft-spike-<slug>.md` when the story has no parent
 2. Fill all 7 body sections using the Spike stub format from `./references/scoring-guide.md`.
 3. Fill each `[placeholder]` with content derived from the original story.
 
@@ -161,7 +162,8 @@ before writing any files.
 
 For each approved sub-story:
 
-1. Filename: `<parent_id>-<n>-<kebab-slug>.md` — e.g., `6868-1-register-flow.md`.
+1. Filename: `<parent_id>-<n>-<kebab-slug>.md` — e.g., `6868-1-register-flow.md`. When the
+   story has no parent, use `draft-<n>-<kebab-slug>.md`: a filename never contains `None`.
 2. Path: `<artifacts>/Tickets/Ready/<filename>`.
 3. Frontmatter (hook-valid — no `status:` and no `provider_id` before provider creation):
 
@@ -170,7 +172,7 @@ For each approved sub-story:
 date: <YYYY-MM-DD>
 type: ticket
 work_item_type: User Story
-parent_id: <parent_id>
+parent_id: <parent_id>   # omit the key entirely when the story has no parent
 provider: local
 story_points: <estimated-points>
 ---
@@ -230,9 +232,10 @@ For each sub-story draft (in order):
 2. Assert response contains `System.Id`. If absent: STOP and report failure with the item
    title and the raw error.
 3. `wit_work_item_link_write[link]` with explicit `type: "parent"` linking the new item to
-   `parent_id`.
+   `parent_id`. Skip this step when the story has no parent — sub-stories of a standalone story
+   are standalone too, and a Story is never attached to an Epic to give it a parent.
 4. Read back: `wit_work_item[get](id=<new_id>, expand=Relations)`.
-   Assert `System.Parent == parent_id`.
+   Assert `System.Parent == parent_id`, or that there is no parent when the original had none.
    Assert that the relations array contains no `System.LinkTypes.Related` links
    (no stray Related links from prior failed runs).
    If either assertion fails: STOP and report

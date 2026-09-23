@@ -10,6 +10,7 @@ provider-neutral.
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import replace
 from typing import Any
 
@@ -17,7 +18,6 @@ from .adapters import (
     ScmAdapter,
     TrackerAdapter,
     _artifact,
-    _encode_artifact_envelope,
     _items,
     _pull_request,
     _review_thread,
@@ -40,6 +40,19 @@ WORK_ITEM_FIELDS = (
     "System.Parent",
 )
 _BATCH_LIMIT = 200
+_COMMENT_LIMIT = 200
+# A WIQL condition names a field; anything else is search text, brackets or not.
+_WIQL_FIELD = re.compile(r"\[(System|Microsoft)\.[A-Za-z.]+\]")
+# `status` is a numeric enum on some payloads; the server also sends the name.
+_PR_STATUS = {1: "active", 2: "abandoned", 3: "completed"}
+_THREAD_STATUS = {
+    1: "active",
+    2: "fixed",
+    3: "wontFix",
+    4: "closed",
+    5: "byDesign",
+    6: "pending",
+}
 _PR_DESCRIPTION_LIMIT = 4000
 
 
@@ -57,7 +70,7 @@ def wiql_for(query: str) -> str:
     text = query.strip()
     if text.upper().startswith("SELECT"):
         return text
-    if "[" in text:
+    if _WIQL_FIELD.search(text):
         condition = text
     else:
         condition = "[System.Title] CONTAINS '{}'".format(text.replace("'", "''"))
@@ -106,11 +119,21 @@ def ado_work_item(value: dict[str, Any], mappings: dict[str, Any]) -> WorkItem:
     return replace(item, provider_data=value)
 
 
+def _status_name(value: Any, names: dict[int, str]) -> str:
+    if isinstance(value, bool) or value is None:
+        return ""
+    if isinstance(value, int):
+        return names.get(value, str(value))
+    return str(value)
+
+
 def ado_pull_request(value: Any) -> PullRequest:
     if not isinstance(value, dict) or "pullRequestId" not in value:
         return _pull_request(value)
     number = value["pullRequestId"]
-    web = (value.get("repository") or {}).get("webUrl")
+    # `repo_pull_request[get]` nests the repository; the create action returns its name as a string.
+    repository = value.get("repository")
+    web = repository.get("webUrl") if isinstance(repository, dict) else None
     return replace(
         _pull_request(
             {
@@ -124,7 +147,8 @@ def ado_pull_request(value: Any) -> PullRequest:
                 "targetBranch": str(value.get("targetRefName") or "").removeprefix(
                     "refs/heads/"
                 ),
-                "state": value.get("status"),
+                "state": _status_name(value.get("status"), _PR_STATUS)
+                or value.get("statusName"),
             }
         ),
         provider_data=value,
@@ -149,7 +173,9 @@ def ado_review_thread(value: Any) -> ReviewThread:
                 if isinstance(author, dict)
                 else author,
                 "comment": first.get("content"),
-                "status": value.get("status"),
+                "status": _status_name(value.get("status"), _THREAD_STATUS)
+                or value.get("statusName")
+                or "active",
             }
         ),
         provider_data=value,
@@ -202,13 +228,19 @@ class AzureDevOpsTrackerAdapter(TrackerAdapter):
     def search_work_items(
         self, query: str, cursor: str | None = None
     ) -> dict[str, Any]:
-        items = self._batch(self._query_ids(wiql_for(query)))
-        return {"items": [item.__dict__ for item in items], "nextCursor": None}
+        # The server caps a WIQL result; say so rather than implying the result is complete.
+        ids = self._query_ids(wiql_for(query))
+        items = self._batch(ids)
+        return {
+            "items": [item.__dict__ for item in items],
+            "nextCursor": None,
+            "truncated": len(ids) >= _BATCH_LIMIT,
+        }
 
     def create_work_item(
         self, kind: str, title: str, description: str, parent_ref: str | None = None
     ) -> WorkItem:
-        work_type = self.mappings.get("kinds", {}).get(kind, kind)
+        work_type = self._provider_kind(kind)
         if parent_ref:
             result = self._ado(
                 "wit_work_item_write",
@@ -263,44 +295,23 @@ class AzureDevOpsTrackerAdapter(TrackerAdapter):
 
     def list_artifacts(self, ref: str, kind: str | None = None) -> list[ArtifactRef]:
         result = self._ado(
-            "wit_work_item", "list_comments", workItemId=_number(ref, "work item")
+            "wit_work_item",
+            "list_comments",
+            workItemId=_number(ref, "work item"),
+            top=_COMMENT_LIMIT,
         )
         artifacts = [_artifact(item) for item in _items(result)]
         return [item for item in artifacts if kind is None or item.kind == kind]
 
-    def publish_artifact(
-        self, ref: str, kind: str, title: str, content: str, revision: str
-    ) -> ArtifactRef:
-        from .publish import publish_artifact_idempotent
-
-        envelope = _encode_artifact_envelope(
-            kind=kind, title=title, revision=revision, content=content
-        )
-        result = publish_artifact_idempotent(
-            list_fn=lambda: self.list_artifacts(ref, kind),
-            create_fn=lambda: _artifact(
-                self._ado(
-                    "wit_work_item_comment_write",
-                    "add",
-                    workItemId=_number(ref, "work item"),
-                    text=envelope,
-                    format="Markdown",
-                ),
-                fallback_kind=kind,
-                fallback_title=title,
-                fallback_revision=revision,
-            ),
-            title=title,
-            revision=revision,
-        )
-        artifact = result["artifact"]
-        return replace(
-            artifact,
-            kind=artifact.kind or kind,
-            title=artifact.title or title,
-            revision=artifact.revision or revision,
-            outcome=result["outcome"],
-            attempts=result["attempts"],
+    def _create_artifact(
+        self, ref: str, envelope: str, *, kind: str, title: str, revision: str
+    ) -> Any:
+        return self._ado(
+            "wit_work_item_comment_write",
+            "add",
+            workItemId=_number(ref, "work item"),
+            text=envelope,
+            format="Markdown",
         )
 
     def link_development_artifact(
@@ -318,9 +329,6 @@ class AzureDevOpsTrackerAdapter(TrackerAdapter):
                 }
             ],
         )
-
-    def _provider_state(self, state: str) -> str:
-        return str(self.mappings.get("states", {}).get(state, state))
 
 
 class AzureReposScmAdapter(ScmAdapter):
@@ -364,17 +372,23 @@ class AzureReposScmAdapter(ScmAdapter):
         target_branch: str,
         draft: bool = True,
     ) -> PullRequest:
-        return ado_pull_request(
-            self._ado(
-                "repo_pull_request_write",
-                "create",
-                title=title,
-                description=description[:_PR_DESCRIPTION_LIMIT],
-                sourceRefName=f"refs/heads/{source_branch.removeprefix('refs/heads/')}",
-                targetRefName=f"refs/heads/{target_branch.removeprefix('refs/heads/')}",
-                isDraft=draft,
-            )
+        created = self._ado(
+            "repo_pull_request_write",
+            "create",
+            title=title,
+            description=description[:_PR_DESCRIPTION_LIMIT],
+            sourceRefName=f"refs/heads/{source_branch.removeprefix('refs/heads/')}",
+            targetRefName=f"refs/heads/{target_branch.removeprefix('refs/heads/')}",
+            isDraft=draft,
         )
+        # The create action returns a trimmed payload with no URL, so read the pull request back.
+        number = created.get("pullRequestId") if isinstance(created, dict) else None
+        if number is None:
+            raise IntegrationError(
+                "provider_error",
+                "Azure DevOps did not return the created pull request.",
+            )
+        return self.get_pull_request(str(number))
 
     def list_review_threads(self, ref: str) -> list[ReviewThread]:
         result = self._ado(
@@ -408,15 +422,17 @@ class AzureReposScmAdapter(ScmAdapter):
                 f"Pull request {pr_ref} did not include its repository.",
             )
         project_id = (repository.get("project") or {}).get("id")
-        result = self.client.call(
+        if not project_id:
+            raise IntegrationError(
+                "provider_error",
+                f"Pull request {pr_ref} did not include its project id.",
+            )
+        result = self._ado(
             "wit_work_item_link_write",
-            {
-                "action": "link_to_pull_request",
-                "project": self.config.get("project"),
-                "workItemId": _number(work_item_ref, "work item"),
-                "pullRequestId": _number(pr_ref, "pull request"),
-                "projectId": project_id,
-                "repositoryId": repository["id"],
-            },
+            "link_to_pull_request",
+            repositoryId=repository["id"],
+            projectId=project_id,
+            workItemId=_number(work_item_ref, "work item"),
+            pullRequestId=_number(pr_ref, "pull request"),
         )
         return result if isinstance(result, dict) else {"result": result}

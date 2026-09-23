@@ -342,8 +342,20 @@ class AdapterContractTests(unittest.TestCase):
         }
         client = FakeClient(
             {
-                "repo_pull_request": pull_request,
-                "repo_pull_request_write": {**pull_request, "pullRequestId": 8},
+                # `get` answers for whichever pull request was asked for.
+                "repo_pull_request": lambda args: {
+                    **pull_request,
+                    "pullRequestId": args["pullRequestId"],
+                },
+                # `create` returns Azure's trimmed shape: repository is a name, and there is no URL.
+                "repo_pull_request_write": {
+                    "pullRequestId": 8,
+                    "title": "New",
+                    "sourceRefName": "refs/heads/feature/2",
+                    "targetRefName": "refs/heads/develop",
+                    "status": 1,
+                    "repository": "repo",
+                },
                 "repo_pull_request_thread": [
                     {
                         "id": 5,
@@ -378,6 +390,11 @@ class AdapterContractTests(unittest.TestCase):
 
         created = adapter.create_pull_request("New", "body", "feature/2", "develop")
         self.assertEqual(created.number, "8")
+        # The trimmed create payload has no URL; the read-back supplies one.
+        self.assertEqual(
+            created.url, "https://dev.azure.com/o/p/_git/repo/pullrequest/8"
+        )
+        self.assertEqual(created.state, "active")
         create = next(a for t, a in client.calls if t == "repo_pull_request_write")
         self.assertEqual((create["action"], create["isDraft"]), ("create", True))
         self.assertEqual(create["sourceRefName"], "refs/heads/feature/2")
