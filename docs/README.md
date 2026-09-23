@@ -33,7 +33,8 @@ docs/
 |       |-- ADR-0004-protected-items-are-never-linked.md
 |       |-- ADR-0005-claude-code-and-cursor-only.md
 |       |-- ADR-0006-install-from-release-archives.md
-|       `-- ADR-0007-backlog-owns-what-spec-owns-how.md
+|       |-- ADR-0007-backlog-owns-what-spec-owns-how.md
+|       `-- ADR-0008-the-harness-owns-its-files.md
 |-- 02-design/
 |   |-- api.md
 |   |-- components.md
