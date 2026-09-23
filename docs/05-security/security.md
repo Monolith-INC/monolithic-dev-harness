@@ -54,6 +54,7 @@ See [threat-model.md](threat-model.md).
 | Nothing unreviewed reaches a pull request; people publish and approve | `draft-reviewed-prs` |
 | Code ships with tests; generated files are not hand-edited | `tests-with-code`, `generated-files` |
 | Sensitive paths need evidence for the exact change | `guarded-paths` |
+| Stacked branches keep their history: no rebase, squash merge, or force-push | `history-preserved` |
 | Branch, state, spec, and evidence discipline | workflow policy |
 | Reviewer subagents have no file-edit tools | `tools:` in their frontmatter (Read, Grep, Glob, Bash, Skill, WebFetch); their Bash calls still pass the hooks |
 | No stored credentials | the Azure DevOps server uses interactive OAuth; no PAT |

@@ -9,8 +9,8 @@
     hook.py --host cursor --event prompt     (Cursor beforeSubmitPrompt)
 
 Pre-tool events run the harness rules first. If they allow the call, Claude and Cursor
-`preToolUse` payloads continue to the codex-workflows policy runtime (branch template, work-item
-key, state, spec prerequisites, completion evidence, protected branches, stack merge order).
+`preToolUse` payloads continue to the workflow policy runtime (branch template, work-item
+key, state, spec prerequisites, completion evidence, protected branches).
 Prompt events are the only place approvals and manual-check evidence are recorded.
 """
 

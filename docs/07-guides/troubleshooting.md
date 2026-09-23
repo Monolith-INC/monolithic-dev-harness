@@ -34,6 +34,7 @@ Anyone using or installing the harness.
 | `tests-with-code` on a commit | source changed without tests on the branch | add the test |
 | `guarded-paths` on a commit | no evidence for the staged change | run the check with `--staged`, or record a manual check |
 | `draft-reviewed-prs` on the PR | no `ready` verdict or checks for HEAD | run the review stage again after the last commit |
+| `history-preserved` on a git command | a rebase, squash merge, or force-push | merge instead; a person can rewrite history outside the agent if it is really needed |
 | Azure DevOps tools not found | deferred tools not loaded, or the server did not start | ask the agent to search for the tool by name; run `harness doctor --azure --project <p>` |
 | Azure DevOps calls hang | an OAuth redirect nobody completed | complete the browser sign-in; otherwise reload the host (see the runbook) |
 

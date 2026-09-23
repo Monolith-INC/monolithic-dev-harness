@@ -131,7 +131,7 @@ Always `0`; the decision is in stdout.
 
 A deny reason always starts with `[harness <rule>]` (`human-owned`, `approval-required`,
 `protected-items`, `tests-with-code`, `generated-files`, `guarded-paths`, `draft-reviewed-prs`,
-`harness-error`) or comes from the workflow policy.
+`history-preserved`, `harness-error`) or comes from the workflow policy.
 
 ### Failure Behavior
 

@@ -87,7 +87,8 @@ hook `human-owned` blocks any agent write to them. Gates G1, G2, and G4 map to t
 | `generated-files` | hand edits to generated files |
 | `guarded-paths` | commits to guarded paths without check or manual evidence for the staged tree |
 | `draft-reviewed-prs` | non-draft pull requests; pull requests without a `ready` verdict and passing checks for HEAD; publishing drafts or voting |
-| workflow | branch naming with exactly one work-item key, in-progress state, spec before code, completion evidence, protected branches, stack merge order |
+| `history-preserved` | rewriting branch history: rebase, squash merges, force-push, `filter-branch`, completing a pull request by squash or rebase |
+| workflow | branch naming with exactly one work-item key, in-progress state, spec before code, completion evidence, protected branches |
 
 When a hook blocks you, read its reason and fix the cause. Never retry through another tool or
 route around it.

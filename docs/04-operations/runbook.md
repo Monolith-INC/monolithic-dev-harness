@@ -40,6 +40,7 @@ See [observability.md](observability.md).
 | `tests-with-code` blocks a commit | add the test, or put the test commit first on the branch |
 | `guarded-paths` blocks a commit | stage, run `scripts/harness/checks.py --staged`, commit; or validate by hand and reply `harness manual-check <name> ok` |
 | `draft-reviewed-prs` blocks a PR | re-run the review stage on HEAD; any new commit needs a new verdict and new check evidence |
+| `history-preserved` blocks a git command | intended; bring changes in with `git merge` (the `reconcile-feature-stack` skill) and land Stories with merge commits |
 | Azure DevOps tools missing | search for the bare tool name (deferred tools load on search); run `harness doctor --azure` |
 | Azure DevOps calls hang | stop retrying; reload the host. Look for stale `mcp-server-azuredevops` processes by walking the parent chain, and end only a stale one (see `skills/azure-devops/references/oauth.md`) |
 | The MCP server does not start from the desktop app | the app lacks the shell's `PATH` (Node via `nvm`): start the host from a shell or make `npx` available system-wide |

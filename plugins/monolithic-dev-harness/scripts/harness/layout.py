@@ -45,7 +45,11 @@ _MOVES = (
 # Old folders removed once the moves leave nothing but what the harness no longer uses.
 _OLD_FOLDERS = (".codex-workflows", ".agentic")
 # Leftovers of the old layout that nothing reads any more.
-_STALE = (".codex-workflows/active-stage", ".agentic/workflow_prompts/.gitkeep")
+_STALE = (
+    ".codex-workflows/active-stage",
+    f"{STATE}/active-stage",
+    ".agentic/workflow_prompts/.gitkeep",
+)
 
 
 def migrate(repo: Path) -> list[str]:

@@ -39,7 +39,7 @@ output schemas enforced.
 | Component | Code | Role |
 | --- | --- | --- |
 | Hook entry point | `scripts/harness/hook.py` | normalizes both hosts' payloads; runs rules; delegates to the workflow policy |
-| Rules | `scripts/harness/rules.py` | the seven named rules |
+| Rules | `scripts/harness/rules.py` | the eight named rules |
 | Evidence store | `scripts/harness/state.py` | approvals, manual checks, check results, verdicts |
 | Git queries | `scripts/harness/gitstate.py` | trees, staged paths, branch diffs (bounded by timeouts) |
 | Workflow policy | `scripts/hook_runtime.py`, `scripts/policy/` | branch key, state, spec, evidence, protected branches, stack merges |

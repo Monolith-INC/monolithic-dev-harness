@@ -87,7 +87,7 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
   commit per Task; stacked branches for multi-Story Features.
 - **Requirements-first review:** coverage of the Story's acceptance criteria before a deep
   correctness and maintainability audit, ending in a recorded verdict and a **draft** pull request.
-- **Deterministic enforcement:** seven named rules (for example `approval-required`,
+- **Deterministic enforcement:** eight named rules (for example `approval-required`,
   `tests-with-code`, `draft-reviewed-prs`) plus the workflow policy, evaluated before every
   governed tool call, failing closed for writes.
 - **Human approvals that the agent cannot forge:** writes to Azure DevOps open only after you reply

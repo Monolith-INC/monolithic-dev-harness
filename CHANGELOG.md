@@ -15,6 +15,14 @@ All notable changes to this project are documented here. The format follows
   `.monolithic-code-review/`, `.agentic/`, and `.local-tracker/` in; nothing is overwritten. Until
   then, the old files are still read.
 
+### Security
+
+- New rule `history-preserved`: rebase, `git pull --rebase`, squash merges, force-push, and
+  `filter-branch` are refused in every governed repository, as is completing a pull request by
+  squash or rebase. It replaces a guard that only ran while the agent had written a marker file for
+  the landing step, did not block squash despite the skill saying so, and missed wrapped commands.
+  The agent no longer has to switch anything on.
+
 ## [0.1.5] - 2026-09-23
 
 ### Fixed

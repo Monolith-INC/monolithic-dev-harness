@@ -52,7 +52,7 @@ contracts, evidence), and routes every provider call through a place the runtime
 | Skills | Stage procedures. Conductors (`harness`, `implement-story`, `review`) sequence the others. |
 | Reviewer agents | `thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent`; no file-edit tools, pinned to `opus`. |
 | `scripts/harness/hook.py` | Single hook entry point for both hosts; runs the harness rules, then delegates to the workflow policy runtime. |
-| `scripts/harness/rules.py` | The seven named rules. |
+| `scripts/harness/rules.py` | The eight named rules. |
 | `scripts/harness/state.py` | Evidence store under `.harness/state/`. |
 | `scripts/hook_runtime.py`, `scripts/policy/` | Workflow policy: branch key, state, spec prerequisites, completion evidence, protected branches, stack merges. |
 | `workflow-orchestrator` (`scripts/orchestrator/`) | Delivery skills as MCP tools: manifest contracts, event-sourced task queue, Actor-Critic retries, failure taxonomy. |
