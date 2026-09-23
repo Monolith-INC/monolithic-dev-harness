@@ -6,6 +6,13 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- "Spec before code" now covers code only: the source and test globs in the policy's
+  `tests_required`. Setting a repository up, editing `.gitignore` or `.git/info/exclude`, or writing
+  a note into the vault on a Story branch was refused with "has no accepted specification
+  artifact". A policy that names no globs still covers every file except `.git/` and `.harness/`.
+
 ## [0.1.7] - 2026-09-23
 
 ### Fixed

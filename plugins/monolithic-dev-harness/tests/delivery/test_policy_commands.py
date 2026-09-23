@@ -8,11 +8,13 @@ import unittest
 from pathlib import Path
 
 from scripts.hook_runtime import _is_mutating_git
-from scripts.policy.commands import writes_inside
+from scripts import hook_runtime
+from scripts.policy import CanonicalToolEvent
+from scripts.policy.commands import is_code, writes_code
 from scripts.policy.git_branch_guard import evaluate_git_branch_guard
 
 
-class WritesInsideTests(unittest.TestCase):
+class WritesCodeTests(unittest.TestCase):
     def test_redirecting_output_is_not_a_file_write(self) -> None:
         # Reported from a real session: these were blocked because they contain `>`.
         with tempfile.TemporaryDirectory() as tmp:
@@ -26,7 +28,7 @@ class WritesInsideTests(unittest.TestCase):
                 "npm run lint",
             ):
                 with self.subTest(command=command):
-                    self.assertFalse(writes_inside(command, tmp))
+                    self.assertFalse(writes_code(command, tmp, None))
 
     def test_writing_into_the_repository_is(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -37,7 +39,68 @@ class WritesInsideTests(unittest.TestCase):
                 f"echo x > {tmp}/notes.md",
             ):
                 with self.subTest(command=command):
-                    self.assertTrue(writes_inside(command, tmp))
+                    self.assertTrue(writes_code(command, tmp, None))
+
+
+CODE = ["projects/app/lib/**/*.dart", "projects/app/test/**/*_test.dart"]
+
+
+class SpecBeforeCodeCoversCodeOnlyTests(unittest.TestCase):
+    """Reported from a real session: setting the repository up was refused for want of a spec."""
+
+    def test_setup_files_are_not_code(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            for command in (
+                "git checkout -- .gitignore && printf '.harness/state/\\n' >> .git/info/exclude",
+                "echo x > AI_Codex/Checkpoints/build.md",
+                "echo '{}' > .harness/review/sources.json",
+                "python3 scripts/tool.py --out notes.md",
+                f"echo x > {tmp}/README.md",
+            ):
+                with self.subTest(command=command):
+                    self.assertFalse(writes_code(command, tmp, CODE))
+
+    def test_code_and_tests_are(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            for command in (
+                "echo x > projects/app/lib/a.dart",
+                "sed -i s/a/b/ projects/app/test/a_test.dart",
+                "cd projects/app && echo x > lib/main.dart",
+                "rm -rf projects/app",
+                "git checkout -- projects",
+                "python3 -c 'open(\"x\")' projects/app/lib/a.dart",
+                f"echo x > {tmp}/projects/app/lib/b.dart",
+            ):
+                with self.subTest(command=command):
+                    self.assertTrue(writes_code(command, tmp, CODE))
+
+    def test_without_code_globs_every_file_but_gits_and_the_harnesss_is_code(self) -> None:
+        self.assertTrue(is_code("README.md", None))
+        self.assertFalse(is_code(".git/info/exclude", None))
+        self.assertFalse(is_code(".harness/state/x.json", None))
+        self.assertFalse(is_code("../elsewhere/a.dart", None))
+
+    def test_editing_a_file_asks_only_for_code(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / ".harness").mkdir()
+            (root / ".harness/policy.json").write_text(
+                '{"schemaVersion": 1, "tests_required": [{"source": ["lib/**"], "tests": ["test/**"]}]}'
+            )
+
+            def edits_code(path: str | None) -> bool:
+                return hook_runtime._edits_code(
+                    CanonicalToolEvent(
+                        client="claude", tool_name="Write", file_path=path, workspace_root=tmp
+                    )
+                )
+
+            self.assertTrue(edits_code(f"{tmp}/lib/a.dart"))
+            self.assertTrue(edits_code("test/a_test.dart"))
+            self.assertTrue(edits_code(None))
+            self.assertFalse(edits_code(f"{tmp}/.gitignore"))
+            self.assertFalse(edits_code(f"{tmp}/AI_Codex/Checkpoints/build.md"))
+            self.assertFalse(edits_code("/tmp/elsewhere/lib/a.dart"))
 
 
 class MutatingGitTests(unittest.TestCase):
