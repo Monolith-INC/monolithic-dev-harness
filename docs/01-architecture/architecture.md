@@ -26,7 +26,7 @@ contracts, evidence), and routes every provider call through a place the runtime
 ```text
 +--------------------------- plugin -----------------------------+
 |                                                                |
-|  skills/ (46)          agents/            hooks/               |
+|  skills/ (45)          agents/            hooks/               |
 |  backlog, delivery,    thermo-*           hooks.json (Claude)  |
 |  execution, review,    reviewer           cursor.hooks.json    |
 |  conductors            subagents          (Cursor)             |

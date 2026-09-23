@@ -30,7 +30,6 @@ the hook runtime first. Reviewer agents have no file-edit tools (`tools:` in the
 | 3 · Build | `architect`, `tdd`, `check`, `deslop`, `prove-it-works`, `verify-this`, `sequence-verifiable-units`, `commit-prep`, `automated-tests`, `repository-sync` |
 | 4 · Verify | `review-story-preflight`, `review-typescript`, `review-maintainability`, `thermos`, `thermo-nuclear-review`, `thermo-nuclear-code-quality-review`, `branch-and-pr`, `review-pr`, `triage-pr-comments`, `respond-pr-comments`, `resolve-ticket` |
 | Stacked Features | `reconcile-feature-stack`, `merge-story-stack-into-feature`, `finish-feature-development` |
-| Runtime reference | `codex_workflows` (workflow orchestration and policy notes) |
 
 Skills with a `manifest.json` are also served as MCP tools by an orchestrator, with their input and
 output schemas enforced.

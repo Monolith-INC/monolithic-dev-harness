@@ -1,20 +1,48 @@
 ---
 name: feature-implementation
-description: Plan and implement a feature using tracker hierarchy and stacked SCM branches.
+description: Implement a Feature with several User Stories on stacked branches — a Feature branch, one Story branch per Story, each Story through spec, implementation, and review — then land the stack and close the Feature. Use when the user wants to build a whole Feature rather than a single Story.
 ---
 
 # Feature implementation
 
-Before using tracker hierarchy or artifacts, call `workflow_tracking_status`. If
-tracking is paused, report that this skill is unavailable until `/resume-tracker`.
+A Feature with several Stories runs the Story flow once per Story, on branches stacked under one
+Feature branch:
 
-Use the generic tracker contract to fetch a feature and its user stories, confirm logical states and acceptance criteria, and publish the implementation plan as a tracker artifact. Use the SCM adapter for the feature branch and one story branch per child story.
+```text
+<base branch>
+  +-- <Feature branch>          e.g. feature/1200-short-title
+        +-- <Story 1 branch>    branched from the Feature
+        +-- <Story 2 branch>
+        +-- <Story 3 branch>
+```
 
-The branch convention is selected during bootstrap and must be confirmed from integrations.json; do not invent a provider-specific naming rule. Open story pull requests against the feature branch, reconcile ancestor changes before new descendant commits, land stacked stories with `merge-story-stack-into-feature`, and hand off to finish-feature-development after all stories merge.
+Before using the tracker, call `workflow_tracking_status`. If tracking is paused, report that this
+skill is unavailable until `/resume-tracker`.
 
-## Harness flow per Story
+## Procedure
 
-For each child Story in the stack order: `start-ticket` → `write-spec` (gate G2) → `implement-story`
-(on the Story branch based on the Feature branch) → `review` (verdict, then a draft pull request
-against the Feature branch). Every tracker write, push, and pull request goes through the approval
-protocol in the `harness` skill.
+1. **Read the Feature.** Fetch the Feature and its child Stories through the tracker. Confirm each
+   Story's acceptance criteria and state, and the stack order (which Story builds on which).
+2. **Plan.** Publish an implementation plan on the Feature as a tracker artifact: the Stories in
+   stack order and what each one delivers. Publishing is a tracker write: approval batch.
+3. **Create the Feature branch** from the base branch, named with the branch template selected at
+   bootstrap (`branchTemplate` in `.codex-workflows/integrations.json`). If the user wants a
+   different name, ask; do not invent one.
+4. **For each Story, in stack order:** `start-ticket` → `write-spec` (gate G2) →
+   `implement-story` on a Story branch cut from the Feature branch → `review`. Review ends with a
+   **draft** pull request from the Story branch **into the Feature branch**, linked to the Story.
+   Pull requests are not opened earlier: the harness only allows one after a `ready` verdict.
+5. **Keep the stack current.** When an earlier branch changes after a later Story branched from it,
+   run `reconcile-feature-stack` before adding commits to the later Story.
+6. **Land the stack** with `merge-story-stack-into-feature` once the Stories are ready.
+7. **Close the Feature** with `finish-feature-development`.
+
+Every tracker write, push, and pull request goes through the approval protocol in the `harness`
+skill.
+
+## Rules
+
+- Read the Feature and its Stories through the configured tracker; do not work from memory.
+- Use the bootstrap-selected branch template; ask the user when a custom name is needed.
+- Every Story pull request targets the Feature branch and is linked to its Story.
+- Never open the Feature → base-branch pull request here; that is `finish-feature-development`.

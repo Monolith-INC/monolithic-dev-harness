@@ -63,7 +63,7 @@ the integrations gateway or the Azure DevOps server, where the hook runtime sees
 ```text
   Claude Code / Cursor
   +----------------------------------------------------------------+
-  |  agent session --follows--> 46 skills --delegates--> thermos   |
+  |  agent session --follows--> 45 skills --delegates--> thermos   |
   |       |                                              reviewers |
   |       | every governed tool call                               |
   |       v                                                        |

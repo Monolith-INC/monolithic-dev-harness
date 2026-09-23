@@ -9,7 +9,7 @@ last_reviewed: 2026-09-23
 
 ## Status
 
-Accepted. Not yet implemented; see Follow-up.
+Accepted. Decisions 1, 2, and 4 are implemented; decision 3 is pending (see Follow-up).
 
 ## Context
 
@@ -65,8 +65,9 @@ The harness is one new product, not a set of references to other plugins.
 
 ## Follow-up
 
-- Fold the four procedures and rule lists into their skills; remove `.agent/…` references and
-  `skills/codex_workflows/` (after checking its coding rules and templates).
+- ~~Fold the four procedures and rule lists into their skills; remove `.agent/…` references and
+  `skills/codex_workflows/`.~~ Done. The folder's other files were not kept: its coding rules were
+  Dart-specific or duplicated by the harness's own skills, and nothing used its templates.
 - Consolidate repository state under `.harness/`, with a bootstrap migration.
 - Related, from the same review: block rebase, squash merges, and force-push on Story and Feature
   branches in governed repositories without relying on the agent to switch the guard on.
