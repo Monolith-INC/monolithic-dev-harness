@@ -70,3 +70,21 @@ The harness is one new product, not a set of references to other plugins.
 - Consolidate repository state under `.harness/`, with a bootstrap migration.
 - Related, from the same review: block rebase, squash merges, and force-push on Story and Feature
   branches in governed repositories without relying on the agent to switch the guard on.
+
+### Gaps found while documenting the workflow
+
+Answering the product questions in the README ("Common questions") turned up gaps outside this
+decision's scope, recorded here so they are not lost:
+
+- **Work already in progress:** no workflow adopts an in-flight branch, maps its commits to the
+  Story's Tasks, and resumes; the workflow hooks refuse writes on a branch outside the naming
+  convention.
+- **Test-first vs `tests-with-code`:** the `tdd` skill allows a Task with no practical automated
+  test to use a manual check, but the hook blocks a source commit with no test changes in the
+  commit or on the branch, so such a Task cannot be the first commit on a branch.
+- **Brainstorming:** no step for exploring a problem or deciding whether to build something; the
+  harness starts once the team knows what to build.
+- **Worker agents:** implementation is one agent, one Task at a time; nothing dispatches Tasks or
+  Stories to parallel agents.
+- **Choosing the flow:** single-Story versus stacked-Feature is described in the conductor skill,
+  not decided by code.

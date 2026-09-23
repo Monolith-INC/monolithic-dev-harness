@@ -242,6 +242,116 @@ develop
 Every board write, push, and pull request along the way needs a person's `approve HB-XXXX`, the
 same as for a single Story.
 
+### Common questions
+
+#### How does code review fit into the workflow?
+
+Code review is stage 4: after implementation, before any pull request. The harness first checks the
+whole Story branch against the Story's requirements and definition of done. Two reviewers then
+audit the diff in parallel, one for correctness and security, one for maintainability. Verified
+findings of high severity or above are fixed as new commits, and a verdict is recorded for the
+exact commit reviewed. The hooks refuse to open a pull request without a `ready` verdict and
+passing checks for that commit, so the order is enforced, not advised.
+
+#### How does the harness choose an implementation flow?
+
+By what it is given. A single Story runs the Story workflow above; a Feature with several Stories
+runs the Feature workflow, with stacked branches. The conductor skill (`harness`) describes that
+choice; nothing in code makes it. Inside either flow, the work follows what was agreed: the
+Story's acceptance criteria, its ordered Tasks, and its approved spec. The harness does not
+redefine scope during implementation.
+
+#### Is there a pull request review flow?
+
+Yes, in two parts.
+
+- **Before the pull request:** the review above. When the verdict is ready and the checks pass,
+  the harness pushes and opens a **draft** pull request linked to the Story, after a person
+  approves that push and pull request as one batch. In stacked work the Story's pull request
+  targets the Feature branch; otherwise the repository's base branch.
+- **After it:** a person publishes and approves the pull request; the hooks block the agent from
+  doing either. When reviewers leave comments, `triage-pr-comments` lists them with their file and
+  line and fact-checks each one, and `respond-pr-comments` replies or makes the requested changes.
+  Both run only when you ask, and every reply posted needs approval.
+
+#### What if implementation is already in progress?
+
+Not supported yet. There is no workflow that takes over a branch someone already started, maps its
+commits to the Story's Tasks, and continues from there. The workflow hooks also refuse writes on a
+branch whose name doesn't follow the configured convention (for example `develop`). The review
+stage can run on an existing branch; implementation cannot resume mid-way.
+
+#### What happens when an Epic, Feature, or Story changes during stacked development?
+
+Changes to the work items go through `amend-workitems`. It backs up the whole tree, shows the
+complete proposed change set, and waits for approval before writing anything. When the change
+touches a Story's Tasks, it updates the Story's implementation plan and recomputes the Tasks' hour
+estimates, reporting every figure that moved. When an earlier Story's branch changes, the harness
+carries that change forward through the later Story branches with merges and runs the checks
+again.
+
+#### Are the related records updated when a Task is complete?
+
+Yes. After a Task is committed and checked, the harness moves it to done in Azure DevOps once a
+person approves (several finished Tasks can share one approval). Technical specifications are kept
+as artifacts on the work item. The harness does not change unrelated records, ownership, state, or
+hierarchy without separate approval.
+
+#### When does the harness use test-first development?
+
+By default, for every Task that has a practical automated test: the test is written first, seen to
+fail for the intended reason, then made to pass. When a useful automated test isn't practical, the
+harness says so and uses the closest reliable check instead (a targeted script, an emulator
+scenario, or a manual check).
+
+Known conflict: the `tests-with-code` hook refuses any commit that changes source files with no
+test changes in the commit or earlier on the branch. So a Task with no practical automated test
+can only be committed once the branch already has test changes; as the first Task on a branch,
+it is blocked.
+
+#### What if the team has only an idea and no backlog records?
+
+The harness can start from the idea. It drafts a work item from it (any level: an Epic, a Feature,
+or a Story, and neither of the last two needs a parent), structures the description, breaks it into
+Features and Stories, and creates Tasks for the Stories that will be built next. Nothing is written
+to Azure DevOps before a person approves the proposed backlog.
+
+#### Is there a planning or brainstorming workflow?
+
+Planning, yes; brainstorming, no. Planning starts once the team knows what to build: the backlog
+stage, then a technical spec per Story (see below). There is no step for exploring a problem,
+comparing options, or deciding whether something is worth building.
+
+#### Is there a worker-agent workflow?
+
+No. Implementation is one agent working one Task at a time. The only subagents are the two review
+agents (thermos) and the architect's design candidates. Nothing dispatches Tasks or Stories to
+agents working in parallel.
+
+### Planning and delivery
+
+The harness plans delivery after a team has chosen what to build. It starts with an idea or an
+existing backlog item, drafts and approves the backlog, then creates a technical specification for
+each selected Story. The specification describes the system design, affected parts of the repository,
+test approach, user-interface notes, and risks. A technical lead must approve it before
+implementation begins.
+
+```text
+Idea or existing backlog item
+  |
+  v
+Backlog draft and approval
+  |
+  v
+Technical planning for a selected Story
+  |
+  v
+Approved specification
+  |
+  v
+Implementation
+```
+
 ## Repository layout
 
 | Path                                                                                                   | Purpose                                                      |
