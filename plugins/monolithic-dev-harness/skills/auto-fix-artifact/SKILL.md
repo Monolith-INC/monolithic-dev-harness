@@ -95,7 +95,7 @@ Systematically address each FAIL and WARN result:
    - "Save to Azure DevOps" (if source was Azure, uses `wit_work_item_write[update]`)
    - "Save to Artifacts/Artifacts" (if source was file/text, uses `write_to_file`/`replace_file_content`)
    - "Discard"
-3. **Persist Report:** Save the final validation report with `bin/agile-backlog-toolkit validate --file <path> --persist`, which writes to `.agile-backlog-toolkit/reports/`.
+3. **Persist Report:** Save the final validation report with `bin/agile-backlog-toolkit validate --file <path> --persist`, which writes to `.harness/backlog/reports/`.
 
 ---
 

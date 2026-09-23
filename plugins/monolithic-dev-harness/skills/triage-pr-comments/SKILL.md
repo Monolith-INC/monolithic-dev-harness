@@ -12,7 +12,7 @@ accept and what to push back on.
 This skill **decides nothing and posts nothing**. It produces the analysis; the user makes the call.
 Acting on the outcome belongs to `respond-pr-comments`.
 
-Requires `.monolithic-code-review/sources.json` and authenticated tooling for its configured SCM
+Requires `.harness/review/sources.json` and authenticated tooling for its configured SCM
 provider.
 
 ## Procedure
@@ -82,7 +82,7 @@ behaviour, verify against current official documentation via Context7 or web sea
 recall. Where it appeals to a project convention, find that convention in the repository and cite it,
 or note that it is not written down anywhere.
 
-When `.monolithic-code-review/sources.json` records a `knowledge.root`, that lookup is addressed
+When `.harness/review/sources.json` records a `knowledge.root`, that lookup is addressed
 rather than open-ended. Follow the cost ladder — routing table, then search, then one unit — over
 `4-rules/*` for standards, workflow, and security constraints, and `2-structure/architecture` for a
 claim about layering or dependency direction. Cite the unit `id` alongside the convention.

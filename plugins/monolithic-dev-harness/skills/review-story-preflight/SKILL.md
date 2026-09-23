@@ -10,7 +10,7 @@ The gate between "the work is done" and "the work becomes a pull request". This 
 definition of done. Nothing is pushed and nothing is posted — findings go to the user, who decides
 what to fix before the PR exists.
 
-Requires `.monolithic-code-review/sources.json`. If it is missing, run `review-setup` first.
+Requires `.harness/review/sources.json`. If it is missing, run `review-setup` first.
 ## Review flags and quality lenses
 
 User-invoked lifecycle reviews accept optional flags in the request:
@@ -25,7 +25,7 @@ Parse these flags from the user's message. Maintainability never runs without an
 TypeScript runs when mandatory by configuration, when the changed scope includes `.ts` or `.tsx`
 files, or when forced by flag.
 
-Read `quality_lenses` from `.monolithic-code-review/sources.json` when present. After
+Read `quality_lenses` from `.harness/review/sources.json` when present. After
 `review-setup`, TypeScript repositories record `quality_lenses.typescript: "mandatory"`.
 
 | Lens | Runs when |
@@ -49,7 +49,7 @@ already requires of any change — its architecture and dependency rules, its co
 build and test commands, which paths are generated. Read it, and a divergence from how this codebase
 works becomes a citable finding instead of an opinion.
 
-Read `knowledge.root` from `.monolithic-code-review/sources.json`. When it is absent or `null`, say
+Read `knowledge.root` from `.harness/review/sources.json`. When it is absent or `null`, say
 so once and review without it. A missing store is never a reason to substitute your own idea of what
 this project's standards are — that is the same failure as inventing a requirement.
 

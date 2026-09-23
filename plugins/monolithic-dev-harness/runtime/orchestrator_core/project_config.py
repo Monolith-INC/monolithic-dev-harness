@@ -1,6 +1,6 @@
 """Per-project configuration: where to write artifacts, and which Azure DevOps to talk to.
 
-Lives at `.agile-backlog-toolkit/config.json` in the project root. Written by the installer and by
+Lives at `.harness/backlog/config.json` in the project root. Written by the installer and by
 lazy fill; read by the orchestrator and by skills.
 
 **The plugin knows nothing about the client project beyond what is in this file.** It does
@@ -14,8 +14,8 @@ the caller must ask for a path rather than inventing one.
 Values resolve from several places, earliest wins:
 
     1. environment variables               -- CI and one-off overrides
-    2. .agile-backlog-toolkit/config.json   -- the canonical file
-    3. .agile-backlog-toolkit.install.json  -- install receipt
+    2. .harness/backlog/config.json         -- the canonical file
+    3. .harness/backlog/install.json        -- install receipt, when one was migrated in
     4. .mcp.json / .cursor/mcp.json        -- org, read from the MCP command arguments
 
 Nothing here raises. Missing values are reported by `missing()`, never guessed.
@@ -29,9 +29,12 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
-PLUGIN_DIRNAME = ".agile-backlog-toolkit"
-CONFIG_RELPATH = Path(PLUGIN_DIRNAME) / "config.json"
-INSTALL_MANIFEST = ".agile-backlog-toolkit.install.json"
+PLUGIN_DIRNAME = ".harness/backlog"
+# Before 0.1.6 the backlog kept its own folder; bootstrap moves it into `.harness/backlog/`.
+LEGACY_PLUGIN_DIRNAME = ".agile-backlog-toolkit"
+LEGACY_INSTALL_MANIFEST = ".agile-backlog-toolkit.install.json"
+CONFIG_FILENAME = "config.json"
+INSTALL_FILENAME = "install.json"
 MCP_FILES = (Path(".mcp.json"), Path(".cursor") / "mcp.json")
 
 ENV_ARTIFACTS = ("AGILE_WORKFLOW_ARTIFACTS_PATH", "AGILE_WORKFLOW_ARTIFACTS")
@@ -130,16 +133,27 @@ class ProjectConfig:
 
 
 def plugin_dir(project_root: Path) -> Path:
-    """`.agile-backlog-toolkit/` -- where the plugin keeps its own state.
+    """`.harness/backlog/` -- where the plugin keeps its own state.
 
     Distinct from the artifacts path: this holds plugin internals (config, reports, the
-    mistakes record), never the user's work products.
+    mistakes record), never the user's work products. A repository not yet migrated by bootstrap
+    keeps working from its old folder.
     """
-    return Path(project_root) / PLUGIN_DIRNAME
+    root = Path(project_root)
+    current, legacy = root / PLUGIN_DIRNAME, root / LEGACY_PLUGIN_DIRNAME
+    return legacy if not current.exists() and legacy.is_dir() else current
+
+
+def project_root_of(state_dir: Path) -> Path:
+    """The project a plugin state directory belongs to (inverse of `plugin_dir`)."""
+    state_dir = Path(state_dir)
+    if state_dir.name == LEGACY_PLUGIN_DIRNAME:
+        return state_dir.parent
+    return state_dir.parents[len(Path(PLUGIN_DIRNAME).parts) - 1]
 
 
 def config_path(project_root: Path) -> Path:
-    return Path(project_root) / CONFIG_RELPATH
+    return plugin_dir(project_root) / CONFIG_FILENAME
 
 
 def _read_json(path: Path) -> dict[str, Any] | None:
@@ -201,7 +215,7 @@ def load_project_config(project_root: Path) -> ProjectConfig:
 
     data = _read_json(config_path(root))
     if data:
-        sources.append(str(CONFIG_RELPATH))
+        sources.append(config_path(root).relative_to(root).as_posix())
         artifacts = _str_or_none(data.get("artifacts_path"))
         provider_mode = _str_or_none(data.get("provider_mode")) or provider_mode
         azure = data.get("azure")
@@ -214,9 +228,12 @@ def load_project_config(project_root: Path) -> ProjectConfig:
         if isinstance(linear, dict):
             linear_team = _str_or_none(linear.get("team"))
 
-    manifest = _read_json(root / INSTALL_MANIFEST)
+    receipt = plugin_dir(root) / INSTALL_FILENAME
+    if not receipt.is_file():
+        receipt = root / LEGACY_INSTALL_MANIFEST
+    manifest = _read_json(receipt)
     if manifest:
-        sources.append(INSTALL_MANIFEST)
+        sources.append(receipt.relative_to(root).as_posix())
         org = org or _str_or_none(manifest.get("azure_devops_org"))
         project = project or _str_or_none(manifest.get("azure_project"))
         team = team or _str_or_none(manifest.get("azure_team"))
@@ -254,7 +271,7 @@ def load_project_config(project_root: Path) -> ProjectConfig:
 
 
 def save_project_config(project_root: Path, config: ProjectConfig) -> Path | None:
-    """Persist to `.agile-backlog-toolkit/config.json`, preserving unknown keys already present."""
+    """Persist to `.harness/backlog/config.json`, preserving unknown keys already present."""
     path = config_path(project_root)
     existing = _read_json(path) or {}
     existing.update(config.as_dict())

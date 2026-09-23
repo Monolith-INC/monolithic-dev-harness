@@ -27,9 +27,9 @@ See [deployment.md](deployment.md).
 | --- | --- | --- |
 | `AZURE_DEVOPS_ORG` | Claude `settings.json` → `env`; Cursor `cursor.mcp.json` (pinned) | installer (`--org`) |
 | `.harness/policy.json` | repository (committed) | `harness bootstrap`, then people |
-| `.codex-workflows/integrations.json` | repository | bootstrap: Azure Boards tracker, Azure Repos SCM, branch template |
-| `.agile-backlog-toolkit/config.json` | repository | bootstrap: org, project, team, artifacts path, `provider_mode: azure` |
-| `.monolithic-code-review/sources.json` | repository | the `review-setup` skill |
+| `.harness/integrations.json` | repository | bootstrap: Azure Boards tracker, Azure Repos SCM, branch template |
+| `.harness/backlog/config.json` | repository | bootstrap: org, project, team, artifacts path, `provider_mode: azure` |
+| `.harness/review/sources.json` | repository | the `review-setup` skill |
 | `HARNESS_HOME`, `HARNESS_BIN_DIR`, `CURSOR_PLUGIN_DIR` | installer environment | optional overrides |
 
 A governed repository commits `.harness/policy.json` and ignores `.harness/state/` (bootstrap adds

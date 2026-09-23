@@ -169,14 +169,13 @@ def handle_plan_capacity(
     """
     from .capacity import format_plan, plan_iteration
     from .estimation import config_diagnostics, estimate_hours, load_config
-    from .project_config import load_project_config
+    from .project_config import load_project_config, project_root_of
     from .providers import get_provider
 
     iteration_ref = str(arguments.get("iteration_ref", "")).strip()
     provider_name = str(arguments.get("provider", "filesystem")).strip() or "filesystem"
 
-    # state_dir is `<project>/.agile-backlog-toolkit`, so its parent is the project root.
-    project_root = state_dir.parent
+    project_root = project_root_of(state_dir)
     project_config = load_project_config(project_root)
 
     provider_kwargs: dict[str, Any] = {}
@@ -301,7 +300,7 @@ def handle_estimate_breakdown(
         estimate_breakdown,
         load_config,
     )
-    from .project_config import load_project_config
+    from .project_config import load_project_config, project_root_of
     from .providers.azure_devops import AzureDevOpsProvider
     from .providers.azure_devops import fields as azure_fields
 
@@ -365,7 +364,7 @@ def handle_estimate_breakdown(
             "instructions": instructions,
         }
 
-    project_root = state_dir.parent
+    project_root = project_root_of(state_dir)
     project_config = load_project_config(project_root)
     process = _as_text(arguments.get("process")) or project_config.azure.process
 

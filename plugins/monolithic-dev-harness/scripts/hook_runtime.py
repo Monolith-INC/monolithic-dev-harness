@@ -25,7 +25,6 @@ from integrations.config import load_config
 from integrations.contracts import IntegrationError
 from policy import CanonicalToolEvent, PolicyDecision
 from policy.git_branch_guard import evaluate_git_branch_guard
-from policy.git_stack_merge_guard import evaluate_git_stack_merge_guard
 
 LOG_FILE = "/tmp/codex_hook_debug.log"
 _WRITE_TOOLS = frozenset(
@@ -129,9 +128,6 @@ def evaluate_event(
         branch_decision = evaluate_git_branch_guard(command, event.workspace_root)
         if branch_decision.is_denied():
             return branch_decision
-        stack_decision = evaluate_git_stack_merge_guard(command, event.workspace_root)
-        if stack_decision.is_denied():
-            return stack_decision
         checkout_decision = _validate_checkout_convention(command, event.workspace_root)
         if checkout_decision.is_denied():
             return checkout_decision

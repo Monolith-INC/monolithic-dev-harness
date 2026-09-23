@@ -8,7 +8,7 @@ and `../skills/azure-devops/SKILL.md`.
 
 ## Before the first Azure call: know the project
 
-Org, project, team, and process live in `.agile-backlog-toolkit/config.json`. Read them with:
+Org, project, team, and process live in `.harness/backlog/config.json`. Read them with:
 
 ```bash
 bin/agile-backlog-toolkit config --show      # exits non-zero when something required is missing

@@ -31,7 +31,7 @@ def resolve_project_root() -> Path:
 
 
 def resolve_state_dir(project_root: Path) -> Path:
-    """`.agile-backlog-toolkit/` -- the plugin's own state directory, never a user location."""
+    """`.harness/backlog/` -- the plugin's own state directory, never a user location."""
     from .project_config import plugin_dir
 
     return plugin_dir(project_root)

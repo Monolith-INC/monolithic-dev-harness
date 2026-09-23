@@ -8,6 +8,7 @@ generated-files     Generated files are never edited by hand.
 guarded-paths       A commit touching a guarded path needs that path's evidence for the tree being committed.
 draft-reviewed-prs  Pull requests are created as drafts, only with a `ready` review verdict and passing checks
                     for HEAD; publishing a draft and voting are left to humans.
+history-preserved   Branch history is never rewritten: no rebase, squash merge, or force-push.
 """
 
 from __future__ import annotations
@@ -669,11 +670,72 @@ def rule_guarded_paths(
     return Decision.allow()
 
 
+_FORCE_PUSH_FLAGS = frozenset(
+    {"--force", "--force-with-lease", "--force-if-includes", "--mirror"}
+)
+_REBASE_EXITS = frozenset({"--abort", "--quit"})
+
+
+def _history_rewrite(argv: list[str]) -> str | None:
+    """What a git invocation would rewrite, if anything."""
+    if not argv:
+        return None
+    subcommand, options = argv[0], argv[1:]
+    if subcommand == "rebase" and not _REBASE_EXITS & set(options):
+        return "`git rebase` rewrites the branch's commits"
+    if subcommand == "pull" and any(
+        option in {"--rebase", "-r"}
+        or (option.startswith("--rebase=") and option != "--rebase=false")
+        for option in options
+    ):
+        return "`git pull --rebase` rewrites the branch's commits"
+    if subcommand == "merge" and "--squash" in options:
+        return "`git merge --squash` collapses the merged branch into one commit"
+    if subcommand == "push" and any(
+        option in _FORCE_PUSH_FLAGS
+        or option.startswith("--force-with-lease=")
+        or (re.match(r"^-[A-Za-z]*f", option) and not option.startswith("--"))
+        or (option.startswith("+") and len(option) > 1)
+        for option in options
+    ):
+        return "a force-push replaces the branch on the server"
+    if subcommand in {"filter-branch", "filter-repo"}:
+        return f"`git {subcommand}` rewrites history"
+    return None
+
+
+def rule_history_preserved(call: ToolCall) -> Decision:
+    """Story and Feature branches keep their history: stacked branches are merged, never rebased,
+    squashed, or force-pushed, so every later Story still builds on the commits it branched from.
+    Always on in a governed repository, however the command is written."""
+    if call.name in SHELL_TOOLS:
+        for _directory, argv in git_invocations(call.command):
+            rewrite = _history_rewrite(argv)
+            if rewrite:
+                return Decision.deny(
+                    "history-preserved",
+                    f"{rewrite}. Branch history is never rewritten here: bring changes in with "
+                    "`git merge` (see `reconcile-feature-stack`), and land Stories with merge commits.",
+                )
+    strategy = call.tool_input.get("mergeStrategy")
+    if call.name == "repo_pull_request_write" and strategy not in (
+        None,
+        "NoFastForward",
+    ):
+        return Decision.deny(
+            "history-preserved",
+            f"completing a pull request with `{strategy}` rewrites its commits; use a merge commit "
+            "(`NoFastForward`).",
+        )
+    return Decision.allow()
+
+
 def evaluate(call: ToolCall, repo: Path, policy: dict[str, Any]) -> Decision:
     for decision in (
         rule_human_owned(call, repo),
         rule_protected_items(call, policy),
         rule_draft_reviewed_prs(call, repo, policy),
+        rule_history_preserved(call),
     ):
         if not decision.allowed:
             return decision

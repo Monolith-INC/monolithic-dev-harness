@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-09-23
+
+### Changed
+
+- Everything the harness keeps in a repository now lives under `.harness/` (ADR-0008), instead of
+  one folder per source plugin: `integrations.json`, `review/`, `backlog/`, `tracker/`, and
+  `state/` (which now also holds the orchestrator's prompts and the amendment backups). Re-run
+  `harness bootstrap` to move an existing repository's `.codex-workflows/`, `.agile-backlog-toolkit/`,
+  `.monolithic-code-review/`, `.agentic/`, and `.local-tracker/` in; nothing is overwritten. Until
+  then, the old files are still read.
+
+### Security
+
+- New rule `history-preserved`: rebase, `git pull --rebase`, squash merges, force-push, and
+  `filter-branch` are refused in every governed repository, as is completing a pull request by
+  squash or rebase. It replaces a guard that only ran while the agent had written a marker file for
+  the landing step, did not block squash despite the skill saying so, and missed wrapped commands.
+  The agent no longer has to switch anything on.
+
 ## [0.1.5] - 2026-09-23
 
 ### Fixed
@@ -198,7 +217,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.6
 [0.1.5]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.5
 [0.1.4]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.4
 [0.1.3]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.3

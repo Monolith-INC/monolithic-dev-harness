@@ -707,6 +707,75 @@ class TestPullRequest(HookTestCase):
         )
 
 
+class TestHistoryPreserved(HookTestCase):
+    def test_rewriting_history_is_denied_however_it_is_written(self) -> None:
+        # Approval does not override it: this is not a question of permission.
+        self.approve()
+        for command in (
+            "git rebase develop",
+            "git rebase -i HEAD~3",
+            "git pull --rebase",
+            "git pull -r origin develop",
+            "git merge --squash userstory/1201-a",
+            "git push --force",
+            "git push -f origin feature/1200-x",
+            "git push -uf origin feature/1200-x",
+            "git push --force-with-lease",
+            "git push origin +feature/1200-x",
+            "git filter-branch --tree-filter 'rm x' HEAD",
+            # The forms an agent retries with after a plain one is refused.
+            "(git rebase develop)",
+            "sudo git push -f",
+            "env X=1 git rebase develop",
+            "bash -c 'git merge --squash userstory/1201-a'",
+            "if true; then git rebase develop; fi",
+        ):
+            with self.subTest(command=command):
+                self.assertDenied(
+                    self.claude("Bash", {"command": command}), "history-preserved"
+                )
+
+    def test_squash_or_rebase_completion_of_a_pull_request_is_denied(self) -> None:
+        self.approve()
+        for strategy in ("Squash", "Rebase", "RebaseMerge"):
+            with self.subTest(strategy=strategy):
+                self.assertDenied(
+                    self.claude(
+                        AZ + "repo_pull_request_write",
+                        {
+                            "action": "update",
+                            "pullRequestId": 7,
+                            "autoComplete": True,
+                            "mergeStrategy": strategy,
+                        },
+                    ),
+                    "history-preserved",
+                )
+
+    def test_merging_and_ordinary_git_are_allowed(self) -> None:
+        self.approve()
+        for command in (
+            "git merge --no-ff userstory/1201-a",
+            "git merge develop",
+            "git rebase --abort",
+            "git pull",
+            "git pull --rebase=false",
+            "git log --oneline",
+        ):
+            with self.subTest(command=command):
+                self.assertAllowed(self.claude("Bash", {"command": command}))
+        self.assertAllowed(
+            self.claude(
+                AZ + "repo_pull_request_write",
+                {
+                    "action": "update",
+                    "pullRequestId": 7,
+                    "mergeStrategy": "NoFastForward",
+                },
+            )
+        )
+
+
 class TestPolicyValidation(HookTestCase):
     def test_guarded_path_naming_an_unknown_check_fails_closed(self) -> None:
         policy = json.loads((self.repo / ".harness" / "policy.json").read_text())

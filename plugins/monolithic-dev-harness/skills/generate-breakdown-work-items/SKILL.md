@@ -24,7 +24,7 @@ Shared references (in `../../references/`):
 - `decomposition-rules.md` — hierarchy (Epic → Feature → Story → Task)
 
 Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which reads
-`.agile-backlog-toolkit/config.json` and falls back to older locations. See
+`.harness/backlog/config.json` and falls back to older locations. See
 `../../references/project-config.md`.
 
 **Not in scope:** inventing or rewriting acceptance criteria; Feature-level story-point estimation;

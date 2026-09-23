@@ -25,7 +25,7 @@ last_reviewed: 2026-09-22
 | Orchestrator | An MCP server that validates a skill's inputs and outputs and runs its Actor-Critic loop. |
 | Protected work item | A work item id listed in the policy that the agent may never write, link, or parent. |
 | Review verdict | `ready` or `blocked`, recorded for one HEAD commit by the review stage. |
-| Rule | One named deterministic check: `human-owned`, `approval-required`, `protected-items`, `tests-with-code`, `generated-files`, `guarded-paths`, `draft-reviewed-prs`. |
+| Rule | One named deterministic check: `human-owned`, `approval-required`, `protected-items`, `tests-with-code`, `generated-files`, `guarded-paths`, `draft-reviewed-prs`, `history-preserved`. |
 | Stacked branches | Story branches based on a Feature branch, landed into it in order. |
 | Tree mode | `decompose-backlog` run on an Epic: Features and their Stories in one pass. |
-| Workflow policy | The codex-workflows rules: branch key, in-progress state, spec before code, completion evidence, protected branches, stack merge order. |
+| Workflow policy | The workflow rules: branch key, in-progress state, spec before code, completion evidence, protected branches. |

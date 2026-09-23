@@ -48,7 +48,7 @@ Accept `/enrich-work-item` flags or conversational inference (see Examples).
 Normalize type → enricher + Azure `workItemType` per `pipeline.md`.
 
 Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which reads
-`.agile-backlog-toolkit/config.json` and falls back to older locations. See
+`.harness/backlog/config.json` and falls back to older locations. See
 `../../references/project-config.md`.
 
 ---

@@ -76,7 +76,7 @@ bin/agile-backlog-toolkit evaluate --skill validate-artifact --file <path>
 ```
 
 The Python critic implements every check in `./references/validation-checks.md`. On failure,
-`evaluate` writes `.agentic/workflow_prompts/validate-artifact.error.log` for `correcao` resume.
+`evaluate` writes `.harness/state/prompts/validate-artifact.error.log` for `correcao` resume.
 
 Read `./references/validation-checks.md` for the complete check definitions, conditions, and
 FAIL/WARN thresholds before running checks manually.
@@ -167,7 +167,7 @@ Print to terminal:
 
 Read `./references/report-format.md` for the report frontmatter template.
 
-Path: `.agile-backlog-toolkit/reports/` (plugin-owned; written by `--persist`)
+Path: `.harness/backlog/reports/` (plugin-owned; written by `--persist`)
 
 Filename: `<YYYY-MM-DD>-validate-<id-or-slug>.md`
 - Use `provider_id` if available.

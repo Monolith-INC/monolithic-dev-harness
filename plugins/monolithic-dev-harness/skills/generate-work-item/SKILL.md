@@ -62,7 +62,7 @@ not invent one. Only a Task needs a parent: if it is missing, STOP and ask once.
 has the wrong type: STOP and report (see `decomposition-rules.md`).
 
 Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which reads
-`.agile-backlog-toolkit/config.json` and falls back to older locations. See
+`.harness/backlog/config.json` and falls back to older locations. See
 `../../references/project-config.md`.
 
 ---

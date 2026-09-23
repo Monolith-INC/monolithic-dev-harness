@@ -2,12 +2,12 @@
 
 Where the plugin keeps per-project settings, and how a skill fills in a value that is missing.
 
-## The plugin owns nothing but `.agile-backlog-toolkit/`
+## The backlog stage owns nothing but `.harness/backlog/`
 
 Two locations, and they must not be confused:
 
 ```
-<project>/.agile-backlog-toolkit/          plugin-owned. Created by the plugin.
+<project>/.harness/backlog/          plugin-owned. Created by the plugin.
 ├── config.json                       settings
 ├── estimation.json                   optional: team's points→hours bands
 ├── mistakes.json                     retry-loop memory
@@ -26,7 +26,7 @@ shared drive: it reads markdown frontmatter from it and nothing more.
 
 ## The file
 
-`.agile-backlog-toolkit/config.json`:
+`.harness/backlog/config.json`:
 
 ```json
 {
@@ -58,8 +58,8 @@ Earlier sources win. Projects configured by earlier versions still resolve:
      AGILE_WORKFLOW_ARTIFACTS_PATH
      AGILE_WORKFLOW_AZURE_ORG / AZURE_DEVOPS_ORG / ADO_ORG
      ...PROJECT, ...TEAM, ...PROCESS
-2. .agile-backlog-toolkit/config.json          <- canonical
-3. .agile-backlog-toolkit.install.json         <- install receipt
+2. .harness/backlog/config.json          <- canonical
+3. .harness/backlog/install.json         <- install receipt
 4. .mcp.json / .cursor/mcp.json         <- org, from the MCP command arguments
 ```
 

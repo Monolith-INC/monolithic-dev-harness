@@ -52,7 +52,7 @@ contracts, evidence), and routes every provider call through a place the runtime
 | Skills | Stage procedures. Conductors (`harness`, `implement-story`, `review`) sequence the others. |
 | Reviewer agents | `thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent`; no file-edit tools, pinned to `opus`. |
 | `scripts/harness/hook.py` | Single hook entry point for both hosts; runs the harness rules, then delegates to the workflow policy runtime. |
-| `scripts/harness/rules.py` | The seven named rules. |
+| `scripts/harness/rules.py` | The eight named rules. |
 | `scripts/harness/state.py` | Evidence store under `.harness/state/`. |
 | `scripts/hook_runtime.py`, `scripts/policy/` | Workflow policy: branch key, state, spec prerequisites, completion evidence, protected branches, stack merges. |
 | `workflow-orchestrator` (`scripts/orchestrator/`) | Delivery skills as MCP tools: manifest contracts, event-sourced task queue, Actor-Critic retries, failure taxonomy. |
@@ -106,9 +106,9 @@ spawned -> inputs validated -> running --success--> completed
 | Manual checks | `.harness/state/manual/` | prompt hook | valid for one index tree |
 | Check evidence | `.harness/state/checks/` | `checks.py` | valid for one tree |
 | Review verdicts | `.harness/state/review/` | `review_verdict.py` | valid for one commit |
-| Tracker binding | `.codex-workflows/integrations.json` | bootstrap | until reconfigured |
-| Backlog config | `.agile-backlog-toolkit/config.json` | bootstrap | until reconfigured |
-| Review config | `.monolithic-code-review/sources.json` | `review-setup` | until reconfigured |
+| Tracker binding | `.harness/integrations.json` | bootstrap | until reconfigured |
+| Backlog config | `.harness/backlog/config.json` | bootstrap | until reconfigured |
+| Review config | `.harness/review/sources.json` | `review-setup` | until reconfigured |
 
 Details: [data-model.md](data-model.md).
 

@@ -13,7 +13,7 @@ advisory.
 
 Run `review-story-preflight` on the Story branch. It checks the whole branch against the Story's
 description, acceptance criteria, and Definition of Done, and ends with a ready/blocked verdict.
-It needs `.monolithic-code-review/sources.json`; run `review-setup` once per repository if it is
+It needs `.harness/review/sources.json`; run `review-setup` once per repository if it is
 missing. Add `--lenses typescript` for TypeScript subprojects and `--lenses maintainability` when
 the Story reshapes structure.
 

@@ -28,7 +28,7 @@ def _project_root() -> Path:
 
 
 def _state_dir(project_root: Path) -> Path:
-    """`.agile-backlog-toolkit/` -- where the plugin keeps its own reports, config, and memory."""
+    """`.harness/backlog/` -- where the plugin keeps its own reports, config, and memory."""
     from .project_config import plugin_dir
 
     return plugin_dir(project_root)
@@ -40,7 +40,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     sub = parser.add_subparsers(dest="command")
 
-    sub.add_parser("init", help="Scaffold .agentic/workflow_prompts mailbox")
+    sub.add_parser("init", help="Scaffold the .harness/state/prompts mailbox")
 
     validate_p = sub.add_parser(
         "validate", help="Validate an artifact draft (rule-based critic)"
@@ -51,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     validate_p.add_argument(
         "--persist",
         action="store_true",
-        help="Write report to .agile-backlog-toolkit/reports/",
+        help="Write report to .harness/backlog/reports/",
     )
     validate_p.add_argument(
         "--hierarchy-parent-is-feature",
@@ -196,7 +196,7 @@ def main(argv: list[str] | None = None) -> int:
         estimate = estimate_hours(points, config=load_config(state_dir))
         if estimate is None:
             print(
-                f"[!] No band covers {points} points; add one to .agile-backlog-toolkit/estimation.json."
+                f"[!] No band covers {points} points; add one to .harness/backlog/estimation.json."
             )
             return 1
 

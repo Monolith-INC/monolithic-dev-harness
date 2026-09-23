@@ -8,7 +8,9 @@ from typing import Any
 
 from .contracts import IntegrationError
 
-CONFIG_RELATIVE_PATH = ".codex-workflows/integrations.json"
+CONFIG_RELATIVE_PATH = ".harness/integrations.json"
+# Before 0.1.6 this file lived in its own folder; bootstrap moves it into `.harness/`.
+LEGACY_CONFIG_RELATIVE_PATH = ".codex-workflows/integrations.json"
 
 
 @dataclass(frozen=True)
@@ -33,7 +35,10 @@ class IntegrationConfig:
 
 
 def config_path(project_root: Path) -> Path:
-    return project_root / CONFIG_RELATIVE_PATH
+    current = project_root / CONFIG_RELATIVE_PATH
+    legacy = project_root / LEGACY_CONFIG_RELATIVE_PATH
+    # A repository not yet migrated by bootstrap keeps working from the old file.
+    return legacy if not current.exists() and legacy.is_file() else current
 
 
 def load_config(project_root: Path | None = None) -> IntegrationConfig:
