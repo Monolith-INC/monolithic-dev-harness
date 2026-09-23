@@ -150,7 +150,7 @@ echo '{"tool_name":"Bash","tool_input":{"command":"git push"},"cwd":"."}' \
 | --- | --- | --- |
 | `scripts/harness/checks.py [--head \| --staged] [--only <name>…]` | `.harness/state/checks/<tree>.json` | `0` all passed or none applied; `1` a check failed; `2` `--head` with uncommitted tracked changes |
 | `scripts/harness/review_verdict.py --verdict ready\|blocked --summary <text>` | `.harness/state/review/<commit>.json` | `0` recorded; `2` `ready` with uncommitted tracked changes |
-| `scripts/harness/bootstrap.py --repo <dir> --policy-from <file>` | policy, `.gitignore`, `integrations.json`, backlog config | `0`; `2` not a repository root, invalid policy, missing organization, or missing backlog values |
+| `scripts/harness/bootstrap.py --repo <dir> --policy-from <file>` | policy, `.git/info/exclude`, `integrations.json`, backlog config | `0`; `2` not a repository root, invalid policy, missing organization, or missing backlog values |
 | `skills/azure-devops/scripts/health-check.mjs --project <p> [--org <o>]` | nothing | `0` healthy; `1` call failed; `2` bad arguments; `124` timeout |
 | `bin/agile-backlog-toolkit <command>` | backlog config, reports | per command; `config` exits non-zero while required values are missing |
 

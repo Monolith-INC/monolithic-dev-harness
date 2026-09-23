@@ -6,7 +6,8 @@
 
 Everything goes under `.harness/` (see `layout.py`). Writes, once:
   .harness/policy.json            the harness rules (copied from --policy-from; never replaced)
-  .gitignore                      ignores .harness/state/
+  .git/info/exclude               ignores .harness/state/ (local to this clone; the shared
+                                  .gitignore is never edited)
   .harness/integrations.json      delivery: Azure Boards tracker + Azure Repos SCM
                                   (repaired in place when it exists; --force rewrites it)
   .harness/backlog/config.json    backlog: org / project / team
@@ -34,13 +35,23 @@ sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
 from harness.config import POLICY_RELATIVE_PATH, PolicyError, load_policy  # noqa: E402
 
 
-def _ensure_gitignore(repo: Path) -> bool:
-    path = repo / ".gitignore"
+def _ensure_local_exclude(repo: Path) -> bool:
+    """Ignore `.harness/state/` in this clone only: git's own exclude file, not the tracked `.gitignore`."""
+    result = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--git-path", "info/exclude"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return False
+    path = Path(result.stdout.strip())
+    path = path if path.is_absolute() else repo / path
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
     if ".harness/state/" in lines:
         return False
-    lines.append(".harness/state/")
-    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join([*lines, ".harness/state/"]) + "\n", encoding="utf-8")
     return True
 
 
@@ -98,8 +109,8 @@ def main(argv: list[str] | None = None) -> int:
         print(
             f"recorded organization {org} (from AZURE_DEVOPS_ORG) in {POLICY_RELATIVE_PATH}"
         )
-    if _ensure_gitignore(repo):
-        print("added .harness/state/ to .gitignore")
+    if _ensure_local_exclude(repo):
+        print("ignored .harness/state/ in .git/info/exclude (this clone only)")
     from harness.layout import BACKLOG, INTEGRATIONS, migrate
 
     for note in migrate(repo):

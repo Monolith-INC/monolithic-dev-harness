@@ -129,6 +129,41 @@ class TestBootstrapProject(unittest.TestCase):
         self.assertNotIn("bindings", config["scm"])
 
 
+class TestLocalExclude(unittest.TestCase):
+    def test_state_is_ignored_locally_and_the_shared_gitignore_is_untouched(
+        self,
+    ) -> None:
+        from harness.bootstrap import _ensure_local_exclude
+
+        with tempfile.TemporaryDirectory() as tmp:
+            repo = Path(tmp)
+            subprocess.run(["git", "init", "-q", str(repo)], check=True)
+            (repo / ".gitignore").write_text("node_modules/\n", encoding="utf-8")
+            self.assertTrue(_ensure_local_exclude(repo))
+            self.assertFalse(_ensure_local_exclude(repo))
+            exclude = (repo / ".git/info/exclude").read_text(encoding="utf-8")
+            self.assertEqual(exclude.splitlines().count(".harness/state/"), 1)
+            self.assertEqual(
+                (repo / ".gitignore").read_text(encoding="utf-8"), "node_modules/\n"
+            )
+            (repo / ".harness/state").mkdir(parents=True)
+            (repo / ".harness/state/x.json").write_text("{}")
+            status = subprocess.run(
+                [
+                    "git",
+                    "-C",
+                    str(repo),
+                    "status",
+                    "--porcelain",
+                    "--untracked-files=all",
+                ],
+                capture_output=True,
+                text=True,
+                check=True,
+            ).stdout
+            self.assertNotIn(".harness/state", status)
+
+
 class TestRepairIntegrations(unittest.TestCase):
     """A config written by 0.1.1 is brought up to date in place."""
 

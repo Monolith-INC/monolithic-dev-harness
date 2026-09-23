@@ -111,12 +111,12 @@ Ask the user which root to use, and present the trade-off rather than picking si
 
 | Option | Root | Trade-off |
 | --- | --- | --- |
-| **Per-developer** | `.harness/review/knowledge/` | Beside `sources.json`, gitignored with it. No diff noise, no review burden — but each developer rebuilds it, and nobody inherits the answers the others gave |
+| **Per-developer** | `.harness/review/knowledge/` | Beside `sources.json`, kept out of git with it. No diff noise, no review burden — but each developer rebuilds it, and nobody inherits the answers the others gave |
 | **Committed anchor** | `.harness/review/knowledge/`, tracked | The team shares one store and can hand-edit it. Highest value, because human-authored identity and rules survive the person who knew them — but generated content lands in pull requests and needs a refresh policy |
 | **Inside the vault** | A directory under `vault.root`, such as `<vault.root>/Project_Knowledge/` | One knowledge home when the repository already keeps a vault. Offer this option only when step 2 found one |
 
 Record the answer as `knowledge.root` and `knowledge.committed`. If the user chooses a committed
-root, do **not** add it to `.gitignore`; if they choose per-developer, it is covered by the
+root, do **not** exclude it from git; if they choose per-developer, it is covered by the
 `.harness/review/` entry described in step 4.
 
 ### 3d. Build the store
@@ -221,17 +221,17 @@ Field notes:
   Consuming skills treat `null` the same way they treat an unsupported capability: they say so once
   and review without project context.
 - `knowledge.committed` — whether the store is tracked in version control. Decides whether the root
-  is added to `.gitignore` and whether a refresh produces reviewable diffs.
+  is excluded from git and whether a refresh produces reviewable diffs.
 - `knowledge.derived_from_commit` — the commit the store was last derived from. Discovery uses it to
   refresh only the units whose inputs actually moved.
 - `knowledge.mcp_server` — the configured knowledge MCP server name when its adapter is installed.
   Omit it when there is none; the store's layout is deterministic, so skills fall back to reading
   `catalog.tsv` and grepping the tree.
 
-Add `.harness/review/` to the repository's `.gitignore` unless the user wants the
-configuration shared with the team. Ask. When `knowledge.committed` is true and the store lives
-under `.harness/review/`, negate the store path so the configuration stays private while
-the knowledge stays shared.
+Keep `.harness/review/` out of git unless the user wants the configuration shared with the team.
+Ask. Keep it out through `.git/info/exclude`, which is local to this clone; never edit the shared
+`.gitignore`. When `knowledge.committed` is true and the store lives under `.harness/review/`,
+negate the store path there so the configuration stays private while the knowledge stays shared.
 
 ### 5. Verify before declaring success
 
