@@ -6,6 +6,27 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-09-23
+
+### Added
+
+- Approval by click in Claude. The agent asks one question with an **Approve** option; picking it
+  opens the approval window, so nobody has to type `approve HB-…`. Typing still works, and is how
+  Cursor approves. Only questions that passed the check below count, once each, and a question that
+  arrives with answers already filled in is refused.
+- `plain-questions` hook: a question to the user is sent back to be rewritten when it is long, asks
+  several things, or contains file names, code, or the harness's own names (rule names, batch ids,
+  tool names).
+- The harness skill tells the agent to raise only what blocks the user's current task, and to keep
+  everything else for one short list at the end of the stage.
+
+### Fixed
+
+- "Spec before code" now covers code only: the source and test globs in the policy's
+  `tests_required`. Setting a repository up, editing `.gitignore` or `.git/info/exclude`, or writing
+  a note into the vault on a Story branch was refused with "has no accepted specification
+  artifact". A policy that names no globs still covers every file except `.git/` and `.harness/`.
+
 ## [0.1.7] - 2026-09-23
 
 ### Fixed

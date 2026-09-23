@@ -54,6 +54,7 @@ contracts, evidence), and routes every provider call through a place the runtime
 | `scripts/harness/hook.py` | Single hook entry point for both hosts; runs the harness rules, then delegates to the workflow policy runtime. |
 | `scripts/harness/rules.py` | The eight named rules. |
 | `scripts/harness/state.py` | Evidence store under `.harness/state/`. |
+| `scripts/harness/questions.py` | Questions to the user: the plain-language check before they are shown, and approval by click. |
 | `scripts/hook_runtime.py`, `scripts/policy/` | Workflow policy: branch key, state, spec prerequisites, completion evidence, protected branches, stack merges. |
 | `workflow-orchestrator` (`scripts/orchestrator/`) | Delivery skills as MCP tools: manifest contracts, event-sourced task queue, Actor-Critic retries, failure taxonomy. |
 | `backlog-orchestrator` (`runtime/orchestrator_core/`) | Backlog skills as MCP tools plus a CLI: draft validation, quality gates, estimation, capacity. |

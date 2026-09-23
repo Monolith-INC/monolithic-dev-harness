@@ -35,13 +35,16 @@ Take "students can add a profile photo" through the harness. Start with the back
 
 The agent drafts the top item, enriches it, and proposes Features and Stories as one outline. Edit
 the outline in plain language until it is right. The agent then shows every body with Story
-Points as one batch with an id:
+Points, then asks one question:
 
 ```text
-Batch HB-4F9A: 1 Epic, 2 Features, 4 Stories (5, 3, 3, 3 points), 7 parent links. Approve?
+Create these in Azure: 1 Epic, 2 Features, 4 Stories (5, 3, 3, 3 points)?
+  Approve    I create them now.
+  Not now    Nothing is written.
 ```
 
-Reply `approve HB-4F9A`. Nothing reaches Azure DevOps before that.
+Click **Approve**. Nothing reaches Azure DevOps before that. In Cursor, which has no question
+picker, the agent gives the batch an id and you reply `approve HB-4F9A`.
 
 ### 3. Plan (gate G2)
 
@@ -63,7 +66,7 @@ Validate in staging (G3); a person publishes and approves the pull request (G4).
 
 | Reply | Effect |
 | --- | --- |
-| `approve HB-XXXX` | opens a 20-minute window for the batch's writes |
+| `approve HB-XXXX` | opens a 20-minute window for the batch's writes (Cursor; in Claude, click **Approve**) |
 | `harness revoke` | closes open windows |
 | `harness manual-check <name> ok` | records that you validated a guarded change by hand |
 

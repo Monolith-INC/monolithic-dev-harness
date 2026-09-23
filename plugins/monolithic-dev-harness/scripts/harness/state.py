@@ -1,7 +1,7 @@
 """Harness state under `<repo>/.harness/state/`: approvals, manual checks, check evidence, review verdicts.
 
-Only the prompt hook writes approvals and manual-check records, so only a human prompt can open
-a write window or vouch for a manual check. Check evidence and review verdicts are written by
+Only the hooks write approvals and manual-check records, and only from what the user typed or
+clicked, so only a human can open a write window or vouch for a manual check. Check evidence and review verdicts are written by
 the stage scripts and keyed to git tree/commit ids, so they go stale the moment the code changes.
 """
 
@@ -51,14 +51,18 @@ def safe_name(name: str) -> str:
 # --- approvals (approval-required) ------------------------------------------------------------
 
 
-def open_approval(repo: Path, approval_id: str, minutes: int) -> dict[str, Any]:
+def open_approval(
+    repo: Path, approval_id: str, minutes: int, question: str = ""
+) -> dict[str, Any]:
     now = _now()
-    record = {
+    record: dict[str, Any] = {
         "id": approval_id,
         "opened": now.isoformat(),
         "expires": (now + timedelta(minutes=minutes)).isoformat(),
         "writes": [],
     }
+    if question:
+        record["question"] = question
     _write(state_dir(repo) / "approvals" / f"{safe_name(approval_id)}.json", record)
     return record
 
@@ -97,6 +101,26 @@ def active_approval(repo: Path) -> tuple[Path, dict[str, Any]] | None:
 def log_write(path: Path, record: dict[str, Any], tool: str) -> None:
     record.setdefault("writes", []).append({"tool": tool, "at": _now().isoformat()})
     _write(path, record)
+
+
+# --- questions shown to the user (approval by click) ------------------------------------------
+
+
+def mark_asked(repo: Path, name: str) -> None:
+    _write(
+        state_dir(repo) / "asked" / f"{safe_name(name)}.json",
+        {"asked": _now().isoformat()},
+    )
+
+
+def take_asked(repo: Path, name: str) -> bool:
+    """Whether the question-check hook let this question through; the mark is used up."""
+    path = state_dir(repo) / "asked" / f"{safe_name(name)}.json"
+    try:
+        path.unlink()
+    except OSError:
+        return False
+    return True
 
 
 # --- manual checks (guarded-paths) ------------------------------------------------------------

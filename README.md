@@ -1,7 +1,7 @@
 # monolithic-dev-harness
 
 [![CI](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.1.7-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
+[![Version](https://img.shields.io/badge/version-0.1.8-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![Cursor](https://img.shields.io/badge/Cursor-supported-black.svg)](https://cursor.com)
@@ -87,11 +87,13 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
   commit per Task; stacked branches for multi-Story Features.
 - **Requirements-first review:** coverage of the Story's acceptance criteria before a deep
   correctness and maintainability audit, ending in a recorded verdict and a **draft** pull request.
-- **Deterministic enforcement:** eight named rules (for example `approval-required`,
+- **Deterministic enforcement:** nine named rules (for example `approval-required`,
   `tests-with-code`, `draft-reviewed-prs`) plus the workflow policy, evaluated before every
   governed tool call, failing closed for writes.
-- **Human approvals that the agent cannot forge:** writes to Azure DevOps open only after you reply
-  `approve HB-…`.
+- **Human approvals that the agent cannot forge:** writes to Azure DevOps open only after you click
+  **Approve** on the agent's question (or, in Cursor, reply `approve HB-…`).
+- **Plain questions:** a hook sends back any question to you that is long, asks several things, or
+  uses file names, code, or internal names.
 - **One-shot install** for Claude Code and Cursor, with a `harness` command for bootstrap and
   health checks.
 
@@ -139,7 +141,7 @@ Take "students can add a profile photo" through the harness, starting with the b
 ```
 
 The agent drafts the Epic, proposes Features and Stories, and stops at gate G1 for your approval.
-Nothing reaches Azure DevOps until you reply `approve HB-…` for the batch it shows you.
+Nothing reaches Azure DevOps until you click **Approve** on the batch it shows you.
 
 ## How it works
 
@@ -175,8 +177,7 @@ no approved spec, it stops and asks for one.
 
 #### Start of the Story
 
-1. Move the Story to Active in Azure DevOps. That's a board write, so a person approves it
-   (`approve HB-XXXX`).
+1. Move the Story to Active in Azure DevOps. That's a board write, so a person approves it.
 2. Create the branch, for example `userstory/1234-short-title`.
 3. Read the repository's `AGENTS.md` once and note the rules that apply: tests for new code,
    generated files, guarded paths.
@@ -239,8 +240,8 @@ develop
    `develop` pull request, link it to the Feature, post a closing summary, and move the Feature to
    done.
 
-Every board write, push, and pull request along the way needs a person's `approve HB-XXXX`, the
-same as for a single Story.
+Every board write, push, and pull request along the way needs a person's approval, the same as for
+a single Story.
 
 ### Common questions
 
@@ -421,7 +422,7 @@ See [`docs/05-security/security.md`](./docs/05-security/security.md).
 
 ## Project status
 
-`0.1.7`. The rules, installer, and test suites are verified in CI. Loading in
+`0.1.8`. The rules, installer, and test suites are verified in CI. Loading in
 Cursor and a full end-to-end run against a live Azure DevOps project are pending observation.
 
 See [`docs/06-delivery/roadmap.md`](./docs/06-delivery/roadmap.md).

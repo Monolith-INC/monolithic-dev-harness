@@ -23,7 +23,7 @@ Preconditions, all enforced by hooks:
 
 - the review stage recorded a `ready` verdict for HEAD (`draft-reviewed-prs`);
 - every applicable check passed for HEAD's tree (`draft-reviewed-prs`);
-- an approval window is open (`approval-required`): show the user the push + PR batch and ask for `approve HB-…`.
+- an approval window is open (`approval-required`): say in plain words what will be pushed and opened, and ask the user to approve it (the harness skill's approval protocol).
 
 Then:
 

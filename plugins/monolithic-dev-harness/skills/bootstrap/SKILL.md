@@ -19,7 +19,7 @@ Start from `<plugin root>/examples/policy.example.json` or build one with the us
 | `azure` | organization (empty → taken from `AZURE_DEVOPS_ORG` at bootstrap), project, team, repository, `protected_work_items` (`protected-items`) |
 | `backlog.artifacts_path` | where backlog drafts, plans, and reports are written |
 | `git.base_branch` | branch base, branch diffs, deslop scope |
-| `approvals.window_minutes` | how long an `approve HB-…` reply keeps writes open (`approval-required`) |
+| `approvals.window_minutes` | how long an approval (a click on `Approve`, or an `approve HB-…` reply) keeps writes open (`approval-required`) |
 | `checks` | the commands `check` runs, selected by `when` globs (`guarded-paths`, `draft-reviewed-prs`) |
 | `tests_required` | source ↔ test globs for the commit gate (`tests-with-code`) |
 | `generated` | files never edited by hand (`generated-files`) |

@@ -13,6 +13,7 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
+from harness.config import PolicyError, load_policy
 from host_adapters import (
     format_claude_decision,
     format_cursor_decision,
@@ -23,7 +24,7 @@ from integrations.adapters import tracker_adapter
 from integrations.config import load_config
 from integrations.contracts import IntegrationError
 from policy import CanonicalToolEvent, PolicyDecision
-from policy.commands import git_commands, writes_inside
+from policy.commands import git_commands, is_code, writes_code
 from policy.git_branch_guard import evaluate_git_branch_guard
 
 LOG_FILE = "/tmp/codex_hook_debug.log"
@@ -131,7 +132,9 @@ def evaluate_event(
         checkout_decision = _validate_checkout_convention(command, event.workspace_root)
         if checkout_decision.is_denied():
             return checkout_decision
-        if _is_mutating_git(command) or writes_inside(command, event.workspace_root):
+        if _is_mutating_git(command) or writes_code(
+            command, event.workspace_root, _code_patterns(event.workspace_root)
+        ):
             return _evaluate_work_context(event)
         return PolicyDecision.allow()
 
@@ -142,9 +145,42 @@ def evaluate_event(
             return _evaluate_completion(event)
         return PolicyDecision.allow()
 
-    if event.tool_name in _WRITE_TOOLS:
+    if event.tool_name in _WRITE_TOOLS and _edits_code(event):
         return _evaluate_work_context(event)
     return PolicyDecision.allow()
+
+
+def _code_patterns(project_root: str) -> list[str] | None:
+    """The policy's source and test globs: the files "spec before code" covers.
+
+    `None` (every file but git's and the harness's) when the policy names none or cannot be read.
+    """
+    try:
+        policy = load_policy(Path(project_root))
+    except (PolicyError, OSError):
+        return None
+    patterns = [
+        pattern
+        for group in policy.get("tests_required", [])
+        for key in ("source", "tests")
+        for pattern in group.get(key, [])
+    ]
+    return patterns or None
+
+
+def _edits_code(event: CanonicalToolEvent) -> bool:
+    if not event.file_path:
+        return True
+    path = Path(event.file_path)
+    root = Path(event.workspace_root or ".").resolve()
+    if path.is_absolute():
+        try:
+            relative = path.resolve().relative_to(root).as_posix()
+        except ValueError:
+            return False
+    else:
+        relative = path.as_posix()
+    return is_code(relative, _code_patterns(event.workspace_root))
 
 
 def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:

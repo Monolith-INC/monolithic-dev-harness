@@ -63,24 +63,44 @@ modules, test strategy, UI design notes. Present it for **G2** and stop until th
 
 `review`. The requirements check first, then thermos, fixes, a verdict for HEAD, and the draft PR.
 
+## Talking to the user
+
+The person driving the harness knows the goal, not the harness. Every message and question is for
+them:
+
+- Only raise what blocks the thing they are doing right now. Everything else (leftover files, old
+  tools, follow-ups) waits for one short list at the end of the stage.
+- Plain words. No file names, code, rule names, tool names, or batch ids unless they ask. Describe
+  what a thing does instead ("the setting that hides local files from git").
+- One question at a time, with options that say what happens for them.
+
+Hook `plain-questions` checks every question before it is shown and sends back one that is too long,
+asks several things, or needs the harness's vocabulary to understand.
+
 ## The approval protocol (every tracker or SCM write)
 
-Hook `approval-required` blocks every write to Azure DevOps (work items, links, comments, pull requests, threads,
-branches, `git push`) unless the user has opened an approval window. To open one:
+Hook `approval-required` blocks every write to Azure DevOps (work items, links, comments, pull
+requests, threads, branches, `git push`) unless the user has opened an approval window. To open one:
 
-1. Show the exact batch: each item or field or link, or the push and PR you are about to make.
-2. Give it a batch id: `HB-` plus 4–8 uppercase letters or digits (for example `HB-7Q2K`).
-3. Ask the user to reply `approve HB-7Q2K` (`aprovo HB-7Q2K` also works). Their prompt opens the
-   window for `approvals.window_minutes` (default 20). `harness revoke` closes it early.
+1. Say in plain words what will be written: which items, with their titles, and what changes.
+2. Ask one question with two options, labelled exactly `Approve` and `Not now`. The user's click on
+   `Approve` opens the window for `approvals.window_minutes` (default 20).
+3. Make only the writes you described. Anything new needs a new question.
 
-You cannot open the window yourself: approval records are written only by the prompt hook, and
-hook `human-owned` blocks any agent write to them. Gates G1, G2, and G4 map to these batches.
+In Cursor, where questions cannot be asked, give the batch an id (`HB-` plus 4–8 uppercase letters
+or digits) and ask the user to reply `approve HB-7Q2K`. Typing it works in Claude too.
+`harness revoke` closes a window early.
+
+You cannot open the window yourself: approvals are recorded only from the user's own prompt or
+click, a question that arrives with answers already filled in is refused, and hook `human-owned`
+blocks any agent write to the records. Gates G1, G2, and G4 map to these approvals.
 
 ## Enforced rules (hooks)
 
 | Rule | What it blocks |
 | --- | --- |
-| `human-owned` | agent writes to `.harness/policy.json` and to approval or manual-check records |
+| `human-owned` | agent writes to `.harness/policy.json` and to approval, manual-check, or question records |
+| `plain-questions` | questions to the user that are long, ask several things, contain file names, code, or internal names, or come with answers filled in |
 | `approval-required` | tracker/SCM writes and `git push` without an open approval window |
 | `protected-items` | any write, link, or child on a protected work item, even with approval |
 | `tests-with-code` | commits that change source files with no test change in the commit or on the branch |
@@ -88,7 +108,7 @@ hook `human-owned` blocks any agent write to them. Gates G1, G2, and G4 map to t
 | `guarded-paths` | commits to guarded paths without check or manual evidence for the staged tree |
 | `draft-reviewed-prs` | non-draft pull requests; pull requests without a `ready` verdict and passing checks for HEAD; publishing drafts or voting |
 | `history-preserved` | rewriting branch history: rebase, squash merges, force-push, `filter-branch`, completing a pull request by squash or rebase |
-| workflow | branch naming with exactly one work-item key, in-progress state, spec before code, completion evidence, protected branches |
+| workflow | branch naming with exactly one work-item key, in-progress state, spec before code (source and test files), completion evidence, protected branches |
 
 When a hook blocks you, read its reason and fix the cause. Never retry through another tool or
 route around it.
