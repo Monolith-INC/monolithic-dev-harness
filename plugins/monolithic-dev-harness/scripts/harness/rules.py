@@ -253,25 +253,8 @@ def referenced_ids(tool_input: dict[str, Any]) -> set[int]:
 def git_invocations(
     command: str, cwd: str | None = ""
 ) -> list[tuple[str | None, list[str]]]:
-    """Every `git` the command runs: (its directory relative to `cwd`'s base, argv after options).
-
-    Walks the same invocations as the write rules, so `sudo git push`, `(git push)`, and
-    `if …; then git push; fi` are all seen.
-    """
-    found: list[tuple[str | None, list[str]]] = []
-    for invocation in shellscan.invocations(command, cwd):
-        if invocation.name != "git":
-            continue
-        directory = invocation.cwd or None
-        rest = list(invocation.args)
-        while rest and rest[0].startswith("-"):
-            flag = rest.pop(0)
-            if flag in {"-C", "-c", "--git-dir", "--work-tree"} and rest:
-                value = rest.pop(0)
-                if flag == "-C":
-                    directory = shellscan.resolve(value, directory or "")
-        found.append((directory, rest))
-    return found
+    """Every `git` the command runs: (its directory, argv after options). See `shellscan`."""
+    return shellscan.git_commands(command, cwd)
 
 
 def git_subcommands(command: str) -> set[str]:

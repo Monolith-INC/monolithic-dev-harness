@@ -6,6 +6,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-09-23
+
+### Fixed
+
+- The workflow policy no longer treats any `>` in a shell command as a file write. Read-only
+  commands such as `ls -la 2>&1` or `harness doctor 2>/dev/null` were refused on branches without a
+  work item. It now reads commands through the same reader as the harness rules, counting only a
+  redirect into the repository or a command known to write.
+- The protected-branch guard checks every `git` on a line, not only the first: `git status && git
+  commit` on `develop` is refused, as are wrapped forms such as `(git commit …)`.
+
 ## [0.1.6] - 2026-09-23
 
 ### Changed
@@ -217,7 +228,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.7
 [0.1.6]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.6
 [0.1.5]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.5
 [0.1.4]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.4

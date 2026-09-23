@@ -108,6 +108,11 @@ OUTPUT_OPTIONS = {
 }
 # Commands whose last operand is the destination; the rest are only read.
 COPIERS = frozenset({"cp", "install", "rsync", "scp"})
+# Commands known to write what they are given. Without the fail-closed default (see `scan`),
+# only these, the tables above, and redirects count as writes.
+KNOWN_WRITERS = frozenset(
+    {"chgrp", "chmod", "chown", "ln", "mv", "tee", "touch", "truncate"}
+)
 # Commands that remove what they are given, recursively when asked to.
 REMOVERS = frozenset({"rm", "rmdir", "shred", "unlink"})
 SHELLS = frozenset({"sh", "bash", "dash", "zsh", "ksh", "fish"})
@@ -592,6 +597,7 @@ def _classify(
     base: Path | None,
     whole: str,
     probing: bool = False,
+    unknown_writes: bool = True,
 ) -> None:
     name, args, cwd = invocation.name, invocation.args, invocation.cwd
 
@@ -722,7 +728,10 @@ def _classify(
             for path in operands[:-1]:
                 target(path)
         return
-    # Any other command: assume it writes every path it names, including `--opt=path` values.
+    # Any other command: assume it writes every path it names, including `--opt=path` values,
+    # unless the caller asked for positive evidence only.
+    if not unknown_writes and name not in KNOWN_WRITERS:
+        return
     for arg in args:
         if arg.startswith("-") and "=" in arg:
             target(arg.split("=", 1)[1])
@@ -909,11 +918,21 @@ def _writes_operands(invocation: Invocation) -> bool:
     return any("\x00" in path for path in probe.targets + probe.trees)
 
 
-def scan(command: str, cwd: str | None = "", base: Path | None = None) -> ShellWrites:
-    """What `command`, started in `cwd` (relative to `base`), could write."""
+def scan(
+    command: str,
+    cwd: str | None = "",
+    base: Path | None = None,
+    unknown_writes: bool = True,
+) -> ShellWrites:
+    """What `command`, started in `cwd` (relative to `base`), could write.
+
+    `unknown_writes=False` drops the fail-closed default for commands this module does not know
+    (`flutter test`, `harness doctor`): they count as writing nothing. The protection rules keep the
+    default; a check that only asks "is this plainly a write?" turns it off.
+    """
     writes = _Writes()
     for invocation in invocations(command, cwd):
-        _classify(invocation, writes, base, command)
+        _classify(invocation, writes, base, command, unknown_writes=unknown_writes)
         if invocation.operands_from_pipe and _writes_operands(invocation):
             writes.unresolved.extend(words_in(" ".join(invocation.piped_from)))
     return ShellWrites(
@@ -921,3 +940,47 @@ def scan(command: str, cwd: str | None = "", base: Path | None = None) -> ShellW
         tuple(dict.fromkeys(writes.trees)),
         tuple(dict.fromkeys(writes.unresolved)),
     )
+
+
+def git_commands(
+    command: str, cwd: str | None = ""
+) -> list[tuple[str | None, list[str]]]:
+    """Every `git` the command runs: (its directory, argv after git's own options).
+
+    Walks the same invocations as `scan`, so `sudo git push`, `(git push)`, `git status && git
+    commit`, and `if …; then git push; fi` are all seen.
+    """
+    found: list[tuple[str | None, list[str]]] = []
+    for invocation in invocations(command, cwd):
+        if invocation.name != "git":
+            continue
+        directory = invocation.cwd or None
+        rest = list(invocation.args)
+        while rest and rest[0].startswith("-"):
+            flag = rest.pop(0)
+            if flag in {"-C", "-c", "--git-dir", "--work-tree", "--namespace"} and rest:
+                value = rest.pop(0)
+                if flag == "-C":
+                    directory = _resolve(value, directory or "")
+        found.append((directory, rest))
+    return found
+
+
+def writes_inside(command: str, root: Path | None = None) -> bool:
+    """Whether the command plainly writes a file inside `root` (the repository).
+
+    Positive evidence only: a redirect, or a command known to write. Redirects to `/dev/null`,
+    file-descriptor redirects such as `2>&1`, writes outside the repository (`/tmp`), and commands
+    this module does not know (`flutter test`) do not count.
+    """
+    writes = scan(command, "", root, unknown_writes=False)
+    for path in (*writes.targets, *writes.trees):
+        if not path.startswith(("/", "~")):
+            return True
+        if root is not None:
+            try:
+                Path(path).resolve().relative_to(Path(root).resolve())
+                return True
+            except ValueError:
+                continue
+    return False
