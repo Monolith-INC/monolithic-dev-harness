@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Everything the harness keeps in a repository now lives under `.harness/` (ADR-0008), instead of
+  one folder per source plugin: `integrations.json`, `review/`, `backlog/`, `tracker/`, and
+  `state/` (which now also holds the orchestrator's prompts and the amendment backups). Re-run
+  `harness bootstrap` to move an existing repository's `.codex-workflows/`, `.agile-backlog-toolkit/`,
+  `.monolithic-code-review/`, `.agentic/`, and `.local-tracker/` in; nothing is overwritten. Until
+  then, the old files are still read.
+
 ## [0.1.5] - 2026-09-23
 
 ### Fixed

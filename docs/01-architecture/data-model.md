@@ -46,9 +46,9 @@ A Story never attaches to an Epic. Points go into the process's points field
     |-- manual/<name>-<tree>.json    {name, tree, note, recorded}
     |-- checks/<tree>.json           {tree, recorded, results[{name, run, exit_code, seconds}]}
     `-- review/<commit>.json         {head, verdict: ready|blocked, summary, recorded}
-.codex-workflows/integrations.json   tracker + SCM adapters, branch template
-.agile-backlog-toolkit/config.json   org, project, team, process, artifacts path, provider mode
-.monolithic-code-review/sources.json requirement sources, PR host, knowledge store
+.harness/integrations.json   tracker + SCM adapters, branch template
+.harness/backlog/config.json   org, project, team, process, artifacts path, provider mode
+.harness/review/sources.json requirement sources, PR host, knowledge store
 ```
 
 ## Runtime State Machine

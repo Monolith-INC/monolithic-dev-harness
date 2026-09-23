@@ -16,7 +16,7 @@ claim about the changed scope.
 
 ## Project knowledge
 
-When `.monolithic-code-review/sources.json` records a `knowledge.root`, two units inform this lens.
+When `.harness/review/sources.json` records a `knowledge.root`, two units inform this lens.
 Follow the cost ladder — routing table, then search, then one unit — and never read the whole store.
 
 - `3-mechanics/stack` — compiler strictness, schema authority, runtime and framework versions. Use

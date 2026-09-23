@@ -44,13 +44,13 @@ with `harness doctor`.
 
 Optional: `--branch-template` (must contain `{key}`; default `{category}/{key}-{slug}`), `--discover`
 (queries Azure DevOps for work-item types and states, which starts OAuth), `--force` (rewrite
-`.codex-workflows/integrations.json` from scratch). An existing policy is never replaced; re-running
+`.harness/integrations.json` from scratch). An existing policy is never replaced; re-running
 bootstrap on an opted-in repository repairs its integrations file in place instead.
 
 ## 3. Finish
 
 1. Run `review-setup` once to record where requirements and pull requests live
-   (`.monolithic-code-review/sources.json`).
+   (`.harness/review/sources.json`).
 2. Health-check Azure DevOps (`azure-devops` skill).
 3. Restart the agent session so hooks and MCP servers reload.
 4. If the repository still has older copies of these workflows wired in (project-level

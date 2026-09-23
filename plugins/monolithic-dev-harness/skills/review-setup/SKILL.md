@@ -8,7 +8,7 @@ description: Use once per repository, before any other review skill, to record w
 Every other skill in this toolkit needs three answers: **where do requirements live**, **where do
 pull requests live**, and **what does this project already require of any change**. This skill
 establishes all three, confirms them with the user, and writes them to
-`.monolithic-code-review/sources.json` in the repository being reviewed.
+`.harness/review/sources.json` in the repository being reviewed.
 
 The first two are pointers to systems outside the repository. The third is the project itself, and
 it is built by `discover-project-knowledge` into a store this skill locates and records.
@@ -69,7 +69,7 @@ Do not assume. Check, in this order, and report what you find:
 1. **Tracker MCP tools in this session.** Look for tool names matching a tracker
    (`*linear*`, `*jira*`, `*azure*devops*`, `*youtrack*`, `*shortcut*`). Note the exact tool names —
    they are what gets recorded, not a vendor label.
-2. **A local vault.** Look for `AI_Codex/`, `docs/specs/`, `.codex-workflows/`, `specs/`, or a
+2. **A local vault.** Look for `AI_Codex/`, `docs/specs/`, `specs/`, or a
    comparable directory holding features, stories, or tickets. Read one file to learn the layout.
 3. **SCM work items/issues**, if the configured provider exposes them — use only as a fallback.
 
@@ -111,13 +111,13 @@ Ask the user which root to use, and present the trade-off rather than picking si
 
 | Option | Root | Trade-off |
 | --- | --- | --- |
-| **Per-developer** | `.monolithic-code-review/knowledge/` | Beside `sources.json`, gitignored with it. No diff noise, no review burden — but each developer rebuilds it, and nobody inherits the answers the others gave |
-| **Committed anchor** | `.monolithic-code-review/knowledge/`, tracked | The team shares one store and can hand-edit it. Highest value, because human-authored identity and rules survive the person who knew them — but generated content lands in pull requests and needs a refresh policy |
+| **Per-developer** | `.harness/review/knowledge/` | Beside `sources.json`, gitignored with it. No diff noise, no review burden — but each developer rebuilds it, and nobody inherits the answers the others gave |
+| **Committed anchor** | `.harness/review/knowledge/`, tracked | The team shares one store and can hand-edit it. Highest value, because human-authored identity and rules survive the person who knew them — but generated content lands in pull requests and needs a refresh policy |
 | **Inside the vault** | A directory under `vault.root`, such as `<vault.root>/Project_Knowledge/` | One knowledge home when the repository already keeps a vault. Offer this option only when step 2 found one |
 
 Record the answer as `knowledge.root` and `knowledge.committed`. If the user chooses a committed
 root, do **not** add it to `.gitignore`; if they choose per-developer, it is covered by the
-`.monolithic-code-review/` entry described in step 4.
+`.harness/review/` entry described in step 4.
 
 ### 3d. Build the store
 
@@ -133,7 +133,7 @@ A store is not required for the other skills to function. If the user declines, 
 
 ### 4. Write the configuration
 
-Write `.monolithic-code-review/sources.json` in the repository root:
+Write `.harness/review/sources.json` in the repository root:
 
 ```json
 {
@@ -185,7 +185,7 @@ Write `.monolithic-code-review/sources.json` in the repository root:
     "maintainability": "off"
   },
   "knowledge": {
-    "root": ".monolithic-code-review/knowledge",
+    "root": ".harness/review/knowledge",
     "committed": false,
     "schema_version": 1,
     "derived_from_commit": "<sha>",
@@ -228,9 +228,9 @@ Field notes:
   Omit it when there is none; the store's layout is deterministic, so skills fall back to reading
   `catalog.tsv` and grepping the tree.
 
-Add `.monolithic-code-review/` to the repository's `.gitignore` unless the user wants the
+Add `.harness/review/` to the repository's `.gitignore` unless the user wants the
 configuration shared with the team. Ask. When `knowledge.committed` is true and the store lives
-under `.monolithic-code-review/`, negate the store path so the configuration stays private while
+under `.harness/review/`, negate the store path so the configuration stays private while
 the knowledge stays shared.
 
 ### 5. Verify before declaring success
@@ -272,7 +272,7 @@ For file-backed sources, requirements and DoD are conventionally the `## Require
 
 ## Success criteria
 
-- `.monolithic-code-review/sources.json` exists and parses.
+- `.harness/review/sources.json` exists and parses.
 - Every capability either resolves or is listed in `unsupported`.
 - Every SCM capability either resolves or is listed in `scm.unsupported`.
 - `quality_lenses` reflects the TypeScript detection outcome.

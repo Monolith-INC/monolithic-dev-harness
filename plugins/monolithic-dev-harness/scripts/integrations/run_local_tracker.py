@@ -104,7 +104,7 @@ def handle_call(name: str, args: dict[str, Any], store: LocalTrackerStore) -> An
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Local tracker MCP provider")
     parser.add_argument("--project-root", type=Path, required=True)
-    parser.add_argument("--root", default=".local-tracker")
+    parser.add_argument("--root", default=".harness/tracker")
     args = parser.parse_args(argv)
     store = LocalTrackerStore(
         {"projectRoot": str(args.project_root.resolve()), "root": args.root}

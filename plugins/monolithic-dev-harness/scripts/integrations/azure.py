@@ -192,7 +192,7 @@ class AzureDevOpsTrackerAdapter(TrackerAdapter):
         if not project:
             raise IntegrationError(
                 "invalid_config",
-                "tracker.project is not set in .codex-workflows/integrations.json. "
+                "tracker.project is not set in .harness/integrations.json. "
                 "Set it to the Azure DevOps project name (or re-run bootstrap).",
             )
         payload = {k: v for k, v in arguments.items() if v is not None}
@@ -345,7 +345,7 @@ class AzureReposScmAdapter(ScmAdapter):
         if not project or not repository:
             raise IntegrationError(
                 "invalid_config",
-                "scm.project and scm.repository must be set in .codex-workflows/integrations.json.",
+                "scm.project and scm.repository must be set in .harness/integrations.json.",
             )
         payload = {k: v for k, v in arguments.items() if v is not None}
         return self.client.call(

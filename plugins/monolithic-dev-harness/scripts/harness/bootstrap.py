@@ -4,14 +4,16 @@
     bootstrap.py --repo <dir> --policy-from <policy.json> [--branch-template '{category}/{key}-{slug}']
                  [--discover] [--force]
 
-Writes, once (existing files are kept unless --force):
-  .harness/policy.json                     the harness rules (copied from --policy-from)
-  .gitignore                               ignores .harness/state/
-  .codex-workflows/integrations.json       delivery: Azure Boards tracker + Azure Repos SCM
-  .agile-backlog-toolkit/config.json       backlog: org / project / team
+Everything goes under `.harness/` (see `layout.py`). Writes, once:
+  .harness/policy.json            the harness rules (copied from --policy-from; never replaced)
+  .gitignore                      ignores .harness/state/
+  .harness/integrations.json      delivery: Azure Boards tracker + Azure Repos SCM
+                                  (repaired in place when it exists; --force rewrites it)
+  .harness/backlog/config.json    backlog: org / project / team
 
-Review configuration (.monolithic-code-review/sources.json) is interactive: run the `review-setup`
-skill afterwards. Hooks and MCP servers come from the plugin itself; nothing is wired into the
+A repository set up by an earlier version has its old folders moved into `.harness/` first.
+Review configuration (.harness/review/sources.json) is interactive: run the `review-setup` skill
+afterwards. Hooks and MCP servers come from the plugin itself; nothing is wired into the
 repository's host settings.
 """
 
@@ -57,7 +59,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--force",
         action="store_true",
-        help="rewrite .codex-workflows/integrations.json from scratch (the policy is never replaced)",
+        help="rewrite .harness/integrations.json from scratch (the policy is never replaced)",
     )
     args = parser.parse_args(argv)
 
@@ -98,17 +100,21 @@ def main(argv: list[str] | None = None) -> int:
         )
     if _ensure_gitignore(repo):
         print("added .harness/state/ to .gitignore")
+    from harness.layout import BACKLOG, INTEGRATIONS, migrate
+
+    for note in migrate(repo):
+        print(note)
 
     azure = policy["azure"]
-    integrations = repo / ".codex-workflows" / "integrations.json"
+    integrations = repo / INTEGRATIONS
     if integrations.exists() and not args.force:
         from harness.integrations_setup import repair_integrations
 
         repairs = repair_integrations(integrations, azure)
         for repair in repairs:
-            print(f"repaired .codex-workflows/integrations.json: {repair}")
+            print(f"repaired {INTEGRATIONS}: {repair}")
         if not repairs:
-            print("kept existing .codex-workflows/integrations.json")
+            print(f"kept existing {INTEGRATIONS}")
     else:
         from harness.integrations_setup import configure_integrations
 
@@ -122,7 +128,7 @@ def main(argv: list[str] | None = None) -> int:
             project=str(azure.get("project") or ""),
             repository=str(azure.get("repository") or ""),
         )
-        print("wrote .codex-workflows/integrations.json (azure_devops + azure_repos)")
+        print(f"wrote {INTEGRATIONS} (azure_devops + azure_repos)")
 
     backlog = policy.get("backlog", {})
     pairs = {
@@ -145,11 +151,11 @@ def main(argv: list[str] | None = None) -> int:
     subprocess.run(
         [str(cli), "config", *set_args], cwd=repo, check=True, stdout=subprocess.DEVNULL
     )
-    backlog_config = repo / ".agile-backlog-toolkit" / "config.json"
+    backlog_config = repo / BACKLOG / "config.json"
     data = json.loads(backlog_config.read_text(encoding="utf-8"))
     data["provider_mode"] = "azure"
     backlog_config.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    print("configured .agile-backlog-toolkit/config.json (provider_mode azure)")
+    print(f"configured {BACKLOG}/config.json (provider_mode azure)")
 
     print(
         json.dumps(

@@ -62,7 +62,7 @@ class TestNoAssumedArtifactsLocation(ConfigTestCase):
             r'^([A-Z_]+)\s*=\s*[("\']', source.read_text(encoding="utf-8"), re.M
         )
         self.assertIn("PLUGIN_DIRNAME", names)
-        self.assertEqual(PLUGIN_DIRNAME, ".agile-backlog-toolkit")
+        self.assertEqual(PLUGIN_DIRNAME, ".harness/backlog")
         # No constant may hold a candidate location for user artifacts.
         self.assertNotIn("DEFAULT_ARTIFACTS_PATH", names)
 
@@ -190,20 +190,31 @@ class TestFallbackSources(ConfigTestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             _write(
-                root / ".agile-backlog-toolkit.install.json",
-                {"azure_devops_org": "legacy-org"},
+                plugin_dir(root) / "install.json", {"azure_devops_org": "legacy-org"}
             )
             self.assertEqual(load_project_config(root).azure.org, "legacy-org")
+
+    def test_an_unmigrated_project_is_still_read_from_its_old_folder(self):
+        """Until bootstrap moves it, the pre-0.1.6 layout keeps working."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = Path(tmpdir)
+            _write(
+                root / ".agile-backlog-toolkit" / "config.json",
+                {"azure": {"project": "p"}},
+            )
+            _write(
+                root / ".agile-backlog-toolkit.install.json", {"azure_devops_org": "o"}
+            )
+            config = load_project_config(root)
+            self.assertEqual((config.azure.org, config.azure.project), ("o", "p"))
+            self.assertEqual(plugin_dir(root), root / ".agile-backlog-toolkit")
 
     def test_canonical_file_wins_over_fallbacks(self):
         """A current value is not overridden by an older source."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             _write(config_path(root), {"azure": {"org": "current"}})
-            _write(
-                root / ".agile-backlog-toolkit.install.json",
-                {"azure_devops_org": "stale"},
-            )
+            _write(plugin_dir(root) / "install.json", {"azure_devops_org": "stale"})
             self.assertEqual(load_project_config(root).azure.org, "current")
 
     def test_sources_compose_across_files(self):
@@ -211,9 +222,7 @@ class TestFallbackSources(ConfigTestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             _write(config_path(root), {"azure": {"project": "p"}})
-            _write(
-                root / ".agile-backlog-toolkit.install.json", {"azure_devops_org": "o"}
-            )
+            _write(plugin_dir(root) / "install.json", {"azure_devops_org": "o"})
             config = load_project_config(root)
             self.assertEqual((config.azure.org, config.azure.project), ("o", "p"))
 
@@ -368,6 +377,7 @@ class TestPersistence(ConfigTestCase):
         """An unwritable location degrades, following the never-raise idiom."""
         with tempfile.TemporaryDirectory() as tmpdir:
             blocker = Path(tmpdir) / PLUGIN_DIRNAME
+            blocker.parent.mkdir(parents=True)
             blocker.write_text("not a directory", encoding="utf-8")
             self.assertIsNone(save_project_config(Path(tmpdir), ProjectConfig()))
 

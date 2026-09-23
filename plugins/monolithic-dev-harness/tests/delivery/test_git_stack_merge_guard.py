@@ -18,7 +18,7 @@ class GitStackMergeGuardTests(unittest.TestCase):
 
     def test_denies_rebase_when_stage_active(self):
         with tempfile.TemporaryDirectory() as tmp:
-            stage = Path(tmp) / ".codex-workflows" / "active-stage"
+            stage = Path(tmp) / ".harness" / "state" / "active-stage"
             stage.parent.mkdir(parents=True)
             stage.write_text(STAGE_NAME, encoding="utf-8")
             decision = evaluate_git_stack_merge_guard(
@@ -29,7 +29,7 @@ class GitStackMergeGuardTests(unittest.TestCase):
 
     def test_denies_force_push_when_stage_active(self):
         with tempfile.TemporaryDirectory() as tmp:
-            stage = Path(tmp) / ".codex-workflows" / "active-stage"
+            stage = Path(tmp) / ".harness" / "state" / "active-stage"
             stage.parent.mkdir(parents=True)
             stage.write_text(STAGE_NAME, encoding="utf-8")
             decision = evaluate_git_stack_merge_guard(
@@ -39,7 +39,7 @@ class GitStackMergeGuardTests(unittest.TestCase):
 
     def test_allows_merge_no_ff_when_stage_active(self):
         with tempfile.TemporaryDirectory() as tmp:
-            stage = Path(tmp) / ".codex-workflows" / "active-stage"
+            stage = Path(tmp) / ".harness" / "state" / "active-stage"
             stage.parent.mkdir(parents=True)
             stage.write_text(STAGE_NAME, encoding="utf-8")
             decision = evaluate_git_stack_merge_guard(

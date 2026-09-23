@@ -40,7 +40,7 @@ wherever it appears, so nobody mistakes a shipped default for a fact about their
 
 ## Configuration
 
-Create `.agile-backlog-toolkit/estimation.json` to replace the shipped defaults:
+Create `.harness/backlog/estimation.json` to replace the shipped defaults:
 
 ```json
 {

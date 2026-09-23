@@ -1,4 +1,4 @@
-"""Write `.codex-workflows/integrations.json`: the tracker/SCM binding the workflow runtime reads.
+"""Write `.harness/integrations.json`: the tracker/SCM binding the workflow runtime reads.
 
 Extracted from codex-workflows' installer (`scripts/installer/bootstrap.py`, 75c22f0). The harness only
 needs the configuration writer; hooks and MCP servers come from the plugin itself.
@@ -12,10 +12,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+from .layout import INTEGRATIONS, TRACKER
+
 
 def default_install_dir(project_dest: Path) -> Path:
-    """Project-local runtime root (never ~/.codex-workflows)."""
-    return project_dest / ".codex-workflows"
+    """Where the local tracker's server script lives: this plugin, never the project."""
+    return Path(__file__).resolve().parents[2]
 
 
 def configure_integrations(
@@ -131,7 +133,7 @@ def configure_integrations(
         tracker_cfg["mappings"] = confirm_mappings
         payload["tracker"] = tracker_cfg
 
-    path = project_dest / ".codex-workflows" / "integrations.json"
+    path = project_dest / INTEGRATIONS
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(
         json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
@@ -244,10 +246,10 @@ def _default_tracker_config(
     if provider == "local_tracker":
         return {
             "adapter": "local_tracker",
-            "root": ".local-tracker",
+            "root": TRACKER,
             "storagePolicy": "committed",
             "connection": _local_tracker_connection(
-                project_dest or Path.cwd(), runtime_dir, ".local-tracker"
+                project_dest or Path.cwd(), runtime_dir, TRACKER
             ),
             "mappings": presets,
             "bindings": _local_tracker_bindings(),
@@ -262,7 +264,7 @@ def _with_local_tracker_transport(
     if not isinstance(tracker, dict) or tracker.get("adapter") != "local_tracker":
         return payload
     tracker = dict(tracker)
-    root = str(tracker.get("root") or ".local-tracker")
+    root = str(tracker.get("root") or TRACKER)
     tracker.setdefault(
         "connection", _local_tracker_connection(project_dest, runtime_dir, root)
     )
@@ -298,7 +300,7 @@ def _local_tracker_bindings() -> dict[str, str]:
 
 
 def _initialize_local_tracker(project_dest: Path, tracker: dict) -> None:
-    root = project_dest / str(tracker.get("root") or ".local-tracker")
+    root = project_dest / str(tracker.get("root") or TRACKER)
     root.mkdir(parents=True, exist_ok=True)
     for state in ("backlog", "ready", "in_progress", "done", "canceled", "artifacts"):
         (root / state).mkdir(exist_ok=True)
@@ -309,17 +311,19 @@ def _initialize_local_tracker(project_dest: Path, tracker: dict) -> None:
 
 def _set_local_tracker_ignore(project_dest: Path, ignored: bool) -> None:
     path = project_dest / ".gitignore"
-    start = "# codex-workflows-plugin local tracker (managed)"
-    entry = ".local-tracker/"
+    start = "# harness local tracker (managed)"
+    entry = f"{TRACKER}/"
+    # The block an older layout wrote, removed so the ignore does not point at a moved folder.
+    legacy = ("# codex-workflows-plugin local tracker (managed)", ".local-tracker/")
     existing = path.read_text(encoding="utf-8") if path.is_file() else ""
     lines = existing.splitlines()
     filtered: list[str] = []
     skip_next = False
     for line in lines:
-        if line == start:
+        if line in (start, legacy[0]):
             skip_next = True
             continue
-        if skip_next and line == entry:
+        if skip_next and line in (entry, legacy[1]):
             skip_next = False
             continue
         skip_next = False

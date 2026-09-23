@@ -225,12 +225,12 @@ class LocalTrackerAdapter(TrackerAdapter):
 
 
 class LocalTrackerStore:
-    """Store work items and workflow artifacts below ``.local-tracker``."""
+    """Store work items and workflow artifacts below ``.harness/tracker``."""
 
     def __init__(self, config: dict[str, Any]):
         self.config = config
         project_root = Path(str(config.get("projectRoot") or Path.cwd())).resolve()
-        candidate = Path(str(config.get("root") or ".local-tracker"))
+        candidate = Path(str(config.get("root") or ".harness/tracker"))
         root = (
             (project_root / candidate).resolve()
             if not candidate.is_absolute()

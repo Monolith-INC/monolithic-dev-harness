@@ -22,7 +22,7 @@ skill is unavailable until `/resume-tracker`.
 - The stack is reconciled: if the Feature advanced after a Story branched, `reconcile-feature-stack`
   has run.
 
-Write `merge-story-stack-into-feature` to `.codex-workflows/active-stage` at the start and delete
+Write `merge-story-stack-into-feature` to `.harness/state/active-stage` at the start and delete
 it when you stop.
 
 ## Procedure

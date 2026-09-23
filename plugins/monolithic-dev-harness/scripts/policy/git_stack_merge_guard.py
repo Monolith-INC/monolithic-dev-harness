@@ -10,7 +10,7 @@ from pathlib import Path
 from .events import PolicyDecision
 
 STAGE_NAME = "merge-story-stack-into-feature"
-_ACTIVE_STAGE_REL = Path(".codex-workflows") / "active-stage"
+_ACTIVE_STAGE_REL = Path(".harness") / "state" / "active-stage"
 _ENV_KEY = "CODEX_WORKFLOW_STAGE"
 
 _FORCE_PUSH = re.compile(

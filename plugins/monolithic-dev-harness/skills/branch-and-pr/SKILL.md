@@ -11,7 +11,7 @@ Adapted from cursor-team-kit's `new-branch-and-pr` (MIT), rewritten for Azure Re
 ## Branch
 
 1. The working tree is clean, or its changes are explicitly handled.
-2. Branch name: the repository's convention from `.codex-workflows/integrations.json` →
+2. Branch name: the repository's convention from `.harness/integrations.json` →
    `branchTemplate` (for example `{category}/{key}-{slug}` → `feature/9123-avatar-do-estudante`). The
    key is the Story id. The workflow policy hook rejects a branch without exactly one work-item key.
 3. Base: `git.base_branch` from `.harness/policy.json` (for a stacked Feature, the Feature branch

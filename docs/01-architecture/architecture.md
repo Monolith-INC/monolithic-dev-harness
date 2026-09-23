@@ -106,9 +106,9 @@ spawned -> inputs validated -> running --success--> completed
 | Manual checks | `.harness/state/manual/` | prompt hook | valid for one index tree |
 | Check evidence | `.harness/state/checks/` | `checks.py` | valid for one tree |
 | Review verdicts | `.harness/state/review/` | `review_verdict.py` | valid for one commit |
-| Tracker binding | `.codex-workflows/integrations.json` | bootstrap | until reconfigured |
-| Backlog config | `.agile-backlog-toolkit/config.json` | bootstrap | until reconfigured |
-| Review config | `.monolithic-code-review/sources.json` | `review-setup` | until reconfigured |
+| Tracker binding | `.harness/integrations.json` | bootstrap | until reconfigured |
+| Backlog config | `.harness/backlog/config.json` | bootstrap | until reconfigured |
+| Review config | `.harness/review/sources.json` | `review-setup` | until reconfigured |
 
 Details: [data-model.md](data-model.md).
 

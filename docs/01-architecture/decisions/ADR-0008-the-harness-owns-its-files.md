@@ -9,7 +9,7 @@ last_reviewed: 2026-09-23
 
 ## Status
 
-Accepted. Decisions 1, 2, and 4 are implemented; decision 3 is pending (see Follow-up).
+Accepted and implemented.
 
 ## Context
 
@@ -38,7 +38,18 @@ The harness is one new product, not a set of references to other plugins.
    manifests, and `skills/codex_workflows/` is removed once nothing else in it is worth keeping.
 3. **One folder per repository.** Everything the harness writes into a governed repository lives
    under `.harness/`. Bootstrap moves the older folders (`.codex-workflows/`,
-   `.agile-backlog-toolkit/`, `.monolithic-code-review/`, `.agentic/`) into it.
+   `.agile-backlog-toolkit/`, `.monolithic-code-review/`, `.agentic/`, `.local-tracker/`) into it:
+
+   ```text
+   .harness/
+     policy.json          the rules (human-owned)
+     integrations.json    tracker and repository connection
+     review/              where review requirements live, and the review knowledge store
+     backlog/             backlog settings, estimation, reports
+     tracker/             local tracker records, when that tracker is used
+     state/               approvals, manual checks, evidence, prompts, backups (not committed)
+   ```
+
 4. **Reconcile merges, never rebases.** The reconcile rule list already says merge only; the
    procedure text and the skill that say "merge or rebase" change to match.
 
@@ -68,7 +79,9 @@ The harness is one new product, not a set of references to other plugins.
 - ~~Fold the four procedures and rule lists into their skills; remove `.agent/…` references and
   `skills/codex_workflows/`.~~ Done. The folder's other files were not kept: its coding rules were
   Dart-specific or duplicated by the harness's own skills, and nothing used its templates.
-- Consolidate repository state under `.harness/`, with a bootstrap migration.
+- ~~Consolidate repository state under `.harness/`, with a bootstrap migration.~~ Done:
+  `scripts/harness/layout.py` holds the layout and the migration; the integrations and backlog
+  runtimes read an unmigrated repository's old files until bootstrap moves them.
 - Related, from the same review: block rebase, squash merges, and force-push on Story and Feature
   branches in governed repositories without relying on the agent to switch the guard on.
 
