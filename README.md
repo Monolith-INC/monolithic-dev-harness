@@ -164,6 +164,55 @@ Nothing reaches Azure DevOps until you reply `approve HB-…` for the batch it s
 
 See [`docs/02-design/workflows.md`](./docs/02-design/workflows.md).
 
+### The implementation workflow
+
+Stage 3 starts once a Story has an approved technical spec. Its job is to turn each of the
+Story's Tasks into one tested, checked commit.
+
+**What it starts from.** The Story and its acceptance criteria (backlog stage), the ordered list of
+Tasks (breakdown), and the spec approved at gate G2. It doesn't re-decide any of these. If there is
+no approved spec, it stops and asks for one.
+
+**Start of the Story**
+
+1. Move the Story to Active in Azure DevOps. That's a board write, so a person approves it
+   (`approve HB-XXXX`).
+2. Create the branch, for example `userstory/1234-short-title`.
+3. Read the repository's `AGENTS.md` once and note the rules that apply: tests for new code,
+   generated files, guarded paths.
+
+**Then each Task, in order, fully finished before the next one starts:**
+
+1. **Design first**, only if the Task changes an interface: sketch the types and signatures.
+2. **Write a failing test** for the Task's acceptance criterion.
+3. **Write the smallest code** that makes it pass.
+4. **Run the repository's checks:** lint and tests, plus the check a guarded path needs if one
+   changed. Fix until green.
+5. **Clean up** leftover AI clutter in the diff.
+6. **Commit**, one commit per Task, naming the Task id.
+7. **Mark the Task done** in Azure DevOps. That's a board write, so a person approves it; several
+   finished Tasks can share one approval.
+
+**While it works, the hooks block it from:**
+
+- committing code without tests (`tests-with-code`)
+- editing generated files (`generated-files`)
+- committing a guarded path before its check passes, or before a person has checked it by hand
+  (`guarded-paths`)
+- writing to the board or pushing without approval (`approval-required`)
+
+**End of the Story**
+
+1. Run the checks once more on the final code, and record the result.
+2. Run the real thing (app, emulator, endpoint) and write down what actually happened.
+3. Hand over to stage 4 (review). The pull request is opened there, not here.
+
+**What you get back:** per Task, the commit, the test that failed and then passed, and the checks
+run. Per Story, the evidence and the observed behavior.
+
+For a Feature with several Stories, `feature-implementation` runs this once per Story on stacked
+branches, then merges them into the Feature branch.
+
 ## Repository layout
 
 | Path                                                                                                   | Purpose                                                      |
