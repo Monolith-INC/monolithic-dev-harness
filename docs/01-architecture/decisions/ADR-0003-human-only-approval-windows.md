@@ -2,7 +2,7 @@
 title: ADR-0003 Human-only approval windows
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-23
 ---
 
 # ADR-0003: Approval windows are opened only by the user's own prompt
@@ -23,6 +23,15 @@ The prompt hook (`UserPromptSubmit` / `beforeSubmitPrompt`) recognizes `approve 
 `.harness/state/approvals/`. The `approval-required` rule allows tracker/SCM writes and `git push`
 only while a window is open, and logs each write to it. The `human-owned` rule blocks the agent
 from writing approval records. `harness revoke` closes windows early.
+
+**Amended in 0.1.8: approval by click (Claude).** Typing a code was the least friendly step of the
+process. In Claude the agent now asks one question with an `Approve` option, and the `PostToolUse`
+hook on `AskUserQuestion` opens the window when the user picks it. The click is as human as a typed
+prompt: the tool's answer comes from Claude's question picker, never from the agent. Two guards keep
+it that way. The `PreToolUse` hook refuses a question that arrives with answers already filled in,
+and it marks each question it lets through under `.harness/state/asked/` (human-owned). The
+`PostToolUse` hook honours only an answer to a marked question, once, so a question that skipped the
+check opens nothing. Typed `approve HB-…` stays, and is the only way in Cursor.
 
 ## Options Considered
 
@@ -50,7 +59,8 @@ Claude prints the recorded window back into the conversation; Cursor's prompt ho
 
 ## Validation
 
-`TestApprovalRequired` and `TestHumanOwned` in `tests/harness/test_hook_rules.py`.
+`TestApprovalRequired` and `TestHumanOwned` in `tests/harness/test_hook_rules.py`;
+`ApprovalByClickTests` in `tests/harness/test_questions.py`.
 
 ## References
 

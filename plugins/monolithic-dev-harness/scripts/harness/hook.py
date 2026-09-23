@@ -3,6 +3,8 @@
 
     hook.py --host claude --event pre-tool   (Claude PreToolUse)
     hook.py --host claude --event prompt     (Claude UserPromptSubmit)
+    hook.py --host claude --event ask        (Claude PreToolUse on AskUserQuestion)
+    hook.py --host claude --event answer     (Claude PostToolUse on AskUserQuestion)
     hook.py --host cursor --event pre-tool   (Cursor preToolUse)
     hook.py --host cursor --event shell      (Cursor beforeShellExecution)
     hook.py --host cursor --event mcp        (Cursor beforeMCPExecution)
@@ -11,7 +13,9 @@
 Pre-tool events run the harness rules first. If they allow the call, Claude and Cursor
 `preToolUse` payloads continue to the workflow policy runtime (branch template, work-item
 key, state, spec prerequisites, completion evidence, protected branches).
-Prompt events are the only place approvals and manual-check evidence are recorded.
+Prompt events record approvals and manual-check evidence from what the user typed; answer events
+record an approval from the user clicking `Approve` on a question. Ask events send a question back
+to be rewritten when it is not plain enough to show a person.
 """
 
 from __future__ import annotations
@@ -30,7 +34,7 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
     if str(entry) not in sys.path:
         sys.path.insert(0, str(entry))
 
-from harness import gitstate, rules, state  # noqa: E402
+from harness import gitstate, questions, rules, state  # noqa: E402
 from harness.config import POLICY_RELATIVE_PATH, PolicyError, load_policy  # noqa: E402
 
 # The hosts give the hook 15 seconds and treat a timeout as "no decision", which lets the call
@@ -228,11 +232,69 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     return 0
 
 
+def _governed(payload: dict[str, Any]) -> Path | None:
+    repo = _workspace(payload)
+    return repo if (repo / POLICY_RELATIVE_PATH).is_file() else None
+
+
+def handle_ask(payload: dict[str, Any]) -> int:
+    """Before a question is shown: send it back if a person would have to decode it."""
+    repo = _governed(payload)
+    if repo is None:
+        return 0
+    tool_input = payload.get("tool_input")
+    tool_input = tool_input if isinstance(tool_input, dict) else {}
+    found = questions.problems(tool_input)
+    if found:
+        _emit_decision(
+            "claude", rules.Decision.deny("plain-questions", questions.rewrite_reason(found))
+        )
+        return 0
+    tool_use_id = str(payload.get("tool_use_id") or "")
+    if tool_use_id:
+        state.mark_asked(repo, questions.marker_name(tool_use_id))
+    return 0
+
+
+def handle_answer(payload: dict[str, Any]) -> int:
+    """After the user answers: an `Approve` click opens an approval window."""
+    repo = _governed(payload)
+    tool_use_id = str(payload.get("tool_use_id") or "")
+    if repo is None or not tool_use_id:
+        return 0
+    if not state.take_asked(repo, questions.marker_name(tool_use_id)):
+        return 0  # the question never passed the check, so its answer opens nothing
+    tool_input = payload.get("tool_input")
+    approved = questions.approval(
+        tool_input if isinstance(tool_input, dict) else {}, payload.get("tool_response")
+    )
+    if approved is None:
+        return 0
+    try:
+        window = int(load_policy(repo).get("approvals", {}).get("window_minutes", 20))
+    except (PolicyError, ValueError):
+        window = 20
+    approval_id = questions.approval_id(tool_use_id)
+    state.open_approval(repo, approval_id, window, question=approved[0])
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PostToolUse",
+                    "additionalContext": f"[harness] the user approved; approval {approval_id} is open "
+                    f"for {window} minutes. Make only the writes the question described.",
+                }
+            }
+        )
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", choices=("claude", "cursor"), required=True)
     parser.add_argument(
-        "--event", choices=("pre-tool", "prompt", "shell", "mcp"), required=True
+        "--event", choices=("pre-tool", "prompt", "shell", "mcp", "ask", "answer"), required=True
     )
     args = parser.parse_args(argv)
     try:
@@ -243,6 +305,13 @@ def main(argv: list[str] | None = None) -> int:
         payload = {}
     if args.event == "prompt":
         return handle_prompt(args.host, payload)
+    if args.event in ("ask", "answer"):
+        try:
+            return handle_ask(payload) if args.event == "ask" else handle_answer(payload)
+        except Exception:
+            # A question is not a write: a broken check shows it as asked. Its answer then opens
+            # nothing, because only a question the check let through is honoured.
+            return 0
     try:
         return handle_pre_tool(args.host, args.event, payload)
     except Exception as exc:

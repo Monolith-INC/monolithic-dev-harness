@@ -48,7 +48,7 @@ See [threat-model.md](threat-model.md).
 
 | Control | Rule / mechanism |
 | --- | --- |
-| No tracker/SCM write or push without a person's approval | `approval-required`; windows exist only from the prompt hook |
+| No tracker/SCM write or push without a person's approval | `approval-required`; windows exist only from the user's prompt or their click on `Approve` (ADR-0003) |
 | The agent cannot approve itself or weaken the policy | `human-owned` |
 | Protected items are never modified, even indirectly by links | `protected-items` |
 | Nothing unreviewed reaches a pull request; people publish and approve | `draft-reviewed-prs` |

@@ -1,7 +1,7 @@
 """The harness rules, evaluated on every governed tool call. Each deny names its rule.
 
 human-owned         Approvals, manual-check records, and the policy file are human-owned; the agent cannot write them.
-approval-required   Azure / tracker / SCM writes need an approval window opened by the user's own prompt.
+approval-required   Azure / tracker / SCM writes need an approval window opened by the user (a prompt or a click).
 protected-items     Protected work items are never written, linked, or parented — approval does not override.
 tests-with-code     A commit that changes source files must come with test changes (in the commit or the branch).
 generated-files     Generated files are never edited by hand.
@@ -297,9 +297,13 @@ def _shell_start(call: ToolCall, repo: Path) -> str:
 
 
 # Human-owned paths, as components under the repository root. A write into `.harness/` or
-# `.harness/state/` could create one; anything under the last two is a record.
+# `.harness/state/` could create one; anything under the last three is a record.
 _OWNED_FILES = ((".harness",), (".harness", "state"), (".harness", "policy.json"))
-_OWNED_DIRS = ((".harness", "state", "approvals"), (".harness", "state", "manual"))
+_OWNED_DIRS = (
+    (".harness", "state", "approvals"),
+    (".harness", "state", "manual"),
+    (".harness", "state", "asked"),
+)
 
 
 def _components_match(names: tuple[str, ...], patterns: list[str]) -> bool:
@@ -535,9 +539,11 @@ def rule_approval_required(
         return (
             Decision.deny(
                 "approval-required",
-                f"`{call.name}` writes to the tracker/SCM and no approval window is open. Show the user the "
-                "exact batch (items, fields, links) with a batch id such as HB-7Q2K, and ask them to reply "
-                "`approve HB-7Q2K`. Their reply opens the window; you cannot open it yourself.",
+                f"`{call.name}` writes to the tracker/SCM and no approval window is open. Tell the user in plain "
+                "words what will be written, then ask one question with an `Approve` option and a `Not now` "
+                "option; their click opens the window. Where questions cannot be asked (Cursor), give the "
+                "batch an id such as HB-7Q2K and ask them to reply `approve HB-7Q2K`. You cannot open the "
+                "window yourself.",
             ),
             None,
         )
