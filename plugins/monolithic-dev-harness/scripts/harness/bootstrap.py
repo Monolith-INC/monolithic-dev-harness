@@ -111,6 +111,13 @@ def main(argv: list[str] | None = None) -> int:
         )
     if _ensure_local_exclude(repo):
         print("ignored .harness/state/ in .git/info/exclude (this clone only)")
+    from harness.knowledge import initialize as initialize_knowledge
+
+    knowledge_result = initialize_knowledge(repo)
+    print(
+        f"knowledge {knowledge_result['outcome']}: "
+        f"{knowledge_result.get('revision', '')}"
+    )
     from harness.layout import BACKLOG, INTEGRATIONS, migrate
 
     for note in migrate(repo):
