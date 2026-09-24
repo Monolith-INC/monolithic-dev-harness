@@ -98,6 +98,29 @@ def active_approval(repo: Path) -> tuple[Path, dict[str, Any]] | None:
     return best
 
 
+def pin_notes(repo: Path, approval_id: str, notes: dict[str, str]) -> None:
+    """Record the approved plan and spec notes (path -> content digest) this approval covers."""
+    path = state_dir(repo) / "approvals" / f"{safe_name(approval_id)}.json"
+    record = _read(path)
+    if record is None or not notes:
+        return
+    pinned = record.get("notes")
+    record["notes"] = {**(pinned if isinstance(pinned, dict) else {}), **notes}
+    _write(path, record)
+
+
+def pinned_notes(repo: Path) -> dict[str, set[str]]:
+    """Path -> digests pinned by approvals the user has not revoked. Expiry does not unpin."""
+    directory = state_dir(repo) / "approvals"
+    pinned: dict[str, set[str]] = {}
+    for path in directory.glob("*.json") if directory.is_dir() else []:
+        record = _read(path)
+        notes = record.get("notes") if record and not record.get("revoked") else None
+        for note, digest in notes.items() if isinstance(notes, dict) else ():
+            pinned.setdefault(str(note), set()).add(str(digest))
+    return pinned
+
+
 def log_write(path: Path, record: dict[str, Any], tool: str) -> None:
     record.setdefault("writes", []).append({"tool": tool, "at": _now().isoformat()})
     _write(path, record)

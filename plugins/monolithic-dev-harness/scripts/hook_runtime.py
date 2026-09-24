@@ -13,8 +13,10 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
+from spec_runtime import SPEC_KINDS
+
 from harness.config import PolicyError, load_policy
-from harness.local_artifacts import artifacts_root, has_local_spec_artifact
+from harness.local_artifacts import approved_kinds_for, artifacts_dir
 from host_adapters import (
     format_claude_decision,
     format_cursor_decision,
@@ -55,20 +57,6 @@ _MUTATING_GIT = frozenset(
         "reset",
         "stash",
         "tag",
-    }
-)
-
-SPEC_ARTIFACT_KINDS = frozenset(
-    {
-        "spec",
-        "tech_spec",
-        "tech-spec",
-        "design_doc",
-        "design-doc",
-        "implementation_plan",
-        "implementation-plan",
-        "bugfix_spec",
-        "bugfix-spec",
     }
 )
 
@@ -225,11 +213,18 @@ def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
             for artifact in tracker.list_artifacts(item.id)
         }
         project_root = Path(event.workspace_root or ".").resolve()
-        if not (SPEC_ARTIFACT_KINDS & kinds) and not has_local_spec_artifact(
-            project_root, str(item.key), SPEC_ARTIFACT_KINDS, _artifact_kind
-        ):
-            local = artifacts_root(project_root)
-            where = "the tracker" if local is None else f"the tracker or under {local}"
+        if not SPEC_ARTIFACT_KINDS & kinds:
+            kinds |= set(
+                map(_artifact_kind, approved_kinds_for(project_root, str(item.key)))
+            )
+        if not SPEC_ARTIFACT_KINDS & kinds:
+            local = artifacts_dir(project_root)
+            where = (
+                "the tracker"
+                if local is None
+                else f"the tracker or under {local} (a note there counts once it is marked "
+                "`status: approved` and the user then approves it)"
+            )
             return PolicyDecision.deny(
                 f"Work item {item.key} has no accepted specification artifact in {where}."
             )
@@ -324,8 +319,12 @@ def _artifact_kind(kind: str) -> str:
         "pullrequest": "pull_request",
         "resolution": "resolution_report",
         "verification_report": "verification",
-        "technical_specification": "tech-spec",
+        "technical_specification": "tech_spec",
     }.get(normalized, normalized)
+
+
+# The kinds write-spec produces, plus the generic `spec`, in the form `_artifact_kind` gives them.
+SPEC_ARTIFACT_KINDS = frozenset(map(_artifact_kind, (*SPEC_KINDS, "spec")))
 
 
 def _arguments(payload: dict[str, Any]) -> dict[str, Any]:

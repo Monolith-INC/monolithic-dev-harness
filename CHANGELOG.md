@@ -8,13 +8,22 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
-- The spec-before-code gate also finds plans and specs kept in the repository's artifacts path
-  (`backlog.artifacts_path`). The tracker is still checked first. When it has no spec-like artifact, a Markdown file
-  there counts if both of these hold:
-  - its frontmatter `type` is a spec kind the gate already accepts;
-  - its `story`, `ticket` or `work_item` names the work item.
+- The spec-before-code gate also finds plans and specs kept in the repository's artifacts path. The tracker is
+  still checked first. When it has no spec-like artifact, a Markdown file in the artifacts path counts if all of
+  these hold:
+  - its frontmatter `type` is `spec` or one of the kinds write-spec produces;
+  - its `story` or `work_item` names the work item (`ticket` does not count: the work-item templates use it for
+    the parent);
+  - it says `status: approved`, and the user approved afterwards. Each approval pins the exact content of the notes
+    marked approved at that moment. A draft, a note edited after the approval, or a note under a revoked approval
+    does not count.
 
-  Teams that keep plans outside the tracker no longer have to pause enforcement to edit source files.
+  The artifacts path is read the same way the backlog skills read it: the `AGILE_WORKFLOW_ARTIFACTS_PATH`
+  environment variable first, then `.harness/backlog/config.json`, with `~` expanded. The gate reads only the
+  notes an approval pinned, so a large artifacts folder does not slow it down. Teams that keep plans outside
+  the tracker no longer have to pause enforcement to edit source files.
+- The spec gate accepts every kind write-spec produces, including `rfc`, `adr`, `srs` and `api-contract`. Before,
+  it kept its own shorter list.
 
 ## [0.1.9] - 2026-09-23
 
