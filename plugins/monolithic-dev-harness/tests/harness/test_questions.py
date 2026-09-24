@@ -114,6 +114,24 @@ class ApprovalByClickTests(unittest.TestCase):
         self.assertIsNotNone(active)
         self.assertEqual(active[1]["question"], PLAIN)
 
+    def test_clicking_approve_pins_the_notes_marked_approved(self) -> None:
+        backlog = self.repo / ".harness/backlog"
+        backlog.mkdir(parents=True)
+        (backlog / "config.json").write_text('{"artifacts_path": "Vault"}')
+        (self.repo / "Vault").mkdir()
+        (self.repo / "Vault/plan.md").write_text(
+            "---\nstory: 7824\nstatus: approved\n---\n"
+        )
+        (self.repo / "Vault/draft.md").write_text(
+            "---\nstory: 7825\nstatus: draft\n---\n"
+        )
+        run(self.repo, "ask", {"tool_use_id": "toolu_1", "tool_input": ask()})
+        out = self._answer("Approve")
+        self.assertIn(
+            "1 plan or spec note", out["hookSpecificOutput"]["additionalContext"]
+        )
+        self.assertEqual(len(state.pinned_notes(self.repo)), 1)
+
     def test_not_now_opens_nothing(self) -> None:
         run(self.repo, "ask", {"tool_use_id": "toolu_1", "tool_input": ask()})
         self.assertIsNone(self._answer("Not now"))

@@ -194,6 +194,24 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     return 0
 
 
+def _pin_approved_notes(repo: Path, approval_id: str) -> str:
+    """Pin the notes marked approved in the artifacts path to this approval; a note for the user."""
+    # Imported here so only approvals pay for loading the artifacts-path reader.
+    from harness import local_artifacts
+
+    try:
+        notes = local_artifacts.approved_notes(repo)
+        state.pin_notes(repo, approval_id, notes)
+    except (OSError, ValueError) as exc:
+        return f" Approved plan and spec notes were NOT pinned: {exc}"
+    if not notes:
+        return ""
+    return (
+        f" It also covers {len(notes)} plan or spec note(s) marked approved, as they read now;"
+        " editing one needs a new approval."
+    )
+
+
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     prompt = payload.get("prompt") or payload.get("user_prompt") or ""
     repo = _workspace(payload)
@@ -214,6 +232,7 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         state.open_approval(repo, approval_id, window)
         notes.append(
             f"[harness] approval {approval_id} recorded; tracker/SCM writes are open for {window} minutes."
+            + _pin_approved_notes(repo, approval_id)
         )
     for name in MANUAL_RE.findall(prompt):
         try:
@@ -277,13 +296,15 @@ def handle_answer(payload: dict[str, Any]) -> int:
         window = 20
     approval_id = questions.approval_id(tool_use_id)
     state.open_approval(repo, approval_id, window, question=approved[0])
+    pinned = _pin_approved_notes(repo, approval_id)
     print(
         json.dumps(
             {
                 "hookSpecificOutput": {
                     "hookEventName": "PostToolUse",
                     "additionalContext": f"[harness] the user approved; approval {approval_id} is open "
-                    f"for {window} minutes. Make only the writes the question described.",
+                    f"for {window} minutes. Make only the writes the question described."
+                    + pinned,
                 }
             }
         )
