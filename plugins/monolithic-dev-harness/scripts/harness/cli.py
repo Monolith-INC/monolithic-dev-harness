@@ -155,8 +155,14 @@ def knowledge_command(args: argparse.Namespace) -> int:
             "init": lambda: knowledge.initialize(Path(args.repo), args.store),
             "refresh": lambda: knowledge.refresh(Path(args.repo), args.store),
             "catalog": lambda: knowledge.catalog(Path(args.repo), args.store),
-            "find": lambda: knowledge.find(Path(args.repo), tuple(value for value in (args.address, *args.terms) if value), args.store),
-            "resolve": lambda: knowledge.resolve(Path(args.repo), args.address, args.store),
+            "find": lambda: knowledge.find(
+                Path(args.repo),
+                tuple(value for value in (args.address, *args.terms) if value),
+                args.store,
+            ),
+            "resolve": lambda: knowledge.resolve(
+                Path(args.repo), args.address, args.store
+            ),
             "fetch": lambda: knowledge.fetch(Path(args.repo), args.address, args.store),
             "status": lambda: knowledge.status(Path(args.repo), args.store),
         }[args.operation]()
@@ -190,8 +196,13 @@ def main(argv: list[str] | None = None) -> int:
         help="opt a repository in (arguments pass through to bootstrap.py)",
         add_help=False,
     )
-    knowledge_parser = sub.add_parser("knowledge", help="query or refresh a harness-owned immutable knowledge store")
-    knowledge_parser.add_argument("operation", choices=("init", "refresh", "catalog", "find", "resolve", "fetch", "status"))
+    knowledge_parser = sub.add_parser(
+        "knowledge", help="query or refresh a harness-owned immutable knowledge store"
+    )
+    knowledge_parser.add_argument(
+        "operation",
+        choices=("init", "refresh", "catalog", "find", "resolve", "fetch", "status"),
+    )
     knowledge_parser.add_argument("address", nargs="?")
     knowledge_parser.add_argument("terms", nargs="*")
     knowledge_parser.add_argument("--repo", default=".")

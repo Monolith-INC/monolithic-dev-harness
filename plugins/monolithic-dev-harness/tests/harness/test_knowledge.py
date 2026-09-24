@@ -13,7 +13,10 @@ from scripts.harness import knowledge
 def _policy(repo: Path, branch: str = "main") -> Path:
     path = repo / ".harness/policy.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({"schemaVersion": 1, "git": {"base_branch": branch}}), encoding="utf-8")
+    path.write_text(
+        json.dumps({"schemaVersion": 1, "git": {"base_branch": branch}}),
+        encoding="utf-8",
+    )
     return path
 
 
@@ -32,7 +35,9 @@ class KnowledgeStoreTests(unittest.TestCase):
         listed = knowledge.catalog(self.repo)
         self.assertEqual(created["outcome"], "created")
         self.assertEqual(unchanged["outcome"], "unchanged")
-        self.assertEqual([item["logical_unit_id"] for item in listed], ["project/harness-policy"])
+        self.assertEqual(
+            [item["logical_unit_id"] for item in listed], ["project/harness-policy"]
+        )
         self.assertEqual(knowledge.status(self.repo)["current"], 1)
 
     def test_refresh_keeps_the_old_revision_and_marks_it_stale(self) -> None:
@@ -42,8 +47,13 @@ class KnowledgeStoreTests(unittest.TestCase):
         after = refreshed["revision"]
         self.assertEqual(refreshed["outcome"], "refreshed")
         self.assertNotEqual(before, after)
-        self.assertEqual(knowledge.fetch(self.repo, f"project/harness-policy@{before}")["status"], "superseded")
-        self.assertEqual(knowledge.fetch(self.repo, "project/harness-policy")["revision_id"], after)
+        self.assertEqual(
+            knowledge.fetch(self.repo, f"project/harness-policy@{before}")["status"],
+            "superseded",
+        )
+        self.assertEqual(
+            knowledge.fetch(self.repo, "project/harness-policy")["revision_id"], after
+        )
         self.assertEqual(knowledge.status(self.repo)["stale"], 1)
 
     def test_find_is_bounded_and_fetches_only_the_current_revision(self) -> None:

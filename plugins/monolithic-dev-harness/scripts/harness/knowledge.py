@@ -75,7 +75,10 @@ def _read_json(path: Path) -> dict[str, Any]:
 
 def _write_json(path: Path, value: Mapping[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def _manifest(store_id: str) -> dict[str, Any]:
@@ -103,7 +106,9 @@ def _ensure_store(repo: Path, store_id: str) -> StorePaths:
         case True:
             manifest = _read_json(paths.manifest)
             if manifest.get("schema") != SCHEMA or manifest.get("store_id") != store_id:
-                raise KnowledgeError(f"{paths.manifest} is not a compatible knowledge store")
+                raise KnowledgeError(
+                    f"{paths.manifest} is not a compatible knowledge store"
+                )
         case False:
             _write_json(paths.manifest, _manifest(store_id))
             _write_json(paths.catalog, _empty_catalog(store_id))
@@ -116,7 +121,9 @@ def _ensure_store(repo: Path, store_id: str) -> StorePaths:
 def _policy_revision(repo: Path) -> dict[str, Any]:
     policy_path = repo / POLICY_RELATIVE_PATH
     if not policy_path.is_file():
-        raise KnowledgeError(f"{POLICY_RELATIVE_PATH} is required before knowledge initialization")
+        raise KnowledgeError(
+            f"{POLICY_RELATIVE_PATH} is required before knowledge initialization"
+        )
     policy = load_policy(repo)
     payload = {
         "logical_unit_id": "project/harness-policy",
@@ -136,7 +143,10 @@ def _policy_revision(repo: Path) -> dict[str, Any]:
                 "fingerprint": {"sha256": _file_digest(policy_path)},
             }
         ],
-        "provenance": {"method": "harness-policy-seed/v1", "confidence": "source_backed"},
+        "provenance": {
+            "method": "harness-policy-seed/v1",
+            "confidence": "source_backed",
+        },
         "lineage": {"supersedes": [], "related": []},
         "retrieval": {
             "read_when": [
@@ -162,7 +172,10 @@ def _write_revision(paths: StorePaths, revision: Mapping[str, Any]) -> bool:
 
 def _event(paths: StorePaths, payload: Mapping[str, Any]) -> str:
     event_id = _digest(payload)
-    _write_json(paths.events / f"{event_id.removeprefix('sha256:')}.json", {**payload, "event_id": event_id})
+    _write_json(
+        paths.events / f"{event_id.removeprefix('sha256:')}.json",
+        {**payload, "event_id": event_id},
+    )
     return event_id
 
 
@@ -173,7 +186,9 @@ def _catalog(paths: StorePaths) -> dict[str, Any]:
     return catalog
 
 
-def _index_revision(index: dict[str, Any], revision: Mapping[str, Any]) -> dict[str, Any]:
+def _index_revision(
+    index: dict[str, Any], revision: Mapping[str, Any]
+) -> dict[str, Any]:
     sources = index.get("sources", {})
     mappings = tuple(
         (f"{item.get('kind')}:{item.get('locator')}", str(revision["revision_id"]))
@@ -197,7 +212,9 @@ def initialize(repo: Path, store_id: str = "project") -> dict[str, Any]:
     return refresh(repo.resolve(), store_id, paths)
 
 
-def refresh(repo: Path, store_id: str = "project", paths: StorePaths | None = None) -> dict[str, Any]:
+def refresh(
+    repo: Path, store_id: str = "project", paths: StorePaths | None = None
+) -> dict[str, Any]:
     active_paths = paths or _ensure_store(repo.resolve(), store_id)
     revision = _policy_revision(repo.resolve())
     catalog = _catalog(active_paths)
@@ -210,13 +227,22 @@ def refresh(repo: Path, store_id: str = "project", paths: StorePaths | None = No
             return {"outcome": "unchanged", "store": store_id, "revision": current}
         case False:
             _write_revision(active_paths, revision)
-            statuses = {**existing.get("revisions", {}), str(revision["revision_id"]): "current"}
-            previous_statuses = {**statuses, **({str(current): "stale"} if current else {})}
+            statuses = {
+                **existing.get("revisions", {}),
+                str(revision["revision_id"]): "current",
+            }
+            previous_statuses = {
+                **statuses,
+                **({str(current): "stale"} if current else {}),
+            }
             updated_catalog = {
                 **catalog,
                 "units": {
                     **units,
-                    logical_id: {"current": revision["revision_id"], "revisions": previous_statuses},
+                    logical_id: {
+                        "current": revision["revision_id"],
+                        "revisions": previous_statuses,
+                    },
                 },
             }
             _write_json(active_paths.catalog, updated_catalog)
@@ -231,12 +257,21 @@ def refresh(repo: Path, store_id: str = "project", paths: StorePaths | None = No
                     "current_revision": revision["revision_id"],
                 },
             )
-            return {"outcome": "created" if current is None else "refreshed", "store": store_id, "revision": revision["revision_id"], "event": event}
+            return {
+                "outcome": "created" if current is None else "refreshed",
+                "store": store_id,
+                "revision": revision["revision_id"],
+                "event": event,
+            }
 
 
 def _current_revisions(paths: StorePaths) -> tuple[tuple[str, str, str], ...]:
     return tuple(
-        (logical_id, str(entry.get("current", "")), str(entry.get("revisions", {}).get(entry.get("current"), "")))
+        (
+            logical_id,
+            str(entry.get("current", "")),
+            str(entry.get("revisions", {}).get(entry.get("current"), "")),
+        )
         for logical_id, entry in _catalog(paths)["units"].items()
         if isinstance(entry, dict) and entry.get("current")
     )
@@ -266,7 +301,9 @@ def catalog(repo: Path, store_id: str = "project") -> tuple[dict[str, Any], ...]
             "title": _load_revision(paths, revision_id).get("title", logical_id),
             "tier": _load_revision(paths, revision_id).get("tier", ""),
             "area": _load_revision(paths, revision_id).get("area", ""),
-            "read_when": _load_revision(paths, revision_id).get("retrieval", {}).get("read_when", []),
+            "read_when": _load_revision(paths, revision_id)
+            .get("retrieval", {})
+            .get("read_when", []),
         }
         for logical_id, revision_id, status in _current_revisions(paths)
     )
@@ -284,13 +321,20 @@ def _flatten(value: object) -> str:
             return str(value)
 
 
-def find(repo: Path, terms: Sequence[str], store_id: str = "project") -> tuple[dict[str, Any], ...]:
+def find(
+    repo: Path, terms: Sequence[str], store_id: str = "project"
+) -> tuple[dict[str, Any], ...]:
     normalized = tuple(term.lower() for term in terms if term.strip())
     if not normalized:
         raise KnowledgeError("find needs at least one term")
     paths = _paths(repo.resolve(), store_id)
     matches = tuple(
-        (sum(text.count(term) for term in normalized), logical_id, revision_id, revision)
+        (
+            sum(text.count(term) for term in normalized),
+            logical_id,
+            revision_id,
+            revision,
+        )
         for logical_id, revision_id, status in _current_revisions(paths)
         for revision in (_load_revision(paths, revision_id),)
         for text in (_flatten(revision).lower(),)
@@ -304,7 +348,9 @@ def find(repo: Path, terms: Sequence[str], store_id: str = "project") -> tuple[d
             "matched_terms": list(normalized),
             "summary": revision.get("content", {}).get("summary", ""),
         }
-        for _, logical_id, revision_id, revision in sorted(matches, key=lambda item: (-item[0], item[1]))[:MAX_FIND_HITS]
+        for _, logical_id, revision_id, revision in sorted(
+            matches, key=lambda item: (-item[0], item[1])
+        )[:MAX_FIND_HITS]
     )
 
 
@@ -314,7 +360,11 @@ def resolve(repo: Path, logical_id: str, store_id: str = "project") -> dict[str,
     if not isinstance(entry, dict) or not entry.get("current"):
         raise KnowledgeError(f"unknown logical unit: {logical_id}")
     revision_id = str(entry["current"])
-    return {"logical_unit_id": logical_id, "revision_id": revision_id, "status": entry.get("revisions", {}).get(revision_id, "unverifiable")}
+    return {
+        "logical_unit_id": logical_id,
+        "revision_id": revision_id,
+        "status": entry.get("revisions", {}).get(revision_id, "unverifiable"),
+    }
 
 
 def fetch(repo: Path, address: str, store_id: str = "project") -> dict[str, Any]:
@@ -324,7 +374,12 @@ def fetch(repo: Path, address: str, store_id: str = "project") -> dict[str, Any]
     revision = _load_revision(_paths(repo.resolve(), store_id), target)
     if revision.get("logical_unit_id") != logical_id:
         raise KnowledgeError(f"{target} does not belong to {logical_id}")
-    return {**revision, "status": resolved["status"] if target == resolved["revision_id"] else "superseded"}
+    return {
+        **revision,
+        "status": resolved["status"]
+        if target == resolved["revision_id"]
+        else "superseded",
+    }
 
 
 def status(repo: Path, store_id: str = "project") -> dict[str, Any]:
@@ -335,4 +390,10 @@ def status(repo: Path, store_id: str = "project") -> dict[str, Any]:
         if isinstance(entry, dict)
         for state in entry.get("revisions", {}).values()
     )
-    return {"store": store_id, "units": len(_catalog(paths)["units"]), "current": revisions.count("current"), "stale": revisions.count("stale"), "events": len(tuple(paths.events.glob("*.json")))}
+    return {
+        "store": store_id,
+        "units": len(_catalog(paths)["units"]),
+        "current": revisions.count("current"),
+        "stale": revisions.count("stale"),
+        "events": len(tuple(paths.events.glob("*.json"))),
+    }
