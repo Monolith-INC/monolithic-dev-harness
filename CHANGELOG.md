@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-09-24
+
+### Added
+
+- Harness-owned knowledge stores under `.harness/knowledge/`. The `harness knowledge` command lists, finds, resolves,
+  fetches, and refreshes source-backed units from append-only, immutable revisions. Bootstrap sets up the `project`
+  store from `.harness/policy.json`, and the new `knowledge-acquire` skill tells agents to read from it instead of
+  guessing a project convention.
+
 ### Fixed
 
 - The spec-before-code gate also finds plans and specs kept in the repository's artifacts path. The tracker is
@@ -276,7 +285,10 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.10
+[0.1.9]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.9
+[0.1.8]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.8
 [0.1.7]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.7
 [0.1.6]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.6
 [0.1.5]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.5
