@@ -19,7 +19,7 @@ from pathlib import Path
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
 
-from harness import gitstate  # noqa: E402
+from harness import gitstate, knowledge  # noqa: E402
 from harness.config import POLICY_RELATIVE_PATH  # noqa: E402
 
 PLUGIN_ID = "monolithic-dev-harness@monolithic-dev-harness"
@@ -149,6 +149,30 @@ def bootstrap(extra: list[str]) -> int:
     return subprocess.call([sys.executable, str(script), *args])
 
 
+def knowledge_command(args: argparse.Namespace) -> int:
+    try:
+        result = {
+            "init": lambda: knowledge.initialize(Path(args.repo), args.store),
+            "refresh": lambda: knowledge.refresh(Path(args.repo), args.store),
+            "catalog": lambda: knowledge.catalog(Path(args.repo), args.store),
+            "find": lambda: knowledge.find(
+                Path(args.repo),
+                tuple(value for value in (args.address, *args.terms) if value),
+                args.store,
+            ),
+            "resolve": lambda: knowledge.resolve(
+                Path(args.repo), args.address, args.store
+            ),
+            "fetch": lambda: knowledge.fetch(Path(args.repo), args.address, args.store),
+            "status": lambda: knowledge.status(Path(args.repo), args.store),
+        }[args.operation]()
+    except knowledge.KnowledgeError as exc:
+        print(json.dumps({"outcome": "error", "error": str(exc)}), file=sys.stderr)
+        return 2
+    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         prog="harness",
@@ -172,12 +196,25 @@ def main(argv: list[str] | None = None) -> int:
         help="opt a repository in (arguments pass through to bootstrap.py)",
         add_help=False,
     )
+    knowledge_parser = sub.add_parser(
+        "knowledge", help="query or refresh a harness-owned immutable knowledge store"
+    )
+    knowledge_parser.add_argument(
+        "operation",
+        choices=("init", "refresh", "catalog", "find", "resolve", "fetch", "status"),
+    )
+    knowledge_parser.add_argument("address", nargs="?")
+    knowledge_parser.add_argument("terms", nargs="*")
+    knowledge_parser.add_argument("--repo", default=".")
+    knowledge_parser.add_argument("--store", default="project")
     args, extra = parser.parse_known_args(argv)
     if args.command == "version":
         print(version())
         return 0
     if args.command == "doctor":
         return doctor(args)
+    if args.command == "knowledge":
+        return knowledge_command(args)
     return bootstrap(extra)
 
 

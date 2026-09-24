@@ -49,6 +49,7 @@ output schemas enforced.
 | Backlog orchestrator | `runtime/orchestrator_core/` | backlog skills as MCP tools; validation, estimation, capacity; CLI |
 | Setup | `scripts/harness/bootstrap.py`, `scripts/harness/integrations_setup.py` | opt a repository in |
 | CLI | `bin/harness`, `scripts/harness/cli.py` | version, doctor, bootstrap |
+| Knowledge store | `scripts/harness/knowledge.py` | agent-owned immutable revisions, evidence, source index, and bounded retrieval |
 | Installer | `install.sh` (repository root) | install, upgrade, uninstall |
 
 ## Runtime State Machine

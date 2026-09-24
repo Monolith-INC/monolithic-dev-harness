@@ -6,6 +6,7 @@ Everything lives under one folder (ADR-0008):
       policy.json            the rules (human-owned)
       integrations.json      tracker and repository connection
       review/                where review requirements live, and the review knowledge store
+      knowledge/             agent-owned immutable project knowledge stores
       backlog/               backlog settings, estimation, reports
       tracker/               local tracker records, when that tracker is used
       state/                 approvals, manual checks, evidence, scratch (not committed)
@@ -26,6 +27,7 @@ from pathlib import Path
 HARNESS = ".harness"
 INTEGRATIONS = f"{HARNESS}/integrations.json"
 REVIEW = f"{HARNESS}/review"
+KNOWLEDGE = f"{HARNESS}/knowledge"
 BACKLOG = f"{HARNESS}/backlog"
 TRACKER = f"{HARNESS}/tracker"
 STATE = f"{HARNESS}/state"
