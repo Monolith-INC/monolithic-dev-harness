@@ -14,6 +14,7 @@ if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
 from harness.config import PolicyError, load_policy
+from harness.local_artifacts import artifacts_root, has_local_spec_artifact
 from host_adapters import (
     format_claude_decision,
     format_cursor_decision,
@@ -54,6 +55,20 @@ _MUTATING_GIT = frozenset(
         "reset",
         "stash",
         "tag",
+    }
+)
+
+SPEC_ARTIFACT_KINDS = frozenset(
+    {
+        "spec",
+        "tech_spec",
+        "tech-spec",
+        "design_doc",
+        "design-doc",
+        "implementation_plan",
+        "implementation-plan",
+        "bugfix_spec",
+        "bugfix-spec",
     }
 )
 
@@ -209,22 +224,14 @@ def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
             _artifact_kind(artifact.kind)
             for artifact in tracker.list_artifacts(item.id)
         }
-        if not (
-            {
-                "spec",
-                "tech_spec",
-                "tech-spec",
-                "design_doc",
-                "design-doc",
-                "implementation_plan",
-                "implementation-plan",
-                "bugfix_spec",
-                "bugfix-spec",
-            }
-            & kinds
+        project_root = Path(event.workspace_root or ".").resolve()
+        if not (SPEC_ARTIFACT_KINDS & kinds) and not has_local_spec_artifact(
+            project_root, str(item.key), SPEC_ARTIFACT_KINDS, _artifact_kind
         ):
+            local = artifacts_root(project_root)
+            where = "the tracker" if local is None else f"the tracker or under {local}"
             return PolicyDecision.deny(
-                f"Work item {item.key} has no accepted specification artifact."
+                f"Work item {item.key} has no accepted specification artifact in {where}."
             )
         return PolicyDecision.allow()
     except IntegrationError as exc:

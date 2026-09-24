@@ -6,6 +6,16 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The spec-before-code gate also finds plans and specs kept in the repository's artifacts path
+  (`backlog.artifacts_path`). The tracker is still checked first. When it has no spec-like artifact, a Markdown file
+  there counts if both of these hold:
+  - its frontmatter `type` is a spec kind the gate already accepts;
+  - its `story`, `ticket` or `work_item` names the work item.
+
+  Teams that keep plans outside the tracker no longer have to pause enforcement to edit source files.
+
 ## [0.1.9] - 2026-09-23
 
 ### Fixed
