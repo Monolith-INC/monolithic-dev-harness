@@ -1,0 +1,4 @@
+{
+  "command": "npx",
+  "args": ["-y", "@azure-devops/mcp", "${AZURE_DEVOPS_ORG}", "-d", "core", "work-items", "repositories"]
+}

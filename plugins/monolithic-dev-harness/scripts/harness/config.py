@@ -72,11 +72,10 @@ def load_policy(repo_root: Path) -> dict[str, Any]:
     return policy
 
 
-def protected_ids(policy: dict[str, Any]) -> set[int]:
-    ids: set[int] = set()
-    for value in policy.get("azure", {}).get("protected_work_items", []):
-        try:
-            ids.add(int(value))
-        except (TypeError, ValueError):
-            continue
-    return ids
+def protected_ids(policy: dict[str, Any]) -> set[str]:
+    """Protected tracker references, accepting the legacy Azure policy field."""
+    values = (
+        policy.get("trackers", {}).get("protected_work_items", [])
+        or policy.get("azure", {}).get("protected_work_items", [])
+    )
+    return {str(value) for value in values if isinstance(value, (str, int)) and not isinstance(value, bool)}

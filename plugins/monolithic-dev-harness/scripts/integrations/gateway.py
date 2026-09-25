@@ -5,11 +5,14 @@ import secrets
 from pathlib import Path
 from typing import Any
 
+from trackers.registry import TrackerError, active
+
 from .adapters import scm_adapter, tracker_adapter
 from .config import load_config, set_tracking_mode
 from .contracts import IntegrationError
 
 TOOLS = [
+    {"name": "tracker_describe", "description": "Describe the active tracker manifest.", "inputSchema": {"type": "object", "properties": {}}},
     {
         "name": "tracker_get_work_item",
         "description": "Retrieve one configured tracker work item.",
@@ -186,6 +189,11 @@ def handle_call(
         return _tracking_status(set_tracking_mode(config.project_root, "skipped"))
     if name == "workflow_resume_tracker":
         return _tracking_status(set_tracking_mode(config.project_root, "enforced"))
+    if name == "tracker_describe":
+        try:
+            return dict(active(config.project_root).manifest)
+        except TrackerError as exc:
+            raise IntegrationError("invalid_config", str(exc)) from exc
     if name.startswith("tracker_"):
         if not config.tracking_enabled:
             raise IntegrationError(

@@ -65,12 +65,22 @@ class TestConfigureIntegrations(unittest.TestCase):
         self.assertEqual(config["schemaVersion"], 1)
         self.assertEqual(config["branchTemplate"], "{category}/{key}-{slug}")
         self.assertEqual(config["tracker"]["adapter"], "azure_devops")
+        self.assertEqual(config["tracker"]["name"], "azure-devops")
         self.assertEqual(config["scm"]["adapter"], "azure_repos")
         self.assertIn("contoso", config["tracker"]["connection"]["args"])
 
     def test_org_falls_back_to_the_git_remote(self) -> None:
         config = self.configure()
         self.assertIn("contoso", config["scm"]["connection"]["args"])
+
+    def test_linear_selection_records_the_manifest_name(self) -> None:
+        path = configure_integrations(
+            self.repo, tracker="linear", scm="github", branch_template="{category}/{key}-{slug}",
+            discover=False, runtime_dir=PLUGIN_ROOT,
+        )
+        config = json.loads(path.read_text(encoding="utf-8"))
+        self.assertEqual((config["tracker"]["name"], config["tracker"]["adapter"]), ("linear", "linear"))
+        self.assertEqual(config["scm"]["adapter"], "github")
 
     def test_branch_template_must_carry_the_work_item_key(self) -> None:
         with self.assertRaises(ValueError):

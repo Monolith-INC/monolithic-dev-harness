@@ -45,6 +45,7 @@ output schemas enforced.
 | Git queries | `scripts/harness/gitstate.py` | trees, staged paths, branch diffs (bounded by timeouts) |
 | Workflow policy | `scripts/hook_runtime.py`, `scripts/policy/` | branch key, state, spec, evidence, protected branches, stack merges |
 | Workflow orchestrator | `scripts/orchestrator/` | delivery skills as MCP tools; Actor-Critic loop |
+| Tracker registry | `scripts/trackers/registry.py` | validates shipped and approval-pinned onboarded tracker manifests; resolves the active tracker fail-closed |
 | Integrations gateway | `scripts/integrations/` | tracker and SCM adapters |
 | Backlog orchestrator | `runtime/orchestrator_core/` | backlog skills as MCP tools; validation, estimation, capacity; CLI |
 | Setup | `scripts/harness/bootstrap.py`, `scripts/harness/integrations_setup.py` | opt a repository in |

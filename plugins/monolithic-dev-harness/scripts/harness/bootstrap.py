@@ -63,6 +63,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--policy-from", required=True)
     parser.add_argument("--branch-template", default="{category}/{key}-{slug}")
     parser.add_argument(
+        "--tracker", default="azure-devops", choices=("azure-devops", "linear", "local"),
+        help="shipped tracker manifest to configure (Azure DevOps remains the compatibility default)",
+    )
+    parser.add_argument(
+        "--scm", choices=("azure-repos", "github"),
+        help="SCM adapter; defaults to Azure Repos for Azure Boards and GitHub otherwise",
+    )
+    parser.add_argument(
         "--discover",
         action="store_true",
         help="query Azure DevOps for capabilities (starts OAuth)",
@@ -92,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
     except PolicyError as exc:
         print(f"policy is invalid: {exc}", file=sys.stderr)
         return 2
-    if not policy["azure"]["organization"]:
+    if args.tracker == "azure-devops" and not policy["azure"]["organization"]:
         org = os.environ.get("AZURE_DEVOPS_ORG", "").strip()
         if not org:
             print(
@@ -124,11 +132,13 @@ def main(argv: list[str] | None = None) -> int:
         print(note)
 
     azure = policy["azure"]
+    tracker_adapter = {"azure-devops": "azure_devops", "local": "local_tracker"}.get(args.tracker, args.tracker)
+    scm_adapter = args.scm.replace("-", "_") if args.scm else ("azure_repos" if args.tracker == "azure-devops" else "github")
     integrations = repo / INTEGRATIONS
     if integrations.exists() and not args.force:
         from harness.integrations_setup import repair_integrations
 
-        repairs = repair_integrations(integrations, azure)
+        repairs = repair_integrations(integrations, azure) if args.tracker == "azure-devops" else []
         for repair in repairs:
             print(f"repaired {INTEGRATIONS}: {repair}")
         if not repairs:
@@ -138,42 +148,38 @@ def main(argv: list[str] | None = None) -> int:
 
         configure_integrations(
             repo,
-            tracker="azure_devops",
-            scm="azure_repos",
+            tracker=tracker_adapter,
+            scm=scm_adapter,
             branch_template=args.branch_template,
             discover=args.discover,
             runtime_dir=PLUGIN_ROOT,
             project=str(azure.get("project") or ""),
             repository=str(azure.get("repository") or ""),
         )
-        print(f"wrote {INTEGRATIONS} (azure_devops + azure_repos)")
+        print(f"wrote {INTEGRATIONS} ({args.tracker} + {scm_adapter})")
 
     backlog = policy.get("backlog", {})
-    pairs = {
-        "azure.org": azure["organization"],
-        "azure.project": azure["project"],
-        "azure.team": azure["team"],
-        "artifacts_path": backlog.get("artifacts_path", ""),
-    }
-    missing = [key for key, value in pairs.items() if not value]
-    if missing:
-        print(
-            f"policy is missing values the backlog stage needs: {', '.join(missing)}",
-            file=sys.stderr,
-        )
-        return 2
-    cli = PLUGIN_ROOT / "bin" / "agile-backlog-toolkit"
-    set_args = [
-        arg for key, value in pairs.items() for arg in ("--set", f"{key}={value}")
-    ]
-    subprocess.run(
-        [str(cli), "config", *set_args], cwd=repo, check=True, stdout=subprocess.DEVNULL
-    )
     backlog_config = repo / BACKLOG / "config.json"
-    data = json.loads(backlog_config.read_text(encoding="utf-8"))
-    data["provider_mode"] = "azure"
+    backlog_config.parent.mkdir(parents=True, exist_ok=True)
+    if args.tracker == "azure-devops":
+        pairs = {
+            "azure.org": azure["organization"], "azure.project": azure["project"],
+            "azure.team": azure["team"], "artifacts_path": backlog.get("artifacts_path", ""),
+        }
+        missing = [key for key, value in pairs.items() if not value]
+        if missing:
+            print(f"policy is missing values the backlog stage needs: {', '.join(missing)}", file=sys.stderr)
+            return 2
+        cli = PLUGIN_ROOT / "bin" / "agile-backlog-toolkit"
+        set_args = [arg for key, value in pairs.items() for arg in ("--set", f"{key}={value}")]
+        subprocess.run([str(cli), "config", *set_args], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+        data = json.loads(backlog_config.read_text(encoding="utf-8"))
+    else:
+        data = {"schemaVersion": 1, "artifacts_path": backlog.get("artifacts_path", "")}
+    data["provider_mode"] = args.tracker
+    data["tracker"] = args.tracker
     backlog_config.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
-    print(f"configured {BACKLOG}/config.json (provider_mode azure)")
+    print(f"configured {BACKLOG}/config.json (provider_mode {args.tracker})")
 
     print(
         json.dumps(

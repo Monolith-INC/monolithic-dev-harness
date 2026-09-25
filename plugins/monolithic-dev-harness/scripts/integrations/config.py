@@ -31,7 +31,7 @@ class IntegrationConfig:
 
     @property
     def configured(self) -> bool:
-        return bool(self.tracker.get("adapter")) and bool(self.scm.get("adapter"))
+        return bool(self.tracker.get("name") or self.tracker.get("adapter")) and bool(self.scm.get("adapter"))
 
 
 def config_path(project_root: Path) -> Path:
@@ -63,8 +63,8 @@ def load_config(project_root: Path | None = None) -> IntegrationConfig:
     tracker = raw.get("tracker")
     scm = raw.get("scm")
     branch_template = raw.get("branchTemplate")
-    if not isinstance(tracker, dict) or not tracker.get("adapter"):
-        raise IntegrationError("invalid_config", "tracker.adapter is required.")
+    if not isinstance(tracker, dict) or not (tracker.get("name") or tracker.get("adapter")):
+        raise IntegrationError("invalid_config", "tracker.name or legacy tracker.adapter is required.")
     if not isinstance(scm, dict) or not scm.get("adapter"):
         raise IntegrationError("invalid_config", "scm.adapter is required.")
     if not isinstance(branch_template, str) or "{key}" not in branch_template:
@@ -74,6 +74,11 @@ def load_config(project_root: Path | None = None) -> IntegrationConfig:
     if "branchPattern" not in tracker:
         tracker = {**tracker, "branchPattern": branch_template}
     tracker = {**tracker, "projectRoot": str(root)}
+    try:
+        from trackers.registry import active
+        tracker = {**tracker, "manifest": dict(active(root).manifest)}
+    except ValueError as exc:
+        raise IntegrationError("invalid_config", str(exc)) from exc
     tracking = raw.get("tracking")
     if isinstance(tracking, dict) and tracking.get("mode") in {"enforced", "skipped"}:
         tracker = {**tracker, "trackingMode": str(tracking["mode"])}

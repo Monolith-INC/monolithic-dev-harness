@@ -121,6 +121,45 @@ def pinned_notes(repo: Path) -> dict[str, set[str]]:
     return pinned
 
 
+def pin_trackers(repo: Path, approval_id: str, trackers: dict[str, str]) -> None:
+    """Record approved onboarded tracker-folder digests for one user approval."""
+    path = state_dir(repo) / "approvals" / f"{safe_name(approval_id)}.json"
+    record = _read(path)
+    if record is None or not trackers:
+        return
+    pinned = record.get("trackers")
+    record["trackers"] = {
+        **(pinned if isinstance(pinned, dict) else {}),
+        **trackers,
+    }
+    _write(path, record)
+
+
+def pinned_trackers(repo: Path) -> dict[str, set[str]]:
+    """Approved tracker-folder path -> digests, excluding revoked approvals."""
+    directory = state_dir(repo) / "approvals"
+    records = (
+        tuple(
+            record
+            for record in (_read(path) for path in directory.glob("*.json"))
+            if record and not record.get("revoked")
+        )
+        if directory.is_dir()
+        else ()
+    )
+    return {
+        folder: {
+            str(digest)
+            for record in records
+            for path, digest in (record.get("trackers") or {}).items()
+            if path == folder
+        }
+        for folder in {
+            path for record in records for path in (record.get("trackers") or {})
+        }
+    }
+
+
 def log_write(path: Path, record: dict[str, Any], tool: str) -> None:
     record.setdefault("writes", []).append({"tool": tool, "at": _now().isoformat()})
     _write(path, record)

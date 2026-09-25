@@ -241,6 +241,12 @@ class TestHumanOwned(HookTestCase):
                 self.assertAllowed(self.claude("Bash", {"command": command}))
 
 
+class TestTrackerWrites(HookTestCase):
+    def test_tracker_declared_write_needs_approval(self) -> None:
+        from scripts.harness.rules import is_remote_write, make_call
+        self.assertTrue(is_remote_write(make_call("save_issue", {}, "linear"), {"save_issue"}))
+
+
 class TestApproval(HookTestCase):
     def test_every_form_of_git_push_needs_approval(self) -> None:
         for command in (

@@ -30,6 +30,16 @@ References (start at `../../common/workflows/enrich-work-item.md`):
 
 **Not in scope:** generating a raw work item from a title alone — use `generate-work-item` first.
 
+## Active tracker contract
+
+Before choosing a hierarchy, destination, provider call, or identifier syntax, call
+`tracker_describe`. Its manifest is authoritative for artifact names and parent links (`artifacts`,
+`roles`), logical states (`states`), branch and reference syntax (`ids`), write operations
+(`writes`), and whether a textual reference can create a link (`mentions_link`). Map generic
+terms such as delivery unit and step through that response. Azure-specific instructions apply only
+when the active manifest name is `azure-devops`; otherwise use the configured tracker gateway
+operations and preserve the manifest's native names.
+
 ---
 
 ## PHASE 0 — COLLECT INPUTS

@@ -1,0 +1,27 @@
+{
+  "schemaVersion": 1,
+  "name": "azure-devops",
+  "label": "Azure DevOps Boards",
+  "docs": "https://learn.microsoft.com/azure/devops/boards/",
+  "access": {"kind": "mcp", "server": "mcp.json", "auth": "oauth-interactive"},
+  "settings": [
+    {"key": "organization", "required": true, "env": "AZURE_DEVOPS_ORG", "source": "https://learn.microsoft.com/azure/devops/extend/develop/azure-devops-service-rest-api-versioning"},
+    {"key": "project", "required": true, "source": "https://learn.microsoft.com/azure/devops/organizations/projects/about-projects"},
+    {"key": "team", "required": false, "source": "https://learn.microsoft.com/azure/devops/organizations/settings/about-teams-and-agile-tools"}
+  ],
+  "artifacts": [
+    {"name": "Epic", "children": ["Feature"], "source": "https://learn.microsoft.com/azure/devops/boards/backlogs/define-features-epics"},
+    {"name": "Feature", "children": ["User Story", "Bug"], "source": "https://learn.microsoft.com/azure/devops/boards/backlogs/define-features-epics"},
+    {"name": "User Story", "children": ["Task"], "estimate": "Microsoft.VSTS.Scheduling.StoryPoints", "source": "https://learn.microsoft.com/azure/devops/boards/backlogs/define-features-epics"},
+    {"name": "Task", "children": [], "source": "https://learn.microsoft.com/azure/devops/boards/backlogs/add-tasks"},
+    {"name": "Bug", "children": ["Task"], "source": "https://learn.microsoft.com/azure/devops/boards/backlogs/manage-bugs"}
+  ],
+  "roles": {"containers": ["Epic", "Feature"], "delivery_unit": "User Story", "step": "Task"},
+  "states": {"backlog": "New", "ready": "Approved", "in_progress": "Active", "done": "Closed", "canceled": "Removed"},
+  "ids": {"pattern": "[0-9]+", "branch_key": "[0-9]+", "mention": ["#{id}", "AB#{id}", "_workitems/edit/{id}"]},
+  "mentions_link": true,
+  "attachments": {"spec": "comment", "report": "comment", "pull_request": "artifact-link"},
+  "text_format": "markdown",
+  "writes": ["wit_work_item_write", "wit_work_item_link_write", "wit_work_item_comment_write", "repo_create_branch"],
+  "sources": {"states": "https://learn.microsoft.com/azure/devops/boards/work-items/workflow-and-state-categories"}
+}

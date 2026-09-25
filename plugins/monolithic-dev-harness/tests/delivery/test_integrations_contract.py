@@ -220,6 +220,8 @@ class IntegrationContractTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
+            description = handle_call("tracker_describe", {}, project_root=root)
+            self.assertEqual((description["name"], description["roles"]["delivery_unit"]), ("local", "user_story"))
             self.assertTrue(
                 handle_call("workflow_tracking_status", {}, project_root=root)[
                     "enabled"

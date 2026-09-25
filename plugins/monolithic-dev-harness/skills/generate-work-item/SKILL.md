@@ -30,6 +30,16 @@ Context7: read `context7-mcp` skill; server `plugin-context7-plugin-context7`.
 **Not in scope:** enricher templates, emoji section layouts, or story-point driver tables — use the
 `enrich-work-item` skill after drafting if the host team requires that format.
 
+## Active tracker contract
+
+Before choosing a hierarchy, destination, provider call, or identifier syntax, call
+`tracker_describe`. Its manifest is authoritative for artifact names and parent links (`artifacts`,
+`roles`), logical states (`states`), branch and reference syntax (`ids`), write operations
+(`writes`), and whether a textual reference can create a link (`mentions_link`). Map generic
+terms such as delivery unit and step through that response. Azure-specific instructions apply only
+when the active manifest name is `azure-devops`; otherwise use the configured tracker gateway
+operations and preserve the manifest's native names.
+
 ---
 
 ## PHASE 0 — COLLECT INPUTS

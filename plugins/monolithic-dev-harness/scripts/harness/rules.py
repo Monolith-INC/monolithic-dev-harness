@@ -188,11 +188,11 @@ def is_gateway_write(call: ToolCall) -> bool:
     return call.name in GATEWAY_WRITES
 
 
-def is_remote_write(call: ToolCall) -> bool:
+def is_remote_write(call: ToolCall, tracker_writes: set[str] | None = None) -> bool:
     if call.name in SHELL_TOOLS:
         return "push" in git_subcommands(call.command)
     return (call.server != "" or call.name not in EDIT_TOOLS) and (
-        is_azure_write(call) or is_gateway_write(call)
+        is_azure_write(call) or is_gateway_write(call) or call.name in (tracker_writes or set())
     )
 
 
@@ -224,8 +224,8 @@ def _ints(value: Any) -> set[int]:
     return set()
 
 
-def referenced_ids(tool_input: dict[str, Any]) -> set[int]:
-    found: set[int] = set()
+def referenced_ids(tool_input: dict[str, Any]) -> set[str]:
+    found: set[str] = set()
     for key, value in tool_input.items():
         if key in _ID_KEYS:
             found |= _ints(value)
@@ -247,7 +247,16 @@ def referenced_ids(tool_input: dict[str, Any]) -> set[int]:
         ]
         if field_name in _PARENT_FIELDS:
             found |= _ints(entry.get("value"))
-    return found
+    return {str(value) for value in found}
+
+
+def referenced_values(tool_input: dict[str, Any]) -> set[str]:
+    values = {
+        str(value)
+        for key, value in tool_input.items()
+        if key in _ID_KEYS and isinstance(value, (str, int)) and not isinstance(value, bool)
+    }
+    return values | referenced_ids(tool_input)
 
 
 def git_invocations(
@@ -395,30 +404,41 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
     return Decision.allow()
 
 
-def mentioned_ids(value: Any, pattern: re.Pattern[str] = _TEXT_REFERENCE) -> set[int]:
-    """Work item ids that text in a payload would link: `#123` mentions and work item URLs."""
+def mentioned_ids(value: Any, pattern: re.Pattern[str] = _TEXT_REFERENCE) -> set[str]:
+    """Tracker references which text may turn into provider links."""
     if isinstance(value, str):
         return {
-            int(next(group for group in match.groups() if group))
+            str(next(group for group in match.groups() if group))
             for match in pattern.finditer(value)
         }
     if isinstance(value, dict):
         value = list(value.values())
     if isinstance(value, list):
-        found: set[int] = set()
-        for item in value:
-            found |= mentioned_ids(item, pattern)
-        return found
+        return set().union(*(mentioned_ids(item, pattern) for item in value))
     return set()
 
 
-def rule_protected_items(call: ToolCall, policy: dict[str, Any]) -> Decision:
+def _mention_pattern(manifest: dict[str, Any] | None) -> re.Pattern[str]:
+    ids = (manifest or {}).get("ids", {})
+    expressions = ids.get("mention", []) if isinstance(ids, dict) else []
+    pattern = ids.get("pattern") if isinstance(ids, dict) else None
+    candidates = [
+        re.escape(str(template)).replace(re.escape("{id}"), f"({pattern})")
+        for template in expressions
+        if isinstance(template, str) and isinstance(pattern, str)
+    ]
+    return re.compile("|".join(candidates), re.IGNORECASE) if candidates else _TEXT_REFERENCE
+
+
+def rule_protected_items(call: ToolCall, policy: dict[str, Any], tracker_writes: set[str] | None = None, manifest: dict[str, Any] | None = None) -> Decision:
     protected = protected_ids(policy)
+    mentions_link = bool((manifest or {}).get("mentions_link", True))
+    pattern = _mention_pattern(manifest)
     if call.name in SHELL_TOOLS:
-        return _shell_protected_mentions(call, protected)
-    if not is_remote_write(call):
+        return _shell_protected_mentions(call, protected, pattern, mentions_link)
+    if not is_remote_write(call, tracker_writes):
         return Decision.allow()
-    hit = referenced_ids(call.tool_input) & protected
+    hit = referenced_values(call.tool_input) & protected
     if hit:
         return Decision.deny(
             "protected-items",
@@ -426,7 +446,7 @@ def rule_protected_items(call: ToolCall, policy: dict[str, Any]) -> Decision:
             "linked, or parented — not even with approval (links are two-way and would change them). "
             "Name the item in plain text instead, for example 'Idea 4007', without '#' or a link.",
         )
-    mentioned = mentioned_ids(call.tool_input) & protected
+    mentioned = mentioned_ids(call.tool_input, pattern) & protected if mentions_link else set()
     if mentioned:
         return Decision.deny(
             "protected-items",
@@ -437,7 +457,7 @@ def rule_protected_items(call: ToolCall, policy: dict[str, Any]) -> Decision:
     return Decision.allow()
 
 
-def _shell_protected_mentions(call: ToolCall, protected: set[int]) -> Decision:
+def _shell_protected_mentions(call: ToolCall, protected: set[str], pattern: re.Pattern[str] = _TEXT_REFERENCE, mentions_link: bool = True) -> Decision:
     """A commit message (or tag) links a work item through `#123` or `AB#123` once pushed.
 
     Checked when the commit is made, not only when it is pushed: the harness's own flow commits
@@ -445,7 +465,7 @@ def _shell_protected_mentions(call: ToolCall, protected: set[int]) -> Decision:
     """
     if not git_subcommands(call.command) & {"commit", "push", "tag", "notes", "merge"}:
         return Decision.allow()
-    mentioned = mentioned_ids(call.command) & protected
+    mentioned = mentioned_ids(call.command, pattern) & protected if mentions_link else set()
     if mentioned:
         return Decision.deny(
             "protected-items",
@@ -530,9 +550,9 @@ def _applicable_checks(
 
 
 def rule_approval_required(
-    call: ToolCall, repo: Path
+    call: ToolCall, repo: Path, tracker_writes: set[str] | None = None
 ) -> tuple[Decision, tuple[Path, dict[str, Any]] | None]:
-    if not is_remote_write(call):
+    if not is_remote_write(call, tracker_writes):
         return Decision.allow(), None
     active = state.active_approval(repo)
     if active is None:
@@ -719,16 +739,26 @@ def rule_history_preserved(call: ToolCall) -> Decision:
     return Decision.allow()
 
 
+def _tracker_manifest(repo: Path) -> dict[str, Any]:
+    from trackers.registry import active
+    return dict(active(repo).manifest)
+
+
 def evaluate(call: ToolCall, repo: Path, policy: dict[str, Any]) -> Decision:
+    try:
+        manifest = _tracker_manifest(repo)
+    except (OSError, ValueError):
+        manifest = {}
+    tracker_writes = {str(value) for value in manifest.get("writes", [])}
     for decision in (
         rule_human_owned(call, repo),
-        rule_protected_items(call, policy),
+        rule_protected_items(call, policy, tracker_writes, manifest),
         rule_draft_reviewed_prs(call, repo, policy),
         rule_history_preserved(call),
     ):
         if not decision.allowed:
             return decision
-    decision, approval = rule_approval_required(call, repo)
+    decision, approval = rule_approval_required(call, repo, tracker_writes)
     if not decision.allowed:
         return decision
     for rule in (rule_generated_files, commit_rules):

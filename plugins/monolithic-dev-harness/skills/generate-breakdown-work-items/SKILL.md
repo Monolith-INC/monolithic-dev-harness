@@ -30,6 +30,16 @@ Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which
 **Not in scope:** inventing or rewriting acceptance criteria; Feature-level story-point estimation;
 implementing the product under breakdown — only plan + work-item persistence.
 
+## Active tracker contract
+
+Before choosing a hierarchy, destination, provider call, or identifier syntax, call
+`tracker_describe`. Its manifest is authoritative for artifact names and parent links (`artifacts`,
+`roles`), logical states (`states`), branch and reference syntax (`ids`), write operations
+(`writes`), and whether a textual reference can create a link (`mentions_link`). Map generic
+terms such as delivery unit and step through that response. Azure-specific instructions apply only
+when the active manifest name is `azure-devops`; otherwise use the configured tracker gateway
+operations and preserve the manifest's native names.
+
 ---
 
 ## PHASE 0 — INTAKE (selection only)

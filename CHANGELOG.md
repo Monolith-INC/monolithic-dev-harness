@@ -6,6 +6,28 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Tracker manifests and registry groundwork: a versioned JSON Schema, validation of hierarchy and
+  harness roles, shipped/onboarded discovery, and approval-pinned onboarded folders. An invalid
+  selected tracker fails closed; changing or revoking an approved onboarded folder makes it
+  unavailable until it is approved again.
+
+## [0.2.0] - 2026-09-25
+
+### Added
+
+- Tracker adapters: shipped Azure DevOps, Linear, and local manifests with schema validation,
+  manifest-driven branch keys, protected-reference handling, write classification, and the
+  `tracker_describe` gateway operation.
+- Custom tracker onboarding with staged validation, explicit approval, and checksum pinning.
+
+### Changed
+
+- Bootstrap can select Azure DevOps, Linear, or the local tracker; Azure DevOps remains the
+  compatibility default. Backlog-facing skills now consult the active tracker contract before
+  choosing hierarchy, identifiers, or provider operations.
+
 ## [0.1.10] - 2026-09-24
 
 ### Added
