@@ -13,6 +13,16 @@ All notable changes to this project are documented here. The format follows
   selected tracker fails closed; changing or revoking an approved onboarded folder makes it
   unavailable until it is approved again.
 
+### Fixed
+
+- Tracker manifests are checked with the standard library, so hooks no longer need `jsonschema`
+  installed. A test keeps the check in agreement with JSON Schema, and the tracker test suite now
+  runs in CI.
+- Mentions of protected work items (`#123`, `AB#123`, work item URLs) are denied again whatever
+  tracker is active; a tracker's own mention forms are checked in addition, not instead.
+- Scoped sessions: a closed session frees its checkout, a second session cannot start while one is
+  open, and a broken session record is reported instead of raised.
+
 ## [0.2.0] - 2026-09-25
 
 ### Added

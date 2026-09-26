@@ -423,6 +423,11 @@ def mentioned_ids(value: Any, pattern: re.Pattern[str] = _TEXT_REFERENCE) -> set
 
 
 def _mention_pattern(manifest: dict[str, Any] | None) -> re.Pattern[str]:
+    """The default `#123` / work item URL forms, plus any forms the active tracker declares.
+
+    The defaults always apply, whatever the tracker says about `mentions_link`: the code host
+    (Azure Repos, for one) turns them into links on its own, so a protected item stays protected.
+    """
     ids = (manifest or {}).get("ids", {})
     expressions = ids.get("mention", []) if isinstance(ids, dict) else []
     pattern = ids.get("pattern") if isinstance(ids, dict) else None
@@ -431,11 +436,7 @@ def _mention_pattern(manifest: dict[str, Any] | None) -> re.Pattern[str]:
         for template in expressions
         if isinstance(template, str) and isinstance(pattern, str)
     ]
-    return (
-        re.compile("|".join(candidates), re.IGNORECASE)
-        if candidates
-        else _TEXT_REFERENCE
-    )
+    return re.compile("|".join((_TEXT_REFERENCE.pattern, *candidates)), re.IGNORECASE)
 
 
 def rule_protected_items(
@@ -445,10 +446,9 @@ def rule_protected_items(
     manifest: dict[str, Any] | None = None,
 ) -> Decision:
     protected = protected_ids(policy)
-    mentions_link = bool((manifest or {}).get("mentions_link", True))
     pattern = _mention_pattern(manifest)
     if call.name in SHELL_TOOLS:
-        return _shell_protected_mentions(call, protected, pattern, mentions_link)
+        return _shell_protected_mentions(call, protected, pattern)
     if not is_remote_write(call, tracker_writes):
         return Decision.allow()
     hit = referenced_values(call.tool_input) & protected
@@ -459,9 +459,7 @@ def rule_protected_items(
             "linked, or parented — not even with approval (links are two-way and would change them). "
             "Name the item in plain text instead, for example 'Idea 4007', without '#' or a link.",
         )
-    mentioned = (
-        mentioned_ids(call.tool_input, pattern) & protected if mentions_link else set()
-    )
+    mentioned = mentioned_ids(call.tool_input, pattern) & protected
     if mentioned:
         return Decision.deny(
             "protected-items",
@@ -476,7 +474,6 @@ def _shell_protected_mentions(
     call: ToolCall,
     protected: set[str],
     pattern: re.Pattern[str] = _TEXT_REFERENCE,
-    mentions_link: bool = True,
 ) -> Decision:
     """A commit message (or tag) links a work item through `#123` or `AB#123` once pushed.
 
@@ -485,9 +482,7 @@ def _shell_protected_mentions(
     """
     if not git_subcommands(call.command) & {"commit", "push", "tag", "notes", "merge"}:
         return Decision.allow()
-    mentioned = (
-        mentioned_ids(call.command, pattern) & protected if mentions_link else set()
-    )
+    mentioned = mentioned_ids(call.command, pattern) & protected
     if mentioned:
         return Decision.deny(
             "protected-items",

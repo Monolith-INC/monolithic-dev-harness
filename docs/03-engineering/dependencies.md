@@ -42,7 +42,7 @@ None.
 | --- | --- | --- |
 | pytest | latest | test runner |
 | ruff | 0.16.4 (pinned) | lint and format |
-| jsonschema | latest | validates the example policy against the schema |
+| jsonschema | latest | validates the example policy against the schema; cross-checks the tracker manifest checker |
 | shellcheck | 0.11 (via `shellcheck-py` locally, preinstalled in CI) | shell lint |
 | Claude Code CLI | latest | `claude plugin validate`, sandboxed install test |
 | GitHub Actions | `actions/checkout`, `actions/setup-python`, `actions/setup-node` | CI; Dependabot keeps them current |

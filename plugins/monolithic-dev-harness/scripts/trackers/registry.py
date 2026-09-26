@@ -10,10 +10,9 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from jsonschema import Draft202012Validator
-from jsonschema.exceptions import ValidationError
-
 from harness import state
+
+from .schema_check import SchemaError, errors, unsupported
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SHIPPED_ROOT = PLUGIN_ROOT / "trackers"
@@ -35,18 +34,18 @@ class Tracker:
 
 @lru_cache(maxsize=1)
 def _schema() -> Mapping[str, Any]:
-    return json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    schema = json.loads(SCHEMA_PATH.read_text(encoding="utf-8"))
+    match sorted(unsupported(schema)):
+        case []:
+            return schema
+        case unknown:
+            raise TrackerError(
+                f"tracker schema uses keywords the checker does not support: {unknown}"
+            )
 
 
-@lru_cache(maxsize=1)
-def _validator() -> Draft202012Validator:
-    schema = _schema()
-    Draft202012Validator.check_schema(schema)
-    return Draft202012Validator(schema)
-
-
-def _field(error: ValidationError) -> str:
-    return ".".join(map(str, error.absolute_path)) or str(error.validator or "manifest")
+def _field(error: SchemaError) -> str:
+    return ".".join(map(str, error.path)) or error.keyword
 
 
 def _invalid(field: str, message: str) -> TrackerError:
@@ -57,8 +56,8 @@ def validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
     error = next(
         iter(
             sorted(
-                _validator().iter_errors(manifest),
-                key=lambda item: list(item.absolute_path),
+                errors(manifest, _schema()),
+                key=lambda item: tuple(map(str, item.path)),
             )
         ),
         None,
@@ -66,7 +65,7 @@ def validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
     match error:
         case None:
             return _validate_domain(dict(manifest))
-        case ValidationError() as invalid:
+        case SchemaError() as invalid:
             raise _invalid(_field(invalid), invalid.message)
 
 

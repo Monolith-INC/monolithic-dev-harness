@@ -5,4 +5,4 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PY="${PYTHON:-python3}"
 cd "$ROOT"
 PYTHONPATH=runtime:tests/backlog "$PY" -m pytest tests/backlog -q -p no:cacheprovider
-PYTHONPATH=.:scripts "$PY" -m pytest tests/delivery tests/harness -q -p no:cacheprovider
+PYTHONPATH=.:scripts "$PY" -m pytest tests/delivery tests/harness tests/trackers -q -p no:cacheprovider
