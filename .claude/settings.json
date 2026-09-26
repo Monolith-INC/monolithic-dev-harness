@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "monolithic-dev-harness": {
+      "source": {
+        "source": "github",
+        "repo": "Monolith-INC/monolithic-dev-harness"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "monolithic-dev-harness@monolithic-dev-harness": true
+  }
+}
