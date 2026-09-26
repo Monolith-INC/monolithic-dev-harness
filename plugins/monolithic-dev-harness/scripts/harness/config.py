@@ -72,13 +72,19 @@ def load_policy(repo_root: Path) -> dict[str, Any]:
     return policy
 
 
+def canonical_id(value: str | int) -> str:
+    """One spelling per tracker id: `#01001` is item 1001, and `lin-7` is `LIN-7`."""
+    text = str(value).strip()
+    return str(int(text)) if text.isdigit() else text.upper()
+
+
 def protected_ids(policy: dict[str, Any]) -> set[str]:
-    """Protected tracker references, accepting the legacy Azure policy field."""
-    values = policy.get("trackers", {}).get("protected_work_items", []) or policy.get(
-        "azure", {}
-    ).get("protected_work_items", [])
+    """Protected tracker references from the tracker list and the legacy Azure list, together."""
+    sections = (policy.get("trackers"), policy.get("azure"))
     return {
-        str(value)
-        for value in values
+        canonical_id(value)
+        for section in sections
+        if isinstance(section, dict)
+        for value in section.get("protected_work_items") or ()
         if isinstance(value, (str, int)) and not isinstance(value, bool)
     }

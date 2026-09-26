@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 
 from scripts.harness import state
 from scripts.trackers.registry import available
-from tests.harness.test_questions import PLAIN, ask, run
+from tests.harness.test_questions import HOOK, PLAIN, ask, run
+
+NAMED = "Use the acme tracker for this project's work items?"
 from tests.trackers.test_registry import _manifest
 
 
@@ -26,33 +30,69 @@ class TrackerPinningTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    def test_approve_click_pins_an_onboarded_tracker_and_edits_or_revocation_hide_it(
-        self,
-    ):
+    def approve(self, text: str, tool_use_id: str) -> dict:
         self.assertIsNone(
-            run(self.repo, "ask", {"tool_use_id": "toolu_tracker", "tool_input": ask()})
+            run(self.repo, "ask", {"tool_use_id": tool_use_id, "tool_input": ask(text)})
         )
-        response = run(
+        answered = {**ask(text), "answers": {text: "Approve"}}
+        return run(
             self.repo,
             "answer",
             {
-                "tool_use_id": "toolu_tracker",
-                "tool_input": {**ask(), "answers": {PLAIN: "Approve"}},
-                "tool_response": {**ask(), "answers": {PLAIN: "Approve"}},
+                "tool_use_id": tool_use_id,
+                "tool_input": answered,
+                "tool_response": answered,
             },
         )
+
+    def prompt(self, text: str) -> None:
+        subprocess.run(
+            [sys.executable, str(HOOK), "--host", "claude", "--event", "prompt"],
+            input=json.dumps({"cwd": str(self.repo), "prompt": text}),
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+    def names(self) -> list[str]:
+        return [tracker.name for tracker in available(self.repo)]
+
+    def test_an_approval_naming_the_tracker_pins_it_and_edits_or_revocation_hide_it(
+        self,
+    ):
+        response = self.approve(NAMED, "toolu_tracker")
 
         self.assertIn(
             "pins 1 approved onboarded tracker",
             response["hookSpecificOutput"]["additionalContext"],
         )
-        self.assertIn("acme", [tracker.name for tracker in available(self.repo)])
+        self.assertIn("acme", self.names())
 
         (self.folder / "reference.md").write_text("changed", encoding="utf-8")
-        self.assertNotIn("acme", [tracker.name for tracker in available(self.repo)])
+        self.assertNotIn("acme", self.names())
 
         state.revoke_approvals(self.repo)
-        self.assertNotIn("acme", [tracker.name for tracker in available(self.repo)])
+        self.assertNotIn("acme", self.names())
+
+    def test_an_unrelated_approval_does_not_pin_the_tracker(self):
+        response = self.approve(PLAIN, "toolu_other")
+
+        self.assertNotIn("pins", response["hookSpecificOutput"]["additionalContext"])
+        self.assertNotIn("acme", self.names())
+
+    def test_a_typed_approval_pins_only_when_it_names_the_tracker(self):
+        self.prompt("approve HB-AAAA1")
+        self.assertNotIn("acme", self.names())
+        self.prompt("approve HB-BBBB2 and the acme tracker")
+        self.assertIn("acme", self.names())
+
+    def test_a_broken_onboarded_manifest_hides_only_itself(self):
+        self.approve(NAMED, "toolu_tracker")
+        junk = self.repo / ".harness/trackers/junk"
+        junk.mkdir()
+        (junk / "tracker.json").write_text("{", encoding="utf-8")
+        self.assertIn("acme", self.names())
+        self.assertIn("linear", self.names())
 
 
 if __name__ == "__main__":

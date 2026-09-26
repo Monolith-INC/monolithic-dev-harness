@@ -212,19 +212,22 @@ def _pin_approved_notes(repo: Path, approval_id: str) -> str:
     )
 
 
-def _pin_approved_trackers(repo: Path, approval_id: str) -> str:
-    """Pin tracker definitions the user approved so later edits do not silently apply."""
+def _pin_approved_trackers(repo: Path, approval_id: str, approval_text: str) -> str:
+    """Pin the onboarded tracker folders the approval names, as they read now.
+
+    Later edits need a new approval that names the tracker again.
+    """
     from trackers.registry import approved_onboarded_trackers, pin_approved_trackers
 
     try:
-        folders = approved_onboarded_trackers(repo)
+        folders = approved_onboarded_trackers(repo, approval_text)
         pin_approved_trackers(repo, approval_id, folders)
     except (OSError, ValueError) as exc:
         return f" Approved onboarded trackers were NOT pinned: {exc}"
     return (
         ""
         if not folders
-        else f" It also pins {len(folders)} approved onboarded tracker(s)."
+        else f" It also pins {len(folders)} approved onboarded tracker(s) it names."
     )
 
 
@@ -249,7 +252,7 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         notes.append(
             f"[harness] approval {approval_id} recorded; tracker/SCM writes are open for {window} minutes."
             + _pin_approved_notes(repo, approval_id)
-            + _pin_approved_trackers(repo, approval_id)
+            + _pin_approved_trackers(repo, approval_id, prompt)
         )
     for name in MANUAL_RE.findall(prompt):
         try:
@@ -314,7 +317,7 @@ def handle_answer(payload: dict[str, Any]) -> int:
     approval_id = questions.approval_id(tool_use_id)
     state.open_approval(repo, approval_id, window, question=approved[0])
     pinned = _pin_approved_notes(repo, approval_id) + _pin_approved_trackers(
-        repo, approval_id
+        repo, approval_id, approved[0]
     )
     print(
         json.dumps(

@@ -250,6 +250,47 @@ class TestTrackerWrites(HookTestCase):
         )
 
 
+class TestTrackerSafety(HookTestCase):
+    LINEAR = "mcp__linear__save_issue"
+
+    def integrations(self, tracker: dict) -> None:
+        (self.repo / ".codex-workflows" / "integrations.json").write_text(
+            json.dumps({**INTEGRATIONS, "tracker": tracker})
+        )
+
+    def test_a_broken_onboarded_manifest_does_not_open_tracker_writes(self) -> None:
+        self.write(".harness/trackers/junk/tracker.json", "{")
+        self.assertDenied(self.claude(self.LINEAR, {"title": "x"}), "approval-required")
+
+    def test_an_unusable_selected_tracker_blocks_mcp_calls_only(self) -> None:
+        self.integrations({"name": "missing"})
+        self.approve()
+        self.assertDenied(self.claude(self.LINEAR, {"title": "x"}), "tracker-config")
+        self.assertDenied(
+            self.claude(AZ + "wit_get_work_item", {"id": 7}), "tracker-config"
+        )
+        self.assertAllowed(self.claude("Read", {"file_path": "README.md"}))
+
+    def test_an_unreadable_selection_blocks_mcp_calls(self) -> None:
+        (self.repo / ".codex-workflows" / "integrations.json").write_text("{")
+        self.assertDenied(self.claude(self.LINEAR, {"title": "x"}), "tracker-config")
+
+    def test_no_tracker_selected_keeps_the_default_rules(self) -> None:
+        (self.repo / ".codex-workflows" / "integrations.json").unlink()
+        self.assertAllowed(self.claude("mcp__linear__list_issues", {}))
+        self.assertDenied(
+            self.claude(AZ + "wit_work_item_write", {"action": "create"}),
+            "approval-required",
+        )
+
+    def test_mcp_calls_fail_closed_when_the_rules_cannot_run(self) -> None:
+        from scripts.harness.rules import is_write_class, make_call
+
+        self.assertTrue(is_write_class(make_call("save_issue", {}, "linear")))
+        self.assertTrue(is_write_class(make_call("mcp__linear__save_issue", {})))
+        self.assertFalse(is_write_class(make_call("Read", {})))
+
+
 class TestApproval(HookTestCase):
     def test_every_form_of_git_push_needs_approval(self) -> None:
         for command in (
@@ -416,6 +457,44 @@ class TestProtected(HookTestCase):
                     ),
                     "protected-items",
                 )
+
+    def test_leading_zeros_do_not_hide_a_protected_id(self) -> None:
+        self.approve()
+        # `#0…` stays a colour code (see the html-entities test); URLs and id fields do not.
+        for text in (
+            "_workitems/edit/001001",
+            "vstfs:///WorkItemTracking/WorkItem/01001",
+        ):
+            with self.subTest(text=text):
+                self.assertDenied(
+                    self.claude(
+                        AZ + "wit_work_item_write",
+                        {
+                            "action": "create",
+                            "fields": [{"name": "System.Description", "value": text}],
+                        },
+                    ),
+                    "protected-items",
+                )
+        self.assertDenied(
+            self.claude(
+                AZ + "wit_work_item_write", {"action": "update", "id": "01001"}
+            ),
+            "protected-items",
+        )
+
+    def test_tracker_and_legacy_protected_lists_both_apply(self) -> None:
+        policy = {**POLICY, "trackers": {"protected_work_items": ["LIN-7"]}}
+        (self.repo / ".harness" / "policy.json").write_text(json.dumps(policy))
+        self.approve()
+        self.assertDenied(
+            self.claude("Bash", {"command": "git commit -m 'Refs #1001'"}),
+            "protected-items",
+        )
+        self.assertDenied(
+            self.claude("mcp__linear__save_issue", {"id": "LIN-7"}),
+            "protected-items",
+        )
 
     def test_commit_messages_link_through_any_mention_form(self) -> None:
         self.approve()

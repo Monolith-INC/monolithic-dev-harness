@@ -20,6 +20,14 @@ All notable changes to this project are documented here. The format follows
   runs in CI.
 - Mentions of protected work items (`#123`, `AB#123`, work item URLs) are denied again whatever
   tracker is active; a tracker's own mention forms are checked in addition, not instead.
+- Tracker safety: a broken onboarded tracker file hides only itself instead of breaking the registry;
+  a tracker choice that cannot be loaded blocks MCP calls instead of dropping tracker writes from
+  approval; MCP calls fail closed when the rules cannot run; hierarchy checks are linear and id
+  patterns must compile without capturing groups.
+- Onboarded tracker folders are pinned only by an approval that names the tracker, not by any
+  approval.
+- Protected work items: the tracker and legacy Azure lists apply together, and ids compare without
+  leading zeros or case (`_workitems/edit/01001` is item 1001).
 - Scoped sessions: a closed session frees its checkout, a second session cannot start while one is
   open, and a broken session record is reported instead of raised.
 

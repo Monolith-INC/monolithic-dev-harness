@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from . import gitstate, globs, shellscan, state
-from .config import protected_ids
+from .config import canonical_id, protected_ids
 
 EDIT_TOOLS = frozenset(
     {
@@ -202,8 +202,10 @@ def is_write_class(call: ToolCall) -> bool:
     """Calls that must fail closed if the rules themselves cannot run.
 
     Every shell command counts: if the rules could not read it, nothing says it only reads.
+    Every MCP call counts too: which tracker tools write comes from the tracker manifest, and
+    the rules that read it are what failed.
     """
-    if call.name in EDIT_TOOLS or call.name in SHELL_TOOLS:
+    if call.name in EDIT_TOOLS or call.name in SHELL_TOOLS or call.server:
         return True
     return is_remote_write(call)
 
@@ -254,7 +256,7 @@ def referenced_ids(tool_input: dict[str, Any]) -> set[str]:
 
 def referenced_values(tool_input: dict[str, Any]) -> set[str]:
     values = {
-        str(value)
+        canonical_id(value)
         for key, value in tool_input.items()
         if key in _ID_KEYS
         and isinstance(value, (str, int))
@@ -412,7 +414,7 @@ def mentioned_ids(value: Any, pattern: re.Pattern[str] = _TEXT_REFERENCE) -> set
     """Tracker references which text may turn into provider links."""
     if isinstance(value, str):
         return {
-            str(next(group for group in match.groups() if group))
+            canonical_id(next(group for group in match.groups() if group))
             for match in pattern.finditer(value)
         }
     if isinstance(value, dict):
@@ -756,17 +758,30 @@ def rule_history_preserved(call: ToolCall) -> Decision:
     return Decision.allow()
 
 
-def _tracker_manifest(repo: Path) -> dict[str, Any]:
-    from trackers.registry import active
+def _tracker_manifest(repo: Path) -> dict[str, Any] | None:
+    """The active tracker's manifest: `{}` when none is selected, `None` when the one selected
+    cannot be used (unreadable choice, missing, invalid, or unapproved tracker)."""
+    from trackers.registry import active, is_selected
 
-    return dict(active(repo).manifest)
+    if not is_selected(repo):
+        return {}
+    try:
+        return dict(active(repo).manifest)
+    except (OSError, ValueError):
+        return None
 
 
 def evaluate(call: ToolCall, repo: Path, policy: dict[str, Any]) -> Decision:
-    try:
-        manifest = _tracker_manifest(repo)
-    except (OSError, ValueError):
-        manifest = {}
+    manifest = _tracker_manifest(repo)
+    if manifest is None and call.server:
+        return Decision.deny(
+            "tracker-config",
+            "the tracker chosen in .harness/integrations.json cannot be loaded (it is unreadable, "
+            "missing, invalid, or not approved), so the harness cannot tell which tracker calls "
+            "write. MCP calls are blocked until it is fixed: `tracker.name` must name a shipped "
+            "tracker, or an onboarded one the user approved by name.",
+        )
+    manifest = manifest or {}
     tracker_writes = {str(value) for value in manifest.get("writes", [])}
     for decision in (
         rule_human_owned(call, repo),
