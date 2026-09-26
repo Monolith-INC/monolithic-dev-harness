@@ -30,15 +30,10 @@ References (start at `../../common/workflows/enrich-work-item.md`):
 
 **Not in scope:** generating a raw work item from a title alone — use `generate-work-item` first.
 
-## Active tracker contract
+## Active tracker
 
-Before choosing a hierarchy, destination, provider call, or identifier syntax, call
-`tracker_describe`. Its manifest is authoritative for artifact names and parent links (`artifacts`,
-`roles`), logical states (`states`), branch and reference syntax (`ids`), write operations
-(`writes`), and whether a textual reference can create a link (`mentions_link`). Map generic
-terms such as delivery unit and step through that response. Azure-specific instructions apply only
-when the active manifest name is `azure-devops`; otherwise use the configured tracker gateway
-operations and preserve the manifest's native names.
+Call `tracker_describe` before choosing a hierarchy, destination, provider call, or id format, and
+follow [the tracker contract](../../references/tracker-contract.md).
 
 ---
 
@@ -58,7 +53,7 @@ Accept `/enrich-work-item` flags or conversational inference (see Examples).
 Normalize type → enricher + Azure `workItemType` per `pipeline.md`.
 
 Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which reads
-`.harness/backlog/config.json` and falls back to older locations. See
+`artifacts_path` from `.harness/settings.json`. See
 `../../references/project-config.md`.
 
 ---

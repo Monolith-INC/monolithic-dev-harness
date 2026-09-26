@@ -2,10 +2,22 @@
 title: Documentation Changelog
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Changelog
+
+## 2026-09-26: Trackers, settings, and sessions (0.2.0)
+
+- Every document now names `.harness/settings.json` as the only settings file; `policy.json`,
+  `integrations.json`, and the backlog config are gone from the docs as from the code.
+- Added the tracker contract (`tracker.json` plus `adapter.py`), onboarding and typed trust,
+  sessions, and the `tracker-invalid` rule to the architecture, data model, API, components,
+  workflows, security, threat model, runbook, troubleshooting, and user guide.
+- Rewrote ADR-0009 (trackers are adapters, settings are one file) and amended ADR-0008's layout.
+- Added glossary entries for adapter, checkout, gateway, onboarded tracker, session, settings,
+  tracker, tracker contract, tracker manifest, tracker policy, tracker trust, and tracking mode.
+- Added the rework checkpoint log under `06-delivery/checkpoints/`.
 
 ## 2026-09-22 — Documentation baseline
 

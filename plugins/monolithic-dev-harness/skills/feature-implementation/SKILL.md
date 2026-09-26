@@ -26,7 +26,7 @@ skill is unavailable until `/resume-tracker`.
 2. **Plan.** Publish an implementation plan on the Feature as a tracker artifact: the Stories in
    stack order and what each one delivers. Publishing is a tracker write: approval batch.
 3. **Create the Feature branch** from the base branch, named with the branch template selected at
-   bootstrap (`branchTemplate` in `.harness/integrations.json`). If the user wants a
+   bootstrap (`branch_template` in `.harness/settings.json`). If the user wants a
    different name, ask; do not invent one.
 4. **For each Story, in stack order:** `start-ticket` → `write-spec` (gate G2) →
    `implement-story` on a Story branch cut from the Feature branch → `review`. Review ends with a

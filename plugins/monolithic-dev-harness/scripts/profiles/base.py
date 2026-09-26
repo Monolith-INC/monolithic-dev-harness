@@ -1,6 +1,6 @@
 """Optional workspace defaults for installer discovery.
 
-Durable work state and provider details are loaded from integrations.json;
+Durable work state and provider details come from .harness/settings.json and the tracker folders;
 profiles only provide local verification and protected-branch defaults.
 """
 

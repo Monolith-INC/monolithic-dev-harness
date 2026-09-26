@@ -2,7 +2,7 @@
 title: User Guide
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # User Guide
@@ -13,7 +13,8 @@ Take a piece of work from an idea to a reviewed draft pull request with the harn
 
 ## Audience
 
-Developers, Feature Owners, and Tech Leads on a team using Azure DevOps with Claude Code or Cursor.
+Developers, Feature Owners, and Tech Leads on a team using Claude Code or Cursor with Azure DevOps,
+Linear, the repository-local tracker, or an onboarded one. The examples below use Azure DevOps.
 
 ## Prerequisites
 
@@ -48,8 +49,9 @@ picker, the agent gives the batch an id and you reply `approve HB-4F9A`.
 
 ### 3. Plan (gate G2)
 
-For the Story you build next, the agent moves it to in progress and writes a technical spec from
-its acceptance criteria and Tasks. The Tech Lead reviews it; approve the batch that publishes it.
+For the Story you build next, the agent checks out its branch, moves it to in progress, binds it to
+your checkout with `harness session start <story>`, and writes a technical spec from its acceptance
+criteria and Tasks. The Tech Lead reviews it; approve the batch that publishes it.
 
 ### 4. Build
 
@@ -69,6 +71,16 @@ Validate in staging (G3); a person publishes and approves the pull request (G4).
 | `approve HB-XXXX` | opens a 20-minute window for the batch's writes (Cursor; in Claude, click **Approve**) |
 | `harness revoke` | closes open windows |
 | `harness manual-check <name> ok` | records that you validated a guarded change by hand |
+| `harness trust-tracker <name> <digest>` | trusts an onboarded tracker as `harness tracker show` printed it |
+| `harness untrust-tracker <name>` | withdraws that trust |
+
+### Useful commands
+
+| Command | Effect |
+| --- | --- |
+| `harness session status` | which work item this checkout is bound to, and its phase |
+| `harness session pause` / `resume` / `close` | stop, restart, or finish the session |
+| `harness doctor` | settings, tracker, and session at a glance |
 
 ## Expected Result
 

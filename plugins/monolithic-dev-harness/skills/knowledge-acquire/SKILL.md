@@ -25,6 +25,6 @@ harness knowledge refresh --store project
 ```
 
 Knowledge is agent-owned and append-only. Never edit a revision, catalog, source index, or event
-directly. Bootstrap initializes the `project` store from `.harness/policy.json`; refresh creates a
+directly. Bootstrap initializes the `project` store with a pointer to `.harness/settings.json`; refresh creates a
 new revision only when its source evidence changed.
 

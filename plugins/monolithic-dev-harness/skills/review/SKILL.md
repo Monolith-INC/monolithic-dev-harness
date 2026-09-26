@@ -19,7 +19,7 @@ the Story reshapes structure.
 
 ## 2. Deep audit
 
-Run `thermos` on the same branch diff (base: `git.base_branch` from `.harness/policy.json`). Pass
+Run `thermos` on the same branch diff (base: `git.base_branch` from `.harness/settings.json`). Pass
 the repository's review guides as house rules: the root `docs/review.md` and the touched
 subproject's `docs/review.md` when they exist, plus the rules list `implement-story` carried. Items
 no linter catches go here explicitly, for example masking personal data in the UI when the repository requires it.

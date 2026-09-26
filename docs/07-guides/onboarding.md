@@ -2,7 +2,7 @@
 title: Onboarding
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Onboarding
@@ -28,7 +28,7 @@ Python 3.10+, git, Node.js, Claude Code, and access to the repository.
 
    ```bash
    python3 -m venv .venv
-   .venv/bin/pip install pytest ruff==0.16.4 jsonschema shellcheck-py
+   .venv/bin/pip install pytest ruff==0.16.4 shellcheck-py
    ```
 
 3. Run the outcome gate from [../03-engineering/development.md](../03-engineering/development.md#full-outcome-gate).

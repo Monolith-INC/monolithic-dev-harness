@@ -15,7 +15,7 @@ From intake `work_item_ref` / `source_kind`:
 | `source_kind` | Resolution |
 | --- | --- |
 | `id` | `wit_work_item[get](id, expand=Relations)` |
-| `url` | Extract id via `../../references/azure-mechanics.md` (URL→id), then same as `id` |
+| `url` | Extract id via `../../../references/azure-mechanics.md` (URL→id), then same as `id` |
 | `path` | Read the markdown file; parse frontmatter + body |
 
 Determine `work_item_type`:
@@ -101,8 +101,8 @@ Do not create Azure or artifacts path Task work items in this phase.
 ### Artifacts path and frontmatter
 
 Resolve the artifacts root with `bin/agile-backlog-toolkit config --show`. If unset, ASK the user where
-plans should go and save it with `config --set artifacts_path=<path>`. Never guess a location, and
-never create a directory structure the user did not ask for.
+plans should go; they set it as `artifacts_path` in `.harness/settings.json`. Never guess a location,
+and never create a directory structure the user did not ask for.
 
 **Filename:** `YYYY-MM-DD-<story-slug>.md`
 

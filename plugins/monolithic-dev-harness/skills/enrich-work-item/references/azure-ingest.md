@@ -4,7 +4,7 @@ Resolve an Azure DevOps work-item URL (or numeric id) into an **enrichment input
 fields, attachment contents, and any external sources referenced in the description. Read this file when
 `source` is an Azure URL or id before routing the enricher.
 
-Shared create/link/update rules remain in `../../references/azure-mechanics.md`.
+Shared create/link/update rules remain in `../../../references/azure-mechanics.md`.
 
 ---
 

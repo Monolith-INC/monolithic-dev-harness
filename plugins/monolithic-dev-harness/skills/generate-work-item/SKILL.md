@@ -30,15 +30,10 @@ Context7: read `context7-mcp` skill; server `plugin-context7-plugin-context7`.
 **Not in scope:** enricher templates, emoji section layouts, or story-point driver tables — use the
 `enrich-work-item` skill after drafting if the host team requires that format.
 
-## Active tracker contract
+## Active tracker
 
-Before choosing a hierarchy, destination, provider call, or identifier syntax, call
-`tracker_describe`. Its manifest is authoritative for artifact names and parent links (`artifacts`,
-`roles`), logical states (`states`), branch and reference syntax (`ids`), write operations
-(`writes`), and whether a textual reference can create a link (`mentions_link`). Map generic
-terms such as delivery unit and step through that response. Azure-specific instructions apply only
-when the active manifest name is `azure-devops`; otherwise use the configured tracker gateway
-operations and preserve the manifest's native names.
+Call `tracker_describe` before choosing a hierarchy, destination, provider call, or id format, and
+follow [the tracker contract](../../references/tracker-contract.md).
 
 ---
 
@@ -72,7 +67,7 @@ not invent one. Only a Task needs a parent: if it is missing, STOP and ask once.
 has the wrong type: STOP and report (see `decomposition-rules.md`).
 
 Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which reads
-`.harness/backlog/config.json` and falls back to older locations. See
+`artifacts_path` from `.harness/settings.json`. See
 `../../references/project-config.md`.
 
 ---

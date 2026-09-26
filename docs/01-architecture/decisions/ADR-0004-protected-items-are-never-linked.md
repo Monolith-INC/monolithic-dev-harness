@@ -2,7 +2,7 @@
 title: ADR-0004 Protected items are never linked
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # ADR-0004: Protected work items are never written, linked, or parented
@@ -19,10 +19,11 @@ its revision.
 
 ## Decision
 
-Ids in `azure.protected_work_items` are refused by the `protected-items` rule for any write, link,
-unlink, child creation, or comment, even inside an approval window. The rule also refuses text
-that mentions a protected id as `#<id>` or by work item URL, because Azure DevOps turns a mention
-into a link. A copy names the original in plain text (for example `Idea 4007`) instead.
+Ids in `protected_work_items` (`.harness/settings.json`) are refused by the `protected-items`
+rule for any write, link, unlink, child creation, or comment, even inside an approval window. The
+rule also refuses text that mentions a protected id in a form a tracker turns into a link: each
+tracker lists those forms in its manifest (`ids.mention`, with `ids.mentions_link`), for example
+`#<id>`, `AB#<id>`, and work item URLs on Azure DevOps, or the bare `ENG-12` on Linear. A copy names the original in plain text (for example `Idea 4007`) instead.
 
 ## Options Considered
 
@@ -45,7 +46,7 @@ None.
 
 ## Validation
 
-`TestProtectedItems` in `tests/harness/test_hook_rules.py`.
+`TestProtected` and `TestTrackers` in `tests/harness/test_hook_rules.py`.
 
 ## References
 

@@ -6,27 +6,53 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-26
+
+### Breaking
+
+- One settings file: `.harness/settings.json` (schema `config/settings.schema.json`) replaces
+  `.harness/policy.json`, `.harness/integrations.json`, and `.harness/backlog/config.json`. People
+  write it; the harness only reads it. `harness bootstrap --settings-from <file>` replaces
+  `--policy-from`, `--tracker`, `--scm`, `--discover`, and `--force`. There is no migration: run
+  bootstrap again with a settings file (start from `examples/settings.example.json`).
+- `protected_work_items` is a top-level list of strings; the Azure-only `azure` block is gone.
+- Governed code changes need an active session for the checkout (`harness session start`), unless
+  tracking is skipped.
+- `bin/agile-backlog-toolkit config --set` is removed; the backlog stage reads the settings file.
+- Workflow artifacts on a tracker use the envelope `harness-artifact:v1`.
+
 ### Added
 
-- Tracker manifests and registry groundwork: a versioned JSON Schema, validation of hierarchy and
-  harness roles, shipped/onboarded discovery, and approval-pinned onboarded folders. An invalid
-  selected tracker fails closed; changing or revoking an approved onboarded folder makes it
-  unavailable until it is approved again.
-
-## [0.2.0] - 2026-09-25
-
-### Added
-
-- Tracker adapters: shipped Azure DevOps, Linear, and local manifests with schema validation,
-  manifest-driven branch keys, protected-reference handling, write classification, and the
-  `tracker_describe` gateway operation.
-- Custom tracker onboarding with staged validation, explicit approval, and checksum pinning.
+- Trackers are adapters: each tracker is one folder, `trackers/<name>/`, holding `tracker.json`
+  (checked against `config/tracker.schema.json`) and `adapter.py` (exporting
+  `adapter(context) -> TrackerOps`). Azure DevOps, Linear, and a repository-local tracker ship.
+- `harness tracker list | show | stage` to bring in a tracker the harness does not ship; it counts
+  only once the user types `harness trust-tracker <name> <digest>`, and any edit drops trust.
+- Sessions: `harness session start | status | pause | resume | close` bind one work item to one
+  checkout; the workflow checks the session's work item instead of guessing it from the branch.
+- Rule `tracker-invalid`: while the selected tracker is missing, invalid, untrusted, or lacks its
+  values, tracker and SCM writes are refused.
+- `harness doctor --tools` checks the tracker's server offers every tool its manifest names;
+  `harness doctor --azure` takes its values from the settings.
+- The gateway checks every call's arguments against the tool's input schema.
+- One shared reference for the active tracker (`references/tracker-contract.md`).
 
 ### Changed
 
-- Bootstrap can select Azure DevOps, Linear, or the local tracker; Azure DevOps remains the
-  compatibility default. Backlog-facing skills now consult the active tracker contract before
-  choosing hierarchy, identifiers, or provider operations.
+- Which calls write, how ids look, and which text links a protected item come from every usable
+  tracker folder: Linear writes need approval, Linear and Azure protected ids are both caught, and
+  Azure's full set of link forms is restored.
+- Branch keys come from each tracker's `ids.branch_key` (Azure accepts `AB-123`; Linear and local
+  keys are matched without regard to case).
+- When the rules cannot run, every MCP call counts as a write and is refused.
+- The knowledge store's seed points at the settings file instead of copying it.
+- Schemas are checked with the harness's own standard-library checker; `jsonschema` is no longer
+  needed anywhere.
+
+### Removed
+
+- The Azure adapter shim, the discovery presets, the integrations setup writer, the layout
+  migration, and the copies of templates, references, and scripts inside tracker folders.
 
 ## [0.1.10] - 2026-09-24
 

@@ -52,22 +52,23 @@ scripts/integrations/   contracts (TrackerOps, ScmOps, domain types), registry, 
 | 6 | Rules: `TrackerPolicy` built once, `tracker-invalid` rule, restored protections, typed settings | done |
 | 7 | Sessions wired into the workflow runtime; `harness session` command | done |
 | 8 | Onboarding (`harness tracker stage/show/list`) and typed trust in the prompt hook | done |
-| 9 | Bootstrap and backlog config done; skills, references, and docs still name the old files | in progress |
-| 10 | Tests in `run.sh`, CI, lint, versions, changelog; push | pending |
+| 9 | Bootstrap, backlog config, skills, references, and a full docs pass (links, glossary, ADR-0009) | done |
+| 10 | Tests in `run.sh`, CI without `jsonschema`, lint, versions 0.2.0, changelog; pushed | done |
 
 ## Notes
 
 - The Linear adapter's tool arguments (`save_issue` with `team`, `labels`, `parentId`, `state`;
   `list_comments`/`save_comment` with `issueId`) follow Linear's MCP documentation as far as it
-  could be checked offline; confirm against a live server.
-- Full runner (`tests/run.sh`) passes: 347 backlog, 268 core/integrations/delivery/harness.
-- Still to update in step 9: skills (`bootstrap`, `onboard-tracker`, `start-ticket`,
-  `enrich-work-item`, `generate-work-item`, `generate-breakdown-work-items`, `skip-tracker`,
-  `resume-tracker`, `azure-devops`, `generate-plain-language-documentation`), `references/`
-  (`project-config.md`, `azure-mechanics.md`), docs, README, ADR-0009, CHANGELOG, versions, CI.
+  could be checked offline; confirm against a live server (roadmap: "Live check of the Linear
+  adapter").
+- Verified locally on Python 3.10 and 3.11: `tests/run.sh` (347 backlog, 268 core, integrations,
+  delivery, harness), `ruff check`, `ruff format --check`, `shellcheck`, `scripts/check_repo.py`,
+  `scripts/check_versions.py`, `markdownlint-cli2`. Not run locally: `claude plugin validate` and the
+  sandboxed install job (CI runs them).
+- Out of scope, noted for later: the backlog runtime keeps its own Azure DevOps and Linear providers
+  (`runtime/orchestrator_core/providers/`), a second translation layer beside the tracker adapters.
 
 ## Next
 
-Step 9: rewrite the skills and docs that name `policy.json`, `integrations.json`, the backlog
-config file, or `config --set`; one shared tracker-contract reference for the three work-item
-skills. Then step 10.
+Nothing left in this rework. Follow-ups: the live Linear check, and folding the backlog runtime's
+providers onto the tracker adapters.
