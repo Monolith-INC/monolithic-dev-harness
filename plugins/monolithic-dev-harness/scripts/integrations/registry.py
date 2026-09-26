@@ -158,9 +158,7 @@ def _consistent(folder: Path, document: Mapping[str, Any]) -> Result[None]:
                     "every artifact child must name a declared artifact",
                 ),
                 require(
-                    not any(
-                        _cycles(artifacts, name, frozenset()) for name in artifacts
-                    ),
+                    _acyclic(artifacts, frozenset(artifacts)),
                     "invalid_tracker",
                     "the artifact hierarchy contains a cycle",
                 ),
@@ -190,12 +188,13 @@ def _consistent(folder: Path, document: Mapping[str, Any]) -> Result[None]:
     )
 
 
-def _cycles(
-    graph: Mapping[str, tuple[str, ...]], name: str, path: frozenset[str]
-) -> bool:
-    return name in path or any(
-        _cycles(graph, child, path | {name}) for child in graph.get(name, ())
-    )
+def _acyclic(graph: Mapping[str, tuple[str, ...]], nodes: frozenset[str]) -> bool:
+    """Whether the graph has no cycle: peel off the types that contain nothing left, layer by layer.
+
+    Each layer costs one pass over the edges, so a wide or diamond-shaped hierarchy stays cheap.
+    """
+    leaves = frozenset(node for node in nodes if not set(graph.get(node, ())) & nodes)
+    return not nodes or (bool(leaves) and _acyclic(graph, nodes - leaves))
 
 
 def placeholders(text: str) -> frozenset[str]:
@@ -232,7 +231,14 @@ def _expressions(ids: Mapping[str, Any]) -> Result[None]:
     return bind(
         sequence(
             (
-                _compiles(pattern, "pattern"),
+                bind(
+                    _compiles(pattern, "pattern"),
+                    lambda compiled: require(
+                        compiled.groups == 0,
+                        "invalid_tracker",
+                        "ids.pattern must not capture; write groups as (?:...)",
+                    ),
+                ),
                 bind(
                     _compiles(str(ids["branch_key"]), "branch_key"),
                     lambda compiled: require(
@@ -248,8 +254,13 @@ def _expressions(ids: Mapping[str, Any]) -> Result[None]:
                             "invalid_tracker",
                             "every ids.mention needs {id}",
                         ),
-                        lambda _, template=template: _compiles(
-                            mention_expression(template, pattern), "mention"
+                        lambda _, template=template: bind(
+                            _compiles(mention_expression(template, pattern), "mention"),
+                            lambda compiled: require(
+                                compiled.groups == 1,
+                                "invalid_tracker",
+                                "an ids.mention may capture only {id}; write other groups as (?:...)",
+                            ),
                         ),
                     )
                     for template in ids["mention"]

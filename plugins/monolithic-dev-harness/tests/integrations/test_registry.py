@@ -120,6 +120,28 @@ class RegistryTest(unittest.TestCase):
                 registry.read_manifest(folder, "onboarded"), Err, label
             )
 
+    def test_a_wide_diamond_hierarchy_is_checked_quickly(self) -> None:
+        import time
+
+        layers = [[f"l{depth}n{i}" for i in range(12)] for depth in range(12)]
+        extra = [
+            {
+                "name": name,
+                "children": layers[depth + 1] if depth + 1 < len(layers) else [],
+            }
+            for depth, layer in enumerate(layers)
+            for name in layer
+        ]
+        local = json.loads(
+            (registry.SHIPPED_ROOT / "local" / "tracker.json").read_text()
+        )
+        folder = copy_tracker(
+            "local", self.repo / "wide", artifacts=local["artifacts"] + extra
+        )
+        started = time.monotonic()
+        self.assertIsInstance(registry.read_manifest(folder, "onboarded"), Ok)
+        self.assertLess(time.monotonic() - started, 1)
+
     def test_a_folder_without_an_adapter_is_rejected(self) -> None:
         folder = copy_tracker("local", self.repo / "noadapter")
         (folder / "adapter.py").unlink()
