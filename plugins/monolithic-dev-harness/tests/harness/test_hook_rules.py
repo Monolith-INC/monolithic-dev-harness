@@ -244,7 +244,10 @@ class TestHumanOwned(HookTestCase):
 class TestTrackerWrites(HookTestCase):
     def test_tracker_declared_write_needs_approval(self) -> None:
         from scripts.harness.rules import is_remote_write, make_call
-        self.assertTrue(is_remote_write(make_call("save_issue", {}, "linear"), {"save_issue"}))
+
+        self.assertTrue(
+            is_remote_write(make_call("save_issue", {}, "linear"), {"save_issue"})
+        )
 
 
 class TestApproval(HookTestCase):

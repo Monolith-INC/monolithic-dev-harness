@@ -26,8 +26,12 @@ class TrackerPinningTests(unittest.TestCase):
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    def test_approve_click_pins_an_onboarded_tracker_and_edits_or_revocation_hide_it(self):
-        self.assertIsNone(run(self.repo, "ask", {"tool_use_id": "toolu_tracker", "tool_input": ask()}))
+    def test_approve_click_pins_an_onboarded_tracker_and_edits_or_revocation_hide_it(
+        self,
+    ):
+        self.assertIsNone(
+            run(self.repo, "ask", {"tool_use_id": "toolu_tracker", "tool_input": ask()})
+        )
         response = run(
             self.repo,
             "answer",
@@ -38,7 +42,10 @@ class TrackerPinningTests(unittest.TestCase):
             },
         )
 
-        self.assertIn("pins 1 approved onboarded tracker", response["hookSpecificOutput"]["additionalContext"])
+        self.assertIn(
+            "pins 1 approved onboarded tracker",
+            response["hookSpecificOutput"]["additionalContext"],
+        )
         self.assertIn("acme", [tracker.name for tracker in available(self.repo)])
 
         (self.folder / "reference.md").write_text("changed", encoding="utf-8")

@@ -36,7 +36,9 @@ def _read(path: Path) -> dict[str, object]:
 
 def _write(path: Path, value: dict[str, object]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    path.write_text(
+        json.dumps(value, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+    )
 
 
 def _identity(repo: Path) -> tuple[str, str, str]:
@@ -47,7 +49,9 @@ def _identity(repo: Path) -> tuple[str, str, str]:
     )
 
 
-def _session_id(identity: tuple[str, str, str], work_item: str, attempt: int = 0) -> str:
+def _session_id(
+    identity: tuple[str, str, str], work_item: str, attempt: int = 0
+) -> str:
     parts = (*identity, work_item, *((str(attempt),) if attempt else ()))
     return "HS-" + hashlib.sha256(":".join(parts).encode()).hexdigest()[:10].upper()
 
@@ -62,15 +66,27 @@ def start(repo: Path, work_item: str, workflow: str) -> dict[str, object]:
     if current.state == "error":
         raise SessionError(f"cannot start a session: {current.reason}")
     if current.session_id is not None:
-        raise SessionError(f"session {current.session_id} is already open on this checkout")
+        raise SessionError(
+            f"session {current.session_id} is already open on this checkout"
+        )
     identity = _identity(repo)
     session_id = next(
         candidate
-        for candidate in (_session_id(identity, work_item, attempt) for attempt in count())
+        for candidate in (
+            _session_id(identity, work_item, attempt) for attempt in count()
+        )
         if not (repo / ROOT / candidate).exists()
     )
     directory = repo / ROOT / session_id
-    record = {"session_id": session_id, "work_item": work_item, "workflow": workflow, "worktree": identity[0], "git_dir": identity[1], "branch": identity[2], "base_commit": gitstate.head_sha(repo)}
+    record = {
+        "session_id": session_id,
+        "work_item": work_item,
+        "workflow": workflow,
+        "worktree": identity[0],
+        "git_dir": identity[1],
+        "branch": identity[2],
+        "base_commit": gitstate.head_sha(repo),
+    }
     _write(directory / "session.json", record)
     _write(directory / "events" / "0001-started.json", {"type": "started"})
     return record
@@ -84,21 +100,34 @@ def resolve(repo: Path) -> Resolution:
     try:
         bound = tuple(
             (path.parent, record)
-            for path, record in ((path, _read(path)) for path in sorted((repo / ROOT).glob("*/session.json")))
-            if tuple(record.get(key) for key in ("worktree", "git_dir", "branch")) == identity
+            for path, record in (
+                (path, _read(path))
+                for path in sorted((repo / ROOT).glob("*/session.json"))
+            )
+            if tuple(record.get(key) for key in ("worktree", "git_dir", "branch"))
+            == identity
         )
-        states = tuple((str(record.get("session_id")), _last_event(directory)) for directory, record in bound)
+        states = tuple(
+            (str(record.get("session_id")), _last_event(directory))
+            for directory, record in bound
+        )
     except SessionError as exc:
         return Resolution("error", reason=str(exc))
-    open_ = tuple((session_id, event) for session_id, event in states if event != "closed")
+    open_ = tuple(
+        (session_id, event) for session_id, event in states if event != "closed"
+    )
     if not open_:
         return Resolution("dormant")
     if len(open_) != 1:
-        return Resolution("error", reason="multiple open sessions are bound to this checkout")
+        return Resolution(
+            "error", reason="multiple open sessions are bound to this checkout"
+        )
     session_id, event = open_[0]
     if event is None:
         return Resolution("error", session_id, "session has no events")
-    return Resolution("active" if event in {"started", "resumed"} else "dormant", session_id, event)
+    return Resolution(
+        "active" if event in {"started", "resumed"} else "dormant", session_id, event
+    )
 
 
 def transition(repo: Path, session_id: str, event: str) -> Resolution:

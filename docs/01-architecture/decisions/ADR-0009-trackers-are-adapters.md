@@ -1,7 +1,8 @@
 ---
 title: ADR-0009 Trackers are adapters
 status: Proposed
-date: 2026-09-25
+owner: monolithic-dev-harness maintainers
+last_reviewed: 2026-09-25
 ---
 
 # ADR-0009: Trackers are adapters

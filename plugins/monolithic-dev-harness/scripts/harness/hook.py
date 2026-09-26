@@ -221,7 +221,11 @@ def _pin_approved_trackers(repo: Path, approval_id: str) -> str:
         pin_approved_trackers(repo, approval_id, folders)
     except (OSError, ValueError) as exc:
         return f" Approved onboarded trackers were NOT pinned: {exc}"
-    return "" if not folders else f" It also pins {len(folders)} approved onboarded tracker(s)."
+    return (
+        ""
+        if not folders
+        else f" It also pins {len(folders)} approved onboarded tracker(s)."
+    )
 
 
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:

@@ -120,7 +120,8 @@ class TrackerAdapter(ABC):
             return None
         escaped = re.escape(pattern)
         escaped = escaped.replace(
-            re.escape("{key}"), rf"(?P<key>{key_pattern if isinstance(key_pattern, str) else r'[A-Za-z][A-Za-z0-9_-]*-?[0-9]+|[0-9]+'})"
+            re.escape("{key}"),
+            rf"(?P<key>{key_pattern if isinstance(key_pattern, str) else r'[A-Za-z][A-Za-z0-9_-]*-?[0-9]+|[0-9]+'})",
         )
         escaped = escaped.replace(re.escape("{category}"), r"[A-Za-z0-9_-]+")
         escaped = escaped.replace(re.escape("{slug}"), r"[A-Za-z0-9_-]+")
@@ -404,7 +405,10 @@ def tracker_adapter(config: dict[str, Any]) -> TrackerAdapter:
     from .azure import AzureDevOpsTrackerAdapter
     from .local_tracker import LocalTrackerAdapter
 
-    adapter = config.get("adapter") or {"azure-devops": "azure_devops", "local": "local_tracker"}.get(config.get("name"), config.get("name"))
+    adapter = config.get("adapter") or {
+        "azure-devops": "azure_devops",
+        "local": "local_tracker",
+    }.get(config.get("name"), config.get("name"))
     if adapter == "linear":
         return LinearTrackerAdapter(config)
     if adapter == "azure_devops":

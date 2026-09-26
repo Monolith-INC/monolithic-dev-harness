@@ -63,11 +63,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--policy-from", required=True)
     parser.add_argument("--branch-template", default="{category}/{key}-{slug}")
     parser.add_argument(
-        "--tracker", default="azure-devops", choices=("azure-devops", "linear", "local"),
+        "--tracker",
+        default="azure-devops",
+        choices=("azure-devops", "linear", "local"),
         help="shipped tracker manifest to configure (Azure DevOps remains the compatibility default)",
     )
     parser.add_argument(
-        "--scm", choices=("azure-repos", "github"),
+        "--scm",
+        choices=("azure-repos", "github"),
         help="SCM adapter; defaults to Azure Repos for Azure Boards and GitHub otherwise",
     )
     parser.add_argument(
@@ -132,13 +135,23 @@ def main(argv: list[str] | None = None) -> int:
         print(note)
 
     azure = policy["azure"]
-    tracker_adapter = {"azure-devops": "azure_devops", "local": "local_tracker"}.get(args.tracker, args.tracker)
-    scm_adapter = args.scm.replace("-", "_") if args.scm else ("azure_repos" if args.tracker == "azure-devops" else "github")
+    tracker_adapter = {"azure-devops": "azure_devops", "local": "local_tracker"}.get(
+        args.tracker, args.tracker
+    )
+    scm_adapter = (
+        args.scm.replace("-", "_")
+        if args.scm
+        else ("azure_repos" if args.tracker == "azure-devops" else "github")
+    )
     integrations = repo / INTEGRATIONS
     if integrations.exists() and not args.force:
         from harness.integrations_setup import repair_integrations
 
-        repairs = repair_integrations(integrations, azure) if args.tracker == "azure-devops" else []
+        repairs = (
+            repair_integrations(integrations, azure)
+            if args.tracker == "azure-devops"
+            else []
+        )
         for repair in repairs:
             print(f"repaired {INTEGRATIONS}: {repair}")
         if not repairs:
@@ -163,16 +176,28 @@ def main(argv: list[str] | None = None) -> int:
     backlog_config.parent.mkdir(parents=True, exist_ok=True)
     if args.tracker == "azure-devops":
         pairs = {
-            "azure.org": azure["organization"], "azure.project": azure["project"],
-            "azure.team": azure["team"], "artifacts_path": backlog.get("artifacts_path", ""),
+            "azure.org": azure["organization"],
+            "azure.project": azure["project"],
+            "azure.team": azure["team"],
+            "artifacts_path": backlog.get("artifacts_path", ""),
         }
         missing = [key for key, value in pairs.items() if not value]
         if missing:
-            print(f"policy is missing values the backlog stage needs: {', '.join(missing)}", file=sys.stderr)
+            print(
+                f"policy is missing values the backlog stage needs: {', '.join(missing)}",
+                file=sys.stderr,
+            )
             return 2
         cli = PLUGIN_ROOT / "bin" / "agile-backlog-toolkit"
-        set_args = [arg for key, value in pairs.items() for arg in ("--set", f"{key}={value}")]
-        subprocess.run([str(cli), "config", *set_args], cwd=repo, check=True, stdout=subprocess.DEVNULL)
+        set_args = [
+            arg for key, value in pairs.items() for arg in ("--set", f"{key}={value}")
+        ]
+        subprocess.run(
+            [str(cli), "config", *set_args],
+            cwd=repo,
+            check=True,
+            stdout=subprocess.DEVNULL,
+        )
         data = json.loads(backlog_config.read_text(encoding="utf-8"))
     else:
         data = {"schemaVersion": 1, "artifacts_path": backlog.get("artifacts_path", "")}

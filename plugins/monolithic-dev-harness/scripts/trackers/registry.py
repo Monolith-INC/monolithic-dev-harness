@@ -73,11 +73,11 @@ def validate_manifest(manifest: Mapping[str, Any]) -> dict[str, Any]:
 def _validate_domain(manifest: dict[str, Any]) -> dict[str, Any]:
     artifacts = tuple(manifest["artifacts"])
     names = tuple(str(item["name"]) for item in artifacts)
-    graph = {
-        str(item["name"]): tuple(map(str, item["children"])) for item in artifacts
-    }
+    graph = {str(item["name"]): tuple(map(str, item["children"])) for item in artifacts}
     roles = manifest["roles"]
-    _require(len(names) == len(set(names)), "artifacts", "artifact names must be unique")
+    _require(
+        len(names) == len(set(names)), "artifacts", "artifact names must be unique"
+    )
     _require(
         all(child in graph for children in graph.values() for child in children),
         "artifacts.children",
@@ -195,7 +195,8 @@ def _onboarded(repo: Path) -> tuple[Tracker, ...]:
     return tuple(
         tracker
         for tracker in _discover(repo / ".harness" / "trackers", "onboarded")
-        if tracker.manifest.get("status") == "approved" and _is_pinned(repo, tracker.root)
+        if tracker.manifest.get("status") == "approved"
+        and _is_pinned(repo, tracker.root)
     )
 
 
@@ -220,7 +221,9 @@ def approved_onboarded_trackers(repo: Path) -> tuple[Path, ...]:
 
 def _selection(repo: Path) -> tuple[str, str]:
     path = repo / ".harness" / "integrations.json"
-    path = repo / ".codex-workflows" / "integrations.json" if not path.is_file() else path
+    path = (
+        repo / ".codex-workflows" / "integrations.json" if not path.is_file() else path
+    )
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:

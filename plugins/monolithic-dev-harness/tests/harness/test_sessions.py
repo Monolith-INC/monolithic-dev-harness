@@ -51,7 +51,9 @@ class SessionTests(unittest.TestCase):
     def test_a_started_session_is_active_on_its_checkout(self) -> None:
         session_id = self.start()
         resolution = sessions.resolve(self.repo)
-        self.assertEqual((resolution.state, resolution.session_id), ("active", session_id))
+        self.assertEqual(
+            (resolution.state, resolution.session_id), ("active", session_id)
+        )
 
     def test_a_session_on_another_branch_does_not_apply(self) -> None:
         self.start()
@@ -117,7 +119,9 @@ class SessionTests(unittest.TestCase):
         for event in (self.repo / sessions.ROOT / session_id / "events").iterdir():
             event.unlink()
         resolution = sessions.resolve(self.repo)
-        self.assertEqual((resolution.state, resolution.session_id), ("error", session_id))
+        self.assertEqual(
+            (resolution.state, resolution.session_id), ("error", session_id)
+        )
 
 
 if __name__ == "__main__":

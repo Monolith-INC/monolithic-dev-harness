@@ -40,7 +40,11 @@ def _manifest(name: str, *, status: str = "approved") -> dict[str, object]:
             "done": "Done",
             "canceled": "Canceled",
         },
-        "ids": {"pattern": "[A-Z]+-[0-9]+", "branch_key": "[0-9]+", "mention": ["#{id}"]},
+        "ids": {
+            "pattern": "[A-Z]+-[0-9]+",
+            "branch_key": "[0-9]+",
+            "mention": ["#{id}"],
+        },
         "mentions_link": False,
         "attachments": {"spec": "comment", "report": "comment", "pull_request": "link"},
         "text_format": "markdown",
@@ -67,7 +71,10 @@ class RegistryTests(unittest.TestCase):
             onboarded = _write_manifest(repo / ".harness" / "trackers", "acme")
 
             self.assertEqual(
-                [tracker.name for tracker in available(repo, shipped_root=shipped.parent)],
+                [
+                    tracker.name
+                    for tracker in available(repo, shipped_root=shipped.parent)
+                ],
                 ["azure-devops"],
             )
 
@@ -75,11 +82,16 @@ class RegistryTests(unittest.TestCase):
             pin_approved_trackers(repo, "HB-TRACKERS", [onboarded])
 
             self.assertEqual(
-                [tracker.name for tracker in available(repo, shipped_root=shipped.parent)],
+                [
+                    tracker.name
+                    for tracker in available(repo, shipped_root=shipped.parent)
+                ],
                 ["acme", "azure-devops"],
             )
 
-    def test_active_prefers_shipped_on_name_clash_without_explicit_onboarded_source(self):
+    def test_active_prefers_shipped_on_name_clash_without_explicit_onboarded_source(
+        self,
+    ):
         with tempfile.TemporaryDirectory() as directory:
             repo = Path(directory)
             shipped = _write_manifest(repo / "shipped", "acme")

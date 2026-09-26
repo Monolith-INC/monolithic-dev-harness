@@ -12,7 +12,11 @@ from .config import load_config, set_tracking_mode
 from .contracts import IntegrationError
 
 TOOLS = [
-    {"name": "tracker_describe", "description": "Describe the active tracker manifest.", "inputSchema": {"type": "object", "properties": {}}},
+    {
+        "name": "tracker_describe",
+        "description": "Describe the active tracker manifest.",
+        "inputSchema": {"type": "object", "properties": {}},
+    },
     {
         "name": "tracker_get_work_item",
         "description": "Retrieve one configured tracker work item.",
