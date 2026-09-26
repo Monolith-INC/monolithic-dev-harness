@@ -254,6 +254,39 @@ def _valid_onboarded(repo: Path) -> tuple[Tracker, ...]:
     )
 
 
+@dataclass(frozen=True)
+class OnboardedStatus:
+    """What one onboarded folder is: `invalid`, `draft`, `unpinned`, or `pinned`."""
+
+    folder: Path
+    state: str
+    detail: str = ""
+
+
+def onboarded_status(repo: Path) -> tuple[OnboardedStatus, ...]:
+    """Every folder under `.harness/trackers/`, for `harness doctor` to report."""
+    return tuple(
+        map(
+            lambda path: _status(repo, path),
+            _manifest_paths(repo / ".harness" / "trackers"),
+        )
+    )
+
+
+def _status(repo: Path, path: Path) -> OnboardedStatus:
+    try:
+        tracker = _load_path(path, "onboarded")
+    except TrackerError as exc:
+        return OnboardedStatus(path.parent, "invalid", str(exc))
+    match (tracker.manifest.get("status"), _is_pinned(repo, tracker.root)):
+        case ("approved", True):
+            return OnboardedStatus(path.parent, "pinned")
+        case ("approved", False):
+            return OnboardedStatus(path.parent, "unpinned")
+        case _:
+            return OnboardedStatus(path.parent, "draft")
+
+
 def _try_load_onboarded(path: Path) -> Tracker | None:
     try:
         return _load_path(path, "onboarded")

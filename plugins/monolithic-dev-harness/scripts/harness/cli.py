@@ -116,6 +116,9 @@ def doctor(args: argparse.Namespace) -> int:
             "governed" if governed else "not opted in (run `harness bootstrap`)",
         )
 
+    if repo is not None and (repo / POLICY_RELATIVE_PATH).is_file():
+        _tracker_report(report, repo)
+
     if args.azure:
         print("Azure DevOps")
         if not args.project:
@@ -133,6 +136,38 @@ def doctor(args: argparse.Namespace) -> int:
 
     print("healthy" if report.failures == 0 else f"{report.failures} problem(s) found")
     return 0 if report.failures == 0 else 1
+
+
+_ONBOARDED = {
+    "pinned": ("ok", "approved and pinned"),
+    "unpinned": (
+        "warn",
+        "approved but not pinned: ask one approval question that names this tracker",
+    ),
+    "draft": ("skip", "draft: not selectable until approved and pinned"),
+}
+
+
+def _tracker_report(report: Report, repo: Path) -> None:
+    """The chosen tracker and every onboarded folder, as the hook rules will see them."""
+    from trackers.registry import TrackerError, active, is_selected, onboarded_status
+
+    print("Tracker")
+    if not is_selected(repo):
+        report.line("skip", "tracker", "none chosen; the default Azure rules apply")
+    else:
+        try:
+            tracker = active(repo)
+            report.line("ok", "tracker", f"{tracker.name} ({tracker.source})")
+        except TrackerError as exc:
+            report.line(
+                "FAIL",
+                "tracker",
+                f"{exc}; MCP calls are blocked until .harness/integrations.json is fixed",
+            )
+    for item in onboarded_status(repo):
+        status, detail = _ONBOARDED.get(item.state, ("warn", f"invalid: {item.detail}"))
+        report.line(status, f"onboarded {item.folder.name}", detail)
 
 
 def bootstrap(extra: list[str]) -> int:

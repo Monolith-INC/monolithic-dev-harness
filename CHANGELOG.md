@@ -19,6 +19,8 @@ All notable changes to this project are documented here. The format follows
   `scripts/integrations/azure.py`; the Linear and local adapter shims and the per-tracker copies of
   the canonical templates are gone. `mentions_link` is removed from the manifest schema. Tracker
   names map to integration adapter ids through one table in the registry.
+- `harness doctor` reports the chosen tracker and whether it loads, and the state of every
+  onboarded tracker folder: invalid (with the reason), draft, approved but not pinned, or pinned.
 - `python3 -m trackers.onboarding stage|approve` runs onboarding from the command line; `approve`
   rejects anything that is not a tracker name.
 
