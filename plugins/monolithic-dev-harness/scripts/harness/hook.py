@@ -13,7 +13,7 @@
 Pre-tool events run the harness rules first. If they allow the call, Claude and Cursor
 `preToolUse` payloads continue to the workflow policy runtime (branch template, work-item
 key, state, spec prerequisites, completion evidence, protected branches).
-Prompt events record approvals and manual-check evidence from what the user typed; answer events
+Prompt events record approvals, manual-check evidence, and tracker trust from what the user typed; answer events
 record an approval from the user clicking `Approve` on a question. Ask events send a question back
 to be rewritten when it is not plain enough to show a person.
 """
@@ -34,8 +34,15 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
     if str(entry) not in sys.path:
         sys.path.insert(0, str(entry))
 
-from harness import gitstate, questions, rules, state  # noqa: E402
-from harness.config import POLICY_RELATIVE_PATH, PolicyError, load_policy  # noqa: E402
+from core.result import Err, Ok  # noqa: E402
+from harness import (  # noqa: E402
+    gitstate,
+    questions,
+    rules,
+    settings,
+    state,
+    tracker_policy,
+)
 
 # The hosts give the hook 15 seconds and treat a timeout as "no decision", which lets the call
 # through. The rules get less than that, and running out counts as a failure.
@@ -57,6 +64,14 @@ REVOKE_RE = re.compile(r"\bharness\s+revoke\b", re.IGNORECASE)
 MANUAL_RE = re.compile(
     r"\bharness\s+manual-check\s+([A-Za-z0-9._-]{1,60})\s+ok\b", re.IGNORECASE
 )
+TRUST_RE = re.compile(
+    r"\bharness\s+trust-tracker\s+([a-z][a-z0-9-]{0,63})\s+([0-9a-f]{12,64})\b",
+    re.IGNORECASE,
+)
+UNTRUST_RE = re.compile(
+    r"\bharness\s+untrust-tracker\s+([a-z][a-z0-9-]{0,63})\b", re.IGNORECASE
+)
+DEFAULT_WINDOW_MINUTES = 20
 
 
 def _workspace(payload: dict[str, Any]) -> Path:
@@ -165,8 +180,8 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     call = _tool_call(host, event, payload)
     repo = _workspace(payload)
-    if not (repo / POLICY_RELATIVE_PATH).is_file():
-        # Not a governed repository: the harness is opt-in per repo (bootstrap writes the policy).
+    if not settings.governed(repo):
+        # Not a governed repository: the harness is opt-in per repo (bootstrap writes the settings).
         _emit_decision(host, rules.Decision.allow())
         return 0
     timed = hasattr(signal, "SIGALRM")
@@ -174,8 +189,16 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
         signal.signal(signal.SIGALRM, _out_of_time)
         signal.setitimer(signal.ITIMER_REAL, RULES_BUDGET_SECONDS)
     try:
-        policy = load_policy(repo)
-        decision = rules.evaluate(call, repo, policy)
+        loaded = settings.load(repo)
+        match loaded:
+            case Err(failure):
+                return _fail(
+                    host, call, f"the settings cannot be used: {failure.message}"
+                )
+            case Ok(chosen):
+                decision = rules.evaluate(
+                    call, repo, chosen, tracker_policy.build(repo, loaded)
+                )
     except (Exception, _OutOfTime) as exc:
         # Any failure of the rules, including a crash or running out of time, blocks writes.
         # A hook that exits with an error or times out is not a block: the host lets the call run.
@@ -212,30 +235,51 @@ def _pin_approved_notes(repo: Path, approval_id: str) -> str:
     )
 
 
-def _pin_approved_trackers(repo: Path, approval_id: str) -> str:
-    """Pin tracker definitions the user approved so later edits do not silently apply."""
-    from trackers.registry import approved_onboarded_trackers, pin_approved_trackers
+def _window(repo: Path) -> int:
+    match settings.load(repo):
+        case Ok(chosen):
+            return chosen.approval_minutes
+        case Err():
+            return DEFAULT_WINDOW_MINUTES
 
-    try:
-        folders = approved_onboarded_trackers(repo)
-        pin_approved_trackers(repo, approval_id, folders)
-    except (OSError, ValueError) as exc:
-        return f" Approved onboarded trackers were NOT pinned: {exc}"
-    return "" if not folders else f" It also pins {len(folders)} approved onboarded tracker(s)."
+
+def _trust_notes(repo: Path, prompt: str) -> list[str]:
+    """Trust or untrust onboarded trackers the user named, each pinned to the digest they typed."""
+    from integrations import registry, trust
+
+    trusted = [
+        (
+            name,
+            trust.trust(
+                repo, name, repo / registry.ONBOARDED_RELATIVE_PATH / name, digest
+            ),
+        )
+        for name, digest in TRUST_RE.findall(prompt)
+    ]
+    untrusted = [
+        (name, trust.untrust(repo, name)) for name in UNTRUST_RE.findall(prompt)
+    ]
+    return [
+        *(
+            f"[harness] tracker {name} is trusted as it reads now (digest {result.value[:12]})."
+            if isinstance(result, Ok)
+            else f"[harness] tracker {name} was NOT trusted: {result.failure.message}"
+            for name, result in trusted
+        ),
+        *(f"[harness] tracker {name} is no longer trusted." for name, _ in untrusted),
+    ]
 
 
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     prompt = payload.get("prompt") or payload.get("user_prompt") or ""
     repo = _workspace(payload)
     notes: list[str] = []
-    if not (repo / POLICY_RELATIVE_PATH).is_file():
+    if not settings.governed(repo):
         if host == "cursor":
             print(json.dumps({"continue": True}))
         return 0
-    try:
-        window = int(load_policy(repo).get("approvals", {}).get("window_minutes", 20))
-    except (PolicyError, ValueError):
-        window = 20
+    window = _window(repo)
+    notes.extend(_trust_notes(repo, prompt))
     if REVOKE_RE.search(prompt):
         notes.append(
             f"[harness] revoked {state.revoke_approvals(repo)} open approval window(s)."
@@ -245,7 +289,6 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         notes.append(
             f"[harness] approval {approval_id} recorded; tracker/SCM writes are open for {window} minutes."
             + _pin_approved_notes(repo, approval_id)
-            + _pin_approved_trackers(repo, approval_id)
         )
     for name in MANUAL_RE.findall(prompt):
         try:
@@ -266,7 +309,7 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
 
 def _governed(payload: dict[str, Any]) -> Path | None:
     repo = _workspace(payload)
-    return repo if (repo / POLICY_RELATIVE_PATH).is_file() else None
+    return repo if settings.governed(repo) else None
 
 
 def handle_ask(payload: dict[str, Any]) -> int:
@@ -303,15 +346,10 @@ def handle_answer(payload: dict[str, Any]) -> int:
     )
     if approved is None:
         return 0
-    try:
-        window = int(load_policy(repo).get("approvals", {}).get("window_minutes", 20))
-    except (PolicyError, ValueError):
-        window = 20
+    window = _window(repo)
     approval_id = questions.approval_id(tool_use_id)
     state.open_approval(repo, approval_id, window, question=approved[0])
-    pinned = _pin_approved_notes(repo, approval_id) + _pin_approved_trackers(
-        repo, approval_id
-    )
+    pinned = _pin_approved_notes(repo, approval_id)
     print(
         json.dumps(
             {

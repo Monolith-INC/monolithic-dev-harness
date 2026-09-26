@@ -12,6 +12,7 @@ from scripts.hook_runtime import _is_mutating_git
 from scripts.policy import CanonicalToolEvent
 from scripts.policy.commands import is_code, writes_code
 from scripts.policy.git_branch_guard import evaluate_git_branch_guard
+from tests.settings_fixture import write_settings
 
 
 class WritesCodeTests(unittest.TestCase):
@@ -85,9 +86,8 @@ class SpecBeforeCodeCoversCodeOnlyTests(unittest.TestCase):
     def test_editing_a_file_asks_only_for_code(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            (root / ".harness").mkdir()
-            (root / ".harness/policy.json").write_text(
-                '{"schemaVersion": 1, "tests_required": [{"source": ["lib/**"], "tests": ["test/**"]}]}'
+            write_settings(
+                root, tests_required=[{"source": ["lib/**"], "tests": ["test/**"]}]
             )
 
             def edits_code(path: str | None) -> bool:

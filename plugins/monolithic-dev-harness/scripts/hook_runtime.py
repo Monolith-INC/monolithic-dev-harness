@@ -15,7 +15,8 @@ if _SCRIPTS_DIR not in sys.path:
 
 from spec_runtime import SPEC_KINDS
 
-from harness.config import PolicyError, load_policy
+from core.result import Err, Failure, Ok, Result, bind, fmap
+from harness import sessions, settings, state
 from harness.local_artifacts import approved_kinds_for, artifacts_dir
 from host_adapters import (
     format_claude_decision,
@@ -23,9 +24,8 @@ from host_adapters import (
     parse_claude_payload,
     parse_cursor_payload,
 )
-from integrations.adapters import tracker_adapter
-from integrations.config import load_config
-from integrations.contracts import IntegrationError
+from integrations import branches, registry
+from integrations.contracts import LogicalState, TrackerOps, WorkItem
 from policy import CanonicalToolEvent, PolicyDecision
 from policy.commands import git_commands, is_code, writes_code
 from policy.git_branch_guard import evaluate_git_branch_guard
@@ -145,7 +145,7 @@ def evaluate_event(
     if normalized == "tracker_transition_work_item":
         arguments = _arguments(payload or {})
         if arguments.get("state") == "done":
-            return _evaluate_completion(event)
+            return _evaluate_completion(event, str(arguments.get("ref", "")))
         return PolicyDecision.allow()
 
     if event.tool_name in _WRITE_TOOLS and _edits_code(event):
@@ -154,21 +154,20 @@ def evaluate_event(
 
 
 def _code_patterns(project_root: str) -> list[str] | None:
-    """The policy's source and test globs: the files "spec before code" covers.
+    """The settings' source and test globs: the files "spec before code" covers.
 
-    `None` (every file but git's and the harness's) when the policy names none or cannot be read.
+    `None` (every file but git's and the harness's) when the settings name none or cannot be read.
     """
-    try:
-        policy = load_policy(Path(project_root))
-    except (PolicyError, OSError):
-        return None
-    patterns = [
-        pattern
-        for group in policy.get("tests_required", [])
-        for key in ("source", "tests")
-        for pattern in group.get(key, [])
-    ]
-    return patterns or None
+    match settings.load(Path(project_root)):
+        case Ok(chosen):
+            patterns = [
+                pattern
+                for group in chosen.tests_required
+                for pattern in (*group.source, *group.tests)
+            ]
+            return patterns or None
+        case Err():
+            return None
 
 
 def _edits_code(event: CanonicalToolEvent) -> bool:
@@ -186,57 +185,91 @@ def _edits_code(event: CanonicalToolEvent) -> bool:
     return is_code(relative, _code_patterns(event.workspace_root))
 
 
-def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
-    if _is_bootstrap_or_repair(event.command):
-        return PolicyDecision.allow()
-    try:
-        config = load_config(Path(event.workspace_root))
-        if not config.tracking_enabled:
+def _decision(result: Result[None]) -> PolicyDecision:
+    match result:
+        case Ok():
             return PolicyDecision.allow()
-        if not event.branch:
-            return PolicyDecision.deny(
-                "A ticket branch is required before governed changes."
+        case Err(failure):
+            return PolicyDecision.deny(failure.message)
+
+
+def _enforced(root: Path) -> bool:
+    return state.tracking_mode(root) == "enforced"
+
+
+def _session_item(root: Path) -> Result[tuple[sessions.Session, TrackerOps, WorkItem]]:
+    """This checkout's active session, the tracker, and the session's work item as the tracker has it."""
+    match sessions.resolve(root):
+        case sessions.Bound(session) if session.phase == sessions.Phase.ACTIVE:
+            return bind(
+                registry.open_selected(root, settings.load(root)),
+                lambda ops: fmap(
+                    ops.get_work_item(session.work_item),
+                    lambda item: (session, ops, item),
+                ),
             )
-        tracker = tracker_adapter(config.tracker)
-        key = tracker.resolve_branch_key(event.branch)
-        if not key:
-            return PolicyDecision.deny(
-                "Branch does not match the configured work-item convention and cannot be mapped to a tracker item."
+        case sessions.Bound(session):
+            return Err(
+                _failure(
+                    f"session {session.id} for {session.work_item} is {session.phase.value}; resume it first"
+                )
             )
-        item = tracker.get_work_item(_provider_ref(config.tracker, key))
-        if item.state.value != "in_progress":
-            return PolicyDecision.deny(
+        case sessions.Unbound(reason) | sessions.Broken(reason):
+            return Err(
+                _failure(
+                    f"governed changes need an active session: {reason}. Start one with "
+                    "`harness session start <work item>` on the work item's branch."
+                )
+            )
+
+
+def _failure(message: str) -> Failure:
+    return Failure("workflow_policy", message)
+
+
+def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
+    root = Path(event.workspace_root or ".")
+    if _is_bootstrap_or_repair(event.command) or not _enforced(root):
+        return PolicyDecision.allow()
+    return _decision(
+        bind(
+            _session_item(root),
+            lambda found: _ready(root.resolve(), found[1], found[2]),
+        )
+    )
+
+
+def _ready(root: Path, ops: TrackerOps, item: WorkItem) -> Result[None]:
+    if item.state != LogicalState.IN_PROGRESS:
+        return Err(
+            _failure(
                 f"Work item {item.key} must be in progress before code changes are allowed."
             )
-        kinds = {
-            _artifact_kind(artifact.kind)
-            for artifact in tracker.list_artifacts(item.id)
-        }
-        project_root = Path(event.workspace_root or ".").resolve()
-        if not SPEC_ARTIFACT_KINDS & kinds:
-            kinds |= set(
-                map(_artifact_kind, approved_kinds_for(project_root, str(item.key)))
-            )
-        if not SPEC_ARTIFACT_KINDS & kinds:
-            local = artifacts_dir(project_root)
-            where = (
-                "the tracker"
-                if local is None
-                else f"the tracker or under {local} (a note there counts once it is marked "
-                "`status: approved` and the user then approves it)"
-            )
-            return PolicyDecision.deny(
-                f"Work item {item.key} has no accepted specification artifact in {where}."
-            )
-        return PolicyDecision.allow()
-    except IntegrationError as exc:
-        return PolicyDecision.deny(
-            f"Workflow integration unavailable ({exc.code}): {exc}"
         )
-    except (OSError, ValueError) as exc:
-        return PolicyDecision.deny(
-            f"Workflow policy could not validate the current work item: {exc}"
+    return bind(
+        ops.list_artifacts(item.id),
+        lambda found: _has_spec(
+            root, item, {_artifact_kind(artifact.kind) for artifact in found}
+        ),
+    )
+
+
+def _has_spec(root: Path, item: WorkItem, kinds: set[str]) -> Result[None]:
+    local = set(map(_artifact_kind, approved_kinds_for(root, str(item.key))))
+    if SPEC_ARTIFACT_KINDS & (kinds | local):
+        return Ok(None)
+    folder = artifacts_dir(root)
+    where = (
+        "the tracker"
+        if folder is None
+        else f"the tracker or under {folder} (a note there counts once it is marked "
+        "`status: approved` and the user then approves it)"
+    )
+    return Err(
+        _failure(
+            f"Work item {item.key} has no accepted specification artifact in {where}."
         )
+    )
 
 
 def _created_branch(argv: list[str]) -> str:
@@ -253,63 +286,67 @@ def _created_branch(argv: list[str]) -> str:
 
 def _validate_checkout_convention(command: str, project_root: str) -> PolicyDecision:
     targets = [name for name in map(_created_branch, git_commands(command)) if name]
-    if not targets:
+    root = Path(project_root)
+    if not targets or not _enforced(root):
         return PolicyDecision.allow()
-    target = targets[0]
-    try:
-        config = load_config(Path(project_root))
-        if not config.tracking_enabled:
-            return PolicyDecision.allow()
-        tracker = tracker_adapter(config.tracker)
-        if not tracker.resolve_branch_key(target):
-            return PolicyDecision.deny(
-                "Branch does not match the convention selected during workflow bootstrap."
-            )
-    except IntegrationError as exc:
-        return PolicyDecision.deny(
-            f"Workflow integration unavailable ({exc.code}): {exc}"
+    return _decision(
+        bind(
+            settings.load(root),
+            lambda chosen: bind(
+                registry.selected(root, Ok(chosen)),
+                lambda active: fmap(
+                    branches.work_item_id(
+                        chosen.branch_template,
+                        active.manifest.ids.branch_key,
+                        targets[0],
+                    ),
+                    lambda _: None,
+                ),
+            ),
         )
-    except (OSError, ValueError) as exc:
-        return PolicyDecision.deny(
-            f"Workflow policy could not validate the branch convention: {exc}"
-        )
-    return PolicyDecision.allow()
+    )
 
 
-def _evaluate_completion(event: CanonicalToolEvent) -> PolicyDecision:
-    try:
-        config = load_config(Path(event.workspace_root))
-        if not config.tracking_enabled:
-            return PolicyDecision.allow()
-        tracker = tracker_adapter(config.tracker)
-        key = tracker.resolve_branch_key(event.branch)
-        if not key:
-            return PolicyDecision.deny(
-                "Cannot complete a work item without a mapped ticket branch."
+def _evaluate_completion(event: CanonicalToolEvent, ref: str) -> PolicyDecision:
+    root = Path(event.workspace_root or ".")
+    if not _enforced(root):
+        return PolicyDecision.allow()
+    return _decision(
+        bind(
+            _session_item(root),
+            lambda found: _complete(found[0], found[1], found[2], ref),
+        )
+    )
+
+
+def _complete(
+    session: sessions.Session, ops: TrackerOps, item: WorkItem, ref: str
+) -> Result[None]:
+    if ref.strip().upper() not in {item.id.upper(), item.key.upper()}:
+        return Err(
+            _failure(
+                f"this checkout's session is for {item.key}; {ref} is completed from its own session."
             )
-        item = tracker.get_work_item(_provider_ref(config.tracker, key))
-        kinds = {
-            _artifact_kind(artifact.kind)
-            for artifact in tracker.list_artifacts(item.id)
-        }
-        missing = {"resolution_report", "verification", "pull_request"} - kinds
-        if missing:
-            return PolicyDecision.deny(
+        )
+    return bind(
+        ops.list_artifacts(item.id),
+        lambda found: _completion_evidence(
+            item, {_artifact_kind(a.kind) for a in found}
+        ),
+    )
+
+
+def _completion_evidence(item: WorkItem, kinds: set[str]) -> Result[None]:
+    missing = {"resolution_report", "verification", "pull_request"} - kinds
+    return (
+        Err(
+            _failure(
                 f"Cannot mark {item.key} done; missing artifacts: {', '.join(sorted(missing))}."
             )
-        return PolicyDecision.allow()
-    except IntegrationError as exc:
-        return PolicyDecision.deny(
-            f"Workflow integration unavailable ({exc.code}): {exc}"
         )
-
-
-def _provider_ref(tracker_config: dict[str, Any], key: str) -> str:
-    if tracker_config.get("adapter") == "azure_devops" and key.lower().startswith(
-        "ab-"
-    ):
-        return key[3:]
-    return key
+        if missing
+        else Ok(None)
+    )
 
 
 def _artifact_kind(kind: str) -> str:

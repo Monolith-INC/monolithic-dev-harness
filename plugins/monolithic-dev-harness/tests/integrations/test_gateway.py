@@ -6,27 +6,17 @@ import unittest
 from pathlib import Path
 
 from integrations import gateway
-
-SETTINGS = {
-    "schemaVersion": 1,
-    "tracker": {"name": "local"},
-    "scm": {"name": "github", "values": {"owner": "o", "repo": "r"}},
-    "branch_template": "feature/{key}-{slug}",
-}
+from tests.settings_fixture import write_settings
 
 
 class GatewayTest(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.root = Path(self._tmp.name)
-        (self.root / ".harness").mkdir()
-        self.write_settings(SETTINGS)
+        write_settings(self.root)
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
-
-    def write_settings(self, value: dict) -> None:
-        (self.root / ".harness" / "settings.json").write_text(json.dumps(value))
 
     def call(self, name: str, **args):
         return gateway.handle_call(name, args, self.root)
@@ -88,11 +78,8 @@ class GatewayTest(unittest.TestCase):
         )
 
     def test_broken_settings_or_trackers_fail_every_tracker_call(self) -> None:
-        self.write_settings(
-            {
-                **SETTINGS,
-                "tracker": {"name": "azure-devops", "values": {"organization": "o"}},
-            }
+        write_settings(
+            self.root, tracker={"name": "azure-devops", "values": {"organization": "o"}}
         )
         self.assertIn(
             "project", self.call("tracker_get_work_item", ref="1").failure.message

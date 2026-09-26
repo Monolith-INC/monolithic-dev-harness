@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from harness.config import POLICY_RELATIVE_PATH, load_policy
+from harness.settings import SETTINGS_RELATIVE_PATH
 
 KNOWLEDGE = Path(".harness") / "knowledge"
 SCHEMA = "harness-knowledge-store/v1"
@@ -118,33 +118,33 @@ def _ensure_store(repo: Path, store_id: str) -> StorePaths:
     return paths
 
 
-def _policy_revision(repo: Path) -> dict[str, Any]:
-    policy_path = repo / POLICY_RELATIVE_PATH
-    if not policy_path.is_file():
+def _settings_revision(repo: Path) -> dict[str, Any]:
+    """A pointer to the settings file and its digest; the settings themselves stay in the file."""
+    settings_path = repo / SETTINGS_RELATIVE_PATH
+    if not settings_path.is_file():
         raise KnowledgeError(
-            f"{POLICY_RELATIVE_PATH} is required before knowledge initialization"
+            f"{SETTINGS_RELATIVE_PATH} is required before knowledge initialization"
         )
-    policy = load_policy(repo)
     payload = {
-        "logical_unit_id": "project/harness-policy",
-        "title": "Harness policy",
+        "logical_unit_id": "project/harness-settings",
+        "title": "Harness settings",
         "tier": "structure",
-        "area": "harness-policy",
+        "area": "harness-settings",
         "kind": "fact",
         "content": {
-            "summary": "The harness policy is the repository's operational routing contract.",
-            "policy": policy,
+            "summary": "The repository's harness settings are its operational routing contract; read the file for them.",
+            "settings_file": str(SETTINGS_RELATIVE_PATH),
             "open_questions": [],
         },
         "evidence": [
             {
                 "kind": "repository_file",
-                "locator": str(POLICY_RELATIVE_PATH),
-                "fingerprint": {"sha256": _file_digest(policy_path)},
+                "locator": str(SETTINGS_RELATIVE_PATH),
+                "fingerprint": {"sha256": _file_digest(settings_path)},
             }
         ],
         "provenance": {
-            "method": "harness-policy-seed/v1",
+            "method": "harness-settings-seed/v1",
             "confidence": "source_backed",
         },
         "lineage": {"supersedes": [], "related": []},
@@ -153,7 +153,7 @@ def _policy_revision(repo: Path) -> dict[str, Any]:
                 "routing a task through harness-governed repository boundaries",
                 "selecting checks, generated paths, or workflow configuration",
             ],
-            "keywords": ["harness", "policy", "repository", "checks", "workflow"],
+            "keywords": ["harness", "settings", "repository", "checks", "workflow"],
         },
     }
     return {**payload, "revision_id": _digest(payload)}
@@ -216,7 +216,7 @@ def refresh(
     repo: Path, store_id: str = "project", paths: StorePaths | None = None
 ) -> dict[str, Any]:
     active_paths = paths or _ensure_store(repo.resolve(), store_id)
-    revision = _policy_revision(repo.resolve())
+    revision = _settings_revision(repo.resolve())
     catalog = _catalog(active_paths)
     units = catalog["units"]
     logical_id = str(revision["logical_unit_id"])

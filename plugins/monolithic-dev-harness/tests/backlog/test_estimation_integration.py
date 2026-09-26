@@ -6,7 +6,6 @@ from pathlib import Path
 from orchestrator_core.artifact_validator import validate_artifact
 from orchestrator_core.handlers import HANDLERS, handle_plan_capacity
 from orchestrator_core.ingest import coerce_float, ingest_file, ingest_from_text
-from orchestrator_core.project_config import update_config
 
 AZURE_PAYLOADS = {
     "iteration": {
@@ -175,12 +174,19 @@ class TestPlanCapacityHandler(unittest.TestCase):
         self.assertIn("plan-capacity", HANDLERS)
 
     def _run(self, arguments, project_root, *, artifacts_path=None):
-        """state_dir is <project>/.agile-backlog-toolkit; the handler derives the root from it."""
+        """state_dir is <project>/.harness/backlog; the handler derives the root from it."""
         root = Path(project_root)
-        state_dir = root / ".agile-backlog-toolkit"
+        state_dir = root / ".harness" / "backlog"
         state_dir.mkdir(parents=True, exist_ok=True)
         if artifacts_path:
-            update_config(root, artifacts_path=artifacts_path)
+            settings = {
+                "schemaVersion": 1,
+                "tracker": {"name": "local"},
+                "scm": {"name": "github", "values": {"owner": "o", "repo": "r"}},
+                "branch_template": "feature/{key}-{slug}",
+                "artifacts_path": str(artifacts_path),
+            }
+            (root / ".harness" / "settings.json").write_text(json.dumps(settings))
         return handle_plan_capacity(
             arguments, skills_dir=Path("."), state_dir=state_dir, instructions=""
         )
@@ -266,7 +272,10 @@ class TestPlanCapacityHandler(unittest.TestCase):
             root = Path(tmpdir)
             self._run({"provider": "filesystem"}, root)
             created = {p.name for p in root.iterdir()}
-            self.assertEqual(created, {".agile-backlog-toolkit"})
+            self.assertEqual(created, {".harness"})
+            self.assertEqual(
+                {p.name for p in (root / ".harness").iterdir()}, {"backlog"}
+            )
 
 
 if __name__ == "__main__":

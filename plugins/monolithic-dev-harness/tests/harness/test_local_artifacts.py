@@ -9,8 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from scripts.harness import local_artifacts, state
-
-ARTIFACT_ENV = ("AGILE_WORKFLOW_ARTIFACTS_PATH", "AGILE_WORKFLOW_ARTIFACTS")
+from tests.settings_fixture import write_settings
 
 
 class LocalArtifactsTests(unittest.TestCase):
@@ -19,13 +18,7 @@ class LocalArtifactsTests(unittest.TestCase):
         self.addCleanup(self._tmp.cleanup)
         self.repo = Path(self._tmp.name)
         self.vault = self.repo / "Vault"
-        env = {k: v for k, v in os.environ.items() if k not in ARTIFACT_ENV}
-        patcher = mock.patch.dict(os.environ, env, clear=True)
-        patcher.start()
-        self.addCleanup(patcher.stop)
-        config = self.repo / ".harness" / "backlog" / "config.json"
-        config.parent.mkdir(parents=True)
-        config.write_text('{"artifacts_path": "Vault"}', encoding="utf-8")
+        write_settings(self.repo, artifacts_path="Vault")
 
     def note(self, name: str, frontmatter: str, prefix: str = "") -> Path:
         path = self.vault / name
@@ -60,7 +53,7 @@ class LocalArtifactsTests(unittest.TestCase):
         self.assertEqual(local_artifacts.approved_notes(self.repo), {})
 
     def test_no_artifacts_path_pins_nothing(self) -> None:
-        (self.repo / ".harness" / "backlog" / "config.json").write_text("{}")
+        write_settings(self.repo)
         self.note("plan.md", "type: spec\nstatus: approved")
         self.assertIsNone(local_artifacts.artifacts_dir(self.repo))
         self.assertEqual(local_artifacts.approved_notes(self.repo), {})
@@ -129,19 +122,17 @@ class LocalArtifactsTests(unittest.TestCase):
 
     # --- where the artifacts path comes from ---------------------------------------------
 
-    def test_the_environment_overrides_the_config_file(self) -> None:
+    def test_the_settings_file_is_the_only_source(self) -> None:
         with tempfile.TemporaryDirectory() as elsewhere:
             with mock.patch.dict(
                 os.environ, {"AGILE_WORKFLOW_ARTIFACTS_PATH": elsewhere}
             ):
                 self.assertEqual(
-                    local_artifacts.artifacts_dir(self.repo), Path(elsewhere)
+                    local_artifacts.artifacts_dir(self.repo), self.repo / "Vault"
                 )
 
     def test_home_is_expanded(self) -> None:
-        (self.repo / ".harness" / "backlog" / "config.json").write_text(
-            '{"artifacts_path": "~/vault"}'
-        )
+        write_settings(self.repo, artifacts_path="~/vault")
         with mock.patch.dict(os.environ, {"HOME": "/home/someone"}):
             self.assertEqual(
                 local_artifacts.artifacts_dir(self.repo), Path("/home/someone/vault")

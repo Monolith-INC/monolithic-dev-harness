@@ -447,6 +447,23 @@ class _Values(
         return ""
 
 
+def selected(
+    repo: Path, settings: Result[Settings], root: Path = SHIPPED_ROOT
+) -> Result[Active]:
+    """The selected tracker as a result: its manifest and values, or why it cannot be used."""
+    match resolve(repo, settings, root):
+        case Active() as active:
+            return Ok(active)
+        case Invalid(failure):
+            return Err(failure)
+        case NotConfigured(reason):
+            return err("not_configured", reason)
+
+
+def open_selected(repo: Path, settings: Result[Settings]) -> Result[TrackerOps]:
+    return bind(selected(repo, settings), lambda active: open_tracker(active, repo))
+
+
 def open_tracker(active: Active, repo: Path) -> Result[TrackerOps]:
     """The active tracker's operations, connected the way its manifest says."""
     return build(active, repo, _transport(active, repo))

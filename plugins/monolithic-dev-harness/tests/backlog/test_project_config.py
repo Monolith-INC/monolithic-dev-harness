@@ -1,41 +1,33 @@
 import json
-import os
 import re
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import patch
 
 from orchestrator_core.project_config import (
     PLUGIN_DIRNAME,
     AzureConfig,
     ProjectConfig,
-    config_path,
     load_project_config,
-    org_from_mcp,
     plugin_dir,
-    save_project_config,
-    update_config,
 )
 
+SETTINGS = {
+    "schemaVersion": 1,
+    "tracker": {"name": "local"},
+    "scm": {"name": "github", "values": {"owner": "o", "repo": "r"}},
+    "branch_template": "feature/{key}-{slug}",
+}
 
-def _write(path: Path, payload) -> None:
+
+def _settings(root: Path, **changes) -> None:
+    path = root / ".harness" / "settings.json"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload), encoding="utf-8")
+    path.write_text(json.dumps({**SETTINGS, **changes}), encoding="utf-8")
 
 
 class ConfigTestCase(unittest.TestCase):
-    """Base case with a clean environment, so host env vars cannot leak into assertions."""
-
-    def setUp(self):
-        self._env = patch.dict(os.environ, {}, clear=False)
-        self._env.start()
-        for key in list(os.environ):
-            if key.startswith(("AGILE_WORKFLOW_", "AZURE_DEVOPS_", "ADO_", "CODEX_")):
-                del os.environ[key]
-
-    def tearDown(self):
-        self._env.stop()
+    """Base case: environment variables never feed the configuration, so none are cleared."""
 
 
 class TestNoAssumedArtifactsLocation(ConfigTestCase):
@@ -120,267 +112,51 @@ class TestArtifactsPathResolution(ConfigTestCase):
                 self.assertIsNotNone(config.resolve_artifacts_dir(root))
 
 
-class TestConfigFile(ConfigTestCase):
-    """The canonical .agile-backlog-toolkit/config.json."""
+class TestReadFromSettings(ConfigTestCase):
+    """The backlog view of `.harness/settings.json`, the only source."""
 
-    def test_reads_all_fields(self):
-        """Every value round-trips out of the canonical file."""
+    def test_reads_the_artifacts_path_and_the_azure_values(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            _write(
-                config_path(root),
-                {
-                    "artifacts_path": "docs/backlog",
-                    "provider_mode": "both",
-                    "azure": {
-                        "org": "o",
-                        "project": "p",
-                        "team": "t",
-                        "process": "scrum",
-                    },
-                    "linear": {"team": "linear-team"},
-                },
+            values = {
+                "organization": "contoso",
+                "project": "Shop",
+                "team": "Web",
+                "process": "scrum",
+            }
+            _settings(
+                root,
+                tracker={"name": "azure-devops", "values": values},
+                artifacts_path="docs/backlog",
             )
             config = load_project_config(root)
             self.assertEqual(config.artifacts_path, "docs/backlog")
-            self.assertEqual(config.azure.org, "o")
-            self.assertEqual(config.azure.process, "scrum")
-            self.assertEqual(config.provider_mode, "both")
-            self.assertEqual(config.linear.team, "linear-team")
+            self.assertEqual(
+                config.azure, AzureConfig("contoso", "Shop", "Web", "scrum")
+            )
+            self.assertEqual(
+                (config.provider_mode, config.sources),
+                ("azure-devops", (".harness/settings.json",)),
+            )
+            self.assertTrue(config.azure_ready)
 
-    def test_malformed_file_degrades_without_inventing_a_path(self):
-        """Broken JSON must neither crash nor conjure an artifacts location."""
+    def test_linear_values_and_no_azure(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            path = config_path(root)
-            path.parent.mkdir(parents=True)
-            path.write_text("{not json", encoding="utf-8")
+            _settings(root, tracker={"name": "linear", "values": {"team": "ENG"}})
             config = load_project_config(root)
-            self.assertIsNone(config.artifacts_path)
-
-    def test_blank_values_are_treated_as_unset(self):
-        """An empty string is not a configured value."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            _write(config_path(root), {"artifacts_path": "   ", "azure": {"org": ""}})
-            config = load_project_config(root)
-            self.assertIsNone(config.artifacts_path)
+            self.assertEqual((config.linear.team, config.azure), ("ENG", AzureConfig()))
             self.assertEqual(config.missing(), ["org", "project"])
 
-
-class TestFallbackSources(ConfigTestCase):
-    """What older files can and cannot supply."""
-
-    def test_unrecognised_keys_do_not_become_an_artifacts_path(self):
-        """Only `artifacts_path` sets the artifacts path.
-
-        A key this version does not recognise is not a user telling it where artifacts go,
-        so the path stays unset -- which makes the caller ask, the correct outcome.
-        """
+    def test_broken_or_missing_settings_give_an_empty_configuration(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            _write(config_path(root), {"storage": "SomeFolder", "output_dir": "Other"})
-            _write(
-                root / ".agile-backlog-toolkit.install.json", {"output_folder": "Third"}
-            )
-            self.assertIsNone(load_project_config(root).artifacts_path)
-
-    def test_install_manifest_supplies_org(self):
-        """A project installed by an older version still knows its organisation."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            _write(
-                plugin_dir(root) / "install.json", {"azure_devops_org": "legacy-org"}
-            )
-            self.assertEqual(load_project_config(root).azure.org, "legacy-org")
-
-    def test_an_unmigrated_project_is_still_read_from_its_old_folder(self):
-        """Until bootstrap moves it, the pre-0.1.6 layout keeps working."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            _write(
-                root / ".agile-backlog-toolkit" / "config.json",
-                {"azure": {"project": "p"}},
-            )
-            _write(
-                root / ".agile-backlog-toolkit.install.json", {"azure_devops_org": "o"}
-            )
-            config = load_project_config(root)
-            self.assertEqual((config.azure.org, config.azure.project), ("o", "p"))
-            self.assertEqual(plugin_dir(root), root / ".agile-backlog-toolkit")
-
-    def test_canonical_file_wins_over_fallbacks(self):
-        """A current value is not overridden by an older source."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            _write(config_path(root), {"azure": {"org": "current"}})
-            _write(plugin_dir(root) / "install.json", {"azure_devops_org": "stale"})
-            self.assertEqual(load_project_config(root).azure.org, "current")
-
-    def test_sources_compose_across_files(self):
-        """Each source fills only what earlier ones left unset."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            _write(config_path(root), {"azure": {"project": "p"}})
-            _write(plugin_dir(root) / "install.json", {"azure_devops_org": "o"})
-            config = load_project_config(root)
-            self.assertEqual((config.azure.org, config.azure.project), ("o", "p"))
-
-
-class TestOrgFromMcp(ConfigTestCase):
-    """Extracting the organisation from an MCP server definition."""
-
-    def test_npx_and_pinned_node_invocations(self):
-        """The org is the trailing argument in both launch forms."""
-        npx = {
-            "mcpServers": {
-                "azure-devops": {"args": ["-y", "@azure-devops/mcp@2.7.0", "my-org"]}
-            }
-        }
-        node = {
-            "mcpServers": {"azure-devops": {"args": ["/x/dist/index.js", "my-org"]}}
-        }
-        self.assertEqual(org_from_mcp(npx), "my-org")
-        self.assertEqual(org_from_mcp(node), "my-org")
-
-    def test_alternate_server_key(self):
-        """Some setups name the server 'Azure DevOps'."""
-        self.assertEqual(
-            org_from_mcp(
-                {"mcpServers": {"Azure DevOps": {"args": ["/x/dist/index.js", "org"]}}}
-            ),
-            "org",
-        )
-
-    def test_hostile_inputs(self):
-        """Malformed MCP files yield nothing rather than raising."""
-        for payload in (
-            None,
-            {},
-            {"mcpServers": None},
-            {"mcpServers": {"azure-devops": "text"}},
-        ):
-            self.assertIsNone(org_from_mcp(payload))
-
-    def test_org_recovered_from_mcp_wiring(self):
-        """A project with only MCP wired still knows its organisation."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            _write(
-                root / ".mcp.json",
-                {"mcpServers": {"azure-devops": {"args": ["/x.js", "my-org"]}}},
-            )
-            config = load_project_config(root)
-            self.assertEqual(config.azure.org, "my-org")
-            self.assertIn(".mcp.json", config.sources)
-
-
-class TestEnvironmentOverrides(ConfigTestCase):
-    """Environment wins, so CI can override a committed file."""
-
-    def test_env_beats_config_file(self):
-        """An env var overrides the stored value."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            _write(config_path(root), {"azure": {"org": "from-file"}})
-            with patch.dict(os.environ, {"AGILE_WORKFLOW_AZURE_ORG": "from-env"}):
-                config = load_project_config(root)
-                self.assertEqual(config.azure.org, "from-env")
-                self.assertEqual(config.sources[0], "environment")
-
-    def test_artifacts_path_can_be_overridden(self):
-        """A one-off run can redirect output without editing anything."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch.dict(
-                os.environ, {"AGILE_WORKFLOW_ARTIFACTS_PATH": "/tmp/elsewhere"}
-            ):
-                self.assertEqual(
-                    load_project_config(Path(tmpdir)).artifacts_path, "/tmp/elsewhere"
-                )
-
-    def test_ado_prefixed_vars_recognised(self):
-        """The ADO_* names used by the live smoke test also work."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            with patch.dict(os.environ, {"ADO_PROJECT": "p", "ADO_TEAM": "t"}):
-                config = load_project_config(Path(tmpdir))
-                self.assertEqual((config.azure.project, config.azure.team), ("p", "t"))
-
-
-class TestMissingValues(ConfigTestCase):
-    """What has to be asked for."""
-
-    def test_org_and_project_are_required(self):
-        """Both are needed before any Azure call can be made."""
-        self.assertEqual(ProjectConfig().missing(), ["org", "project"])
+            self.assertEqual(load_project_config(root), ProjectConfig())
+            (root / ".harness").mkdir()
+            (root / ".harness" / "settings.json").write_text("{")
+            self.assertEqual(load_project_config(root), ProjectConfig())
 
     def test_team_is_optional_unless_asked_for(self):
-        """Team only counts as missing when the caller says it is required."""
         config = ProjectConfig(azure=AzureConfig(org="o", project="p"))
         self.assertEqual(config.missing(), [])
-        self.assertTrue(config.azure_ready)
         self.assertEqual(config.missing(require_team=True), ["team"])
-
-
-class TestPersistence(ConfigTestCase):
-    """Saving, which is what lazy fill relies on."""
-
-    def test_save_and_reload_round_trips(self):
-        """What is written is what comes back."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            save_project_config(
-                root,
-                ProjectConfig(
-                    artifacts_path="docs", azure=AzureConfig(org="o", project="p")
-                ),
-            )
-            config = load_project_config(root)
-            self.assertEqual(config.artifacts_path, "docs")
-            self.assertEqual(config.azure.project, "p")
-
-    def test_update_merges_without_clobbering(self):
-        """Filling in the team must not erase the org or the path."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            update_config(root, artifacts_path="docs", org="o", project="p")
-            update_config(root, team="t")
-            config = load_project_config(root)
-            self.assertEqual(config.artifacts_path, "docs")
-            self.assertEqual((config.azure.org, config.azure.team), ("o", "t"))
-
-    def test_unknown_keys_survive_a_write(self):
-        """A hand-added key must not be destroyed by a lazy-fill save."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            _write(config_path(root), {"customTeamSetting": 42})
-            update_config(root, org="o")
-            reloaded = json.loads(config_path(root).read_text(encoding="utf-8"))
-            self.assertEqual(reloaded["customTeamSetting"], 42)
-            self.assertEqual(reloaded["azure"]["org"], "o")
-
-    def test_empty_values_do_not_blank_existing_ones(self):
-        """Passing None must not erase what is already set."""
-        config = ProjectConfig(artifacts_path="docs", azure=AzureConfig(org="o"))
-        updated = config.with_azure(org=None).with_artifacts_path("")
-        self.assertEqual(updated.azure.org, "o")
-        self.assertEqual(updated.artifacts_path, "docs")
-
-    def test_unset_artifacts_path_is_not_written(self):
-        """A config with no path must not persist a placeholder."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            save_project_config(root, ProjectConfig(azure=AzureConfig(org="o")))
-            data = json.loads(config_path(root).read_text(encoding="utf-8"))
-            self.assertNotIn("artifacts_path", data)
-
-    def test_save_failure_returns_none_rather_than_raising(self):
-        """An unwritable location degrades, following the never-raise idiom."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            blocker = Path(tmpdir) / PLUGIN_DIRNAME
-            blocker.parent.mkdir(parents=True)
-            blocker.write_text("not a directory", encoding="utf-8")
-            self.assertIsNone(save_project_config(Path(tmpdir), ProjectConfig()))
-
-
-if __name__ == "__main__":
-    unittest.main()

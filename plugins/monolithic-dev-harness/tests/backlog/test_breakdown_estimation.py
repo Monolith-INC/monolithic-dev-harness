@@ -389,8 +389,8 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
         from orchestrator_core.handlers import handle_estimate_breakdown
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            state = P(tmpdir) / ".agile-backlog-toolkit"
-            state.mkdir()
+            state = P(tmpdir) / ".harness" / "backlog"
+            state.mkdir(parents=True)
             return handle_estimate_breakdown(
                 arguments, skills_dir=P("."), state_dir=state, instructions=""
             )

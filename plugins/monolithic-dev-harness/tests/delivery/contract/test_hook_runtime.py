@@ -1,5 +1,5 @@
-import json
 import os
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -14,16 +14,20 @@ for path in (ROOT, SCRIPTS_DIR):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
+from core.result import Ok
+from harness import local_artifacts, sessions, settings, state
 from host_adapters import (
     format_claude_decision,
     format_cursor_decision,
     parse_claude_payload,
     parse_cursor_payload,
 )
+from integrations import registry
+from integrations.contracts import ArtifactDraft, LogicalState, WorkItemKind
 from scripts import hook_runtime
-from scripts.harness import local_artifacts, state
 from scripts.hook_runtime import select_adapter
 from scripts.policy import CanonicalToolEvent
+from tests.settings_fixture import write_settings
 
 
 class TestHookRuntime(unittest.TestCase):
@@ -47,20 +51,8 @@ class TestHookRuntime(unittest.TestCase):
     def test_skipped_tracking_bypasses_ticket_context_checks_but_not_git_guards(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            config_path = root / ".codex-workflows" / "integrations.json"
-            config_path.parent.mkdir()
-            config_path.write_text(
-                json.dumps(
-                    {
-                        "schemaVersion": 1,
-                        "branchTemplate": "{category}/{key}-{slug}",
-                        "tracking": {"mode": "skipped"},
-                        "tracker": {"adapter": "local_tracker", "bindings": {}},
-                        "scm": {"adapter": "github", "connection": {}},
-                    }
-                ),
-                encoding="utf-8",
-            )
+            write_settings(root)
+            state.set_tracking_mode(root, "skipped")
             event = CanonicalToolEvent(
                 client="claude", tool_name="Write", workspace_root=str(root)
             )
@@ -80,47 +72,135 @@ class TestHookRuntime(unittest.TestCase):
                 )
 
 
-class _Tracker:
-    def __init__(self, artifact_kinds: list[str]):
-        self.artifact_kinds = artifact_kinds
-
-    def resolve_branch_key(self, branch: str) -> str:
-        return "7824"
-
-    def get_work_item(self, ref: str):
-        return mock.Mock(id="7824", key="7824", state=mock.Mock(value="in_progress"))
-
-    def list_artifacts(self, ref: str):
-        return [mock.Mock(kind=kind) for kind in self.artifact_kinds]
-
-
-PLAN = 'type: implementation-plan\nstory: "7824"\nstatus: approved'
-ARTIFACT_ENV = ("AGILE_WORKFLOW_ARTIFACTS_PATH", "AGILE_WORKFLOW_ARTIFACTS")
+def git(root: Path, *args: str) -> None:
+    env = {
+        **os.environ,
+        "GIT_AUTHOR_NAME": "t",
+        "GIT_AUTHOR_EMAIL": "t@t",
+        "GIT_COMMITTER_NAME": "t",
+        "GIT_COMMITTER_EMAIL": "t@t",
+    }
+    subprocess.run(
+        ["git", "-C", str(root), *args], check=True, capture_output=True, env=env
+    )
 
 
-class TestSpecGateArtifactsPath(unittest.TestCase):
-    """A note in the artifacts path opens the spec gate only as the user approved it."""
+class TrackedRepo(unittest.TestCase):
+    """A git repository on a ticket branch, with the local tracker holding STORY-0001 in progress."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
         self.root = Path(self._tmp.name)
         self.vault = self.root / "Vault"
-        clean_env = {k: v for k, v in os.environ.items() if k not in ARTIFACT_ENV}
-        env = mock.patch.dict(os.environ, clean_env, clear=True)
-        env.start()
-        self.addCleanup(env.stop)
+        git(self.root, "init", "-q", "-b", "develop")
+        git(self.root, "commit", "-q", "--allow-empty", "-m", "init")
+        git(self.root, "checkout", "-q", "-b", "userstory/STORY-0001-example")
         self.configure("Vault")
-
-    def tearDown(self):
-        self._tmp.cleanup()
+        self.ops = registry.open_selected(self.root, settings.load(self.root)).value
+        story = self.ops.create_work_item(
+            WorkItemKind.USER_STORY, "Example", "", ""
+        ).value
+        self.ops.transition_work_item(story.key, LogicalState.IN_PROGRESS)
 
     def configure(self, artifacts_path: str) -> None:
-        """Set the artifacts path where the backlog skills keep it."""
-        config = self.root / ".harness" / "backlog" / "config.json"
-        config.parent.mkdir(parents=True, exist_ok=True)
-        config.write_text(
-            json.dumps({"artifacts_path": artifacts_path}), encoding="utf-8"
+        path = {"artifacts_path": artifacts_path} if artifacts_path else {}
+        write_settings(self.root, branch_template="{category}/{key}-{slug}", **path)
+
+    def evaluate(self):
+        event = CanonicalToolEvent(
+            client="claude",
+            tool_name="Write",
+            workspace_root=str(self.root),
+            branch="userstory/STORY-0001-example",
         )
+        return hook_runtime._evaluate_work_context(event)
+
+
+class TestSessionScope(TrackedRepo):
+    """Governed code changes need an active session, and the session names the work item."""
+
+    def setUp(self):
+        super().setUp()
+        self.ops.add_artifact(
+            "STORY-0001", ArtifactDraft("tech_spec", "Spec", "text", "1")
+        )
+
+    def test_no_session_denies_and_says_how_to_start_one(self):
+        decision = self.evaluate()
+        self.assertTrue(decision.is_denied())
+        self.assertIn("harness session start", decision.reason)
+
+    def test_an_active_session_allows_and_a_paused_or_closed_one_denies(self):
+        self.assertIsInstance(
+            sessions.start(self.root, "STORY-0001", "implement-story"), Ok
+        )
+        self.assertFalse(self.evaluate().is_denied())
+        sessions.transition(self.root, "pause")
+        self.assertIn("paused", self.evaluate().reason)
+        sessions.transition(self.root, "resume")
+        self.assertFalse(self.evaluate().is_denied())
+        sessions.transition(self.root, "close")
+        self.assertTrue(self.evaluate().is_denied())
+
+    def test_the_session_work_item_must_be_in_progress(self):
+        self.ops.transition_work_item("STORY-0001", LogicalState.READY)
+        sessions.start(self.root, "STORY-0001", "implement-story")
+        self.assertIn("must be in progress", self.evaluate().reason)
+
+    def test_a_detached_head_cannot_hold_a_session(self):
+        sessions.start(self.root, "STORY-0001", "implement-story")
+        git(self.root, "checkout", "-q", "--detach")
+        self.assertIn("no branch", self.evaluate().reason)
+
+    def test_another_branch_in_the_same_checkout_is_not_covered(self):
+        sessions.start(self.root, "STORY-0001", "implement-story")
+        git(self.root, "checkout", "-q", "-b", "userstory/STORY-0002-other")
+        self.assertTrue(self.evaluate().is_denied())
+
+    def test_completion_is_checked_against_the_session_item(self):
+        sessions.start(self.root, "STORY-0001", "implement-story")
+        done = CanonicalToolEvent(
+            client="claude",
+            tool_name="mcp__x__tracker_transition_work_item",
+            workspace_root=str(self.root),
+        )
+        self.assertIn(
+            "missing artifacts",
+            hook_runtime._evaluate_completion(done, "STORY-0001").reason,
+        )
+        self.assertIn(
+            "its own session",
+            hook_runtime._evaluate_completion(done, "STORY-0009").reason,
+        )
+        for kind in ("resolution_report", "verification", "pull_request"):
+            self.ops.add_artifact("STORY-0001", ArtifactDraft(kind, kind, "text", "1"))
+        self.assertFalse(
+            hook_runtime._evaluate_completion(done, "STORY-0001").is_denied()
+        )
+
+    def test_new_branches_follow_the_convention(self):
+        self.assertTrue(
+            hook_runtime._validate_checkout_convention(
+                "git checkout -b feature/nope", str(self.root)
+            ).is_denied()
+        )
+        self.assertFalse(
+            hook_runtime._validate_checkout_convention(
+                "git switch -c userstory/story-0002-x", str(self.root)
+            ).is_denied()
+        )
+
+
+PLAN = 'type: implementation-plan\nstory: "STORY-0001"\nstatus: approved'
+
+
+class TestSpecGateArtifactsPath(TrackedRepo):
+    """A note in the artifacts path opens the spec gate only as the user approved it."""
+
+    def setUp(self):
+        super().setUp()
+        sessions.start(self.root, "STORY-0001", "implement-story")
 
     def note(self, name: str, frontmatter: str, directory: Path | None = None) -> Path:
         path = (directory or self.vault) / name
@@ -135,24 +215,6 @@ class TestSpecGateArtifactsPath(unittest.TestCase):
             self.root, approval_id, local_artifacts.approved_notes(self.root)
         )
 
-    def evaluate(self, tracker_kinds: list[str] | None = None):
-        config = mock.Mock(tracking_enabled=True, tracker={"adapter": "azure_devops"})
-        event = CanonicalToolEvent(
-            client="claude",
-            tool_name="Write",
-            workspace_root=str(self.root),
-            branch="userstory/7824-example",
-        )
-        with (
-            mock.patch.object(hook_runtime, "load_config", return_value=config),
-            mock.patch.object(
-                hook_runtime,
-                "tracker_adapter",
-                return_value=_Tracker(tracker_kinds or []),
-            ),
-        ):
-            return hook_runtime._evaluate_work_context(event)
-
     def test_approved_plan_the_user_approved_allows_code_changes(self):
         self.note("Implementation_Plans/plan.md", PLAN)
         self.approve()
@@ -161,7 +223,7 @@ class TestSpecGateArtifactsPath(unittest.TestCase):
     def test_draft_plan_from_the_backlog_stage_denies_even_after_an_approval(self):
         self.note(
             "Implementation_Plans/plan.md",
-            'type: implementation-plan\nstory: "7824"\nstatus: draft',
+            'type: implementation-plan\nstory: "STORY-0001"\nstatus: draft',
         )
         self.approve()
         self.assertTrue(self.evaluate().is_denied())
@@ -186,30 +248,34 @@ class TestSpecGateArtifactsPath(unittest.TestCase):
         self.assertTrue(self.evaluate().is_denied())
 
     def test_ticket_field_names_the_parent_and_does_not_count(self):
-        self.note("Specs/spec.md", "type: spec\nticket: 7824\nstatus: approved")
+        self.note("Specs/spec.md", "type: spec\nticket: STORY-0001\nstatus: approved")
         self.approve()
         self.assertTrue(self.evaluate().is_denied())
 
     def test_work_item_field_names_the_item(self):
-        self.note("Specs/spec.md", "type: spec\nwork_item: 7824\nstatus: approved")
+        self.note(
+            "Specs/spec.md", "type: spec\nwork_item: STORY-0001\nstatus: approved"
+        )
         self.approve()
         self.assertFalse(self.evaluate().is_denied())
 
     def test_every_kind_write_spec_produces_is_accepted(self):
-        self.note("Specs/adr.md", "type: adr\nstory: 7824\nstatus: approved")
+        self.note("Specs/adr.md", "type: adr\nstory: STORY-0001\nstatus: approved")
         self.approve()
         self.assertFalse(self.evaluate().is_denied())
 
     def test_plan_for_another_story_denies(self):
         self.note(
             "Implementation_Plans/plan.md",
-            'type: implementation-plan\nstory: "7825"\nstatus: approved',
+            'type: implementation-plan\nstory: "STORY-0002"\nstatus: approved',
         )
         self.approve()
         self.assertTrue(self.evaluate().is_denied())
 
     def test_note_of_another_type_denies(self):
-        self.note("Agent_Sessions/s.md", "type: session\nstory: 7824\nstatus: approved")
+        self.note(
+            "Agent_Sessions/s.md", "type: session\nstory: STORY-0001\nstatus: approved"
+        )
         self.approve()
         self.assertTrue(self.evaluate().is_denied())
 
@@ -220,15 +286,6 @@ class TestSpecGateArtifactsPath(unittest.TestCase):
         decision = self.evaluate()
         self.assertTrue(decision.is_denied())
         self.assertIn("in the tracker.", decision.reason)
-
-    def test_environment_override_is_honoured(self):
-        with tempfile.TemporaryDirectory() as elsewhere:
-            self.note("plan.md", PLAN, Path(elsewhere))
-            with mock.patch.dict(
-                os.environ, {"AGILE_WORKFLOW_ARTIFACTS_PATH": elsewhere}
-            ):
-                self.approve()
-                self.assertFalse(self.evaluate().is_denied())
 
     def test_home_relative_path_is_expanded(self):
         with tempfile.TemporaryDirectory() as home:
@@ -241,7 +298,10 @@ class TestSpecGateArtifactsPath(unittest.TestCase):
     def test_tracker_artifact_still_allows_without_local_notes(self):
         for kind in ("implementation_plan", "tech-spec", "technical_specification"):
             with self.subTest(kind=kind):
-                self.assertFalse(self.evaluate([kind]).is_denied())
+                self.ops.add_artifact(
+                    "STORY-0001", ArtifactDraft(kind, kind, "text", "1")
+                )
+                self.assertFalse(self.evaluate().is_denied())
 
 
 if __name__ == "__main__":

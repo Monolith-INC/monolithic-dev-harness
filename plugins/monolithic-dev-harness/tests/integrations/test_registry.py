@@ -9,6 +9,7 @@ from core.result import Err, Ok, err
 from harness.settings import parse
 from integrations import registry, trust
 from integrations.contracts import TrackerOps
+from tests.settings_fixture import MINIMAL
 
 from .fakes import FakeTransport, copy_tracker
 
@@ -20,7 +21,7 @@ SETTINGS = {
 
 
 def settings(tracker: dict):
-    return parse({**SETTINGS, "tracker": tracker})
+    return parse({**MINIMAL, "tracker": tracker})
 
 
 class RegistryTest(unittest.TestCase):

@@ -14,6 +14,7 @@ import unittest
 from pathlib import Path
 
 from scripts.harness import questions, state
+from tests.settings_fixture import write_settings
 
 HOOK = Path(__file__).resolve().parents[2] / "scripts" / "harness" / "hook.py"
 
@@ -86,8 +87,7 @@ class ApprovalByClickTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.repo = Path(self._tmp.name)
-        (self.repo / ".harness").mkdir()
-        (self.repo / ".harness/policy.json").write_text('{"schemaVersion": 1}')
+        write_settings(self.repo)
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
@@ -115,9 +115,7 @@ class ApprovalByClickTests(unittest.TestCase):
         self.assertEqual(active[1]["question"], PLAIN)
 
     def test_clicking_approve_pins_the_notes_marked_approved(self) -> None:
-        backlog = self.repo / ".harness/backlog"
-        backlog.mkdir(parents=True)
-        (backlog / "config.json").write_text('{"artifacts_path": "Vault"}')
+        write_settings(self.repo, artifacts_path="Vault")
         (self.repo / "Vault").mkdir()
         (self.repo / "Vault/plan.md").write_text(
             "---\nstory: 7824\nstatus: approved\n---\n"

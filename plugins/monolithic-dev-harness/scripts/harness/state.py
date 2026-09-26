@@ -140,7 +140,9 @@ def tracking_mode(repo: Path) -> str:
 def set_tracking_mode(repo: Path, mode: str) -> str:
     if mode not in TRACKING_MODES:
         raise ValueError(f"tracking mode must be one of {TRACKING_MODES}")
-    write_json(state_dir(repo) / "tracking.json", {"mode": mode, "changed": _now().isoformat()})
+    write_json(
+        state_dir(repo) / "tracking.json", {"mode": mode, "changed": _now().isoformat()}
+    )
     return mode
 
 

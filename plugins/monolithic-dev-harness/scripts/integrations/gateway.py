@@ -211,13 +211,15 @@ def _route(
             return _workflow(name, root)
         case "tracker" if name == "tracker_describe":
             return fmap(
-                _active(root, loaded), lambda active: plain(active.manifest.document)
+                registry.selected(root, loaded),
+                lambda active: plain(active.manifest.document),
             )
         case "tracker":
             return bind(
                 _tracking_on(root),
                 lambda _: bind(
-                    _tracker(root, loaded), lambda ops: _tracker_call(name, args, ops)
+                    registry.open_selected(root, loaded),
+                    lambda ops: _tracker_call(name, args, ops),
                 ),
             )
         case _:
@@ -256,22 +258,6 @@ def _tracking_on(root: Path) -> Result[None]:
             "tracking_paused",
             "tracker operations are skipped; run /resume-tracker to restore them",
         )
-    )
-
-
-def _active(root: Path, loaded: Result[Settings]) -> Result[registry.Active]:
-    match registry.resolve(root, loaded):
-        case registry.Active() as active:
-            return Ok(active)
-        case registry.Invalid(failure):
-            return Err(failure)
-        case registry.NotConfigured(reason):
-            return err("not_configured", reason)
-
-
-def _tracker(root: Path, loaded: Result[Settings]) -> Result[TrackerOps]:
-    return bind(
-        _active(root, loaded), lambda active: registry.open_tracker(active, root)
     )
 
 

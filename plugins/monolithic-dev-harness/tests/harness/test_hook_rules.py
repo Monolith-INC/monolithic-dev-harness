@@ -20,9 +20,18 @@ CHECKS = PLUGIN_ROOT / "scripts" / "harness" / "checks.py"
 VERDICT = PLUGIN_ROOT / "scripts" / "harness" / "review_verdict.py"
 AZ = "mcp__plugin_monolithic-dev-harness_azure-devops__"
 
-POLICY = {
+SETTINGS = {
     "schemaVersion": 1,
-    "azure": {"project": "demo", "protected_work_items": [1001]},
+    "tracker": {
+        "name": "azure-devops",
+        "values": {"organization": "o", "project": "demo"},
+    },
+    "scm": {
+        "name": "azure-repos",
+        "values": {"organization": "o", "project": "demo", "repository": "app"},
+    },
+    "branch_template": "{category}/{key}-{slug}",
+    "protected_work_items": ["1001"],
     "git": {"base_branch": "develop"},
     "checks": [
         {"name": "unit", "run": "true", "when": ["lib/**"]},
@@ -40,17 +49,6 @@ POLICY = {
         {"path": "security.rules", "evidence": "check:rules"},
         {"path": "infra/main.tf", "evidence": "manual:infra"},
     ],
-}
-INTEGRATIONS = {
-    "schemaVersion": 1,
-    "branchTemplate": "{category}/{key}-{slug}",
-    "scm": {"adapter": "github", "connection": {"command": "true", "args": []}},
-    "tracker": {
-        "adapter": "linear",
-        "bindings": {},
-        "connection": {"command": "true", "args": []},
-    },
-    "tracking": {"mode": "skipped"},
 }
 
 
@@ -79,10 +77,11 @@ class HookTestCase(unittest.TestCase):
         sh(self.repo, "init", "-q", "-b", "develop")
         (self.repo / ".gitignore").write_text(".harness/state/\n")
         (self.repo / ".harness").mkdir()
-        (self.repo / ".harness" / "policy.json").write_text(json.dumps(POLICY))
-        (self.repo / ".codex-workflows").mkdir()
-        (self.repo / ".codex-workflows" / "integrations.json").write_text(
-            json.dumps(INTEGRATIONS)
+        (self.repo / ".harness" / "settings.json").write_text(json.dumps(SETTINGS))
+        # The workflow runtime is covered by its own tests; these exercise the harness rules.
+        (self.repo / ".harness" / "state").mkdir()
+        (self.repo / ".harness" / "state" / "tracking.json").write_text(
+            json.dumps({"mode": "skipped"})
         )
         sh(self.repo, "add", "-A")
         sh(self.repo, "commit", "-q", "-m", "init")
@@ -150,8 +149,8 @@ class HookTestCase(unittest.TestCase):
 
 
 class TestOptIn(HookTestCase):
-    def test_repo_without_policy_is_not_governed(self) -> None:
-        (self.repo / ".harness" / "policy.json").unlink()
+    def test_repo_without_settings_is_not_governed(self) -> None:
+        (self.repo / ".harness" / "settings.json").unlink()
         self.assertAllowed(
             self.claude(AZ + "wit_work_item_write", {"action": "create"})
         )
@@ -171,7 +170,7 @@ class TestOptIn(HookTestCase):
 
 
 class TestHumanOwned(HookTestCase):
-    def test_agent_cannot_write_approvals_or_policy(self) -> None:
+    def test_agent_cannot_write_approvals_settings_or_sessions(self) -> None:
         self.assertDenied(
             self.claude(
                 "Write",
@@ -180,7 +179,9 @@ class TestHumanOwned(HookTestCase):
             "human-owned",
         )
         self.assertDenied(
-            self.claude("Edit", {"file_path": str(self.repo / ".harness/policy.json")}),
+            self.claude(
+                "Edit", {"file_path": str(self.repo / ".harness/settings.json")}
+            ),
             "human-owned",
         )
         self.assertDenied(
@@ -189,32 +190,42 @@ class TestHumanOwned(HookTestCase):
             ),
             "human-owned",
         )
+        for path in (
+            ".harness/state/sessions/HS-1/events/0002-closed.json",
+            ".harness/state/trackers/x.json",
+            ".harness/state/tracking.json",
+        ):
+            with self.subTest(path=path):
+                self.assertDenied(
+                    self.claude("Write", {"file_path": str(self.repo / path)}),
+                    "human-owned",
+                )
         for command in (
-            "cp /tmp/p.json .harness/policy.json",
-            "sed -i 's/4007//' .harness/policy.json",
-            "python3 -c \"open('.harness/policy.json', 'w').write('{}')\"",
+            "cp /tmp/p.json .harness/settings.json",
+            "sed -i 's/4007//' .harness/settings.json",
+            "python3 -c \"open('.harness/settings.json', 'w').write('{}')\"",
             "echo '{}' | tee .harness/state/approvals/HB-1.json",
             "cd .harness/state/approvals && echo '{}' > HB-2.json",
-            "ls 2>/dev/null; echo x >> .harness/policy.json",
+            "ls 2>/dev/null; echo x >> .harness/settings.json",
             # A second line is a second command, not more arguments to the first.
-            "echo hi\ncp /tmp/p.json .harness/policy.json",
-            "cd .harness\necho '{}' > policy.json",
+            "echo hi\ncp /tmp/p.json .harness/settings.json",
+            "cd .harness\necho '{}' > settings.json",
             # Wrappers, dispatchers, and compound commands run the writer all the same.
-            "env X=1 cp /tmp/p.json .harness/policy.json",
-            "sudo tee .harness/policy.json",
-            "echo .harness/policy.json | xargs rm",
-            "eval 'cp /tmp/p .harness/policy.json'",
-            "for f in a; do cp $f .harness/policy.json; done",
-            "if true; then cp /tmp/p .harness/policy.json; fi",
-            "(cd .harness && rm policy.json)",
-            "P=.harness/policy.json; echo x > $P",
+            "env X=1 cp /tmp/p.json .harness/settings.json",
+            "sudo tee .harness/settings.json",
+            "echo .harness/settings.json | xargs rm",
+            "eval 'cp /tmp/p .harness/settings.json'",
+            "for f in a; do cp $f .harness/settings.json; done",
+            "if true; then cp /tmp/p .harness/settings.json; fi",
+            "(cd .harness && rm settings.json)",
+            "P=.harness/settings.json; echo x > $P",
             # A directory target lands on the policy just as well as naming it.
             "cp /tmp/policy.json .harness/",
             "rsync -a /tmp/h/ .harness/",
             "tar -xf p.tar -C .harness",
             "unzip -o p.zip -d .harness",
             "ln -s .harness /tmp/h",
-            "find .harness -name policy.json -delete",
+            "find .harness -name settings.json -delete",
         ):
             with self.subTest(command=command):
                 self.assertDenied(
@@ -225,26 +236,127 @@ class TestHumanOwned(HookTestCase):
         self.assertAllowed(
             self.claude("Write", {"file_path": str(self.repo / "lib/a.dart")})
         )
-        self.assertAllowed(self.claude("Bash", {"command": "cat .harness/policy.json"}))
+        self.assertAllowed(
+            self.claude("Bash", {"command": "cat .harness/settings.json"})
+        )
         # Reading them is always fine, whatever else is on the line.
         for command in (
-            "ls -la .harness/ && cat .harness/policy.json 2>/dev/null | head -80",
-            "cd .harness && cat policy.json 2>&1 | head",
+            "ls -la .harness/ && cat .harness/settings.json 2>/dev/null | head -80",
+            "cd .harness && cat settings.json 2>&1 | head",
             "cd .harness && ls -la > /tmp/listing",
-            "jq .azure .harness/policy.json > /tmp/azure.json",
-            "shasum .harness/policy.json",
-            "shellcheck .harness/policy.json",
-            "git diff .harness/policy.json",
+            "jq .azure .harness/settings.json > /tmp/azure.json",
+            "shasum .harness/settings.json",
+            "shellcheck .harness/settings.json",
+            "git diff .harness/settings.json",
             "python3 -m json.tool .harness/state/approvals/HB-7Q2K.json",
         ):
             with self.subTest(command=command):
                 self.assertAllowed(self.claude("Bash", {"command": command}))
 
 
-class TestTrackerWrites(HookTestCase):
-    def test_tracker_declared_write_needs_approval(self) -> None:
-        from scripts.harness.rules import is_remote_write, make_call
-        self.assertTrue(is_remote_write(make_call("save_issue", {}, "linear"), {"save_issue"}))
+class TestTrackers(HookTestCase):
+    """Tracker writes and protections come from the tracker folders, whichever tracker is selected."""
+
+    def select(self, tracker: dict, **changes) -> None:
+        settings = {
+            **json.loads((self.repo / ".harness" / "settings.json").read_text()),
+            "tracker": tracker,
+            **changes,
+        }
+        (self.repo / ".harness" / "settings.json").write_text(json.dumps(settings))
+
+    def approve(self) -> None:
+        self.hook("claude", "prompt", {"prompt": "approve HB-TRK1"})
+
+    def test_a_write_any_tracker_declares_needs_approval(self) -> None:
+        self.select({"name": "linear", "values": {"team": "ENG"}})
+        self.assertDenied(
+            self.claude("mcp__linear__save_issue", {"title": "x"}), "approval-required"
+        )
+        # The Azure DevOps server stays registered with the host whatever the repository selects.
+        self.assertDenied(
+            self.claude(AZ + "wit_work_item_write", {"action": "create"}),
+            "approval-required",
+        )
+        self.assertAllowed(self.claude("mcp__linear__get_issue", {"id": "ENG-1"}))
+
+    def test_a_protected_linear_issue_is_never_written_or_mentioned(self) -> None:
+        self.select(
+            {"name": "linear", "values": {"team": "ENG"}},
+            protected_work_items=["ENG-12"],
+        )
+        self.approve()
+        self.assertDenied(
+            self.claude("mcp__linear__save_issue", {"id": "eng-12", "title": "x"}),
+            "protected-items",
+        )
+        self.assertDenied(
+            self.claude(
+                "mcp__linear__save_comment",
+                {"issueId": "ENG-3", "body": "follows up ENG-12"},
+            ),
+            "protected-items",
+        )
+        self.assertDenied(
+            self.claude("Bash", {"command": "git commit -m 'fix ENG-12'"}),
+            "protected-items",
+        )
+        self.assertAllowed(
+            self.claude(
+                "mcp__linear__save_comment", {"issueId": "ENG-3", "body": "see ENG-120"}
+            )
+        )
+
+    def test_local_tracker_mentions_do_not_link(self) -> None:
+        self.select({"name": "local"}, protected_work_items=["STORY-0001"])
+        self.assertAllowed(
+            self.claude(
+                "Bash", {"command": "git commit --allow-empty -m 'STORY-0001 notes'"}
+            )
+        )
+
+    def test_a_broken_selected_tracker_refuses_tracker_writes(self) -> None:
+        self.select({"name": "azure-devops", "values": {"organization": "o"}})
+        self.approve()
+        self.assertDenied(
+            self.claude(AZ + "wit_work_item_write", {"action": "create"}),
+            "tracker-invalid",
+        )
+        self.select({"name": "nothing"})
+        self.assertDenied(
+            self.claude(
+                "mcp__plugin_x_workflow-integrations__tracker_create_work_item", {}
+            ),
+            "tracker-invalid",
+        )
+        self.assertAllowed(
+            self.claude("Write", {"file_path": str(self.repo / "lib/a.dart")})
+        )
+
+    def test_trusting_an_onboarded_tracker_takes_the_users_typed_digest(self) -> None:
+        import shutil
+
+        folder = self.repo / ".harness" / "trackers" / "custom"
+        shutil.copytree(PLUGIN_ROOT / "trackers" / "local", folder)
+        manifest = json.loads((folder / "tracker.json").read_text())
+        (folder / "tracker.json").write_text(json.dumps({**manifest, "name": "custom"}))
+        sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
+        from integrations import trust
+
+        digest = trust.digest(folder)
+        wrong = self.hook(
+            "claude", "prompt", {"prompt": f"harness trust-tracker custom {'0' * 12}"}
+        )
+        self.assertIn("NOT trusted", wrong["text"])
+        right = self.hook(
+            "claude",
+            "prompt",
+            {"prompt": f"harness trust-tracker custom {digest[:12]}"},
+        )
+        self.assertIn("is trusted", right["text"])
+        self.assertTrue(trust.is_trusted(self.repo, "custom", folder))
+        self.hook("claude", "prompt", {"prompt": "harness untrust-tracker custom"})
+        self.assertFalse(trust.is_trusted(self.repo, "custom", folder))
 
 
 class TestApproval(HookTestCase):
@@ -782,13 +894,13 @@ class TestHistoryPreserved(HookTestCase):
         )
 
 
-class TestPolicyValidation(HookTestCase):
+class TestSettingsValidation(HookTestCase):
     def test_guarded_path_naming_an_unknown_check_fails_closed(self) -> None:
-        policy = json.loads((self.repo / ".harness" / "policy.json").read_text())
-        policy["guarded_paths"].append(
+        settings = json.loads((self.repo / ".harness" / "settings.json").read_text())
+        settings["guarded_paths"].append(
             {"path": "db/**", "evidence": "check:does-not-exist"}
         )
-        (self.repo / ".harness" / "policy.json").write_text(json.dumps(policy))
+        (self.repo / ".harness" / "settings.json").write_text(json.dumps(settings))
         self.assertDenied(
             self.claude("Write", {"file_path": str(self.repo / "lib/a.dart")}),
             "harness-error",
@@ -847,7 +959,7 @@ class TestFailClosed(HookTestCase):
     def test_a_command_nested_too_deep_to_read_is_blocked(self) -> None:
         self.assertDenied(
             self.claude(
-                "Bash", {"command": "eval " * 20 + "cp x .harness/policy.json"}
+                "Bash", {"command": "eval " * 20 + "cp x .harness/settings.json"}
             ),
             "harness-error",
         )
@@ -860,8 +972,8 @@ class TestFailClosed(HookTestCase):
         self.assertAllowed(self.claude("Bash", {"command": script}))
         self.assertLess(time.monotonic() - started, 5)
 
-    def test_broken_policy_blocks_writes_but_not_reads(self) -> None:
-        (self.repo / ".harness" / "policy.json").write_text("{not json")
+    def test_broken_settings_block_writes_but_not_reads(self) -> None:
+        (self.repo / ".harness" / "settings.json").write_text("{not json")
         self.assertDenied(
             self.claude("Write", {"file_path": str(self.repo / "lib/a.dart")}),
             "harness-error",

@@ -46,13 +46,13 @@ scripts/integrations/   contracts (TrackerOps, ScmOps, domain types), registry, 
 |---|------|--------|
 | 1 | Map current code and baseline tests (main: 233 delivery+harness, 366 backlog pass) | done |
 | 2 | Core: `Ok`/`Err` values and stdlib schema validator (`scripts/core/`) | done |
-| 3 | Single `settings.json`: schema, loader, example (`harness/settings.py`); consumers still read the old files | partly done |
+| 3 | Single `settings.json`: every reader moved (hook, rules, runtime, checks, knowledge, backlog), old loaders deleted | done |
 | 4 | Tracker contract, manifests, registry, trust store (`integrations/`) | done |
 | 5 | Azure, Linear, local adapters; SCM (`integrations/scm.py`); transport; gateway | done |
-| 6 | Rules: one tracker policy value, fail closed, restored protections | pending |
-| 7 | Sessions wired into enforcement | pending |
-| 8 | Onboarding and tracker trust | pending |
-| 9 | Delete copies; bootstrap, backlog config, skills, docs | pending |
+| 6 | Rules: `TrackerPolicy` built once, `tracker-invalid` rule, restored protections, typed settings | done |
+| 7 | Sessions wired into the workflow runtime; `harness session` command | done |
+| 8 | Onboarding (`harness tracker stage/show/list`) and typed trust in the prompt hook | done |
+| 9 | Bootstrap and backlog config done; skills, references, and docs still name the old files | in progress |
 | 10 | Tests in `run.sh`, CI, lint, versions, changelog; push | pending |
 
 ## Notes
@@ -60,11 +60,14 @@ scripts/integrations/   contracts (TrackerOps, ScmOps, domain types), registry, 
 - The Linear adapter's tool arguments (`save_issue` with `team`, `labels`, `parentId`, `state`;
   `list_comments`/`save_comment` with `issueId`) follow Linear's MCP documentation as far as it
   could be checked offline; confirm against a live server.
-- New tests: `tests/core`, `tests/integrations`, `tests/harness/test_settings.py` (52 passing).
-- The branch does not pass the full suite between checkpoints 3 and 6: the hook, rules, bootstrap,
-  and backlog runtime still read `policy.json` / `integrations.json`.
+- Full runner (`tests/run.sh`) passes: 347 backlog, 268 core/integrations/delivery/harness.
+- Still to update in step 9: skills (`bootstrap`, `onboard-tracker`, `start-ticket`,
+  `enrich-work-item`, `generate-work-item`, `generate-breakdown-work-items`, `skip-tracker`,
+  `resume-tracker`, `azure-devops`, `generate-plain-language-documentation`), `references/`
+  (`project-config.md`, `azure-mechanics.md`), docs, README, ADR-0009, CHANGELOG, versions, CI.
 
 ## Next
 
-Step 3 rest and step 6: move the hook, rules, workflow runtime, checks, knowledge, and backlog
-config onto `settings.load`; build the tracker policy value in the rules.
+Step 9: rewrite the skills and docs that name `policy.json`, `integrations.json`, the backlog
+config file, or `config --set`; one shared tracker-contract reference for the three work-item
+skills. Then step 10.

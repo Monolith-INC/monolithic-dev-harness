@@ -1,22 +1,13 @@
 from __future__ import annotations
 
 import json
-import sys
 import tempfile
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "scripts"))
-
-from core.result import Ok  # noqa: E402
-from harness import settings  # noqa: E402
-
-MINIMAL = {
-    "schemaVersion": 1,
-    "tracker": {"name": "local"},
-    "scm": {"name": "github", "values": {"owner": "o", "repo": "r"}},
-    "branch_template": "feature/{key}-{slug}",
-}
+from core.result import Ok
+from harness import settings
+from tests.settings_fixture import MINIMAL
 
 
 class SettingsTest(unittest.TestCase):

@@ -107,16 +107,11 @@ def main(argv: list[str] | None = None) -> int:
         "--payloads", help="Path to JSON of pre-fetched Azure capacity payloads"
     )
 
-    config_p = sub.add_parser("config", help="Show or set project configuration")
-    config_p.add_argument(
-        "--show", action="store_true", help="Print resolved configuration"
+    config_p = sub.add_parser(
+        "config", help="Show the configuration read from .harness/settings.json"
     )
     config_p.add_argument(
-        "--set",
-        dest="assignments",
-        action="append",
-        metavar="KEY=VALUE",
-        help="Set artifacts_path, azure.org, azure.project, azure.team, or azure.process. Repeatable.",
+        "--show", action="store_true", help="Print resolved configuration"
     )
     config_p.add_argument(
         "--require-team",
@@ -286,45 +281,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "config":
-        from .project_config import (
-            config_path,
-            load_project_config,
-            save_project_config,
-        )
-
-        if args.assignments:
-            config = load_project_config(project_root)
-            azure_updates: dict[str, str] = {}
-            artifacts_update: str | None = None
-            for assignment in args.assignments:
-                key, _, value = assignment.partition("=")
-                key, value = key.strip().lower(), value.strip()
-                if not value:
-                    print(f"[!] Ignoring '{assignment}': no value given.")
-                    continue
-                if key in ("artifacts_path", "artifacts"):
-                    artifacts_update = value
-                elif key.startswith("azure."):
-                    field = key.split(".", 1)[1]
-                    if field in ("org", "project", "team", "process"):
-                        azure_updates[field] = value
-                    else:
-                        print(
-                            f"[!] Unknown azure key '{field}'; expected org, project, team or process."
-                        )
-                else:
-                    print(
-                        f"[!] Unknown key '{key}'; expected artifacts_path or azure.<field>."
-                    )
-
-            config = config.with_azure(**azure_updates).with_artifacts_path(
-                artifacts_update
-            )
-            written = save_project_config(project_root, config)
-            if written is None:
-                print(f"[!] Could not write {config_path(project_root)}")
-                return 1
-            print(f"[+] Saved: {written}")
+        from .project_config import load_project_config
 
         config = load_project_config(project_root)
         artifacts = config.resolve_artifacts_dir(project_root)
@@ -349,9 +306,7 @@ def main(argv: list[str] | None = None) -> int:
         missing = config.missing(require_team=args.require_team)
         if missing:
             print(f"\n  Missing: {', '.join(missing)}")
-            print(
-                f"  Set with: bin/agile-backlog-toolkit config --set azure.{missing[0]}=<value>"
-            )
+            print("  Set it in .harness/settings.json under tracker.values.")
             return 1
         return 0
 

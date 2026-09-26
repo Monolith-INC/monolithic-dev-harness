@@ -6,7 +6,7 @@
 --head (default) runs against the committed HEAD and records evidence for HEAD's tree; the working
 tree must be clean so the result describes exactly what was committed. --staged records evidence for
 the index tree (what the next commit will contain); use it before committing a guarded path (guarded-paths).
-Checks come from `.harness/policy.json` → `checks: [{name, run, when}]`; `when` globs select the
+Checks come from `.harness/settings.json` → `checks: [{name, run, when}]`; `when` globs select the
 checks that apply to the files changed on the branch.
 """
 
@@ -20,8 +20,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from harness import gitstate, globs, state  # noqa: E402
-from harness.config import load_policy  # noqa: E402
+from core.result import Err  # noqa: E402
+from harness import gitstate, settings, state  # noqa: E402
+from harness.rules import applicable_checks  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -37,7 +38,11 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     repo = gitstate.repo_root(Path(args.repo)) or Path(args.repo).resolve()
-    policy = load_policy(repo)
+    loaded = settings.load(repo)
+    if isinstance(loaded, Err):
+        print(f"cannot run checks: {loaded.failure.message}", file=sys.stderr)
+        return 2
+    chosen = loaded.value
     if args.staged:
         tree = gitstate.index_tree(repo)
         changed = gitstate.staged_paths(repo)
@@ -49,13 +54,13 @@ def main(argv: list[str] | None = None) -> int:
             )
             return 2
         tree = gitstate.head_tree(repo)
-        changed = gitstate.branch_paths(repo, policy["git"]["base_branch"])
+        changed = gitstate.branch_paths(repo, chosen.base_branch)
 
+    applicable = applicable_checks(repo, chosen, changed)
     selected = [
-        c
-        for c in policy.get("checks", [])
-        if (args.only is None or c["name"] in args.only)
-        and (not c.get("when") or globs.select(changed, c["when"]))
+        check
+        for check in chosen.checks
+        if check.name in applicable and (args.only is None or check.name in args.only)
     ]
     if not selected:
         print("no configured checks apply to the changed files")
@@ -65,23 +70,21 @@ def main(argv: list[str] | None = None) -> int:
     results = []
     for check in selected:
         started = time.monotonic()
-        print(f"--- {check['name']}: {check['run']}", flush=True)
+        print(f"--- {check.name}: {check.run}", flush=True)
         try:
-            proc = subprocess.run(
-                check["run"], shell=True, cwd=repo, timeout=args.timeout
-            )
+            proc = subprocess.run(check.run, shell=True, cwd=repo, timeout=args.timeout)
             code = proc.returncode
         except subprocess.TimeoutExpired:
             code = 124
         results.append(
             {
-                "name": check["name"],
-                "run": check["run"],
+                "name": check.name,
+                "run": check.run,
                 "exit_code": code,
                 "seconds": round(time.monotonic() - started, 1),
             }
         )
-        print(f"--- {check['name']}: exit {code}", flush=True)
+        print(f"--- {check.name}: exit {code}", flush=True)
 
     path = state.record_checks(repo, tree, results)
     failed = [r["name"] for r in results if r["exit_code"] != 0]

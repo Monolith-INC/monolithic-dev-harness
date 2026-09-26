@@ -188,8 +188,8 @@ class TestOrchestratorEngine(unittest.TestCase):
         skills_dir = Path(__file__).resolve().parents[2] / "skills"
         with tempfile.TemporaryDirectory() as tmp:
             project_root = Path(tmp)
-            state_dir = project_root / ".agile-backlog-toolkit"
-            state_dir.mkdir()
+            state_dir = project_root / ".harness" / "backlog"
+            state_dir.mkdir(parents=True)
             engine = OrchestratorEngine(
                 skills_dir=skills_dir,
                 project_root=project_root,
@@ -206,8 +206,8 @@ class TestOrchestratorEngine(unittest.TestCase):
         skills_dir = Path(__file__).resolve().parents[2] / "skills"
         with tempfile.TemporaryDirectory() as tmp:
             project_root = Path(tmp)
-            state_dir = project_root / ".agile-backlog-toolkit"
-            state_dir.mkdir()
+            state_dir = project_root / ".harness" / "backlog"
+            state_dir.mkdir(parents=True)
             engine = OrchestratorEngine(
                 skills_dir=skills_dir,
                 project_root=project_root,
