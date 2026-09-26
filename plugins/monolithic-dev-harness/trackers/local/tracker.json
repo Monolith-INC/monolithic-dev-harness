@@ -1,1 +1,26 @@
-{"schemaVersion":1,"name":"local","label":"Local tracker","docs":"user","access":{"kind":"mcp","server":"mcp.json","auth":"none"},"settings":[{"key":"root","required":false,"source":"user"}],"artifacts":[{"name":"epic","children":["feature"]},{"name":"feature","children":["user_story","bug"]},{"name":"user_story","children":["task"],"estimate":"story_points"},{"name":"task","children":[]},{"name":"bug","children":["task"]}],"roles":{"containers":["epic","feature"],"delivery_unit":"user_story","step":"task"},"states":{"backlog":"backlog","ready":"ready","in_progress":"in_progress","done":"done","canceled":"canceled"},"ids":{"pattern":"[A-Z]+-[0-9]+","branch_key":"[A-Z]+-[0-9]+","mention":["{id}"]},"mentions_link":false,"attachments":{"spec":"artifact","report":"artifact","pull_request":"link"},"text_format":"markdown","writes":["create_work_item","transition_work_item","publish_artifact","link_development_artifact"],"sources":{"manifest":"user"}}
+{
+  "schemaVersion": 1,
+  "name": "local",
+  "label": "Local tracker",
+  "docs": "Work items are JSON files under .harness/tracker/<state>/, committed with the repository.",
+  "connection": {"kind": "local"},
+  "settings": [],
+  "kinds": {"epic": "epic", "feature": "feature", "user_story": "user_story", "task": "task", "bug": "bug"},
+  "states": {"backlog": "backlog", "ready": "ready", "in_progress": "in_progress", "done": "done", "canceled": "canceled"},
+  "artifacts": [
+    {"name": "epic", "children": ["feature"]},
+    {"name": "feature", "children": ["user_story", "bug"]},
+    {"name": "user_story", "children": ["task"], "estimate": "story_points"},
+    {"name": "task", "children": []},
+    {"name": "bug", "children": ["task"]}
+  ],
+  "ids": {
+    "pattern": "(?:EPIC|FEATURE|STORY|TASK|BUG)-[0-9]{4,}",
+    "branch_key": "(?P<id>(?i:EPIC|FEATURE|STORY|TASK|BUG)-[0-9]{4,})",
+    "mention": [],
+    "mentions_link": false
+  },
+  "writes": {"server": "", "tools": []},
+  "attachments": {"spec": "artifact", "report": "artifact", "pull_request": "link"},
+  "text_format": "markdown"
+}

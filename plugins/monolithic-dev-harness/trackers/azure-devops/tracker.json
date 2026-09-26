@@ -3,25 +3,50 @@
   "name": "azure-devops",
   "label": "Azure DevOps Boards",
   "docs": "https://learn.microsoft.com/azure/devops/boards/",
-  "access": {"kind": "mcp", "server": "mcp.json", "auth": "oauth-interactive"},
+  "connection": {
+    "kind": "mcp",
+    "command": "npx",
+    "args": ["-y", "@azure-devops/mcp", "{organization}", "-d", "core", "work-items", "repositories"],
+    "timeout": 60
+  },
   "settings": [
-    {"key": "organization", "required": true, "env": "AZURE_DEVOPS_ORG", "source": "https://learn.microsoft.com/azure/devops/extend/develop/azure-devops-service-rest-api-versioning"},
-    {"key": "project", "required": true, "source": "https://learn.microsoft.com/azure/devops/organizations/projects/about-projects"},
-    {"key": "team", "required": false, "source": "https://learn.microsoft.com/azure/devops/organizations/settings/about-teams-and-agile-tools"}
+    {"key": "organization", "required": true, "description": "The Azure DevOps organization name (dev.azure.com/<organization>)."},
+    {"key": "project", "required": true, "description": "The project that holds the work items."},
+    {"key": "team", "required": false, "description": "The team whose backlog and capacity the backlog stage reads."},
+    {"key": "process", "required": false, "description": "agile, scrum, or cmmi: decides whether Original Estimate exists."}
   ],
-  "artifacts": [
-    {"name": "Epic", "children": ["Feature"], "source": "https://learn.microsoft.com/azure/devops/boards/backlogs/define-features-epics"},
-    {"name": "Feature", "children": ["User Story", "Bug"], "source": "https://learn.microsoft.com/azure/devops/boards/backlogs/define-features-epics"},
-    {"name": "User Story", "children": ["Task"], "estimate": "Microsoft.VSTS.Scheduling.StoryPoints", "source": "https://learn.microsoft.com/azure/devops/boards/backlogs/define-features-epics"},
-    {"name": "Task", "children": [], "source": "https://learn.microsoft.com/azure/devops/boards/backlogs/add-tasks"},
-    {"name": "Bug", "children": ["Task"], "source": "https://learn.microsoft.com/azure/devops/boards/backlogs/manage-bugs"}
-  ],
-  "roles": {"containers": ["Epic", "Feature"], "delivery_unit": "User Story", "step": "Task"},
+  "kinds": {"epic": "Epic", "feature": "Feature", "user_story": "User Story", "task": "Task", "bug": "Bug"},
   "states": {"backlog": "New", "ready": "Approved", "in_progress": "Active", "done": "Closed", "canceled": "Removed"},
-  "ids": {"pattern": "[0-9]+", "branch_key": "[0-9]+", "mention": ["#{id}", "AB#{id}", "_workitems/edit/{id}"]},
-  "mentions_link": true,
+  "artifacts": [
+    {"name": "Epic", "children": ["Feature"]},
+    {"name": "Feature", "children": ["User Story", "Bug"]},
+    {"name": "User Story", "children": ["Task"], "estimate": "Microsoft.VSTS.Scheduling.StoryPoints"},
+    {"name": "Task", "children": []},
+    {"name": "Bug", "children": ["Task"]}
+  ],
+  "tools": {
+    "read": "wit_work_item",
+    "query": "wit_query",
+    "write": "wit_work_item_write",
+    "comment": "wit_work_item_comment_write",
+    "link": "wit_work_item_link_write"
+  },
+  "ids": {
+    "pattern": "[1-9][0-9]*",
+    "branch_key": "(?:(?i:AB)-)?(?P<id>[1-9][0-9]*)",
+    "mention": [
+      "(?<![&\\w])(?:AB|US)?#{id}\\b",
+      "_workitems/edit/{id}\\b",
+      "_workitems[^\\s]*[?&]id={id}\\b",
+      "/_apis/wit/workItems/{id}\\b",
+      "vstfs:///WorkItemTracking/WorkItem/{id}\\b"
+    ],
+    "mentions_link": true
+  },
+  "writes": {
+    "server": "azure-devops",
+    "tools": ["*_write", "repo_create_branch", "pipelines_run", "wiki_upsert_page"]
+  },
   "attachments": {"spec": "comment", "report": "comment", "pull_request": "artifact-link"},
-  "text_format": "markdown",
-  "writes": ["wit_work_item_write", "wit_work_item_link_write", "wit_work_item_comment_write", "repo_create_branch"],
-  "sources": {"states": "https://learn.microsoft.com/azure/devops/boards/work-items/workflow-and-state-categories"}
+  "text_format": "markdown"
 }

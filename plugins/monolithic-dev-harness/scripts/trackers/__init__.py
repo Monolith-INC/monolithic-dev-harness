@@ -1,1 +1,0 @@
-"""Tracker manifests and registry."""

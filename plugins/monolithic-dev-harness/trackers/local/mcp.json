@@ -1,1 +1,0 @@
-{"command":"python3","args":["${PLUGIN_ROOT}/scripts/integrations/run_local_tracker.py"]}
