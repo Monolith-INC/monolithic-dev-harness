@@ -13,6 +13,15 @@ All notable changes to this project are documented here. The format follows
   selected tracker fails closed; changing or revoking an approved onboarded folder makes it
   unavailable until it is approved again.
 
+### Changed
+
+- Tracker folders hold data only (manifest, MCP settings, references). The Azure adapter is back in
+  `scripts/integrations/azure.py`; the Linear and local adapter shims and the per-tracker copies of
+  the canonical templates are gone. `mentions_link` is removed from the manifest schema. Tracker
+  names map to integration adapter ids through one table in the registry.
+- `python3 -m trackers.onboarding stage|approve` runs onboarding from the command line; `approve`
+  rejects anything that is not a tracker name.
+
 ### Fixed
 
 - Tracker manifests are checked with the standard library, so hooks no longer need `jsonschema`

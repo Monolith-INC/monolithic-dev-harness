@@ -135,9 +135,9 @@ def main(argv: list[str] | None = None) -> int:
         print(note)
 
     azure = policy["azure"]
-    tracker_adapter = {"azure-devops": "azure_devops", "local": "local_tracker"}.get(
-        args.tracker, args.tracker
-    )
+    from trackers.registry import adapter_id
+
+    tracker_adapter = adapter_id(args.tracker)
     scm_adapter = (
         args.scm.replace("-", "_")
         if args.scm

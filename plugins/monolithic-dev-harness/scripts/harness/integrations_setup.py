@@ -201,12 +201,13 @@ def _default_tracker_config(
     project: str = "",
 ) -> dict:
     from scripts.integrations.discovery import mapping_presets
+    from scripts.trackers.registry import adapter_id
 
     presets = mapping_presets(provider)
     if provider == "linear":
         return {
             "name": "linear",
-            "adapter": "linear",
+            "adapter": adapter_id("linear"),
             "scope": scope,
             "connection": {
                 "command": "npx",
@@ -227,7 +228,7 @@ def _default_tracker_config(
     if provider == "azure_devops":
         return {
             "name": "azure-devops",
-            "adapter": "azure_devops",
+            "adapter": adapter_id("azure-devops"),
             "scope": scope,
             "connection": {
                 "command": "npx",
@@ -248,7 +249,7 @@ def _default_tracker_config(
     if provider == "local_tracker":
         return {
             "name": "local",
-            "adapter": "local_tracker",
+            "adapter": adapter_id("local"),
             "root": TRACKER,
             "storagePolicy": "committed",
             "connection": _local_tracker_connection(

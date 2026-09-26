@@ -402,13 +402,12 @@ class GitHubScmAdapter(ScmAdapter):
 
 
 def tracker_adapter(config: dict[str, Any]) -> TrackerAdapter:
+    from trackers.registry import adapter_id
+
     from .azure import AzureDevOpsTrackerAdapter
     from .local_tracker import LocalTrackerAdapter
 
-    adapter = config.get("adapter") or {
-        "azure-devops": "azure_devops",
-        "local": "local_tracker",
-    }.get(config.get("name"), config.get("name"))
+    adapter = config.get("adapter") or adapter_id(str(config.get("name")))
     if adapter == "linear":
         return LinearTrackerAdapter(config)
     if adapter == "azure_devops":

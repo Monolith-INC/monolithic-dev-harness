@@ -427,8 +427,8 @@ def mentioned_ids(value: Any, pattern: re.Pattern[str] = _TEXT_REFERENCE) -> set
 def _mention_pattern(manifest: dict[str, Any] | None) -> re.Pattern[str]:
     """The default `#123` / work item URL forms, plus any forms the active tracker declares.
 
-    The defaults always apply, whatever the tracker says about `mentions_link`: the code host
-    (Azure Repos, for one) turns them into links on its own, so a protected item stays protected.
+    The defaults always apply, whatever the tracker: the code host (Azure Repos, for one) turns
+    them into links on its own, so a protected item stays protected.
     """
     ids = (manifest or {}).get("ids", {})
     expressions = ids.get("mention", []) if isinstance(ids, dict) else []

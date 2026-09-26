@@ -45,7 +45,6 @@ def _manifest(name: str, *, status: str = "approved") -> dict[str, object]:
             "branch_key": "[0-9]+",
             "mention": ["#{id}"],
         },
-        "mentions_link": False,
         "attachments": {"spec": "comment", "report": "comment", "pull_request": "link"},
         "text_format": "markdown",
         "writes": ["tracker_write"],

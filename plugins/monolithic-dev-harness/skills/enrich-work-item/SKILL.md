@@ -35,7 +35,8 @@ References (start at `../../common/workflows/enrich-work-item.md`):
 Before choosing a hierarchy, destination, provider call, or identifier syntax, call
 `tracker_describe`. Its manifest is authoritative for artifact names and parent links (`artifacts`,
 `roles`), logical states (`states`), branch and reference syntax (`ids`), write operations
-(`writes`), and whether a textual reference can create a link (`mentions_link`). Map generic
+(`writes`), and the reference forms (`ids.mention`) the harness treats as links. Never write a
+protected item in any of those forms, or as `#<id>`, whatever the tracker. Map generic
 terms such as delivery unit and step through that response. Azure-specific instructions apply only
 when the active manifest name is `azure-devops`; otherwise use the configured tracker gateway
 operations and preserve the manifest's native names.

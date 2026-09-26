@@ -4,7 +4,7 @@
   "title": "Monolithic Dev Harness tracker manifest",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "name", "label", "docs", "access", "settings", "artifacts", "roles", "states", "ids", "mentions_link", "attachments", "text_format", "writes", "sources"],
+  "required": ["schemaVersion", "name", "label", "docs", "access", "settings", "artifacts", "roles", "states", "ids", "attachments", "text_format", "writes", "sources"],
   "properties": {
     "schemaVersion": {"const": 1},
     "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"},
@@ -17,7 +17,6 @@
     "roles": {"type": "object", "additionalProperties": false, "required": ["containers", "delivery_unit", "step"], "properties": {"containers": {"type": "array", "items": {"type": "string", "minLength": 1}}, "delivery_unit": {"type": "string", "minLength": 1}, "step": {"type": "string", "minLength": 1}}},
     "states": {"type": "object", "additionalProperties": false, "required": ["backlog", "ready", "in_progress", "done", "canceled"], "properties": {"backlog": {"type": "string", "minLength": 1}, "ready": {"type": "string", "minLength": 1}, "in_progress": {"type": "string", "minLength": 1}, "done": {"type": "string", "minLength": 1}, "canceled": {"type": "string", "minLength": 1}}},
     "ids": {"type": "object", "additionalProperties": false, "required": ["pattern", "branch_key", "mention"], "properties": {"pattern": {"type": "string", "minLength": 1}, "branch_key": {"type": "string", "minLength": 1}, "mention": {"type": "array", "items": {"type": "string", "minLength": 1}}}},
-    "mentions_link": {"type": "boolean"},
     "attachments": {"type": "object", "additionalProperties": {"type": "string", "minLength": 1}},
     "text_format": {"enum": ["markdown", "html", "plain"]},
     "writes": {"type": "array", "items": {"type": "string", "minLength": 1}},

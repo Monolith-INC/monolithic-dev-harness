@@ -18,7 +18,25 @@ from .schema_check import SchemaError, errors, unsupported
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_SHIPPED_ROOT = PLUGIN_ROOT / "trackers"
 SCHEMA_PATH = PLUGIN_ROOT / "config" / "tracker.schema.json"
-LEGACY_NAMES = {"azure_devops": "azure-devops", "local_tracker": "local"}
+# A tracker name is also a folder name: checked whole, since `$` in the schema allows "x\n".
+NAME = re.compile(r"[a-z][a-z0-9-]{0,63}")
+
+# The one table between tracker manifest names and the adapter ids integrations.json has used.
+ADAPTER_IDS = {
+    "azure-devops": "azure_devops",
+    "linear": "linear",
+    "local": "local_tracker",
+}
+
+
+def adapter_id(name: str) -> str:
+    """The integrations adapter id for a tracker manifest name."""
+    return ADAPTER_IDS.get(name, name)
+
+
+def tracker_name(adapter: str) -> str:
+    """The tracker manifest name for a legacy integrations adapter id."""
+    return {value: key for key, value in ADAPTER_IDS.items()}.get(adapter, adapter)
 
 
 class TrackerError(ValueError):
@@ -106,6 +124,11 @@ def _validate_domain(manifest: dict[str, Any]) -> dict[str, Any]:
         roles["step"] in _descendants(graph, roles["delivery_unit"]),
         "roles.step",
         "step must be below delivery_unit",
+    )
+    _require(
+        bool(NAME.fullmatch(manifest["name"])),
+        "name",
+        "must be a lowercase tracker name",
     )
     _validate_ids(manifest["ids"])
     return manifest
@@ -305,7 +328,7 @@ def _selection(repo: Path) -> tuple[str, str]:
         case {"name": str(name)}:
             return name, "shipped"
         case {"adapter": str(adapter)}:
-            return LEGACY_NAMES.get(adapter, adapter), "shipped"
+            return tracker_name(adapter), "shipped"
         case _:
             raise TrackerError(
                 "tracker selection requires tracker.name or legacy tracker.adapter"

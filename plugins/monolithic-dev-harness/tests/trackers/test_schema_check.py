@@ -50,7 +50,7 @@ def _mutations() -> dict[str, dict[str, object]]:
             lambda m: m.update(settings=[{"key": "org", "required": "yes"}])
         ),
         "missing state": changed(lambda m: m["states"].pop("done")),
-        "mentions_link not boolean": changed(lambda m: m.update(mentions_link=1)),
+        "unknown ids key": changed(lambda m: m["ids"].update(links=True)),
         "attachment value empty": changed(lambda m: m["attachments"].update(spec="")),
         "no sources": changed(lambda m: m.update(sources={})),
         "bad text format": changed(lambda m: m.update(text_format="rtf")),
