@@ -80,6 +80,8 @@ copied into each repository's `integrations.json`; and a repository's settings w
 - The rules load and check every tracker folder on each call (milliseconds; counted in the hook's
   time budget).
 - The Linear adapter's tool arguments follow Linear's documentation and still need a live check.
+- The trusted version is pinned when the Trust question is shown, not when the tracker was walked
+  through; the gap is recorded as [TD-1](../../06-delivery/tech-debt.md#td-1-a-tracker-can-change-between-the-walkthrough-and-the-trust-question).
 
 ## Host-specific Impact
 

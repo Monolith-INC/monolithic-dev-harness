@@ -59,6 +59,7 @@ docs/
 |   |-- roadmap.md
 |   |-- release-process.md
 |   |-- changelog.md
+|   |-- tech-debt.md
 |   `-- checkpoints/
 |       `-- pr-16-rework.md
 `-- 07-guides/
