@@ -7,12 +7,13 @@ Each folder is checked on its own: a broken one is reported and never hides the 
 
 from __future__ import annotations
 
-import importlib.util
 import json
 import re
 import string
+import types
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -30,6 +31,7 @@ from core.result import (
     oks,
     require,
     sequence,
+    value_or,
 )
 from core.schema import load_schema, validate
 from harness.settings import Selection, Settings
@@ -86,7 +88,34 @@ Resolution = NotConfigured | Active | Invalid
 
 
 def read_manifest(folder: Path, source: str) -> Result[Manifest]:
-    """The folder's manifest, checked against the schema and the harness's own rules."""
+    """The folder's manifest, checked against the schema and the harness's own rules.
+
+    Checked once per process for each version of the folder's manifest and adapter.
+    """
+    return _read_manifest(
+        folder, source, _stamp(folder / MANIFEST), _stamp(folder / ADAPTER)
+    )
+
+
+def _stamp(file: Path) -> tuple[int, int]:
+    return value_or(
+        attempt(
+            lambda: (file.stat().st_mtime_ns, file.stat().st_size),
+            "absent",
+            str(file),
+            OSError,
+        ),
+        (0, 0),
+    )
+
+
+@lru_cache(maxsize=64)
+def _read_manifest(
+    folder: Path,
+    source: str,
+    manifest_stamp: tuple[int, int],
+    adapter_stamp: tuple[int, int],
+) -> Result[Manifest]:
     return _labelled(
         folder,
         bind(
@@ -387,6 +416,30 @@ def find(
 # --- the repository's tracker ---------------------------------------------------------------
 
 
+def resolve_among(
+    results: tuple[Result[Manifest], ...], repo: Path, settings: Result[Settings]
+) -> Resolution:
+    """Like `resolve`, choosing among folders already read (see `everything`)."""
+    match settings:
+        case Err(failure):
+            return Invalid(failure)
+        case Ok(chosen):
+            found = next(
+                (
+                    manifest
+                    for manifest in oks(results)
+                    if (manifest.name, manifest.source)
+                    == (chosen.tracker.name, chosen.tracker.source)
+                ),
+                None,
+            )
+            return (
+                _resolution(_with_values(found, chosen.tracker))
+                if found is not None
+                else resolve(repo, settings)
+            )
+
+
 def resolve(
     repo: Path, settings: Result[Settings], root: Path = SHIPPED_ROOT
 ) -> Resolution:
@@ -509,7 +562,15 @@ def build(active: Active, repo: Path, call: Transport) -> Result[TrackerOps]:
             ),
             lambda _: _adapter_function(manifest),
         ),
-        lambda adapter: _built(manifest, adapter(context)),
+        lambda adapter: bind(
+            attempt(
+                lambda: adapter(context),
+                "invalid_tracker",
+                f"{manifest.name}/{ADAPTER} adapter(context) failed",
+                Exception,
+            ),
+            lambda ops: _built(manifest, ops),
+        ),
     )
 
 
@@ -534,9 +595,15 @@ def _adapter_function(manifest: Manifest) -> Result[Any]:
 
 
 def _import(module_name: str, file: Path) -> Any:
-    spec = importlib.util.spec_from_file_location(module_name, file)
-    module = importlib.util.module_from_spec(spec)  # type: ignore[arg-type]
-    spec.loader.exec_module(module)  # type: ignore[union-attr]
+    """Run the adapter's source as it reads now.
+
+    Compiled here rather than through the import system, so Python neither writes a cache file
+    into the tracker folder (which would change its trusted digest) nor runs a cached one that
+    could differ from the source the user reviewed.
+    """
+    module = types.ModuleType(module_name)
+    module.__file__ = str(file)
+    exec(compile(file.read_bytes(), str(file), "exec"), module.__dict__)
     return module
 
 

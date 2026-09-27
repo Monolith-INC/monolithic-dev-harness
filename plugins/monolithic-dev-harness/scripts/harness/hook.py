@@ -142,7 +142,7 @@ def _emit_decision(host: str, decision: rules.Decision) -> None:
 
 
 def _delegate_to_workflow_policy(
-    host: str, payload: dict[str, Any], call: rules.ToolCall
+    host: str, payload: dict[str, Any], call: rules.ToolCall, repo: Path
 ) -> int:
     os.environ["WORKFLOW_HOOK_CLIENT"] = host
     try:
@@ -152,7 +152,7 @@ def _delegate_to_workflow_policy(
     ) as exc:  # the runtime is part of this plugin; failing to import is a defect
         return _fail(host, call, f"workflow policy runtime unavailable: {exc}")
     try:
-        return run(host, payload)
+        return run(host, payload, str(repo))
     except Exception as exc:
         return _fail(host, call, f"workflow policy runtime failed: {exc}")
 
@@ -212,7 +212,7 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
         _emit_decision(host, decision)
         return 0
     if host == "claude" or event == "pre-tool":
-        return _delegate_to_workflow_policy(host, payload, call)
+        return _delegate_to_workflow_policy(host, payload, call, repo)
     _emit_decision(host, decision)
     return 0
 

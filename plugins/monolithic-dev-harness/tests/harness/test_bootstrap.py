@@ -73,3 +73,16 @@ class BootstrapTest(unittest.TestCase):
         )
         self.assertEqual(missing.returncode, 2)
         self.assertIn("organization", missing.stderr)
+
+    def test_an_unusable_tracker_leaves_the_repository_ungoverned_but_state_ignored(
+        self,
+    ) -> None:
+        missing = self.bootstrap(
+            self.candidate({**MINIMAL, "tracker": {"name": "linear"}})
+        )
+        self.assertEqual(missing.returncode, 2)
+        self.assertIn("team", missing.stderr)
+        self.assertFalse((self.repo / ".harness" / "settings.json").exists())
+        self.assertIn(
+            ".harness/state/", (self.repo / ".git" / "info" / "exclude").read_text()
+        )

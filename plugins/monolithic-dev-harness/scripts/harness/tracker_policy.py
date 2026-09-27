@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from fnmatch import fnmatchcase
 from pathlib import Path
 
-from core.result import Ok, Result
+from core.result import Ok, Result, failures, oks
 from integrations import registry
 from integrations.contracts import Manifest, WriteRules
 
@@ -32,13 +32,22 @@ class TrackerPolicy:
 
 
 def build(repo: Path, settings: Result[Settings]) -> TrackerPolicy:
-    manifests = registry.usable(repo)
+    """Every tracker folder is read once here; the selection is resolved among the same reads.
+
+    A shipped tracker that fails its checks means the installation is broken, which is a problem
+    as much as a broken selection: which tools write can no longer be known.
+    """
+    results = registry.shipped()
+    everything = (*results, *registry.onboarded(repo))
+    manifests = oks(everything)
+    shipped_problem = next((failure.message for failure in failures(results)), "")
     return TrackerPolicy(
         writes=tuple(manifest.writes for manifest in manifests),
         ids=tuple(re.compile(manifest.ids.pattern) for manifest in manifests),
         mentions=tuple(_mentions(manifests)),
         protected=frozenset(item.upper() for item in _protected(settings)),
-        problem=_problem(registry.resolve(repo, settings)),
+        problem=shipped_problem
+        or _problem(registry.resolve_among(everything, repo, settings)),
     )
 
 
@@ -71,12 +80,27 @@ def _problem(resolution: registry.Resolution) -> str:
             return ""
 
 
+# The harness's own servers: the gateway lists its writes itself, the orchestrators never write.
+HARNESS_SERVERS = (
+    "workflow-integrations",
+    "backlog-orchestrator",
+    "workflow-orchestrator",
+)
+
+
 def writes_to_tracker(policy: TrackerPolicy, server: str, tool: str) -> bool:
     """Whether a host MCP call is one a tracker declares as a write.
 
-    A call whose server the host did not name is judged by the tool name alone.
+    A call whose server the host did not name is judged by the tool name alone. While the tracker
+    folders cannot be trusted to say (`problem`), every call to a server that is not the harness's
+    own counts as a write, so a broken tracker fails closed.
     """
-    return any(
+    unknown = (
+        bool(policy.problem)
+        and bool(server)
+        and not any(name in server for name in HARNESS_SERVERS)
+    )
+    return unknown or any(
         (not server or (rules.server and rules.server in server))
         and any(fnmatchcase(tool, pattern) for pattern in rules.tools)
         for rules in policy.writes

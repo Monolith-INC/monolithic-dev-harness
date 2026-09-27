@@ -105,6 +105,17 @@ class GatewayTest(unittest.TestCase):
             {tool["name"] for tool in gateway.tools_for(self.root)},
         )
 
+    def test_a_defect_in_one_call_answers_with_an_error_and_keeps_the_server(
+        self,
+    ) -> None:
+        from unittest import mock
+
+        line = json.dumps({"jsonrpc": "2.0", "id": 7, "method": "tools/list"})
+        with mock.patch.object(gateway, "_answer", side_effect=KeyError("boom")):
+            reply = json.loads(gateway.process_message(line, self.root))
+        self.assertEqual((reply["id"], reply["error"]["code"]), (7, -32603))
+        self.assertIn("result", json.loads(gateway.process_message(line, self.root)))
+
     def test_tracker_text_reaches_the_agent_fenced_as_untrusted(self) -> None:
         self.call(
             "tracker_create_work_item",

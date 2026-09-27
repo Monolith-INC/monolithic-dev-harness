@@ -1,7 +1,8 @@
 """The harness rules, evaluated on every governed tool call. Each deny names its rule.
 
 human-owned         The settings, approvals, manual-check records, sessions, and tracker trust are human-owned.
-tracker-invalid     While the selected tracker is missing or broken, tracker and SCM writes are refused.
+tracker-invalid     While the selected tracker is missing or broken, tracker and SCM writes are refused, and so is
+                    every call to an MCP server that is not the harness's own.
 approval-required   Tracker and SCM writes need an approval window opened by the user (a prompt or a click).
 protected-items     Protected work items are never written, linked, or parented — approval does not override.
 tests-with-code     A commit that changes source files must come with test changes (in the commit or the branch).
@@ -86,8 +87,10 @@ _ID_KEYS = frozenset(
         "linkToId",
         "ref",
         "work_item_ref",
+        "workItemRef",
         "workItems",
         "parentRef",
+        "issueId",
     }
 )
 # Field names and patch paths that set a work item's parent.

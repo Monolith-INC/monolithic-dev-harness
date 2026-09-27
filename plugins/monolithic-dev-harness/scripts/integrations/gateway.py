@@ -368,11 +368,25 @@ def process_message(line: str, root: Path) -> str:
                 {
                     "jsonrpc": "2.0",
                     "id": identifier,
-                    **_answer(str(method), rest.get("params") or {}, root),
+                    **_guarded(str(method), rest.get("params") or {}, root),
                 }
             )
         case _:
             return ""
+
+
+def _guarded(method: str, params: Mapping[str, Any], root: Path) -> Mapping[str, Any]:
+    """The answer, or a JSON-RPC error: a defect in one call never stops the server."""
+    match attempt(
+        lambda: _answer(method, params, root),
+        "internal_error",
+        "the gateway failed",
+        Exception,
+    ):
+        case Ok(answer):
+            return answer
+        case Err(failure):
+            return {"error": {"code": -32603, "message": failure.message}}
 
 
 def _answer(method: str, params: Mapping[str, Any], root: Path) -> Mapping[str, Any]:

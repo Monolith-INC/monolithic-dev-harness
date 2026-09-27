@@ -333,6 +333,44 @@ class TestTrackers(HookTestCase):
             self.claude("Write", {"file_path": str(self.repo / "lib/a.dart")})
         )
 
+    def test_an_untrusted_selected_tracker_fails_closed_for_its_own_writes(
+        self,
+    ) -> None:
+        import shutil
+
+        folder = self.repo / ".harness" / "trackers" / "custom"
+        shutil.copytree(PLUGIN_ROOT / "trackers" / "local", folder)
+        manifest = json.loads((folder / "tracker.json").read_text())
+        writes = {"server": "customsrv", "tools": ["save_*"]}
+        (folder / "tracker.json").write_text(
+            json.dumps({**manifest, "name": "custom", "writes": writes})
+        )
+        self.select({"name": "custom", "source": "onboarded"})
+        self.approve()
+        # Untrusted, its manifest cannot say which tools write: every call to its server counts.
+        self.assertDenied(
+            self.claude("mcp__customsrv__save_thing", {}), "tracker-invalid"
+        )
+        self.assertDenied(
+            self.claude("mcp__customsrv__anything", {}), "tracker-invalid"
+        )
+        self.assertAllowed(
+            self.claude(
+                "mcp__plugin_x_workflow-integrations__workflow_tracking_status", {}
+            )
+        )
+
+    def test_linking_a_protected_item_through_the_gateway_is_denied(self) -> None:
+        self.approve()
+        call = "mcp__plugin_x_workflow-integrations__scm_link_work_item"
+        self.assertDenied(
+            self.claude(call, {"pullRequestRef": "12", "workItemRef": "1001"}),
+            "protected-items",
+        )
+        self.assertAllowed(
+            self.claude(call, {"pullRequestRef": "12", "workItemRef": "1002"})
+        )
+
     def test_trusting_an_onboarded_tracker_takes_the_users_typed_digest(self) -> None:
         import shutil
 

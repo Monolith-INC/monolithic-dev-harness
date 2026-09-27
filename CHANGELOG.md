@@ -44,10 +44,28 @@ All notable changes to this project are documented here. The format follows
   Azure's full set of link forms is restored.
 - Branch keys come from each tracker's `ids.branch_key` (Azure accepts `AB-123`; Linear and local
   keys are matched without regard to case).
-- When the rules cannot run, every MCP call counts as a write and is refused.
+- When the rules cannot run, every MCP call counts as a write and is refused. While the selected
+  tracker (or a shipped one) is broken, the same holds for every server but the harness's own.
+- The hook checks sessions in the checkout the call happens in, not the host's project folder.
+- Each hook call reads the settings and each tracker folder once, and asks git one question for
+  the checkout.
 - The knowledge store's seed points at the settings file instead of copying it.
 - Schemas are checked with the harness's own standard-library checker; `jsonschema` is no longer
   needed anywhere.
+
+### Fixed (review of this release)
+
+- Loading an onboarded adapter no longer writes Python cache files into its folder, which changed
+  its digest and dropped trust after first use; adapters run from their source as reviewed.
+- `scm_link_work_item`'s `workItemRef` (and `issueId`) are checked against protected items.
+- A command merely containing `workflow-integrations` no longer skips the session and spec checks;
+  only a lone bootstrap command does.
+- A defect in one gateway call answers with an error instead of stopping the server.
+- Sessions are created in one rename, and an unreadable session record blocks only its own
+  checkout when its owner can be read.
+- Large provider replies and chatty servers are read without deep recursion.
+- Bootstrap ignores `.harness/state/` first, and writes the settings only after their tracker
+  checks out.
 
 ### Removed
 

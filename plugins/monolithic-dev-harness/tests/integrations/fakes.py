@@ -60,7 +60,11 @@ def module(name: str) -> Any:
 
 def copy_tracker(source: str, destination: Path, **changes: Any) -> Path:
     """A copy of a shipped tracker folder with manifest fields replaced."""
-    shutil.copytree(registry.SHIPPED_ROOT / source, destination)
+    shutil.copytree(
+        registry.SHIPPED_ROOT / source,
+        destination,
+        ignore=shutil.ignore_patterns("__pycache__"),
+    )
     manifest = json.loads((destination / "tracker.json").read_text())
     (destination / "tracker.json").write_text(json.dumps({**manifest, **changes}))
     return destination

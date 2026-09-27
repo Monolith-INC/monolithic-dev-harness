@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -80,9 +81,27 @@ def governed(repo: Path) -> bool:
 
 
 def load(repo: Path) -> Result[Settings]:
-    """The repository's settings, or why they cannot be used."""
+    """The repository's settings, or why they cannot be used.
+
+    Read and checked once per process for each version of the file (its modification time and
+    size), however many rules and checks ask.
+    """
+    file = path(repo)
+    return _load(file, _stamp(file))
+
+
+def _stamp(file: Path) -> tuple[int, int]:
+    match attempt(lambda: file.stat(), "absent", str(file), OSError):
+        case Ok(status):
+            return (status.st_mtime_ns, status.st_size)
+        case Err():
+            return (0, 0)
+
+
+@lru_cache(maxsize=8)
+def _load(file: Path, stamp: tuple[int, int]) -> Result[Settings]:
     return bind(
-        bind(_read(path(repo)), _conforming),
+        bind(_read(file), _conforming),
         lambda raw: bind(_parse(raw), _consistent),
     )
 

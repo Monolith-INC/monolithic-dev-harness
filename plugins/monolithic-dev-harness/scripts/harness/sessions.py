@@ -29,10 +29,10 @@ from core.result import (
     attempt,
     bind,
     err,
+    failures,
     fmap,
     oks,
     require,
-    sequence,
 )
 
 from . import gitstate, state
@@ -112,19 +112,31 @@ def _git(repo: Path, *args: str) -> Result[str]:
 def checkout(repo: Path) -> Result[Checkout]:
     """This checkout's identity. A detached HEAD has no branch, so it cannot hold a session."""
     return bind(
-        sequence(
-            (
-                _git(repo, "rev-parse", "--show-toplevel"),
-                _git(repo, "rev-parse", "--absolute-git-dir"),
-                _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD"),
-            )
+        _git(
+            repo,
+            "rev-parse",
+            "--show-toplevel",
+            "--absolute-git-dir",
+            "--symbolic-full-name",
+            "HEAD",
         ),
-        lambda parts: Ok(
-            Checkout(
-                str(Path(parts[0]).resolve()), str(Path(parts[1]).resolve()), parts[2]
-            )
-        ),
+        _identity,
     )
+
+
+def _identity(output: str) -> Result[Checkout]:
+    """One git answer: top level, git directory, and `refs/heads/<branch>` (or `HEAD` when detached)."""
+    match output.splitlines():
+        case [top, git_dir, ref] if ref.startswith("refs/heads/"):
+            return Ok(
+                Checkout(
+                    str(Path(top).resolve()),
+                    str(Path(git_dir).resolve()),
+                    ref.removeprefix("refs/heads/"),
+                )
+            )
+        case _:
+            return err("git_unavailable", "HEAD is not on a branch")
 
 
 def _root(repo: Path) -> Path:
@@ -178,6 +190,14 @@ def _phase(folder: Path) -> Result[Phase]:
             )
 
 
+def _checkout_of(record: dict) -> Checkout:
+    return Checkout(
+        str(record.get("worktree", "")),
+        str(record.get("git_dir", "")),
+        str(record.get("branch", "")),
+    )
+
+
 def _session(folder: Path) -> Result[Session]:
     return bind(
         _read(folder / "session.json"),
@@ -187,11 +207,7 @@ def _session(folder: Path) -> Result[Session]:
                 id=str(record.get("id", folder.name)),
                 work_item=str(record.get("work_item", "")),
                 workflow=str(record.get("workflow", "")),
-                checkout=Checkout(
-                    str(record.get("worktree", "")),
-                    str(record.get("git_dir", "")),
-                    str(record.get("branch", "")),
-                ),
+                checkout=_checkout_of(record),
                 base_commit=str(record.get("base_commit", "")),
                 phase=phase,
                 folder=folder,
@@ -200,23 +216,37 @@ def _session(folder: Path) -> Result[Session]:
     )
 
 
-def _all(repo: Path) -> tuple[Result[Session], ...]:
+def _folders(repo: Path) -> tuple[Path, ...]:
     root = _root(repo)
     return (
-        tuple(_session(path.parent) for path in sorted(root.glob("*/session.json")))
+        tuple(sorted(path.parent for path in root.glob("*/session.json")))
         if root.is_dir()
         else ()
     )
 
 
-def _open_for(
-    sessions: tuple[Result[Session], ...], identity: Checkout
-) -> tuple[Session, ...]:
-    return tuple(
-        session
-        for session in oks(sessions)
-        if session.checkout == identity and session.phase != Phase.CLOSED
+def _claims(repo: Path, identity: Checkout) -> Result[tuple[Result[Session], ...]]:
+    """This checkout's sessions. A record nobody can read may belong to any checkout, so it
+    fails the lot; a readable record for another checkout is none of this checkout's business."""
+    records = tuple(
+        (folder, _read(folder / "session.json")) for folder in _folders(repo)
     )
+    unreadable = failures(record for _, record in records)
+    return (
+        err("session_unreadable", unreadable[0].message)
+        if unreadable
+        else Ok(
+            tuple(
+                _session(folder)
+                for folder, record in records
+                if isinstance(record, Ok) and _checkout_of(record.value) == identity
+            )
+        )
+    )
+
+
+def _open(sessions: tuple[Result[Session], ...]) -> tuple[Session, ...]:
+    return tuple(session for session in oks(sessions) if session.phase != Phase.CLOSED)
 
 
 def resolve(repo: Path) -> Resolution:
@@ -227,25 +257,34 @@ def resolve(repo: Path) -> Resolution:
                 f"this checkout has no branch to bind a session to ({failure.message})"
             )
         case Ok(identity):
-            return _resolution(_all(Path(identity.worktree)), identity)
+            return _resolution(_claims(Path(identity.worktree), identity), identity)
 
 
 def _resolution(
-    sessions: tuple[Result[Session], ...], identity: Checkout
+    claims: Result[tuple[Result[Session], ...]], identity: Checkout
 ) -> Resolution:
-    unreadable = tuple(
-        result.failure.message for result in sessions if isinstance(result, Err)
-    )
-    match (_open_for(sessions, identity), unreadable):
-        case (_, (first, *_)):
-            return Broken(f"a session record cannot be read: {first}")
-        case ((), ()):
+    match claims:
+        case Err(failure):
+            return Broken(
+                f"a session record cannot be read ({failure.message}); a person removes that session folder"
+            )
+        case Ok(sessions) if failures(sessions):
+            return Broken(
+                f"this checkout's session record cannot be read: {failures(sessions)[0].message}"
+            )
+        case Ok(sessions):
+            return _one(_open(sessions), identity)
+
+
+def _one(sessions: tuple[Session, ...], identity: Checkout) -> Resolution:
+    match sessions:
+        case ():
             return Unbound(
                 f"no open session on branch {identity.branch!r} in this checkout"
             )
-        case ((session,), ()):
+        case (session,):
             return Bound(session)
-        case (several, ()):
+        case several:
             return Broken(
                 f"{len(several)} open sessions claim this checkout; close all but one"
             )
@@ -287,9 +326,9 @@ def start(repo: Path, work_item: str, workflow: str) -> Result[Session]:
         checkout(repo),
         lambda identity: bind(
             require(
-                not _open_for(_all(Path(identity.worktree)), identity),
+                isinstance(resolve(repo), Unbound),
                 "session_exists",
-                f"branch {identity.branch!r} in this checkout already has an open session; close it first",
+                f"branch {identity.branch!r} in this checkout already has a session ({describe(resolve(repo))}); close it first",
             ),
             lambda _: _begin(
                 Path(identity.worktree), identity, work_item.strip(), workflow
@@ -313,12 +352,28 @@ def _begin(
         "base_commit": _head(repo),
         "started": _now(),
     }
+    staging = state.state_dir(repo) / "sessions-staging" / identifier
     return bind(
         require(bool(work_item), "invalid_request", "a session needs a work item"),
         lambda _: bind(
-            _create(folder / "session.json", record),
-            lambda _: bind(_append(folder, "started"), lambda _: _session(folder)),
+            _create(staging / "session.json", record),
+            lambda _: bind(
+                _append(staging, "started"),
+                lambda _: bind(_publish(staging, folder), lambda _: _session(folder)),
+            ),
         ),
+    )
+
+
+def _publish(staging: Path, folder: Path) -> Result[Path]:
+    """Move a complete session into place in one rename, so no reader sees half of it."""
+
+    def move() -> Path:
+        folder.parent.mkdir(parents=True, exist_ok=True)
+        return staging.rename(folder)
+
+    return attempt(
+        move, "session_conflict", f"could not record session {folder.name}", OSError
     )
 
 

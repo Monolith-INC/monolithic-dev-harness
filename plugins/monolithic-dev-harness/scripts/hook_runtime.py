@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 from collections.abc import Callable
@@ -110,8 +111,10 @@ def emit_decision(client: str, decision: PolicyDecision) -> None:
     print(json.dumps(formatter(decision)))
 
 
-def run(client: str, input_data: dict[str, Any]) -> int:
-    project_root = get_project_root()
+def run(client: str, input_data: dict[str, Any], project_root: str = "") -> int:
+    """Evaluate one host event. `project_root` is the checkout the call happens in; the hook
+    passes the one it found from the payload, so sessions are checked where the edit is."""
+    project_root = project_root or get_project_root()
     parser, _ = select_adapter(client)
     event = parser(input_data, project_root=project_root)
     event = CanonicalToolEvent(
@@ -382,6 +385,12 @@ def _is_mutating_git(command: str) -> bool:
     return any(argv and argv[0] in _MUTATING_GIT for argv in git_commands(command))
 
 
+# A lone bootstrap invocation, and nothing chained to it, may run before any session exists.
+_BOOTSTRAP = re.compile(
+    r"\s*(?:(?:\S*/)?python3?\s+\S*scripts/harness/bootstrap\.py|(?:\S*/)?harness\s+bootstrap)"
+    r"(?:\s+[^\s;&|`$()<>\\]+)*\s*"
+)
+
+
 def _is_bootstrap_or_repair(command: str | None) -> bool:
-    text = command or ""
-    return "scripts/harness/bootstrap.py" in text or "workflow-integrations" in text
+    return _BOOTSTRAP.fullmatch(command or "") is not None

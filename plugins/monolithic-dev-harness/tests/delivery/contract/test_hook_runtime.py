@@ -117,6 +117,47 @@ class TrackedRepo(unittest.TestCase):
         return hook_runtime._evaluate_work_context(event)
 
 
+class TestBootstrapException(unittest.TestCase):
+    def test_only_a_lone_bootstrap_command_skips_the_work_context(self):
+        allowed = (
+            "python3 /p/scripts/harness/bootstrap.py --repo . --settings-from s.json",
+            "harness bootstrap --settings-from s.json",
+        )
+        refused = (
+            "git commit -am wip # workflow-integrations",
+            "echo workflow-integrations && git push",
+            "python3 /p/scripts/harness/bootstrap.py --repo . && git commit -am x",
+            "harness bootstrap; rm -rf lib",
+        )
+        for command in allowed:
+            self.assertTrue(hook_runtime._is_bootstrap_or_repair(command), command)
+        for command in refused:
+            self.assertFalse(hook_runtime._is_bootstrap_or_repair(command), command)
+
+
+class TestWorkspace(unittest.TestCase):
+    def test_the_hook_checks_the_checkout_the_call_happens_in(self):
+        from harness import hook
+
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            git(root, "init", "-q", "-b", "develop")
+            write_settings(root)
+            payload = {
+                "cwd": str(root),
+                "tool_name": "Write",
+                "tool_input": {"file_path": str(root / "a.txt")},
+            }
+            with (
+                mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": "/elsewhere"}),
+                mock.patch.object(hook_runtime, "run", return_value=0) as run,
+                mock.patch("scripts.hook_runtime.run", run),
+                redirect_stdout(StringIO()),
+            ):
+                hook.handle_pre_tool("claude", "pre-tool", payload)
+            self.assertEqual(Path(run.call_args.args[2]).resolve(), root.resolve())
+
+
 class TestSessionScope(TrackedRepo):
     """Governed code changes need an active session, and the session names the work item."""
 

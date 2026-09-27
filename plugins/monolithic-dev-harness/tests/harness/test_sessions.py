@@ -107,6 +107,24 @@ class SessionTest(unittest.TestCase):
         self.assertIn("no branch", sessions.resolve(self.repo).reason)
         self.assertIsInstance(sessions.start(self.repo, "STORY-0001", "x"), Err)
 
+    def test_another_checkouts_broken_record_does_not_block_this_one(self) -> None:
+        other = self.repo / ".harness" / "state" / "sessions" / "HS-OTHER"
+        other.mkdir(parents=True)
+        (other / "session.json").write_text(
+            json.dumps({"worktree": "/elsewhere", "git_dir": "/x", "branch": "b"})
+        )
+        self.assertIsInstance(sessions.resolve(self.repo), sessions.Unbound)
+        self.assertIsInstance(
+            sessions.start(self.repo, "STORY-0001", "implement-story"), Ok
+        )
+        self.assertIsInstance(sessions.resolve(self.repo), sessions.Bound)
+
+    def test_start_leaves_no_half_written_session(self) -> None:
+        session = sessions.start(self.repo, "STORY-0001", "implement-story").value
+        self.assertTrue((session.folder / "events" / "0001-started.json").is_file())
+        staging = self.repo / ".harness" / "state" / "sessions-staging"
+        self.assertEqual(list(staging.iterdir()) if staging.exists() else [], [])
+
     def test_a_subdirectory_resolves_the_same_checkout(self) -> None:
         sessions.start(self.repo, "STORY-0001", "implement-story")
         (self.repo / "lib").mkdir()

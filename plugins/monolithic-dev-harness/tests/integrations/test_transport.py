@@ -61,3 +61,26 @@ class TransportTest(unittest.TestCase):
         self.assertEqual(transport.decode("hello", None), "hello")
         self.assertEqual(transport.decode("<<a>> x <<a>>\n[1]\n<</a>>", None), [1])
         self.assertEqual(transport.failure_from_text("oops").code, "provider_error")
+
+
+class LargeReplyTest(unittest.TestCase):
+    def test_a_large_reply_after_many_log_lines_is_read(self) -> None:
+        server = textwrap.dedent(
+            """
+            import json, sys
+            for line in sys.stdin:
+                message = json.loads(line)
+                if "id" not in message:
+                    continue
+                if message["method"] != "initialize":
+                    sys.stdout.write("log\\n" * 5000)
+                text = json.dumps({"blob": "x" * 3_000_000})
+                reply = {"content": [{"type": "text", "text": text}]}
+                print(json.dumps({"jsonrpc": "2.0", "id": message["id"], "result": reply}), flush=True)
+            """
+        )
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "server.py"
+            path.write_text(server)
+            reply = transport.mcp(sys.executable, (str(path),), timeout=30)("big", {})
+            self.assertEqual(len(reply.value["blob"]), 3_000_000)

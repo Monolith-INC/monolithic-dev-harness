@@ -165,7 +165,7 @@ Details: [data-model.md](data-model.md).
 | Settings file invalid | write-class calls denied (`harness-error`), reads allowed |
 | Rules crash or run out of time | edits, shell commands, and every MCP call denied; plain reads allowed |
 | Workflow runtime import or run fails | write-class calls denied, reads allowed |
-| Selected tracker missing, invalid, untrusted, or lacking values | tracker and SCM writes denied (`tracker-invalid`) |
+| Selected tracker missing, invalid, untrusted, or lacking values (or a shipped tracker broken) | tracker and SCM writes denied, and every call to an MCP server other than the harness's own (`tracker-invalid`) |
 | A broken onboarded tracker folder | reported by `harness doctor`; other trackers unaffected |
 | No active session for the checkout | governed code changes denied until `harness session start` |
 | git unavailable | commit and PR rules deny |

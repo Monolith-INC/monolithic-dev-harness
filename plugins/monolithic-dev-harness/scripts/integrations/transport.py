@@ -15,6 +15,7 @@ import subprocess
 import time
 from collections.abc import Callable, Mapping
 from contextlib import suppress
+from itertools import accumulate, chain
 from typing import Any
 
 from core.result import Err, Failure, Ok, Result, attempt, bind, err, value_or
@@ -204,32 +205,41 @@ def _send(process: subprocess.Popen[bytes], payload: Mapping[str, Any]) -> Resul
 
 
 def _receive(
-    process: subprocess.Popen[bytes],
-    expected: int,
-    deadline: float,
-    pending: bytes = b"",
+    process: subprocess.Popen[bytes], expected: int, deadline: float
 ) -> Result[Mapping[str, Any]]:
-    """The next reply carrying `expected` as its id. Other lines are skipped; bytes past a line wait."""
-    line, newline, rest = pending.partition(b"\n")
-    match newline:
-        case b"\n":
-            reply = _json_or(line.decode(errors="replace"), lambda: None)
-            return (
-                Ok(reply)
-                if isinstance(reply, dict) and reply.get("id") == expected
-                else _receive(process, expected, deadline, rest)
+    """The next reply carrying `expected` as its id; other lines are skipped until the deadline.
+
+    Chunks are read lazily and split into lines as they arrive, keeping only the unfinished
+    line between chunks, so a large reply or a chatty server costs linear time and no nesting.
+    """
+    chunks = iter(lambda: _chunk(process, deadline - time.monotonic()), b"")
+    buffers = accumulate(
+        chunks, lambda state, chunk: _split(state[1] + chunk), initial=((), b"")
+    )
+    lines = chain.from_iterable(complete for complete, _ in buffers)
+    replies = (_json_or(line.decode(errors="replace"), lambda: None) for line in lines)
+    match next(
+        (
+            reply
+            for reply in replies
+            if isinstance(reply, dict) and reply.get("id") == expected
+        ),
+        None,
+    ):
+        case None:
+            return err(
+                "provider_timeout",
+                "the provider did not answer in time",
+                retryable=True,
             )
-        case _:
-            chunk = _chunk(process, deadline - time.monotonic())
-            return (
-                _receive(process, expected, deadline, pending + chunk)
-                if chunk
-                else err(
-                    "provider_timeout",
-                    "the provider did not answer in time",
-                    retryable=True,
-                )
-            )
+        case reply:
+            return Ok(reply)
+
+
+def _split(buffer: bytes) -> tuple[tuple[bytes, ...], bytes]:
+    """The complete lines in a buffer, and the unfinished rest."""
+    *complete, rest = buffer.split(b"\n")
+    return tuple(complete), rest
 
 
 def _chunk(process: subprocess.Popen[bytes], remaining: float) -> bytes:

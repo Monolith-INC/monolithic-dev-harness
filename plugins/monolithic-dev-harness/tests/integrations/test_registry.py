@@ -207,6 +207,32 @@ class RegistryTest(unittest.TestCase):
         )
         self.assertEqual((command, args[2]), ("npx", "contoso"))
 
+    def test_loading_an_adapter_leaves_its_folder_and_trust_unchanged(self) -> None:
+        folder = copy_tracker("local", self.onboarded / "custom", name="custom")
+        trust.trust(self.repo, "custom", folder, trust.digest(folder))
+        chosen = settings({"name": "custom", "source": "onboarded"})
+        for _ in range(2):
+            active = registry.resolve(self.repo, chosen)
+            self.assertIsInstance(active, registry.Active)
+            self.assertIsInstance(
+                registry.build(active, self.repo, FakeTransport({})), Ok
+            )
+        self.assertFalse((folder / "__pycache__").exists())
+
+    def test_an_adapter_that_raises_while_building_is_reported(self) -> None:
+        folder = copy_tracker("local", self.onboarded / "boom", name="boom")
+        (folder / "adapter.py").write_text(
+            "def adapter(context):\n    raise KeyError('x')\n"
+        )
+        trust.trust(self.repo, "boom", folder, trust.digest(folder))
+        active = registry.resolve(
+            self.repo, settings({"name": "boom", "source": "onboarded"})
+        )
+        self.assertIn(
+            "adapter(context) failed",
+            registry.build(active, self.repo, FakeTransport({})).failure.message,
+        )
+
     def test_an_adapter_that_breaks_the_contract_is_rejected(self) -> None:
         folder = copy_tracker("local", self.onboarded / "bad", name="bad")
         (folder / "adapter.py").write_text("def adapter(context):\n    return {}\n")

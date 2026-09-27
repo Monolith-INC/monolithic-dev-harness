@@ -66,12 +66,26 @@ def _candidate(source: Path) -> Result[settings.Settings]:
     )
 
 
+def _usable(repo: Path, chosen: settings.Settings) -> Result[registry.Active]:
+    """The tracker a settings value selects, checked before the file lands in the repository."""
+    return registry.selected(repo, Ok(chosen))
+
+
 def _install(repo: Path, source: Path) -> Result[str]:
+    """Copy the settings in once, only after they and their tracker check out."""
     target = settings.path(repo)
     if target.exists():
-        return Ok(f"kept existing {settings.SETTINGS_RELATIVE_PATH} (people own it)")
+        return bind(
+            settings.load(repo),
+            lambda chosen: fmap(
+                _usable(repo, chosen),
+                lambda _: (
+                    f"kept existing {settings.SETTINGS_RELATIVE_PATH} (people own it)"
+                ),
+            ),
+        )
     return bind(
-        _candidate(source),
+        bind(_candidate(source), lambda chosen: _usable(repo, chosen)),
         lambda _: fmap(
             attempt(
                 lambda: (
@@ -103,24 +117,20 @@ def main(argv: list[str] | None = None) -> int:
     if not (repo / ".git").exists():
         print(f"{repo} is not a git repository root", file=sys.stderr)
         return 2
+    # State stays out of git before anything can write it: the settings opt the repository in.
+    if _ensure_local_exclude(repo):
+        print("ignored .harness/state/ in .git/info/exclude (this clone only)")
     match _install(repo, Path(args.settings_from)):
         case Err(failure):
-            print(f"settings are invalid: {failure.message}", file=sys.stderr)
-            return 2
-        case Ok(note):
-            print(note)
-    loaded = settings.load(repo)
-    match registry.selected(repo, loaded):
-        case Err(failure):
             print(
-                f"the selected tracker cannot be used: {failure.message}",
+                f"settings or their tracker cannot be used: {failure.message}",
                 file=sys.stderr,
             )
             return 2
-        case Ok(active):
-            print(f"tracker: {active.manifest.label} ({active.manifest.source})")
-    if _ensure_local_exclude(repo):
-        print("ignored .harness/state/ in .git/info/exclude (this clone only)")
+        case Ok(note):
+            print(note)
+    active = registry.selected(repo, settings.load(repo)).value
+    print(f"tracker: {active.manifest.label} ({active.manifest.source})")
     from harness.knowledge import initialize as initialize_knowledge
 
     knowledge_result = initialize_knowledge(repo)
