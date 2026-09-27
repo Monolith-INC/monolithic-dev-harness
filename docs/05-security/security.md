@@ -50,14 +50,14 @@ See [threat-model.md](threat-model.md).
 | Control | Rule / mechanism |
 | --- | --- |
 | No tracker/SCM write or push without a person's approval | `approval-required`; windows exist only from the user's prompt or their click on `Approve` (ADR-0003) |
-| The agent cannot approve itself, trust a tracker, fake a session, or weaken the settings | `human-owned`, typed trust |
+| The agent cannot approve itself, trust a tracker, fake a session, or weaken the settings | `human-owned`, trust and tracker selection only on the user's click |
 | Protected items are never modified, even indirectly by links | `protected-items` |
 | Nothing unreviewed reaches a pull request; people publish and approve | `draft-reviewed-prs` |
 | Code ships with tests; generated files are not hand-edited | `tests-with-code`, `generated-files` |
 | Sensitive paths need evidence for the exact change | `guarded-paths` |
 | Stacked branches keep their history: no rebase, squash merge, or force-push | `history-preserved` |
 | A broken, missing, or untrusted tracker cannot be written to | `tracker-invalid` |
-| Onboarded tracker code runs only as the user saw it | typed trust pinned to the folder digest (ADR-0009) |
+| Onboarded tracker code runs only as the user saw it | trust pinned to the folder digest when the question is shown (ADR-0009) |
 | Session, branch, state, spec, and evidence discipline | workflow policy |
 | Reviewer subagents have no file-edit tools | `tools:` in their frontmatter (Read, Grep, Glob, Bash, Skill, WebFetch); their Bash calls still pass the hooks |
 | No stored credentials | the providers' MCP servers use interactive OAuth; no PAT |

@@ -1,26 +1,37 @@
 """Bring a tracker the harness does not ship into a repository, for a person to review and trust.
 
-    stage   copy a folder (tracker.json + adapter.py + references) into .harness/trackers/<name>/
+    stage   copy a folder (tracker.json + adapter.py + references) into .harness/trackers/<name>/,
+            with the values its settings need (organization, project, ...) kept in values.json
     show    everything a person needs to decide: what it writes, how it links, what it runs,
-            its files, and the exact line to type to trust it as it reads now
+            its files and values, and how to ask the user
+    select  make a trusted tracker the repository's tracker, with its staged values
 
 Staging checks the folder against the contract first and refuses links, which could pull files
-from outside the folder into the repository. Nothing here trusts a tracker: only the user's typed
-`harness trust-tracker <name> <digest>` does (see `trust.py`), and the settings select it.
+from outside the folder into the repository. Nothing here trusts or selects a tracker on its own:
+the hooks do, only after the user clicks Trust or Use it on a question about it (or, in Cursor,
+replies with its short id). The values live inside the folder, so trusting it covers them too.
 """
 
 from __future__ import annotations
 
+import json
+import re
 import shutil
+from collections.abc import Mapping
 from pathlib import Path
 
-from core.result import Ok, Result, attempt, bind, require
+from core.result import Ok, Result, attempt, bind, err, require
+from harness import settings
 
 from . import registry, trust
 from .contracts import Manifest
 
+VALUES = "values.json"
 
-def stage(repo: Path, source: Path) -> Result[Path]:
+
+def stage(
+    repo: Path, source: Path, values: Mapping[str, str] | None = None
+) -> Result[Path]:
     links = (
         tuple(path for path in source.rglob("*") if path.is_symlink())
         if source.is_dir()
@@ -36,7 +47,13 @@ def stage(repo: Path, source: Path) -> Result[Path]:
             ),
             lambda _: bind(
                 registry.read_manifest(source, "onboarded"),
-                lambda manifest: _copy(repo, source, manifest),
+                lambda manifest: bind(
+                    _known_values(manifest, dict(values or {})),
+                    lambda known: bind(
+                        _copy(repo, source, manifest),
+                        lambda folder: _write_values(folder, known),
+                    ),
+                ),
             ),
         ),
     )
@@ -64,6 +81,122 @@ def _copy(repo: Path, source: Path, manifest: Manifest) -> Result[Path]:
                 OSError,
             ),
         ),
+    )
+
+
+def _known_values(manifest: Manifest, values: dict[str, str]) -> Result[dict[str, str]]:
+    unknown = sorted(key for key in values if key not in manifest.settings)
+    return (
+        Ok(values)
+        if not unknown
+        else err(
+            "invalid_settings",
+            f"{manifest.name} takes no setting named {unknown}; it takes {list(manifest.settings)}",
+        )
+    )
+
+
+def _write_values(folder: Path, values: dict[str, str]) -> Result[Path]:
+    return attempt(
+        lambda: (
+            (folder / VALUES).write_text(
+                json.dumps(values, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            and folder
+        ),
+        "unwritable",
+        f"could not write {folder / VALUES}",
+        OSError,
+    )
+
+
+def staged_values(folder: Path) -> dict[str, str]:
+    """The values staged with the tracker; none when it was staged without any."""
+    try:
+        raw = json.loads((folder / VALUES).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return (
+        {str(key): str(value) for key, value in raw.items()}
+        if isinstance(raw, dict)
+        else {}
+    )
+
+
+def staged(repo: Path) -> tuple[Manifest, ...]:
+    """Every onboarded folder whose manifest reads, trusted or not."""
+    root = repo / registry.ONBOARDED_RELATIVE_PATH
+    folders = sorted(path.parent for path in root.glob(f"*/{registry.MANIFEST}"))
+    return tuple(
+        result.value
+        for result in (
+            registry.read_manifest(folder, "onboarded") for folder in folders
+        )
+        if isinstance(result, Ok)
+    )
+
+
+def named_in(repo: Path, text: str) -> Manifest | None:
+    """The one staged tracker a question names, by its label or its name; None if not exactly one."""
+    named = tuple(
+        manifest
+        for manifest in staged(repo)
+        if any(
+            re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", text, re.IGNORECASE)
+            for word in (manifest.label, manifest.name)
+        )
+    )
+    return named[0] if len(named) == 1 else None
+
+
+def by_short_id(repo: Path, short: str) -> Manifest | None:
+    """The staged tracker whose current version has this short reply id."""
+    return next(
+        (
+            manifest
+            for manifest in staged(repo)
+            if trust.short_id(manifest.name, trust.digest(manifest.root))
+            == short.upper()
+        ),
+        None,
+    )
+
+
+def select(repo: Path, name: str) -> Result[str]:
+    """Make a trusted onboarded tracker the repository's tracker, with its staged values."""
+    folder = repo / registry.ONBOARDED_RELATIVE_PATH / name
+    return bind(
+        require(
+            trust.is_trusted(repo, name, folder),
+            "untrusted_tracker",
+            f"the {name} tracker is not trusted as it reads now; ask the user to trust it first",
+        ),
+        lambda _: bind(
+            registry.read_manifest(folder, "onboarded"),
+            lambda manifest: bind(
+                _complete(manifest, staged_values(folder)),
+                lambda values: bind(
+                    settings.write_tracker(
+                        repo, {"name": name, "source": "onboarded", "values": values}
+                    ),
+                    lambda _: Ok(manifest.label),
+                ),
+            ),
+        ),
+    )
+
+
+def _complete(manifest: Manifest, values: dict[str, str]) -> Result[dict[str, str]]:
+    missing = [
+        key for key in manifest.required_settings if not values.get(key, "").strip()
+    ]
+    return (
+        Ok(values)
+        if not missing
+        else err(
+            "invalid_settings",
+            f"the {manifest.name} tracker needs {missing}; stage it again with those values",
+        )
     )
 
 
@@ -101,16 +234,30 @@ def _summary(repo: Path, manifest: Manifest) -> str:
         f"  mentions link items: {manifest.ids.mentions_link}; forms: {list(manifest.ids.mention)}",
         f"  settings: {list(manifest.settings)} (required: {list(manifest.required_settings)})",
         f"  files: {list(files)}",
+        f"  values: {_values_line(staged_values(manifest.root))}",
         f"  digest: {digest}",
         f"  trusted as it reads now: {'yes' if trusted else 'no'}",
         "",
-        "Read adapter.py in full before trusting it: it runs inside the harness.",
-        "To trust it exactly as it reads now, the user types this line themselves:",
-        f"  harness trust-tracker {manifest.name} {digest[: trust.DIGEST_PREFIX_LENGTH]}",
-        "Then a person selects it in .harness/settings.json:",
-        f'  "tracker": {{"name": "{manifest.name}", "source": "onboarded", "values": {{...}}}}',
+        "Walk the user through this and adapter.py in full: the adapter runs inside the harness.",
+        'Then ask one question that names the tracker, with the options "Trust" and "Not now",',
+        f'for example: "Trust the {_phrase(manifest.label)} as I just described it?"',
+        'If they trust it, ask a second question with the options "Use it" and',
+        f'"Keep the current one", for example: "Use {manifest.label} as this project\'s tracker now?"',
+        "The harness records each click; you cannot trust or select a tracker yourself.",
+        f"In Cursor, which has no buttons, the user replies: approve {trust.short_id(manifest.name, digest)}",
+        f"and then, to use it: use {trust.short_id(manifest.name, digest)}",
     )
     return "\n".join(lines)
+
+
+def _phrase(label: str) -> str:
+    return label if label.lower().endswith("tracker") else f"{label} tracker"
+
+
+def _values_line(values: Mapping[str, str]) -> str:
+    return (
+        ", ".join(f"{key} = {value}" for key, value in sorted(values.items())) or "none"
+    )
 
 
 def _runs(manifest: Manifest, repo: Path) -> str:

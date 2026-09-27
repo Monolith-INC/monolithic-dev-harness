@@ -371,30 +371,184 @@ class TestTrackers(HookTestCase):
             self.claude(call, {"pullRequestRef": "12", "workItemRef": "1002"})
         )
 
-    def test_trusting_an_onboarded_tracker_takes_the_users_typed_digest(self) -> None:
+
+class TestTrackerTrustByClick(HookTestCase):
+    """The user trusts, selects, and stops trusting an onboarded tracker with a click."""
+
+    TRUST = "Trust the Acme Boards tracker as I just described it?"
+    USE = "Use Acme Boards as this project's tracker now?"
+    STOP = "Stop trusting the Acme Boards tracker?"
+
+    def setUp(self) -> None:
+        super().setUp()
         import shutil
 
-        folder = self.repo / ".harness" / "trackers" / "custom"
-        shutil.copytree(PLUGIN_ROOT / "trackers" / "local", folder)
-        manifest = json.loads((folder / "tracker.json").read_text())
-        (folder / "tracker.json").write_text(json.dumps({**manifest, "name": "custom"}))
+        self.folder = self.repo / ".harness" / "trackers" / "acme"
+        shutil.copytree(
+            PLUGIN_ROOT / "trackers" / "local",
+            self.folder,
+            ignore=shutil.ignore_patterns("__pycache__"),
+        )
+        manifest = json.loads((self.folder / "tracker.json").read_text())
+        (self.folder / "tracker.json").write_text(
+            json.dumps({**manifest, "name": "acme", "label": "Acme Boards"})
+        )
         sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
+
+    def question(self, text: str, labels: tuple[str, str]) -> dict:
+        return {
+            "questions": [
+                {
+                    "question": text,
+                    "header": "Tracker",
+                    "multiSelect": False,
+                    "options": [
+                        {"label": label, "description": "What this choice does."}
+                        for label in labels
+                    ],
+                }
+            ]
+        }
+
+    def ask(self, text: str, labels: tuple[str, str], use_id: str) -> dict | None:
+        return self.hook(
+            "claude",
+            "ask",
+            {
+                "tool_name": "AskUserQuestion",
+                "tool_use_id": use_id,
+                "tool_input": self.question(text, labels),
+            },
+        )
+
+    def click(
+        self, text: str, labels: tuple[str, str], choice: str, use_id: str
+    ) -> str:
+        answered = {**self.question(text, labels), "answers": {text: choice}}
+        result = self.hook(
+            "claude",
+            "answer",
+            {
+                "tool_name": "AskUserQuestion",
+                "tool_use_id": use_id,
+                "tool_input": self.question(text, labels),
+                "tool_response": answered,
+            },
+        )
+        return (result or {}).get("hookSpecificOutput", {}).get("additionalContext", "")
+
+    def trusted(self) -> bool:
         from integrations import trust
 
-        digest = trust.digest(folder)
-        wrong = self.hook(
-            "claude", "prompt", {"prompt": f"harness trust-tracker custom {'0' * 12}"}
+        return trust.is_trusted(self.repo, "acme", self.folder)
+
+    def settings(self) -> dict:
+        return json.loads((self.repo / ".harness" / "settings.json").read_text())
+
+    def trust_by_click(self) -> str:
+        labels = ("Trust", "Not now")
+        self.assertIsNone(self.ask(self.TRUST, labels, "toolu_trust"))
+        return self.click(self.TRUST, labels, "Trust", "toolu_trust")
+
+    def test_clicking_trust_trusts_the_version_the_question_was_about(self) -> None:
+        note = self.trust_by_click()
+        self.assertIn("trusts the Acme Boards tracker", note)
+        self.assertTrue(self.trusted())
+
+    def test_a_trust_click_opens_no_approval_window(self) -> None:
+        from harness import state
+
+        self.trust_by_click()
+        self.assertIsNone(state.active_approval(self.repo))
+
+    def test_an_edit_between_question_and_click_trusts_nothing(self) -> None:
+        labels = ("Trust", "Not now")
+        self.ask(self.TRUST, labels, "toolu_trust")
+        (self.folder / "adapter.py").write_text("# changed after the question\n")
+        note = self.click(self.TRUST, labels, "Trust", "toolu_trust")
+        self.assertIn("changed", note)
+        self.assertFalse(self.trusted())
+
+    def test_not_now_trusts_nothing(self) -> None:
+        labels = ("Trust", "Not now")
+        self.ask(self.TRUST, labels, "toolu_trust")
+        self.click(self.TRUST, labels, "Not now", "toolu_trust")
+        self.assertFalse(self.trusted())
+
+    def test_a_trust_question_must_name_a_staged_tracker(self) -> None:
+        result = self.ask(
+            "Trust the new tracker as I described it?", ("Trust", "Not now"), "toolu_x"
         )
-        self.assertIn("NOT trusted", wrong["text"])
-        right = self.hook(
-            "claude",
-            "prompt",
-            {"prompt": f"harness trust-tracker custom {digest[:12]}"},
+        self.assertDenied(result, "plain-questions")
+        self.assertIn("name the tracker", json.dumps(result))
+
+    def test_an_unchecked_question_trusts_nothing(self) -> None:
+        # The answer hook only acts on a question the ask hook let through.
+        self.click(self.TRUST, ("Trust", "Not now"), "Trust", "toolu_never_asked")
+        self.assertFalse(self.trusted())
+
+    def test_clicking_use_it_selects_the_trusted_tracker_in_the_settings(self) -> None:
+        (self.folder / "values.json").write_text(json.dumps({}))
+        self.trust_by_click()
+        before = self.settings()
+        labels = ("Use it", "Keep the current one")
+        self.assertIsNone(self.ask(self.USE, labels, "toolu_use"))
+        note = self.click(self.USE, labels, "Use it", "toolu_use")
+        self.assertIn("now uses the Acme Boards tracker", note)
+        after = self.settings()
+        self.assertEqual(
+            after["tracker"], {"name": "acme", "source": "onboarded", "values": {}}
         )
-        self.assertIn("is trusted", right["text"])
-        self.assertTrue(trust.is_trusted(self.repo, "custom", folder))
-        self.hook("claude", "prompt", {"prompt": "harness untrust-tracker custom"})
-        self.assertFalse(trust.is_trusted(self.repo, "custom", folder))
+        self.assertEqual(
+            {k: v for k, v in after.items() if k != "tracker"},
+            {k: v for k, v in before.items() if k != "tracker"},
+        )
+
+    def test_keep_the_current_one_changes_nothing(self) -> None:
+        self.trust_by_click()
+        before = self.settings()
+        labels = ("Use it", "Keep the current one")
+        self.ask(self.USE, labels, "toolu_use")
+        self.click(self.USE, labels, "Keep the current one", "toolu_use")
+        self.assertEqual(self.settings(), before)
+
+    def test_an_untrusted_tracker_cannot_be_selected(self) -> None:
+        before = self.settings()
+        labels = ("Use it", "Keep the current one")
+        self.ask(self.USE, labels, "toolu_use")
+        note = self.click(self.USE, labels, "Use it", "toolu_use")
+        self.assertIn("not trusted", note)
+        self.assertEqual(self.settings(), before)
+
+    def test_clicking_stop_trusting_withdraws_trust(self) -> None:
+        self.trust_by_click()
+        labels = ("Stop trusting", "Keep it")
+        self.ask(self.STOP, labels, "toolu_stop")
+        self.click(self.STOP, labels, "Stop trusting", "toolu_stop")
+        self.assertFalse(self.trusted())
+
+    def test_the_old_typed_line_does_nothing(self) -> None:
+        from integrations import trust
+
+        digest = trust.digest(self.folder)
+        self.hook(
+            "claude", "prompt", {"prompt": f"harness trust-tracker acme {digest[:12]}"}
+        )
+        self.assertFalse(self.trusted())
+
+    def test_cursor_users_reply_with_the_short_id_the_tracker_summary_shows(
+        self,
+    ) -> None:
+        from integrations import onboarding
+
+        summary = onboarding.show(self.repo, "acme").value
+        short = next(word for word in summary.split() if word.startswith("HT-")).rstrip(
+            "."
+        )
+        self.hook("cursor", "prompt", {"prompt": f"approve {short}"})
+        self.assertTrue(self.trusted())
+        self.hook("cursor", "prompt", {"prompt": f"use {short}"})
+        self.assertEqual(self.settings()["tracker"]["name"], "acme")
 
 
 class TestApproval(HookTestCase):

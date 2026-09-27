@@ -1,8 +1,9 @@
 """Which onboarded tracker folders the user trusts, pinned to the folder's exact content.
 
-Only the prompt hook records trust, from the user typing `harness trust-tracker <name> <digest>`,
-so the agent can never trust a tracker itself. Changing any file in the folder changes its digest,
-and the tracker stops counting until the user trusts it again.
+Only the hooks record trust, from the user's own action: clicking Trust on a question about the
+tracker (the question hook pins the folder's digest when the question is shown), or, in Cursor,
+replying `approve <short id>`. The agent can never trust a tracker itself. Changing any file in the
+folder changes its digest, and the tracker stops counting until the user trusts it again.
 """
 
 from __future__ import annotations
@@ -42,6 +43,14 @@ def _content(path: Path) -> bytes:
     )
 
 
+def short_id(name: str, folder_digest: str) -> str:
+    """A short reply id for one version of one tracker, for hosts without question buttons."""
+    return (
+        "HT-"
+        + hashlib.sha256(f"{name}:{folder_digest}".encode()).hexdigest()[:6].upper()
+    )
+
+
 def _record_path(repo: Path, name: str) -> Path:
     return repo / TRUST_RELATIVE_PATH / f"{name}.json"
 
@@ -70,7 +79,7 @@ def trust(repo: Path, name: str, folder: Path, prefix: str) -> Result[str]:
                 and current.startswith(prefix.lower()),
                 "digest_mismatch",
                 f"{name!r} reads differently from what you were shown (digest {current[:DIGEST_PREFIX_LENGTH]}); "
-                f"run `harness tracker show {name}` again",
+                "ask the user again",
             ),
             lambda _: _write(repo, name, current),
         ),

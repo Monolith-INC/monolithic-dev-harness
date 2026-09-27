@@ -5,7 +5,7 @@ harness version
 harness doctor [--repo <dir>] [--tools] [--azure]
 harness bootstrap [--repo <dir>] [--settings-from <file>]   (defaults: current repo, example settings)
 harness session start <work item> [--workflow <name>] | status | pause | resume | close
-harness tracker list | show <name> | stage <folder>
+harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...]
 harness knowledge <operation> ...
 """
 
@@ -312,11 +312,20 @@ def tracker_command(args: argparse.Namespace) -> int:
         case "stage":
             return _print(
                 bind(
-                    onboarding.stage(repo, Path(args.target or "")),
+                    onboarding.stage(
+                        repo, Path(args.target or ""), dict(_pairs(args.value))
+                    ),
                     lambda folder: onboarding.show(repo, folder.name),
                 )
             )
     return 2
+
+
+def _pairs(values: list[str] | None) -> tuple[tuple[str, str], ...]:
+    return tuple(
+        (key.strip(), value.strip())
+        for key, _, value in (item.partition("=") for item in values or ())
+    )
 
 
 def knowledge_command(args: argparse.Namespace) -> int:
@@ -387,6 +396,12 @@ def main(argv: list[str] | None = None) -> int:
         "target", nargs="?", help="a tracker name (show) or folder (stage)"
     )
     tracker_parser.add_argument("--repo", default=".")
+    tracker_parser.add_argument(
+        "--value",
+        action="append",
+        metavar="KEY=VALUE",
+        help="a value the tracker's settings need (stage only); repeat for each",
+    )
     knowledge_parser = sub.add_parser(
         "knowledge", help="query or refresh a harness-owned immutable knowledge store"
     )

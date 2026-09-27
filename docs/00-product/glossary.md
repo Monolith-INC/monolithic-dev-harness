@@ -36,7 +36,7 @@ last_reviewed: 2026-09-26
 | Tracker contract | What every tracker meets: `tracker.json` checked against `config/tracker.schema.json`, and an adapter returning `TrackerOps`. |
 | Tracker manifest | A tracker folder's `tracker.json`: kinds, states, hierarchy, id formats, which tools write, how to connect, which settings it needs. |
 | Tracker policy | What the rules know about trackers for one hook call, built from every usable tracker folder: which calls write, how ids look, which text links. |
-| Tracker trust | The user's typed `harness trust-tracker <name> <digest>`, pinning an onboarded tracker to its folder's exact content. |
+| Tracker trust | The user's click on **Trust** in a question that names an onboarded tracker, pinning it to its folder's exact content as it read when the question was shown. |
 | Tracker | Where work items live. The repository selects one in the settings: a shipped one (`azure-devops`, `linear`, `local`) or an onboarded one. |
 | Tracking mode | `enforced` or `skipped` (`/skip-tracker`, `/resume-tracker`), kept in `.harness/state/tracking.json`. Skipped turns off tracker tools and the session requirement. |
 | Tree mode | `decompose-backlog` run on an Epic: Features and their Stories in one pass. |
