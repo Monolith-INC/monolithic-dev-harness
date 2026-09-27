@@ -24,11 +24,16 @@ Shared references (in `../../references/`):
 - `decomposition-rules.md` — hierarchy (Epic → Feature → Story → Task)
 
 Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which reads
-`.harness/backlog/config.json` and falls back to older locations. See
+`artifacts_path` from `.harness/settings.json`. See
 `../../references/project-config.md`.
 
 **Not in scope:** inventing or rewriting acceptance criteria; Feature-level story-point estimation;
 implementing the product under breakdown — only plan + work-item persistence.
+
+## Active tracker
+
+Call `tracker_describe` before choosing a hierarchy, destination, provider call, or id format, and
+follow [the tracker contract](../../references/tracker-contract.md).
 
 ---
 

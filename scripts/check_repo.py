@@ -5,7 +5,8 @@
 
 - every file the plugin must ship is tracked by git;
 - every tracked *.json file parses;
-- the example policy validates against the policy schema (needs `jsonschema`);
+- the example settings validate against the settings schema, and every shipped tracker folder
+  meets the tracker contract (both with the plugin's own standard-library checker);
 - every skill's frontmatter `name` matches its folder;
 - every document under docs/ has title / status / owner / last_reviewed frontmatter;
 - every relative Markdown link in README.md, CHANGELOG.md, THIRD_PARTY_NOTICES.md, and docs/
@@ -17,6 +18,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -78,21 +80,17 @@ def check_json(problems: list[str]) -> None:
             json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             problems.append(f"{path.relative_to(ROOT)}: invalid JSON ({exc})")
-    try:
-        import jsonschema
-    except ImportError:
-        problems.append(
-            "jsonschema is not installed; cannot validate the example policy"
-        )
-        return
-    schema = json.loads((PLUGIN / "config/policy.schema.json").read_text())
-    example = json.loads((PLUGIN / "examples/policy.example.json").read_text())
-    try:
-        jsonschema.validate(example, schema)
-    except jsonschema.ValidationError as exc:
-        problems.append(
-            f"examples/policy.example.json does not match the schema: {exc.message}"
-        )
+    sys.path.insert(0, str(PLUGIN / "scripts"))
+    from core.result import failures
+    from core.schema import errors
+    from integrations import registry
+
+    schema = json.loads((PLUGIN / "config/settings.schema.json").read_text())
+    example = json.loads((PLUGIN / "examples/settings.example.json").read_text())
+    problems.extend(
+        f"examples/settings.example.json: {error}" for error in errors(schema, example)
+    )
+    problems.extend(failure.message for failure in failures(registry.shipped()))
 
 
 def check_skills(problems: list[str]) -> None:

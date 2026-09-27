@@ -1,14 +1,15 @@
 # monolithic-dev-harness
 
 [![CI](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.1.10-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
+[![Version](https://img.shields.io/badge/version-0.2.0-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![Cursor](https://img.shields.io/badge/Cursor-supported-black.svg)](https://cursor.com)
 [![Documentation](https://img.shields.io/badge/docs-project_documentation-informational.svg)](./docs/README.md)
 
-An AI delivery harness for teams on Azure DevOps: one plugin for Claude Code and Cursor that takes
-an idea from the backlog to a reviewed draft pull request, with people deciding at four gates and
+An AI delivery harness for teams on Azure DevOps, Linear, a repository-local tracker, or a tracker
+they onboard: one plugin for Claude Code and Cursor that takes an idea from the backlog to a
+reviewed draft pull request, with people deciding at four gates and
 hooks enforcing every rule that must not depend on the model remembering it.
 
 > **Core principle:** skills tell the agent what to do; deterministic hooks decide what it may do.
@@ -31,7 +32,7 @@ rules forbid.
    | Skills (model-driven)         |        | Hooks (deterministic)     |
    | backlog -> spec -> build ->   | -----> | every Bash / edit / MCP   |
    | review                        |  tool  | call checked against the  |
-   +-------------------------------+  call  | repo policy + evidence    |
+   +-------------------------------+  call  | repo settings + evidence  |
                    ^                        +-------------+-------------+
                    |                                      |
             people decide at                     allow  or  deny with
@@ -46,7 +47,7 @@ The complete project documentation is available under [`docs/`](./docs/README.md
 | ------------ | ------------------------------------------------------------------------------------------------------------- |
 | Product      | [`docs/00-product/`](./docs/00-product/) — vision, requirements, glossary                                     |
 | Architecture | [`docs/01-architecture/`](./docs/01-architecture/) — system context, architecture, data model, ADRs           |
-| Design       | [`docs/02-design/`](./docs/02-design/) — command and policy contracts, components, workflows                  |
+| Design       | [`docs/02-design/`](./docs/02-design/) — command, settings, and tracker contracts, components, workflows      |
 | Engineering  | [`docs/03-engineering/`](./docs/03-engineering/) — development, testing, standards, dependencies              |
 | Operations   | [`docs/04-operations/`](./docs/04-operations/) — installation, environments, observability, runbook           |
 | Security     | [`docs/05-security/`](./docs/05-security/) — security model, threat model, data privacy                       |
@@ -58,7 +59,8 @@ The complete project documentation is available under [`docs/`](./docs/README.md
 The plugin ships skills (what the agent follows), reviewer subagents, four MCP servers, and one
 hook runtime shared by both hosts. The two orchestrator servers validate skill inputs and outputs
 and run bounded Actor-Critic loops; they never call a provider. Every provider call goes through
-the integrations gateway or the Azure DevOps server, where the hook runtime sees it first.
+the integrations gateway or a tracker's own server, where the hook runtime sees it first. Each
+tracker is one folder (`trackers/<name>/`: a checked `tracker.json` and an `adapter.py`).
 
 ```text
   Claude Code / Cursor
@@ -68,21 +70,27 @@ the integrations gateway or the Azure DevOps server, where the hook runtime sees
   |       | every governed tool call                               |
   |       v                                                        |
   |  hook runtime (scripts/harness/hook.py)                        |
-  |       reads .harness/policy.json and .harness/state/ evidence  |
+  |       reads .harness/settings.json, tracker folders, evidence  |
   +-------|--------------------------------------------------------+
           | allowed calls
           v
   MCP servers:  backlog-orchestrator    workflow-orchestrator
-                workflow-integrations --+
-                azure-devops -----------+--> Azure Boards + Azure Repos
+                workflow-integrations --> selected tracker's adapter
+                                          (Azure DevOps, Linear, local, onboarded)
+                                          + SCM (Azure Repos, GitHub)
+                azure-devops -----------> Azure Boards + Azure Repos
 ```
 
 See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture.md).
 
 ## Features / capabilities
 
-- **Linear backlog:** Epic → Features → Stories (with Story Points in the Azure field) → Tasks, in
-  one run with two approval gates, audited for coverage against the source text.
+- **Linear backlog:** Epic → Features → Stories (with Story Points) → Tasks, in one run with two
+  approval gates, audited for coverage against the source text.
+- **Trackers are adapters:** Azure DevOps, Linear, and a repository-local tracker ship; any other
+  can be onboarded as a folder, and counts only once a person trusts it as it reads.
+- **Sessions:** a work item is bound to one checkout; code changes need an active session, and the
+  workflow checks that item.
 - **Spec-driven delivery:** a technical spec per Story, then one test-first, checked, cleaned-up
   commit per Task; stacked branches for multi-Story Features.
 - **Requirements-first review:** coverage of the Story's acceptance criteria before a deep
@@ -90,12 +98,14 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
 - **Deterministic enforcement:** nine named rules (for example `approval-required`,
   `tests-with-code`, `draft-reviewed-prs`) plus the workflow policy, evaluated before every
   governed tool call, failing closed for writes.
-- **Human approvals that the agent cannot forge:** writes to Azure DevOps open only after you click
+- **Human approvals that the agent cannot forge:** tracker and SCM writes open only after you click
   **Approve** on the agent's question (or, in Cursor, reply `approve HB-…`).
 - **Plain questions:** a hook sends back any question to you that is long, asks several things, or
   uses file names, code, or internal names.
-- **One-shot install** for Claude Code and Cursor, with a `harness` command for bootstrap and
-  health checks.
+- **One settings file** per repository, `.harness/settings.json`, written by people and only read
+  by the harness.
+- **One-shot install** for Claude Code and Cursor, with a `harness` command for bootstrap, health
+  checks, sessions, and trackers.
 
 ## Requirements
 
@@ -104,8 +114,8 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
 | Claude Code and/or Cursor | current releases                                                       |
 | Python                    | 3.10 or newer (hooks, orchestrators, CLI)                              |
 | git                       | any recent version (the hooks read git state)                          |
-| Node.js                   | provides `npx`, which starts the Azure DevOps MCP server               |
-| Azure DevOps              | an organization; sign-in is interactive OAuth in your browser          |
+| Node.js                   | provides `npx`, which starts the Azure DevOps and Linear MCP servers   |
+| A tracker                 | Azure DevOps or Linear (sign-in is OAuth in your browser), or none for the local tracker |
 | GitHub CLI (`gh`)         | only while the repository is private, to download releases             |
 
 ## Installation
@@ -121,7 +131,8 @@ gh release download --repo Monolith-INC/monolithic-dev-harness --pattern install
 ```
 
 The installer finds your hosts, downloads the release archive (no cloning), verifies its SHA-256,
-installs the plugin into each host, records `AZURE_DEVOPS_ORG`, and links `harness` into
+installs the plugin into each host, records `AZURE_DEVOPS_ORG` for the host's Azure DevOps server,
+and links `harness` into
 `~/.local/bin`. Options go after `bash -s --`: `--host claude|cursor|all`, `--org <name>`,
 `--version <x.y.z>`, `--uninstall`. See
 [`docs/04-operations/deployment.md`](./docs/04-operations/deployment.md).
@@ -130,8 +141,8 @@ installs the plugin into each host, records `AZURE_DEVOPS_ORG`, and links `harne
 
 ```bash
 cd your-repository
-harness bootstrap      # writes .harness/policy.json from the example policy
-harness doctor         # checks tools, hosts, configuration, and this repository
+harness bootstrap --settings-from my-settings.json   # checks it, then writes .harness/settings.json
+harness doctor                                       # tools, hosts, settings, tracker, session
 ```
 
 Restart Claude Code (or reload Cursor), then ask the agent:
@@ -141,7 +152,8 @@ Take "students can add a profile photo" through the harness, starting with the b
 ```
 
 The agent drafts the Epic, proposes Features and Stories, and stops at gate G1 for your approval.
-Nothing reaches Azure DevOps until you click **Approve** on the batch it shows you.
+Nothing reaches the tracker until you click **Approve** on the batch it shows you. Start from
+[`examples/settings.example.json`](./plugins/monolithic-dev-harness/examples/settings.example.json).
 
 ## How it works
 
@@ -177,8 +189,9 @@ no approved spec, it stops and asks for one.
 
 #### Start of the Story
 
-1. Move the Story to Active in Azure DevOps. That's a board write, so a person approves it.
-2. Create the branch, for example `userstory/1234-short-title`.
+1. Move the Story to in progress in the tracker. That's a board write, so a person approves it.
+2. Create the branch, for example `userstory/1234-short-title`, and bind the Story to this checkout
+   with `harness session start 1234`.
 3. Read the repository's `AGENTS.md` once and note the rules that apply: tests for new code,
    generated files, guarded paths.
 
@@ -191,7 +204,7 @@ no approved spec, it stops and asks for one.
    changed. Fix until green.
 5. **Clean up** leftover AI clutter in the diff.
 6. **Commit**, one commit per Task, naming the Task id.
-7. **Mark the Task done** in Azure DevOps. That's a board write, so a person approves it; several
+7. **Mark the Task done** in the tracker. That's a board write, so a person approves it; several
    finished Tasks can share one approval.
 
 #### What the hooks block while it works
@@ -224,7 +237,7 @@ develop
         +-- userstory/1203-...          <- Story 3
 ```
 
-1. **Plan** (`feature-implementation`): read the Feature and its Stories from Azure DevOps, confirm
+1. **Plan** (`feature-implementation`): read the Feature and its Stories from the tracker, confirm
    their states and acceptance criteria, create the Feature branch, and publish an implementation
    plan on the Feature.
 2. **Each Story, in stack order:** start the Story (approved), write the spec (gate G2), implement
@@ -293,7 +306,7 @@ again.
 
 #### Are the related records updated when a Task is complete?
 
-Yes. After a Task is committed and checked, the harness moves it to done in Azure DevOps once a
+Yes. After a Task is committed and checked, the harness moves it to done in the tracker once a
 person approves (several finished Tasks can share one approval). Technical specifications are kept
 as artifacts on the work item. The harness does not change unrelated records, ownership, state, or
 hierarchy without separate approval.
@@ -315,7 +328,7 @@ it is blocked.
 The harness can start from the idea. It drafts a work item from it (any level: an Epic, a Feature,
 or a Story, and neither of the last two needs a parent), structures the description, breaks it into
 Features and Stories, and creates Tasks for the Stories that will be built next. Nothing is written
-to Azure DevOps before a person approves the proposed backlog.
+to the tracker before a person approves the proposed backlog.
 
 #### Is there a planning or brainstorming workflow?
 
@@ -361,29 +374,39 @@ Implementation
 | [`install.sh`](./install.sh)                                                                           | One-shot installer (also attached to every release)          |
 | [`.claude-plugin/`](./.claude-plugin/), [`.cursor-plugin/`](./.cursor-plugin/)                         | Marketplace catalogs for each host                           |
 | [`plugins/monolithic-dev-harness/`](./plugins/monolithic-dev-harness/)                                 | The plugin: skills, agents, hooks, MCP config, runtime       |
-| [`plugins/monolithic-dev-harness/scripts/harness/`](./plugins/monolithic-dev-harness/scripts/harness/) | Rules, hook entry point, evidence scripts, bootstrap, CLI    |
+| [`plugins/monolithic-dev-harness/scripts/harness/`](./plugins/monolithic-dev-harness/scripts/harness/) | Rules, hook entry point, settings, sessions, bootstrap, CLI  |
+| [`plugins/monolithic-dev-harness/scripts/integrations/`](./plugins/monolithic-dev-harness/scripts/integrations/) | Tracker contract, registry, trust, gateway, SCM adapters |
+| [`plugins/monolithic-dev-harness/trackers/`](./plugins/monolithic-dev-harness/trackers/)               | Shipped trackers: one `tracker.json` and `adapter.py` each   |
+| [`plugins/monolithic-dev-harness/config/`](./plugins/monolithic-dev-harness/config/)                   | Settings and tracker schemas                                 |
 | [`plugins/monolithic-dev-harness/tests/`](./plugins/monolithic-dev-harness/tests/)                     | Automated tests                                              |
 | [`scripts/`](./scripts/)                                                                               | Release build and version checks                             |
 
 ## Configuration
 
-A repository opts in with `.harness/policy.json` (written by `harness bootstrap`; schema in
-[`config/policy.schema.json`](./plugins/monolithic-dev-harness/config/policy.schema.json), example in
-[`examples/policy.example.json`](./plugins/monolithic-dev-harness/examples/policy.example.json)).
+A repository opts in with `.harness/settings.json`, its only settings file (people write it; the
+harness only reads it). Schema:
+[`config/settings.schema.json`](./plugins/monolithic-dev-harness/config/settings.schema.json);
+example:
+[`examples/settings.example.json`](./plugins/monolithic-dev-harness/examples/settings.example.json).
 
-| Variable / Setting                                                      | Required | Purpose                                                          |
-| ----------------------------------------------------------------------- | -------- | ---------------------------------------------------------------- |
-| `AZURE_DEVOPS_ORG`                                                      | yes      | Azure DevOps organization for the MCP server and bootstrap       |
-| `.harness/policy.json` → `azure`                                        | yes      | project, team, repository, protected work items                  |
-| `.harness/policy.json` → `checks`                                       | no       | commands that produce check evidence                             |
-| `.harness/policy.json` → `tests_required`, `generated`, `guarded_paths` | no       | inputs to `tests-with-code`, `generated-files`, `guarded-paths`  |
+| Setting                                          | Required | Purpose                                                         |
+| ------------------------------------------------ | -------- | --------------------------------------------------------------- |
+| `tracker` (`name`, `source`, `values`)           | yes      | which tracker, and the values its `tracker.json` asks for       |
+| `scm` (`name`, `values`)                         | yes      | GitHub or Azure Repos                                           |
+| `branch_template`                                | yes      | ticket branch names; contains `{key}`                           |
+| `protected_work_items`                           | no       | ids never written, linked, parented, or mentioned               |
+| `artifacts_path`                                 | no       | where plans, specs, and backlog drafts live                     |
+| `checks`, `tests_required`, `generated`, `guarded_paths`, `pull_requests` | no | inputs to the commit and pull request rules |
+| `AZURE_DEVOPS_ORG` (environment)                 | Azure    | the organization for the host-registered Azure DevOps server    |
 
-See [`docs/04-operations/environments.md`](./docs/04-operations/environments.md).
+Adding a tracker: [`skills/onboard-tracker`](./plugins/monolithic-dev-harness/skills/onboard-tracker/SKILL.md).
+See [`docs/04-operations/environments.md`](./docs/04-operations/environments.md) and
+[`docs/02-design/api.md`](./docs/02-design/api.md).
 
 ## Development
 
 ```bash
-python3 -m venv .venv && .venv/bin/pip install pytest ruff==0.16.4 jsonschema
+python3 -m venv .venv && .venv/bin/pip install pytest ruff==0.16.4
 .venv/bin/ruff check . && .venv/bin/ruff format --check .
 ```
 
@@ -395,11 +418,12 @@ See [`docs/03-engineering/development.md`](./docs/03-engineering/development.md)
 PYTHON=.venv/bin/python plugins/monolithic-dev-harness/tests/run.sh
 ```
 
-The suites prove the backlog orchestrator's validation, estimation, and capacity logic, the
-workflow policy runtime, and every harness rule (a deny case and an allow case, through the real
+The suites prove the backlog orchestrator's validation, estimation, and capacity logic, the tracker
+contract and each shipped adapter against its provider's reply shapes, sessions, the workflow
+policy runtime, and every harness rule (a deny case and an allow case, through the real
 hook entry point, for both hosts). CI also installs the built release into a sandboxed Claude Code
-profile. They do not prove behavior inside a live host session or against a live Azure DevOps
-organization: those are the release gates in
+profile. They do not prove behavior inside a live host session or against live Azure DevOps or
+Linear projects: those are the release gates in
 [`docs/06-delivery/release-process.md`](./docs/06-delivery/release-process.md).
 
 See [`docs/03-engineering/testing.md`](./docs/03-engineering/testing.md).
@@ -413,17 +437,19 @@ See [`docs/04-operations/deployment.md`](./docs/04-operations/deployment.md).
 
 ## Security
 
-The agent works with your Azure DevOps identity, so the harness assumes the model can be wrong or
-misled. Every tracker and SCM write needs an approval window that only your own prompt can open;
-protected work items can never be touched; approval and manual-check records are human-owned; and
-the runtime fails closed for writes. Report vulnerabilities privately to the maintainers.
+The agent works with your tracker and repository identity, so the harness assumes the model can be
+wrong or misled. Every tracker and SCM write needs an approval window that only your own prompt can
+open; protected work items can never be touched; the settings, approval, manual-check, session, and
+tracker-trust records are human-owned; an onboarded tracker counts only as you trusted it; and the
+runtime fails closed for writes. Report vulnerabilities privately to the maintainers.
 
 See [`docs/05-security/security.md`](./docs/05-security/security.md).
 
 ## Project status
 
-`0.1.10`. The rules, installer, and test suites are verified in CI. Loading in
-Cursor and a full end-to-end run against a live Azure DevOps project are pending observation.
+`0.2.0`. The rules, adapters, installer, and test suites are verified in CI. Loading in Cursor, a
+full end-to-end run against a live Azure DevOps project, and a live check of the Linear adapter are
+pending observation.
 
 See [`docs/06-delivery/roadmap.md`](./docs/06-delivery/roadmap.md).
 

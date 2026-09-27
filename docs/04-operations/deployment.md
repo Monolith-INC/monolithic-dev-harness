@@ -2,7 +2,7 @@
 title: Deployment
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Deployment
@@ -48,8 +48,9 @@ After installing, restart Claude Code or reload Cursor, then opt each repository
 ## Health Checks
 
 ```bash
-harness doctor                                   # tools, hosts, configuration, repository
-harness doctor --azure --project <project>       # plus a live Azure DevOps call (opens OAuth)
+harness doctor            # tools, hosts, settings, tracker, session
+harness doctor --tools    # plus: the tracker's server offers every tool its manifest names
+harness doctor --azure    # plus: a live Azure DevOps call with the settings' values (opens OAuth)
 ```
 
 ## State Inspection
@@ -70,7 +71,9 @@ Re-run the installer: it replaces the installed copy and re-registers the plugin
 curl -fsSL …/install.sh | bash -s -- --version <previous version>
 ```
 
-Repositories keep their `.harness/policy.json`; older releases ignore fields they do not know.
+Repositories keep their `.harness/settings.json`. Releases before 0.2.0 read `policy.json` instead
+and do not know the settings file; rolling back across 0.2.0 means re-running that release's
+bootstrap.
 
 ## Evidence to Preserve
 

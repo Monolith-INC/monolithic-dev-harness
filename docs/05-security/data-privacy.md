@@ -2,7 +2,7 @@
 title: Data Privacy
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Data Privacy
@@ -19,7 +19,7 @@ What data the harness reads, stores, and sends.
 | Source code | the repository | nothing new | the model provider (as part of the agent's context) |
 | Approval prompts | the developer | first 500 characters of a manual-check prompt, in `.harness/state/manual/` | nowhere |
 | Tool calls | the host | tool name and time for writes inside an approval window | nowhere |
-| Credentials | — | none (OAuth tokens stay in the MCP server process memory) | Azure DevOps only |
+| Credentials | — | none (OAuth tokens stay in the provider MCP server's process memory or its own sign-in cache) | the tracker and SCM providers only |
 
 ## Trust Boundaries
 

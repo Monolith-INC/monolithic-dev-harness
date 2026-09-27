@@ -2,7 +2,7 @@
 title: Security Model
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Security Model
@@ -19,8 +19,9 @@ developer's identity. Out of scope: the hosts themselves, Azure DevOps, and the 
 | Azure Boards work items | the team's plan; protected items must stay intact |
 | Azure Repos branches and pull requests | what reaches review and production |
 | The repository's code and history | commits must meet the team's rules |
-| The developer's Azure DevOps session | every call runs as the developer |
-| `.harness/policy.json`, approvals, manual checks | the controls themselves |
+| The developer's tracker and SCM sign-in | every call runs as the developer |
+| `.harness/settings.json`, approvals, manual checks, sessions, tracker trust | the controls themselves |
+| Onboarded tracker adapters | code that runs inside the harness; trusted only as the user saw it |
 
 ## Trust Boundaries
 
@@ -49,15 +50,18 @@ See [threat-model.md](threat-model.md).
 | Control | Rule / mechanism |
 | --- | --- |
 | No tracker/SCM write or push without a person's approval | `approval-required`; windows exist only from the user's prompt or their click on `Approve` (ADR-0003) |
-| The agent cannot approve itself or weaken the policy | `human-owned` |
+| The agent cannot approve itself, trust a tracker, fake a session, or weaken the settings | `human-owned`, typed trust |
 | Protected items are never modified, even indirectly by links | `protected-items` |
 | Nothing unreviewed reaches a pull request; people publish and approve | `draft-reviewed-prs` |
 | Code ships with tests; generated files are not hand-edited | `tests-with-code`, `generated-files` |
 | Sensitive paths need evidence for the exact change | `guarded-paths` |
 | Stacked branches keep their history: no rebase, squash merge, or force-push | `history-preserved` |
-| Branch, state, spec, and evidence discipline | workflow policy |
+| A broken, missing, or untrusted tracker cannot be written to | `tracker-invalid` |
+| Onboarded tracker code runs only as the user saw it | typed trust pinned to the folder digest (ADR-0009) |
+| Session, branch, state, spec, and evidence discipline | workflow policy |
 | Reviewer subagents have no file-edit tools | `tools:` in their frontmatter (Read, Grep, Glob, Bash, Skill, WebFetch); their Bash calls still pass the hooks |
-| No stored credentials | the Azure DevOps server uses interactive OAuth; no PAT |
+| No stored credentials | the providers' MCP servers use interactive OAuth; no PAT |
+| No third-party package in the hook path | standard library only, including the schema checker |
 
 ## Host Enforcement Differences
 
@@ -67,9 +71,9 @@ same classes; enforcement in a live Cursor session is pending first observation.
 
 ## Fail-closed Behavior
 
-If the policy is invalid, any rule or the workflow runtime raises, or the rules run past their
+If the settings are invalid, any rule or the workflow runtime raises, or the rules run past their
 10-second budget, write-class calls are denied with `harness-error`: file edits, every shell
-command, and tracker/SCM writes. Read-only tools continue. The budget sits below the hosts' 15-second
+command, and every MCP call (without the tracker folders nothing says which tools only read). Read-only tools continue. The budget sits below the hosts' 15-second
 hook timeout because a hook that times out or exits with an error does not block the call.
 Corrupt state files are treated as absent, which can only cause a deny.
 

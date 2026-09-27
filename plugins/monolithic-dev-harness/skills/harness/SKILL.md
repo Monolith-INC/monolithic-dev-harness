@@ -28,8 +28,8 @@ Stacked Feature work (several Stories under one Feature) runs stage 3–4 per St
 
 ## Before the first run in a repository
 
-The repository must be opted in: `.harness/policy.json` exists (run `bootstrap`), Azure DevOps
-answers a health check (`azure-devops`), and `review-setup` has run. If any is missing, do that
+The repository must be opted in: `.harness/settings.json` exists (run `bootstrap`), the selected
+tracker answers (`harness doctor`; `azure-devops` for Azure), and `review-setup` has run. If any is missing, do that
 first and say so.
 
 ## Stage 1: Backlog
@@ -99,7 +99,8 @@ blocks any agent write to the records. Gates G1, G2, and G4 map to these approva
 
 | Rule | What it blocks |
 | --- | --- |
-| `human-owned` | agent writes to `.harness/policy.json` and to approval, manual-check, or question records |
+| `human-owned` | agent writes to `.harness/settings.json`, and to approval, manual-check, question, session, tracker-trust, or tracking-mode records |
+| `tracker-invalid` | tracker and SCM writes while the selected tracker is missing, untrusted, or lacks its values |
 | `plain-questions` | questions to the user that are long, ask several things, contain file names, code, or internal names, or come with answers filled in |
 | `approval-required` | tracker/SCM writes and `git push` without an open approval window |
 | `protected-items` | any write, link, or child on a protected work item, even with approval |
@@ -108,7 +109,7 @@ blocks any agent write to the records. Gates G1, G2, and G4 map to these approva
 | `guarded-paths` | commits to guarded paths without check or manual evidence for the staged tree |
 | `draft-reviewed-prs` | non-draft pull requests; pull requests without a `ready` verdict and passing checks for HEAD; publishing drafts or voting |
 | `history-preserved` | rewriting branch history: rebase, squash merges, force-push, `filter-branch`, completing a pull request by squash or rebase |
-| workflow | branch naming with exactly one work-item key, in-progress state, spec before code (source and test files), completion evidence, protected branches |
+| workflow | code changes without an active session for this checkout (`harness session start`), new branches off the convention, the session's work item not in progress, code before an accepted spec, completion without evidence, protected branches |
 
 When a hook blocks you, read its reason and fix the cause. Never retry through another tool or
 route around it.

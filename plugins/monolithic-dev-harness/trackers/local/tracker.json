@@ -1,0 +1,26 @@
+{
+  "schemaVersion": 1,
+  "name": "local",
+  "label": "Local tracker",
+  "docs": "Work items are JSON files under .harness/tracker/<state>/, committed with the repository.",
+  "connection": {"kind": "local"},
+  "settings": [],
+  "kinds": {"epic": "epic", "feature": "feature", "user_story": "user_story", "task": "task", "bug": "bug"},
+  "states": {"backlog": "backlog", "ready": "ready", "in_progress": "in_progress", "done": "done", "canceled": "canceled"},
+  "artifacts": [
+    {"name": "epic", "children": ["feature"]},
+    {"name": "feature", "children": ["user_story", "bug"]},
+    {"name": "user_story", "children": ["task"], "estimate": "story_points"},
+    {"name": "task", "children": []},
+    {"name": "bug", "children": ["task"]}
+  ],
+  "ids": {
+    "pattern": "(?:EPIC|FEATURE|STORY|TASK|BUG)-[0-9]{4,}",
+    "branch_key": "(?P<id>(?i:EPIC|FEATURE|STORY|TASK|BUG)-[0-9]{4,})",
+    "mention": [],
+    "mentions_link": false
+  },
+  "writes": {"server": "", "tools": []},
+  "attachments": {"spec": "artifact", "report": "artifact", "pull_request": "link"},
+  "text_format": "markdown"
+}

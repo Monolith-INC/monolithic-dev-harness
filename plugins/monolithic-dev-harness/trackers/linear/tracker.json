@@ -1,0 +1,43 @@
+{
+  "schemaVersion": 1,
+  "name": "linear",
+  "label": "Linear",
+  "docs": "https://linear.app/docs/mcp",
+  "connection": {
+    "kind": "mcp",
+    "command": "npx",
+    "args": ["-y", "mcp-remote", "https://mcp.linear.app/mcp"],
+    "timeout": 60
+  },
+  "settings": [
+    {"key": "team", "required": true, "description": "The Linear team key or name new issues are created in."}
+  ],
+  "kinds": {"epic": "Epic", "feature": "Feature", "user_story": "Story", "task": "Task", "bug": "Bug"},
+  "states": {"backlog": "Backlog", "ready": "Todo", "in_progress": "In Progress", "done": "Done", "canceled": "Canceled"},
+  "artifacts": [
+    {"name": "Epic", "children": ["Feature"]},
+    {"name": "Feature", "children": ["Story", "Bug"]},
+    {"name": "Story", "children": ["Task"], "estimate": "estimate"},
+    {"name": "Task", "children": []},
+    {"name": "Bug", "children": ["Task"]}
+  ],
+  "tools": {
+    "get": "get_issue",
+    "list": "list_issues",
+    "save": "save_issue",
+    "comments": "list_comments",
+    "comment": "save_comment"
+  },
+  "ids": {
+    "pattern": "[A-Za-z][A-Za-z0-9]*-[1-9][0-9]*",
+    "branch_key": "(?P<id>[A-Za-z][A-Za-z0-9]*-[1-9][0-9]*)",
+    "mention": ["(?<![\\w-]){id}(?![\\w-])"],
+    "mentions_link": true
+  },
+  "writes": {
+    "server": "linear",
+    "tools": ["save_*", "create_*", "update_*", "delete_*"]
+  },
+  "attachments": {"spec": "comment", "report": "comment", "pull_request": "comment"},
+  "text_format": "markdown"
+}

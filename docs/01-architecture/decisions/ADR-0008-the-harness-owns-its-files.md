@@ -2,14 +2,16 @@
 title: ADR-0008 The harness owns its files
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-23
+last_reviewed: 2026-09-26
 ---
 
 # ADR-0008: The harness owns its files, and keeps them in one place
 
 ## Status
 
-Accepted and implemented.
+Accepted and implemented. The repository layout in decision 3 is amended by
+[ADR-0009](ADR-0009-trackers-are-adapters.md): `policy.json`, `integrations.json`, and the backlog
+config became one `settings.json`, and the migration was removed.
 
 ## Context
 
@@ -42,12 +44,13 @@ The harness is one new product, not a set of references to other plugins.
 
    ```text
    .harness/
-     policy.json          the rules (human-owned)
-     integrations.json    tracker and repository connection
+     settings.json        the only settings file (human-owned; ADR-0009)
+     trackers/            onboarded trackers (ADR-0009)
      review/              where review requirements live, and the review knowledge store
-     backlog/             backlog settings, estimation, reports
+     knowledge/           agent-owned immutable project knowledge stores
+     backlog/             backlog estimation, reports
      tracker/             local tracker records, when that tracker is used
-     state/               approvals, manual checks, evidence, prompts, backups (not committed)
+     state/               approvals, manual checks, evidence, sessions, trust (not committed)
    ```
 
 4. **Reconcile merges, never rebases.** The reconcile rule list already says merge only; the
@@ -79,9 +82,9 @@ The harness is one new product, not a set of references to other plugins.
 - ~~Fold the four procedures and rule lists into their skills; remove `.agent/…` references and
   `skills/codex_workflows/`.~~ Done. The folder's other files were not kept: its coding rules were
   Dart-specific or duplicated by the harness's own skills, and nothing used its templates.
-- ~~Consolidate repository state under `.harness/`, with a bootstrap migration.~~ Done:
-  `scripts/harness/layout.py` holds the layout and the migration; the integrations and backlog
-  runtimes read an unmigrated repository's old files until bootstrap moves them.
+- ~~Consolidate repository state under `.harness/`, with a bootstrap migration.~~ Done, then
+  simplified by ADR-0009: with no repository in production, the migration and the old-file
+  fallbacks were removed, and each path is owned by the one module that uses it.
 - Related, from the same review: block rebase, squash merges, and force-push on Story and Feature
   branches in governed repositories without relying on the agent to switch the guard on.
 
@@ -91,8 +94,7 @@ Answering the product questions in the README ("Common questions") turned up gap
 decision's scope, recorded here so they are not lost:
 
 - **Work already in progress:** no workflow adopts an in-flight branch, maps its commits to the
-  Story's Tasks, and resumes; the workflow hooks refuse writes on a branch outside the naming
-  convention.
+  Story's Tasks, and resumes; a session can bind only a branch that carries the work item's key.
 - **Test-first vs `tests-with-code`:** the `tdd` skill allows a Task with no practical automated
   test to use a manual check, but the hook blocks a source commit with no test changes in the
   commit or on the branch, so such a Task cannot be the first commit on a branch.

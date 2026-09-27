@@ -25,7 +25,8 @@ def state_dir(repo: Path) -> Path:
     return repo / STATE_RELATIVE_PATH
 
 
-def _write(path: Path, payload: dict[str, Any]) -> None:
+def write_json(path: Path, payload: dict[str, Any]) -> None:
+    """Replace a state file atomically: readers see the old record or the new one, never half."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(
@@ -34,7 +35,7 @@ def _write(path: Path, payload: dict[str, Any]) -> None:
     tmp.replace(path)
 
 
-def _read(path: Path) -> dict[str, Any] | None:
+def read_json(path: Path) -> dict[str, Any] | None:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
@@ -63,7 +64,7 @@ def open_approval(
     }
     if question:
         record["question"] = question
-    _write(state_dir(repo) / "approvals" / f"{safe_name(approval_id)}.json", record)
+    write_json(state_dir(repo) / "approvals" / f"{safe_name(approval_id)}.json", record)
     return record
 
 
@@ -71,11 +72,11 @@ def revoke_approvals(repo: Path) -> int:
     directory = state_dir(repo) / "approvals"
     count = 0
     for path in directory.glob("*.json") if directory.is_dir() else []:
-        record = _read(path)
+        record = read_json(path)
         if record and datetime.fromisoformat(record["expires"]) > _now():
             record["expires"] = _now().isoformat()
             record["revoked"] = True
-            _write(path, record)
+            write_json(path, record)
             count += 1
     return count
 
@@ -86,7 +87,7 @@ def active_approval(repo: Path) -> tuple[Path, dict[str, Any]] | None:
         return None
     best: tuple[Path, dict[str, Any]] | None = None
     for path in directory.glob("*.json"):
-        record = _read(path)
+        record = read_json(path)
         if not record or "expires" not in record:
             continue
         try:
@@ -101,12 +102,12 @@ def active_approval(repo: Path) -> tuple[Path, dict[str, Any]] | None:
 def pin_notes(repo: Path, approval_id: str, notes: dict[str, str]) -> None:
     """Record the approved plan and spec notes (path -> content digest) this approval covers."""
     path = state_dir(repo) / "approvals" / f"{safe_name(approval_id)}.json"
-    record = _read(path)
+    record = read_json(path)
     if record is None or not notes:
         return
     pinned = record.get("notes")
     record["notes"] = {**(pinned if isinstance(pinned, dict) else {}), **notes}
-    _write(path, record)
+    write_json(path, record)
 
 
 def pinned_notes(repo: Path) -> dict[str, set[str]]:
@@ -114,7 +115,7 @@ def pinned_notes(repo: Path) -> dict[str, set[str]]:
     directory = state_dir(repo) / "approvals"
     pinned: dict[str, set[str]] = {}
     for path in directory.glob("*.json") if directory.is_dir() else []:
-        record = _read(path)
+        record = read_json(path)
         notes = record.get("notes") if record and not record.get("revoked") else None
         for note, digest in notes.items() if isinstance(notes, dict) else ():
             pinned.setdefault(str(note), set()).add(str(digest))
@@ -123,14 +124,33 @@ def pinned_notes(repo: Path) -> dict[str, set[str]]:
 
 def log_write(path: Path, record: dict[str, Any], tool: str) -> None:
     record.setdefault("writes", []).append({"tool": tool, "at": _now().isoformat()})
-    _write(path, record)
+    write_json(path, record)
+
+
+# --- tracking mode (the gateway's skip and resume, each behind an approval) --------------------
+
+TRACKING_MODES = ("enforced", "skipped")
+
+
+def tracking_mode(repo: Path) -> str:
+    mode = (read_json(state_dir(repo) / "tracking.json") or {}).get("mode")
+    return mode if mode in TRACKING_MODES else "enforced"
+
+
+def set_tracking_mode(repo: Path, mode: str) -> str:
+    if mode not in TRACKING_MODES:
+        raise ValueError(f"tracking mode must be one of {TRACKING_MODES}")
+    write_json(
+        state_dir(repo) / "tracking.json", {"mode": mode, "changed": _now().isoformat()}
+    )
+    return mode
 
 
 # --- questions shown to the user (approval by click) ------------------------------------------
 
 
 def mark_asked(repo: Path, name: str) -> None:
-    _write(
+    write_json(
         state_dir(repo) / "asked" / f"{safe_name(name)}.json",
         {"asked": _now().isoformat()},
     )
@@ -150,14 +170,14 @@ def take_asked(repo: Path, name: str) -> bool:
 
 
 def record_manual(repo: Path, name: str, tree: str, note: str) -> None:
-    _write(
+    write_json(
         state_dir(repo) / "manual" / f"{safe_name(name)}-{tree}.json",
         {"name": name, "tree": tree, "note": note, "recorded": _now().isoformat()},
     )
 
 
 def has_manual(repo: Path, name: str, tree: str) -> bool:
-    record = _read(state_dir(repo) / "manual" / f"{safe_name(name)}-{tree}.json")
+    record = read_json(state_dir(repo) / "manual" / f"{safe_name(name)}-{tree}.json")
     return bool(record) and record.get("tree") == tree and record.get("name") == name
 
 
@@ -166,12 +186,12 @@ def has_manual(repo: Path, name: str, tree: str) -> bool:
 
 def record_checks(repo: Path, tree: str, results: list[dict[str, Any]]) -> Path:
     path = state_dir(repo) / "checks" / f"{tree}.json"
-    _write(path, {"tree": tree, "recorded": _now().isoformat(), "results": results})
+    write_json(path, {"tree": tree, "recorded": _now().isoformat(), "results": results})
     return path
 
 
 def passed_checks(repo: Path, tree: str) -> set[str]:
-    record = _read(state_dir(repo) / "checks" / f"{tree}.json")
+    record = read_json(state_dir(repo) / "checks" / f"{tree}.json")
     if not record:
         return set()
     return {r["name"] for r in record.get("results", []) if r.get("exit_code") == 0}
@@ -184,7 +204,7 @@ def record_review(repo: Path, head: str, verdict: str, summary: str) -> Path:
     if verdict not in {"ready", "blocked"}:
         raise ValueError("verdict must be 'ready' or 'blocked'")
     path = state_dir(repo) / "review" / f"{head}.json"
-    _write(
+    write_json(
         path,
         {
             "head": head,
@@ -197,5 +217,5 @@ def record_review(repo: Path, head: str, verdict: str, summary: str) -> Path:
 
 
 def review_verdict(repo: Path, head: str) -> str | None:
-    record = _read(state_dir(repo) / "review" / f"{head}.json")
+    record = read_json(state_dir(repo) / "review" / f"{head}.json")
     return record.get("verdict") if record else None

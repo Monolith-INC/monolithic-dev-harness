@@ -201,8 +201,8 @@ def handle_plan_capacity(
                     "ok": False,
                     "error": (
                         f"Azure configuration incomplete: {', '.join(missing)} not set. "
-                        "Discover the values through the Azure DevOps MCP tools, then persist "
-                        "them with: bin/agile-backlog-toolkit config --set azure.<key>=<value>"
+                        "Discover the values through the Azure DevOps MCP tools and ask the user "
+                        "to add them to tracker.values in .harness/settings.json."
                     ),
                     "missing_config": missing,
                     "instructions": instructions,

@@ -18,7 +18,7 @@ inputs; skip standalone PHASE 5 gate.
 
 **Hook:** PHASE 4 — GENERATE DRAFT, after bullets are drafted, before present.
 
-1. Draft per `generate-work-item/references/output-formats.md`.
+1. Draft per `../../../common/templates/output-formats.md`.
 2. Run a **work-item-prose** sub-pass on `## Requisitos` and `## Critérios de Aceite`.
 3. Match locale of input `description` (pt-BR labels when description is Portuguese).
 4. Run glossary verification when locale is pt-BR.

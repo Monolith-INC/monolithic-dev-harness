@@ -146,7 +146,7 @@ Write only the selected Tasks to intake `destination`.
 When `destination` is `filesystem` or `both`:
 
 1. Write one markdown draft per Task under the artifacts path (prefer `Tickets/Ready/` or a host Task folder).
-2. Filename pattern per `../../references/ticket-structure.md`:
+2. Filename pattern per `../../../references/ticket-structure.md`:
    `task-<kebab-title>` is invalid as a bare prefix — use `task-<slug>` only if the host regex
    allows `task-`; otherwise `<story-id-or-0000>-task-<slug>.md` matching
    `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+`.
@@ -186,7 +186,7 @@ When `destination` is `azure` or `both`:
 
 ### Shared Azure notes
 
-Extend behavior from `../../references/azure-mechanics.md`. Parent of a Task is the **User Story**,
+Extend behavior from `../../../references/azure-mechanics.md`. Parent of a Task is the **User Story**,
 not the Feature. Description format: Markdown.
 
 ---

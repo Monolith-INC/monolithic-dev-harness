@@ -2,7 +2,7 @@
 title: Runtime Workflows
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Runtime Workflows
@@ -106,25 +106,48 @@ agent --tools/call(skill, args)--> orchestrator
 ```
 
 The orchestrator returns instructions and verdicts. The agent performs any provider call itself,
-through the gateway or the Azure DevOps server, where the hook runtime sees it.
+through the gateway or a tracker's own server, where the hook runtime sees it.
 
 ## Hook evaluation
 
 ```text
 tool call
-  -> repository has .harness/policy.json?          no  -> allow
-  -> human-owned        writes policy/approvals?        -> deny
-  -> protected-items    touches a protected id?          -> deny
+  -> repository has .harness/settings.json?        no  -> allow
+  -> settings readable?                         no  -> deny writes, allow reads
+  -> human-owned        writes settings or records?     -> deny
+  -> tracker-invalid    tracker write while the selected
+                        tracker is unusable?             -> deny
+  -> protected-items    names or links a protected id?   -> deny
   -> draft-reviewed-prs PR not draft / not reviewed /
                         checks missing / publish / vote?  -> deny
   -> approval-required  tracker/SCM write or git push
                         without an open window?          -> deny
   -> generated-files    hand edit of a generated file?   -> deny
   -> git commit?        tests-with-code, guarded-paths   -> deny
-  -> workflow policy    branch key, state, spec, evidence,
-                        protected branches, stack order  -> deny
+  -> workflow policy    active session, branch convention,
+                        state, spec, evidence, protected
+                        branches, stack order            -> deny
   -> allow (and log the write to the open approval window)
 ```
+
+## Sessions
+
+```text
+start-ticket
+  -> work item's branch checked out (branch_template + the tracker's ids.branch_key)
+  -> tracker_transition_work_item in_progress        (approval)
+  -> harness session start <work item>               binds the item to this checkout
+implement-story / review
+  -> code changes allowed while the session is active, the item is in progress, and a spec is
+     accepted (the workflow policy reads the session's item, not the branch name)
+  -> harness session pause / resume                  when work stops and starts again
+resolve-ticket
+  -> tracker_transition_work_item done               checked against the session's item
+  -> harness session close                           frees the checkout
+```
+
+A detached HEAD, another branch in the same checkout, or an unreadable session record means no
+active session, so governed code changes are refused until one is started.
 
 ## Approval protocol
 

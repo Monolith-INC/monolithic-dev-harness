@@ -1,0 +1,118 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://monolith.inc/schemas/settings.schema.json",
+  "title": "monolithic-dev-harness repository settings (.harness/settings.json)",
+  "description": "The only settings file in a governed repository. People edit it; the harness only reads it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "tracker", "scm", "branch_template"],
+  "$defs": {
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"},
+    "glob": {"type": "string", "minLength": 1},
+    "globs": {"type": "array", "items": {"$ref": "#/$defs/glob"}},
+    "values": {
+      "type": "object",
+      "description": "Values the selected tracker or SCM declares in its settings list.",
+      "propertyNames": {"pattern": "^[A-Za-z][A-Za-z0-9_]*$"},
+      "additionalProperties": {"type": "string"}
+    }
+  },
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "tracker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"$ref": "#/$defs/name"},
+        "source": {"enum": ["shipped", "onboarded"], "description": "Where the tracker lives; shipped when omitted."},
+        "values": {"$ref": "#/$defs/values"}
+      }
+    },
+    "scm": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name"],
+      "properties": {
+        "name": {"enum": ["github", "azure-repos"]},
+        "values": {"$ref": "#/$defs/values"}
+      }
+    },
+    "branch_template": {
+      "type": "string",
+      "pattern": "\\{key\\}",
+      "description": "Branch names for ticket work; {key} is the work item key, {category}, {slug} and {user} are free words."
+    },
+    "protected_work_items": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {"type": "string", "minLength": 1},
+      "description": "protected-items: never written, linked, parented, or mentioned in linking text."
+    },
+    "artifacts_path": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Where plans, specs, backlog drafts, and reports live (the repository's vault or docs folder)."
+    },
+    "git": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"base_branch": {"type": "string", "minLength": 1}}
+    },
+    "approvals": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {"window_minutes": {"type": "integer", "minimum": 1, "maximum": 240}}
+    },
+    "checks": {
+      "type": "array",
+      "description": "guarded-paths and draft-reviewed-prs evidence producers, run by scripts/harness/checks.py.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "run"],
+        "properties": {
+          "name": {"type": "string", "pattern": "^[A-Za-z0-9._-]{1,80}$"},
+          "run": {"type": "string", "minLength": 1},
+          "when": {"$ref": "#/$defs/globs"}
+        }
+      }
+    },
+    "tests_required": {
+      "type": "array",
+      "description": "tests-with-code: source globs and the test globs that must change with them.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["source", "tests"],
+        "properties": {
+          "source": {"$ref": "#/$defs/globs"},
+          "tests": {"$ref": "#/$defs/globs"},
+          "exclude": {"$ref": "#/$defs/globs"}
+        }
+      }
+    },
+    "generated": {"$ref": "#/$defs/globs", "description": "generated-files: never edited by hand."},
+    "guarded_paths": {
+      "type": "array",
+      "description": "guarded-paths: evidence is check:<check name> or manual:<name>.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["path", "evidence"],
+        "properties": {
+          "path": {"$ref": "#/$defs/glob"},
+          "evidence": {"type": "string", "pattern": "^(check|manual):[A-Za-z0-9._-]{1,60}$"}
+        }
+      }
+    },
+    "pull_requests": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "require_draft": {"type": "boolean"},
+        "require_review_verdict": {"type": "boolean"}
+      }
+    }
+  }
+}

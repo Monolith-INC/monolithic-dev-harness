@@ -2,14 +2,15 @@
 title: Vision
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Vision
 
 ## Purpose
 
-Give a team on Azure DevOps an AI delivery process it can trust: the agent does the backlog,
+Give a team an AI delivery process it can trust, on the tracker it already uses (Azure DevOps,
+Linear, a repository-local tracker, or one it onboards): the agent does the backlog,
 planning, implementation, and review work, and the team's rules hold even when the model forgets
 them, misreads them, or is steered by content it reads.
 
@@ -38,7 +39,7 @@ the pull request is one confident mistake away from writing somewhere it should 
 
 ## Non-Goals
 
-- Replacing Azure Boards or Azure Repos, or adding columns and states to the board.
+- Replacing the team's tracker or repository host, or adding columns and states to its board.
 - Merging pull requests, voting, or publishing drafts: those stay human.
 - Supporting hosts other than Claude Code and Cursor.
 - Judging things no script can decide deterministically (for example whether personal data is
@@ -47,5 +48,5 @@ the pull request is one confident mistake away from writing somewhere it should 
 ## Success Evidence
 
 - A Story taken from idea to draft pull request with every gate recorded as an approval batch.
-- Zero writes to Azure DevOps without an approval window, and zero writes to protected items.
+- Zero tracker or SCM writes without an approval window, and zero writes to protected items.
 - Test suites and CI green on every change; the installer verified in a sandboxed host profile.

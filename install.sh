@@ -300,7 +300,7 @@ uninstall() {
   fi
   rm -rf "$CURSOR_DIR" "$HARNESS_HOME"
   if [[ -L "${BIN_DIR}/harness" ]]; then rm -f "${BIN_DIR}/harness"; fi
-  say "Done. Repositories keep their .harness/ policy files; delete them if you no longer want them."
+  say "Done. Repositories keep their .harness/ folders (settings and records); delete them if you no longer want them."
 }
 
 main() {

@@ -2,7 +2,7 @@
 title: Runbook
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Runbook
@@ -23,7 +23,8 @@ See [environments.md](environments.md).
 
 ```bash
 harness doctor
-harness doctor --azure --project <project>
+harness doctor --tools
+harness doctor --azure
 ```
 
 ## State Inspection
@@ -34,9 +35,11 @@ See [observability.md](observability.md).
 
 | Situation | Action |
 | --- | --- |
-| Every write is blocked with `harness-error` | the policy is invalid or the runtime failed: read the message; fix `.harness/policy.json` or reinstall |
+| Every write is blocked with `harness-error` | the settings are invalid or the runtime failed: read the message; a person fixes `.harness/settings.json`, or reinstall |
+| `tracker-invalid` blocks a tracker write | the selected tracker is missing, invalid, untrusted, or lacks values: `harness doctor` names which; fix the settings or the folder, or trust it again |
+| The workflow refuses code changes: "need an active session" | `harness session status`; on the work item's branch run `harness session start <item>`, or `resume` a paused one |
 | `approval-required` blocks a write you approved | the window expired or the id differed: approve the new batch id |
-| `protected-items` blocks a write | intended; the item is listed in `azure.protected_work_items`. Change the policy only if the item should no longer be protected |
+| `protected-items` blocks a write | intended; the item is listed in `protected_work_items`. A person changes the settings only if the item should no longer be protected |
 | `tests-with-code` blocks a commit | add the test, or put the test commit first on the branch |
 | `guarded-paths` blocks a commit | stage, run `scripts/harness/checks.py --staged`, commit; or validate by hand and reply `harness manual-check <name> ok` |
 | `draft-reviewed-prs` blocks a PR | re-run the review stage on HEAD; any new commit needs a new verdict and new check evidence |

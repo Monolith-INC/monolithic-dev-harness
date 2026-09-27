@@ -2,7 +2,7 @@
 title: ADR-0001 Deterministic enforcement in hooks
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # ADR-0001: Enforce required behavior in hooks, not in skill text
@@ -40,7 +40,7 @@ script can judge stays in the review stage and is documented as review-only.
 ### Trade-offs
 
 - A hook runs on every governed call (a Python process start per call).
-- Rules must be generic; repository specifics move into `.harness/policy.json`.
+- Rules must be generic; repository specifics move into `.harness/settings.json`, and tracker specifics into tracker folders.
 
 ## Host-specific Impact
 

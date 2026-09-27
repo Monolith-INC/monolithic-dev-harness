@@ -72,8 +72,8 @@ class FilesystemProvider:
     name = "filesystem"
 
     NO_PATH = (
-        "No artifacts path configured. Ask the user where local artifacts should be written, "
-        "then save it with: bin/agile-backlog-toolkit config --set artifacts_path=<path>"
+        "No artifacts path configured. Ask the user where local artifacts should be written; "
+        "they set it as artifacts_path in .harness/settings.json."
     )
 
     def __init__(self, artifacts_dir: Path | None) -> None:

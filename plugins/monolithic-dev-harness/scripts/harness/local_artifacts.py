@@ -35,7 +35,7 @@ _SKIPPED_DIRS = frozenset({"node_modules", "__pycache__"})
 
 
 def artifacts_dir(project_root: Path) -> Path | None:
-    """The artifacts directory the backlog skills write to, or None when none is configured."""
+    """The settings' artifacts path, or None when the settings name none or cannot be read."""
     return load_project_config(project_root).resolve_artifacts_dir(project_root)
 
 

@@ -8,23 +8,15 @@ and `../skills/azure-devops/SKILL.md`.
 
 ## Before the first Azure call: know the project
 
-Org, project, team, and process live in `.harness/backlog/config.json`. Read them with:
+Org, project, team, and process live in `.harness/settings.json` under `tracker.values`. Read them
+with:
 
 ```bash
 bin/agile-backlog-toolkit config --show      # exits non-zero when something required is missing
 ```
 
-If a value is missing, **discover it rather than asking the user to type a slug** — then persist it
-so it is never asked again:
-
-| Missing | Discover with | Then |
-|---|---|---|
-| project | `core_list_projects` | `config --set azure.project=<name>` |
-| team | `core_list_project_teams` | `config --set azure.team=<name>` |
-| process | `wit_backlog[list]` — the Stories backlog column names it: `StoryPoints` → agile, `Effort` → scrum, `Size` → cmmi | `config --set azure.process=<name>` |
-
-Present the options and let the user pick when there is more than one. Full rules in
-`project-config.md`.
+If a value is missing, discover it rather than asking the user to type a slug, then give them the
+entry to add: see `project-config.md`, *Filling in a missing value*.
 
 ## Read a work item (ingest)
 

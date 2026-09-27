@@ -1,58 +1,52 @@
-"""The harness-owned knowledge store is immutable, local, and policy seeded."""
+"""The harness-owned knowledge store is immutable, local, and seeded from the settings file."""
 
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from scripts.harness import knowledge
+from tests.settings_fixture import write_settings
 
 
-def _policy(repo: Path, branch: str = "main") -> Path:
-    path = repo / ".harness/policy.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps({"schemaVersion": 1, "git": {"base_branch": branch}}),
-        encoding="utf-8",
-    )
-    return path
+def _settings(repo: Path, branch: str = "main") -> Path:
+    return write_settings(repo, git={"base_branch": branch})
 
 
 class KnowledgeStoreTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()
         self.repo = Path(self._tmp.name)
-        _policy(self.repo)
+        _settings(self.repo)
 
     def tearDown(self) -> None:
         self._tmp.cleanup()
 
-    def test_initialize_creates_a_policy_seed_and_is_idempotent(self) -> None:
+    def test_initialize_creates_a_settings_seed_and_is_idempotent(self) -> None:
         created = knowledge.initialize(self.repo)
         unchanged = knowledge.initialize(self.repo)
         listed = knowledge.catalog(self.repo)
         self.assertEqual(created["outcome"], "created")
         self.assertEqual(unchanged["outcome"], "unchanged")
         self.assertEqual(
-            [item["logical_unit_id"] for item in listed], ["project/harness-policy"]
+            [item["logical_unit_id"] for item in listed], ["project/harness-settings"]
         )
         self.assertEqual(knowledge.status(self.repo)["current"], 1)
 
     def test_refresh_keeps_the_old_revision_and_marks_it_stale(self) -> None:
         before = knowledge.initialize(self.repo)["revision"]
-        _policy(self.repo, "develop")
+        _settings(self.repo, "develop")
         refreshed = knowledge.refresh(self.repo)
         after = refreshed["revision"]
         self.assertEqual(refreshed["outcome"], "refreshed")
         self.assertNotEqual(before, after)
         self.assertEqual(
-            knowledge.fetch(self.repo, f"project/harness-policy@{before}")["status"],
+            knowledge.fetch(self.repo, f"project/harness-settings@{before}")["status"],
             "superseded",
         )
         self.assertEqual(
-            knowledge.fetch(self.repo, "project/harness-policy")["revision_id"], after
+            knowledge.fetch(self.repo, "project/harness-settings")["revision_id"], after
         )
         self.assertEqual(knowledge.status(self.repo)["stale"], 1)
 
