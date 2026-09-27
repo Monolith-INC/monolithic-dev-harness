@@ -6,6 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Onboarded trackers are trusted and chosen by click. The agent asks "Trust the <name> tracker as I
+  just described it?" (Trust / Not now), then "Use <name> as this project's tracker now?" (Use it /
+  Keep the current one). The harness pins the tracker folder's exact version when the question is
+  shown, acts only on the user's click, and writes the tracker selection into
+  `.harness/settings.json` itself. "Stop trusting" works the same way. In Cursor, which has no
+  buttons, the user replies `approve HT-XXXXXX`, then `use HT-XXXXXX`, and
+  `stop trusting the <name> tracker` to withdraw trust; each reply counts only as the whole
+  message.
+- `harness tracker stage <folder> --value KEY=VALUE` keeps the values the tracker's settings need
+  (organization, project, ...) in the staged folder, so trusting it covers them. Staging refuses a
+  tracker that is missing a required value.
+
+### Removed
+
+- The typed `harness trust-tracker <name> <digest>` and `harness untrust-tracker <name>` lines.
+
 ## [0.2.0] - 2026-09-26
 
 ### Breaking

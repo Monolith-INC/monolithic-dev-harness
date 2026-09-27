@@ -1,7 +1,8 @@
 """The repository's settings: `.harness/settings.json`, the only settings file.
 
-People write it; the harness reads it once per process and passes the value along. Defaults for
-omitted sections live here and nowhere else. The file's presence is what opts a repository in.
+People write it; the harness reads it once per process and passes the value along. The one thing
+the harness writes into it is the tracker selection, when the user clicks to use a tracker. Defaults
+for omitted sections live here and nowhere else. The file's presence is what opts a repository in.
 """
 
 from __future__ import annotations
@@ -119,6 +120,46 @@ def _read(file: Path) -> Result[Any]:
         OSError,
         ValueError,
     )
+
+
+def write_tracker(repo: Path, tracker: Mapping[str, Any]) -> Result[Path]:
+    """Replace the tracker selection, and only it, after the user clicked to use a tracker.
+
+    People write this file; the one thing the harness writes into it is the tracker the user just
+    chose by click. The result must still be valid settings, or nothing is written.
+    """
+    file = path(repo)
+    return bind(
+        bind(
+            _read(file),
+            lambda raw: (
+                Ok({**raw, "tracker": dict(tracker)})
+                if isinstance(raw, dict)
+                else err(
+                    "invalid_settings", f"{SETTINGS_RELATIVE_PATH} is not an object"
+                )
+            ),
+        ),
+        lambda updated: bind(
+            parse(updated),
+            lambda _: attempt(
+                lambda: _write(file, updated),
+                "unwritable",
+                f"could not write {SETTINGS_RELATIVE_PATH}",
+                OSError,
+            ),
+        ),
+    )
+
+
+def _write(file: Path, raw: Mapping[str, Any]) -> Path:
+    """Write beside the file, then swap it in: readers see the old settings or the new, never half."""
+    tmp = file.with_suffix(file.suffix + ".tmp")
+    tmp.write_text(
+        json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    tmp.replace(file)
+    return file
 
 
 def _conforming(raw: Any) -> Result[Mapping[str, Any]]:

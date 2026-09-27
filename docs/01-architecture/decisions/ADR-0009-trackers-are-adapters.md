@@ -41,9 +41,14 @@ copied into each repository's `integrations.json`; and a repository's settings w
 5. **Rules read every usable tracker.** Which calls write, how ids look, and which text links come
    from every shipped or trusted tracker, not only the selected one, because the Azure DevOps server
    is registered with the host whatever a repository selects.
-6. **Trust is typed by a person.** An onboarded tracker (`.harness/trackers/<name>/`) counts only
-   while its folder matches the digest the user typed in `harness trust-tracker <name> <digest>`.
-   Editing any file drops trust. A generic approval never trusts a tracker.
+6. **Trust is a person's click.** An onboarded tracker (`.harness/trackers/<name>/`) counts only
+   while its folder matches the version the user trusted. The agent asks a question that names the
+   tracker with a **Trust** option; the question hook pins the folder's digest when the question is
+   shown, and the answer hook trusts that digest only on the user's click, and only if the folder
+   has not changed since. A second question (**Use it**) makes the harness write the tracker into
+   `.harness/settings.json`, with the values staged in the folder. Editing any file drops trust. A
+   generic approval never trusts a tracker. Cursor, without buttons, takes the reply
+   `approve HT-XXXXXX` / `use HT-XXXXXX`, where the short id names one version of one tracker.
 7. **Standard library only.** The schema checker is the harness's own (`scripts/core/schema.py`),
    because the hooks run before every tool call on machines with no extra packages.
 8. **Sessions scope enforcement.** A session binds one work item to one checkout; governed code
@@ -57,7 +62,9 @@ copied into each repository's `integrations.json`; and a repository's settings w
   release, and onboarded trackers could not bring their own translation.
 - **Validate manifests with `jsonschema`:** a third-party package in the hook path, which breaks
   every write where it is missing.
-- **Folder contract, one settings file, typed trust (chosen).**
+- **Trust by typing `harness trust-tracker <name> <digest>`:** the first version. It proved the
+  user's intent, but asked people to copy a code and edit the settings file by hand.
+- **Folder contract, one settings file, trust and selection by click (chosen).**
 
 ## Consequences
 
@@ -73,6 +80,8 @@ copied into each repository's `integrations.json`; and a repository's settings w
 - The rules load and check every tracker folder on each call (milliseconds; counted in the hook's
   time budget).
 - The Linear adapter's tool arguments follow Linear's documentation and still need a live check.
+- The trusted version is pinned when the Trust question is shown, not when the tracker was walked
+  through; the gap is recorded as [TD-1](../../06-delivery/tech-debt.md#td-1-a-tracker-can-change-between-the-walkthrough-and-the-trust-question).
 
 ## Host-specific Impact
 

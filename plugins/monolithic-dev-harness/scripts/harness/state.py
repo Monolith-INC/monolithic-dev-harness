@@ -149,21 +149,23 @@ def set_tracking_mode(repo: Path, mode: str) -> str:
 # --- questions shown to the user (approval by click) ------------------------------------------
 
 
-def mark_asked(repo: Path, name: str) -> None:
+def mark_asked(repo: Path, name: str, detail: dict[str, Any] | None = None) -> None:
+    """Mark a question the check let through, with what the hook pinned when it was shown."""
     write_json(
         state_dir(repo) / "asked" / f"{safe_name(name)}.json",
-        {"asked": _now().isoformat()},
+        {**(detail or {}), "asked": _now().isoformat()},
     )
 
 
-def take_asked(repo: Path, name: str) -> bool:
-    """Whether the question-check hook let this question through; the mark is used up."""
+def take_asked(repo: Path, name: str) -> dict[str, Any] | None:
+    """The mark of a question the check let through, or None; the mark is used up."""
     path = state_dir(repo) / "asked" / f"{safe_name(name)}.json"
+    record = read_json(path)
     try:
         path.unlink()
     except OSError:
-        return False
-    return True
+        return None
+    return record if record is not None else {}
 
 
 # --- manual checks (guarded-paths) ------------------------------------------------------------

@@ -98,8 +98,9 @@ project. `session start` needs the checkout to be on the work item's branch (the
 `doctor` prints one line per check (`ok`, `warn`, `skip`, `FAIL`), including the settings, the
 selected tracker, broken tracker folders, the tracking mode, and the checkout's session.
 `session` prints the session id, work item, branch, and phase. `tracker show` and `tracker stage`
-print everything a person needs to review an onboarded tracker, ending with the exact
-`harness trust-tracker` line for the user to type.
+print everything a person needs to review an onboarded tracker, and how to ask the user: a
+**Trust** question, then a **Use it** question, plus the short `HT-` reply id for Cursor.
+`tracker stage` takes `--value KEY=VALUE` for each value the tracker's settings need.
 
 ### Exit Codes
 
@@ -259,5 +260,13 @@ not offered.
 | `approve HB-XXXX` / `aprovo HB-XXXX` | opens an approval window (`approvals.window_minutes`) |
 | `harness revoke` | closes every open window |
 | `harness manual-check <name> ok` | records manual evidence for the currently staged tree |
-| `harness trust-tracker <name> <digest>` | trusts an onboarded tracker exactly as its folder reads now (the digest `harness tracker show` printed) |
-| `harness untrust-tracker <name>` | withdraws that trust |
+| `approve HT-XXXXXX` | Cursor: trusts the onboarded tracker whose current version has that short id |
+| `use HT-XXXXXX` | Cursor: selects that trusted tracker, writing it into the settings file |
+| `stop trusting <tracker>` | Cursor: withdraws trust from the tracker named by label or name |
+
+Each tracker reply counts only as the whole message, so a quoted or negated mention does nothing.
+
+In Claude, the same happens by click: a question that says "tracker", names an onboarded tracker,
+and offers **Trust**, **Use it**, or **Stop trusting**. The question hook pins the tracker's version when the
+question is shown; the answer hook acts only on the user's click, and only if the folder has not
+changed since.
