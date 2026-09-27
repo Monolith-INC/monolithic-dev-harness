@@ -8,6 +8,17 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- Onboarded trackers are trusted and chosen by click. The agent asks "Trust the <name> tracker as I
+  just described it?" (Trust / Not now), then "Use <name> as this project's tracker now?" (Use it /
+  Keep the current one). The harness pins the tracker folder's exact version when the question is
+  shown, acts only on the user's click, and writes the tracker selection into
+  `.harness/settings.json` itself. "Stop trusting" works the same way. In Cursor, which has no
+  buttons, the user replies `approve HT-XXXXXX`, then `use HT-XXXXXX`, and
+  `stop trusting the <name> tracker` to withdraw trust; each reply counts only as the whole
+  message.
+- `harness tracker stage <folder> --value KEY=VALUE` keeps the values the tracker's settings need
+  (organization, project, ...) in the staged folder, so trusting it covers them. Staging refuses a
+  tracker that is missing a required value.
 - Sprint planning is part of the one tracker contract: every tracker's `TrackerOps` provides
   `read_iteration`, `iteration_items`, and `hour_fields`, and every `tracker.json` lists the
   replies its planning reads under `planning.replies` (now required). Azure DevOps, Linear, and the
@@ -20,6 +31,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Removed
 
+- The typed `harness trust-tracker <name> <digest>` and `harness untrust-tracker <name>` lines.
 - The backlog runtime's own Azure DevOps and Linear providers, including its HTTP client that
   used a personal access token; Azure field names and capacity mapping now live only in
   `trackers/azure-devops/adapter.py`.

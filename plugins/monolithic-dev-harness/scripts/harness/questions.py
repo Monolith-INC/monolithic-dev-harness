@@ -8,6 +8,9 @@ Two hooks use this module:
   filled in is refused: only the user answers.
 - After the user answers (`approval`): picking the `Approve` option of a question opens an approval
   window, exactly like typing `approve HB-…`. The click comes from the user, not the agent.
+- Tracker questions (`tracker_action`, `tracker_choice`): a question that says "tracker" and offers
+  `Trust`, `Use it`, or `Stop trusting` is about one onboarded tracker it names. The "before" hook
+  pins that tracker's exact version to the question; the "after" hook acts on the click.
 
 The "before" hook marks each question it let through under `.harness/state/asked/`, a human-owned
 folder. The "after" hook only honours an answer to a marked question, so a question that skipped
@@ -23,6 +26,7 @@ from typing import Any
 MAX_QUESTION_WORDS = 50
 MAX_DESCRIPTION_WORDS = 25
 APPROVE_LABELS = frozenset({"approve", "aprovar", "aprovo"})
+TRACKER_ACTIONS = {"trust": "trust", "use it": "select", "stop trusting": "untrust"}
 
 _RULE_NAMES = (
     "human-owned",
@@ -142,6 +146,43 @@ def approval(tool_input: dict[str, Any], tool_response: Any) -> tuple[str, str] 
         ):
             return text, answer
     return None
+
+
+def _first_question(tool_input: dict[str, Any]) -> dict[str, Any]:
+    questions = tool_input.get("questions") or []
+    first = questions[0] if questions else {}
+    return first if isinstance(first, dict) else {}
+
+
+def tracker_action(tool_input: dict[str, Any]) -> tuple[tuple[str, ...], str] | None:
+    """(actions offered, question text) for a question about a tracker; None for any other.
+
+    It must say "tracker" and offer Trust, Use it, or Stop trusting: "Use it" alone is an
+    everyday label ("Should I reuse the cached build?") and never makes a tracker question.
+    """
+    question = _first_question(tool_input)
+    text = str(question.get("question", ""))
+    actions = tuple(
+        dict.fromkeys(
+            TRACKER_ACTIONS[label]
+            for option in question.get("options") or []
+            if isinstance(option, dict)
+            and (label := str(option.get("label", "")).strip().lower())
+            in TRACKER_ACTIONS
+        )
+    )
+    mentions = re.search(r"\btrackers?\b", text, re.IGNORECASE)
+    return (actions, text) if actions and mentions else None
+
+
+def tracker_choice(tool_input: dict[str, Any], tool_response: Any) -> str | None:
+    """The tracker action the user clicked, or None when they picked anything else."""
+    answers = tool_response.get("answers") if isinstance(tool_response, dict) else None
+    text = str(_first_question(tool_input).get("question", ""))
+    answer = answers.get(text) if isinstance(answers, dict) else None
+    return (
+        TRACKER_ACTIONS.get(answer.strip().lower()) if isinstance(answer, str) else None
+    )
 
 
 def approval_id(tool_use_id: str) -> str:

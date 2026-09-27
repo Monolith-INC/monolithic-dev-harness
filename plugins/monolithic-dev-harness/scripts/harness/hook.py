@@ -64,13 +64,13 @@ REVOKE_RE = re.compile(r"\bharness\s+revoke\b", re.IGNORECASE)
 MANUAL_RE = re.compile(
     r"\bharness\s+manual-check\s+([A-Za-z0-9._-]{1,60})\s+ok\b", re.IGNORECASE
 )
-TRUST_RE = re.compile(
-    r"\bharness\s+trust-tracker\s+([a-z][a-z0-9-]{0,63})\s+([0-9a-f]{12,64})\b",
+# Cursor has no question buttons: the user's whole message is the reply, so a quoted or negated
+# mention ("don't use HT-1A2B3C yet") never counts.
+TRACKER_REPLY_RE = re.compile(
+    r"\s*(approve|aprovo|aprovado|aprovar|use|usar)\s+(HT-[A-Z0-9]{6})\s*[.!]?\s*",
     re.IGNORECASE,
 )
-UNTRUST_RE = re.compile(
-    r"\bharness\s+untrust-tracker\s+([a-z][a-z0-9-]{0,63})\b", re.IGNORECASE
-)
+STOP_TRUSTING_RE = re.compile(r"\s*stop\s+trusting\s+(.+?)\s*[.!]?\s*", re.IGNORECASE)
 DEFAULT_WINDOW_MINUTES = 20
 
 
@@ -243,31 +243,73 @@ def _window(repo: Path) -> int:
             return DEFAULT_WINDOW_MINUTES
 
 
-def _trust_notes(repo: Path, prompt: str) -> list[str]:
-    """Trust or untrust onboarded trackers the user named, each pinned to the digest they typed."""
-    from integrations import registry, trust
+def _tracker_act(
+    repo: Path, action: str, name: str, pinned: str, current: str | None = None
+) -> str:
+    """Trust, select, or stop trusting one onboarded tracker, as the user just chose.
 
-    trusted = [
-        (
-            name,
-            trust.trust(
-                repo, name, repo / registry.ONBOARDED_RELATIVE_PATH / name, digest
-            ),
+    `pinned` is the folder's version when the user was asked; if it changed since, nothing happens.
+    `current` is the folder's version now, when the caller already hashed it.
+    """
+    from integrations import onboarding, registry, trust
+
+    folder = repo / registry.ONBOARDED_RELATIVE_PATH / name
+    manifest = registry.read_manifest(folder, "onboarded")
+    label = manifest.value.label if isinstance(manifest, Ok) else name
+    if current is None:
+        current = trust.digest(folder) if folder.is_dir() else ""
+    if action != "untrust" and current != pinned:
+        return (
+            f"[harness] the {label} tracker changed after the user was asked, so nothing was done. "
+            "Show them what changed and ask again."
         )
-        for name, digest in TRUST_RE.findall(prompt)
-    ]
-    untrusted = [
-        (name, trust.untrust(repo, name)) for name in UNTRUST_RE.findall(prompt)
-    ]
-    return [
-        *(
-            f"[harness] tracker {name} is trusted as it reads now (digest {result.value[:12]})."
-            if isinstance(result, Ok)
-            else f"[harness] tracker {name} was NOT trusted: {result.failure.message}"
-            for name, result in trusted
-        ),
-        *(f"[harness] tracker {name} is no longer trusted." for name, _ in untrusted),
-    ]
+    match action:
+        case "trust":
+            result = trust.trust(repo, name, folder, pinned)
+            return (
+                f"[harness] the user trusts the {label} tracker as it read when they were asked."
+                if isinstance(result, Ok)
+                else f"[harness] the {label} tracker was NOT trusted: {result.failure.message}"
+            )
+        case "select":
+            chosen = onboarding.select(repo, name)
+            return (
+                f"[harness] the project now uses the {label} tracker; the settings were updated."
+                if isinstance(chosen, Ok)
+                else f"[harness] the {label} tracker was NOT selected: {chosen.failure.message}"
+            )
+        case _:
+            removed = trust.untrust(repo, name)
+            return (
+                f"[harness] the {label} tracker is no longer trusted."
+                if isinstance(removed, Ok)
+                else f"[harness] the {label} tracker is STILL trusted: {removed.failure.message}"
+            )
+
+
+def _tracker_reply_notes(repo: Path, prompt: str) -> list[str]:
+    """Cursor's typed replies, each the whole message.
+
+    `approve HT-…` trusts and `use HT-…` selects the version whose short id the user was shown;
+    `stop trusting <tracker>` withdraws trust by name.
+    """
+    from integrations import onboarding
+
+    reply = TRACKER_REPLY_RE.fullmatch(prompt)
+    if reply is not None:
+        verb, short = reply.groups()
+        found = onboarding.by_short_id(repo, short)
+        if found is None:
+            return [
+                f"[harness] no staged tracker matches {short.upper()}; it may have changed since "
+                "it was shown. Show the tracker again and ask."
+            ]
+        manifest, digest = found
+        action = "select" if verb.lower() in ("use", "usar") else "trust"
+        return [_tracker_act(repo, action, manifest.name, digest, current=digest)]
+    stop = STOP_TRUSTING_RE.fullmatch(prompt)
+    name = onboarding.named_in(repo, stop.group(1)) if stop is not None else None
+    return [_tracker_act(repo, "untrust", name, "")] if name is not None else []
 
 
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
@@ -279,7 +321,7 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
             print(json.dumps({"continue": True}))
         return 0
     window = _window(repo)
-    notes.extend(_trust_notes(repo, prompt))
+    notes.extend(_tracker_reply_notes(repo, prompt))
     if REVOKE_RE.search(prompt):
         notes.append(
             f"[harness] revoked {state.revoke_approvals(repo)} open approval window(s)."
@@ -326,10 +368,45 @@ def handle_ask(payload: dict[str, Any]) -> int:
             rules.Decision.deny("plain-questions", questions.rewrite_reason(found)),
         )
         return 0
+    detail = _tracker_question(repo, tool_input)
+    if detail is None:
+        _emit_decision(
+            "claude",
+            rules.Decision.deny(
+                "plain-questions",
+                "This question offers a tracker choice but does not name exactly one staged "
+                'tracker: name the tracker by its label, for example "Trust the Acme Boards '
+                'tracker as I just described it?", so the click applies to that one.',
+            ),
+        )
+        return 0
     tool_use_id = str(payload.get("tool_use_id") or "")
     if tool_use_id:
-        state.mark_asked(repo, questions.marker_name(tool_use_id))
+        state.mark_asked(repo, questions.marker_name(tool_use_id), detail)
     return 0
+
+
+def _tracker_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] | None:
+    """What a tracker question is about, pinned now: {} for other questions, None if unclear.
+
+    A Trust or Stop trusting question must name one onboarded tracker. "Use it" alone may be about
+    anything, a shipped tracker included, so an unmatched one is an ordinary question.
+    """
+    from integrations import onboarding, registry, trust
+
+    asked = questions.tracker_action(tool_input)
+    if asked is None:
+        return {}
+    actions, text = asked
+    name = onboarding.named_in(repo, text)
+    if name is None:
+        return None if {"trust", "untrust"} & set(actions) else {}
+    folder = repo / registry.ONBOARDED_RELATIVE_PATH / name
+    return {
+        "tracker": name,
+        "actions": list(actions),
+        "digest": trust.digest(folder) if folder.is_dir() else "",
+    }
 
 
 def handle_answer(payload: dict[str, Any]) -> int:
@@ -338,9 +415,31 @@ def handle_answer(payload: dict[str, Any]) -> int:
     tool_use_id = str(payload.get("tool_use_id") or "")
     if repo is None or not tool_use_id:
         return 0
-    if not state.take_asked(repo, questions.marker_name(tool_use_id)):
+    asked = state.take_asked(repo, questions.marker_name(tool_use_id))
+    if asked is None:
         return 0  # the question never passed the check, so its answer opens nothing
     tool_input = payload.get("tool_input")
+    if asked.get("tracker"):
+        chosen = questions.tracker_choice(
+            tool_input if isinstance(tool_input, dict) else {},
+            payload.get("tool_response"),
+        )
+        note = (
+            _tracker_act(repo, chosen, asked["tracker"], asked.get("digest", ""))
+            if chosen is not None and chosen in asked.get("actions", ())
+            else f"[harness] nothing changed for the {asked['tracker']} tracker."
+        )
+        print(
+            json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "PostToolUse",
+                        "additionalContext": note,
+                    }
+                }
+            )
+        )
+        return 0
     approved = questions.approval(
         tool_input if isinstance(tool_input, dict) else {}, payload.get("tool_response")
     )
