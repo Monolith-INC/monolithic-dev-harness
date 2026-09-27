@@ -10,17 +10,12 @@ reported by `missing()`, never guessed.
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-_SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
-
-from core.result import Ok  # noqa: E402
-from harness import settings  # noqa: E402
+from core.result import Ok
+from harness import settings
 
 PLUGIN_DIRNAME = ".harness/backlog"
 

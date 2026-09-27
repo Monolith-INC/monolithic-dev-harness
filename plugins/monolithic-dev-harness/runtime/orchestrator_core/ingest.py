@@ -5,6 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from integrations.planning import as_float
+
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 FILENAME_RE = re.compile(r"^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+$")
@@ -26,20 +28,6 @@ class ArtifactRecord:
     raw: str = ""
     effort_hours: float | None = None
     """Estimated duration. None means unestimated -- which is honest, not a failure."""
-
-
-def coerce_float(value: Any) -> float | None:
-    """Best-effort numeric coercion for frontmatter values. Never raises."""
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value.strip())
-        except ValueError:
-            return None
-    return None
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
@@ -106,10 +94,6 @@ def _text_or_none(value: Any) -> str | None:
     return None
 
 
-def _legacy_frontmatter_keys(frontmatter: dict[str, Any]) -> tuple[str, ...]:
-    return tuple(key for key in LEGACY_FRONTMATTER_KEYS if key in frontmatter)
-
-
 def ingest_from_text(text: str, *, filename: str | None = None) -> ArtifactRecord:
     frontmatter, body = parse_frontmatter(text)
     artifact_type = normalize_work_item_type(
@@ -139,7 +123,7 @@ def ingest_from_text(text: str, *, filename: str | None = None) -> ArtifactRecor
         filename=filename,
         frontmatter=frontmatter,
         raw=text,
-        effort_hours=coerce_float(frontmatter.get("effort_hours")),
+        effort_hours=as_float(frontmatter.get("effort_hours")),
     )
 
 
@@ -171,32 +155,5 @@ def ingest_file(path: Path) -> ArtifactRecord:
         filename=path.stem,
         frontmatter=frontmatter,
         raw=raw,
-        effort_hours=coerce_float(frontmatter.get("effort_hours")),
-    )
-
-
-def ingest_azure_record(
-    *,
-    provider: str = "azure-devops",
-    work_item_type: str,
-    title: str,
-    description: str,
-    story_points: float | None,
-    parent_id: str | None,
-    provider_id: str,
-    effort_hours: float | None = None,
-) -> ArtifactRecord:
-    return ArtifactRecord(
-        type=normalize_work_item_type(work_item_type) or work_item_type,
-        title=title,
-        body=description or "",
-        story_points=story_points,
-        parent_id=parent_id,
-        provider=provider,
-        provider_id=provider_id,
-        source="azure",
-        filename=None,
-        frontmatter={},
-        raw=description or "",
-        effort_hours=effort_hours,
+        effort_hours=as_float(frontmatter.get("effort_hours")),
     )

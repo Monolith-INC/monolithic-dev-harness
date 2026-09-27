@@ -52,17 +52,9 @@ Capture at minimum:
 | `Microsoft.VSTS.Common.AcceptanceCriteria` | AC when stored outside Description |
 | `relations` | Attachments, parent link, hyperlinks |
 
-If MCP is unavailable, **REST fallback** (read-only):
-
-```
-GET https://dev.azure.com/{org}/{project}/_apis/wit/workitems/{id}?$expand=All&api-version=7.1
-```
-
-Auth (first match):
-
-1. MCP server credentials (already configured for the host).
-2. `AZURE_DEVOPS_EXT_PAT` or `ADO_PAT` environment variable (Basic auth, empty username).
-3. `az devops` logged-in session (`az login` + `az devops configure`).
+Access is through the host's Azure DevOps MCP server only, signed in interactively (see
+`skills/azure-devops/SKILL.md`); no PAT, no `az login`, no direct REST calls. If the server is
+unavailable, STOP and say so.
 
 On 401/403: STOP — report missing auth; do not enrich from a partial fetch.
 
@@ -123,14 +115,6 @@ Returns base64 content — decode and interpret by extension:
 | `.pdf`, `.docx`, `.xlsx` | Extract or summarize text; note `[binary: <name>]` if extraction fails |
 | `.png`, `.jpg`, `.gif`, `.webp` | Describe visually when the enricher needs UI context; otherwise note `[image: <name>]` |
 | Other | Note `[attachment: <name>, type=<ext>]` and include any extractable text |
-
-**REST fallback:**
-
-```
-GET https://dev.azure.com/{org}/{project}/_apis/wit/attachments/{attachmentId}?fileName={fileName}&download=true&api-version=7.1
-```
-
-Same PAT auth as work-item fetch.
 
 ### Description-referenced URLs (non-attachment)
 
@@ -216,5 +200,5 @@ Normalize before PHASE 2 (route enricher):
 | `wit_work_item_attachment` | Download attachment content (when available on server) |
 | `wit_work_item[get_batch]` | Parent chain batch fetch |
 
-If `wit_work_item_attachment` is missing on an older MCP build, use the REST attachment GET
-documented above.
+If `wit_work_item_attachment` is missing on an older MCP build, note each attachment as
+`[attachment: <name>, not fetched]` and say so in the run summary.

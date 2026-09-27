@@ -22,5 +22,6 @@
   },
   "writes": {"server": "", "tools": []},
   "attachments": {"spec": "artifact", "report": "artifact", "pull_request": "link"},
+  "planning": {"replies": []},
   "text_format": "markdown"
 }

@@ -5,7 +5,7 @@
   "description": "What a tracker is. Its folder also holds adapter.py, which exports adapter(context) -> TrackerOps.",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "name", "label", "docs", "connection", "settings", "kinds", "states", "artifacts", "ids", "writes", "text_format"],
+  "required": ["schemaVersion", "name", "label", "docs", "connection", "settings", "kinds", "states", "artifacts", "ids", "writes", "planning", "text_format"],
   "$defs": {
     "text": {"type": "string", "minLength": 1},
     "texts": {"type": "array", "items": {"$ref": "#/$defs/text"}},
@@ -115,6 +115,26 @@
       "properties": {
         "server": {"type": "string", "description": "Text the MCP server name contains; empty when the tracker has no host-visible server."},
         "tools": {"$ref": "#/$defs/texts", "description": "Tool names; * matches any run of characters."}
+      }
+    },
+    "planning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["replies"],
+      "description": "What the tracker's planning operations (read_iteration, iteration_items) read. A skill fetches each reply through the host's tools and hands them over by key; a tracker that reads its own files lists none.",
+      "properties": {
+        "replies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "description"],
+            "properties": {
+              "key": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+              "description": {"$ref": "#/$defs/text", "description": "Which provider tool to call and with what, in words a skill can follow."}
+            }
+          }
+        }
       }
     },
     "attachments": {"type": "object", "additionalProperties": {"$ref": "#/$defs/text"}},

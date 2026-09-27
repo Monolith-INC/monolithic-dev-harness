@@ -140,6 +140,29 @@ class AzureTest(unittest.TestCase):
         page = self.tracker.search_work_items("x", "").value
         self.assertEqual((len(page.items), page.truncated), (2, False))
 
+    def test_planning_reads_replies_and_names_hour_fields(self) -> None:
+        tracker = ops("azure-devops", {**AZURE, "process": "Scrum"}, self.call)
+        replies = {
+            "iteration": {
+                "value": [
+                    {"name": "S0", "attributes": {"timeFrame": 0}},
+                    {
+                        "name": "S1",
+                        "attributes": {"timeFrame": 1, "startDate": "2026-08-03"},
+                    },
+                ]
+            },
+            "work_items": {"value": [{"body": json.dumps(ado_item(5, "Task", "New"))}]},
+        }
+        reading = tracker.read_iteration(replies, "current").value
+        self.assertEqual(str(reading.capacity.start_date), "2026-08-03")
+        (item,) = tracker.iteration_items(replies, "current").value
+        self.assertEqual(item.item_id, "5")
+        self.assertEqual(
+            dict(tracker.hour_fields(4.0, True)),
+            {"/fields/Microsoft.VSTS.Scheduling.RemainingWork": 4.0},
+        )
+
     def test_link_sends_a_hyperlink(self) -> None:
         self.assertEqual(
             self.tracker.link_development_artifact(
@@ -233,6 +256,47 @@ class LinearTest(unittest.TestCase):
         )
         self.assertEqual(tracker.get_work_item("ENG-1").failure.code, "provider_error")
 
+    def test_planning_reads_cycle_dates_and_issue_estimates(self) -> None:
+        replies = {
+            "cycle": [
+                {
+                    "number": 7,
+                    "startsAt": "2026-08-03T00:00:00Z",
+                    "endsAt": "2026-08-14",
+                }
+            ],
+            "issues": {
+                "issues": [
+                    {
+                        **self.issue("ENG-2"),
+                        "estimate": 3,
+                        "assignee": {"name": "Ana"},
+                        "cycle": {"number": 7},
+                    },
+                    {"title": "no identifier"},
+                ]
+            },
+        }
+        reading = self.tracker.read_iteration(replies, "current").value
+        self.assertEqual(
+            (str(reading.capacity.start_date), str(reading.capacity.finish_date)),
+            ("2026-08-03", "2026-08-14"),
+        )
+        self.assertEqual(reading.capacity.members, ())
+        self.assertIn("no team capacity", reading.warnings[0])
+        (item,) = self.tracker.iteration_items(replies, "current").value
+        self.assertEqual(
+            (
+                item.item_id,
+                item.points,
+                item.assigned_to,
+                item.item_type,
+                item.iteration,
+            ),
+            ("ENG-2", 3.0, "Ana", "user_story", "7"),
+        )
+        self.assertEqual(dict(self.tracker.hour_fields(4.0, True)), {})
+
 
 class LocalTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -292,6 +356,44 @@ class LocalTest(unittest.TestCase):
         self.assertTrue(linked["linked"])
         self.assertEqual(
             len(self.tracker.get_work_item(story.key).value.provider_data["links"]), 1
+        )
+
+    def test_planning_reads_the_capacity_file_and_sprint_items(self) -> None:
+        folder = self.repo / ".harness/tracker/capacity"
+        folder.mkdir(parents=True)
+        (folder / "S1.json").write_text(
+            json.dumps(
+                {
+                    "startDate": "2026-08-03",
+                    "finishDate": "2026-08-14",
+                    "members": [{"name": "Ana", "activities": [{"capacityPerDay": 6}]}],
+                }
+            )
+        )
+        story = self.tracker.create_work_item(
+            WorkItemKind.USER_STORY, "S", "", ""
+        ).value
+        path = self.repo / ".harness/tracker/backlog" / f"{story.key}.json"
+        record = json.loads(path.read_text())
+        path.write_text(
+            json.dumps({**record, "iteration": "S1", "points": 5, "remainingHours": 8})
+        )
+        reading = self.tracker.read_iteration({}, "S1").value
+        self.assertEqual(reading.capacity.members[0].daily_hours, 6.0)
+        (item,) = self.tracker.iteration_items({}, "S1").value
+        self.assertEqual(
+            (item.item_id, item.points, item.planned_hours), (story.key, 5.0, 8.0)
+        )
+        self.assertEqual(self.tracker.iteration_items({}, "S2").value, ())
+        self.assertIn(
+            "no capacity file", self.tracker.read_iteration({}, "S2").value.warnings[0]
+        )
+        self.assertEqual(
+            dict(self.tracker.hour_fields(4.0, True)),
+            {"remainingHours": 4.0, "estimatedHours": 4.0},
+        )
+        self.assertEqual(
+            dict(self.tracker.hour_fields(4.0, False)), {"remainingHours": 4.0}
         )
 
     def test_search_pages_and_missing_items(self) -> None:

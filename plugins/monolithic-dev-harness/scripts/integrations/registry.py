@@ -43,6 +43,7 @@ from .contracts import (
     IdRules,
     LogicalState,
     Manifest,
+    PlanningReply,
     TrackerOps,
     Transport,
     WorkItemKind,
@@ -164,6 +165,7 @@ def _consistent(folder: Path, document: Mapping[str, Any]) -> Result[None]:
     }
     kinds = document["kinds"]
     settings = tuple(str(item["key"]) for item in document["settings"])
+    replies = tuple(str(item["key"]) for item in document["planning"]["replies"])
     return bind(
         sequence(
             (
@@ -209,6 +211,11 @@ def _consistent(folder: Path, document: Mapping[str, Any]) -> Result[None]:
                     len(set(settings)) == len(settings),
                     "invalid_tracker",
                     "setting keys must be unique",
+                ),
+                require(
+                    len(set(replies)) == len(replies),
+                    "invalid_tracker",
+                    "planning reply keys must be unique",
                 ),
                 _placeholders(document["connection"], frozenset(settings)),
             )
@@ -336,6 +343,10 @@ def _manifest(folder: Path, source: str, document: Mapping[str, Any]) -> Manifes
         tools=MappingProxyType(dict(document.get("tools", {}))),
         connection=MappingProxyType(dict(document["connection"])),
         settings=tuple(str(item["key"]) for item in document["settings"]),
+        planning=tuple(
+            PlanningReply(str(item["key"]), str(item["description"]))
+            for item in document["planning"]["replies"]
+        ),
         required_settings=tuple(
             str(item["key"]) for item in document["settings"] if item["required"]
         ),
@@ -574,15 +585,19 @@ def build(active: Active, repo: Path, call: Transport) -> Result[TrackerOps]:
     )
 
 
-def _adapter_function(manifest: Manifest) -> Result[Any]:
+def _adapter_module(manifest: Manifest) -> Result[Any]:
     module_name = f"harness_tracker_{manifest.source}_{manifest.name.replace('-', '_')}"
+    return attempt(
+        lambda: _import(module_name, manifest.root / ADAPTER),
+        "invalid_tracker",
+        f"{manifest.name}/{ADAPTER} could not be loaded",
+        Exception,
+    )
+
+
+def _adapter_function(manifest: Manifest) -> Result[Any]:
     return bind(
-        attempt(
-            lambda: _import(module_name, manifest.root / ADAPTER),
-            "invalid_tracker",
-            f"{manifest.name}/{ADAPTER} could not be loaded",
-            Exception,
-        ),
+        _adapter_module(manifest),
         lambda module: (
             Ok(module.adapter)
             if callable(getattr(module, "adapter", None))

@@ -6,6 +6,10 @@ A tracker is two things in its folder (`trackers/<name>/`): `tracker.json`, chec
 record of functions, so an adapter that leaves one out cannot be built. Every function returns an
 `Ok`/`Err` value; none raises for an expected condition.
 
+Every tracker plans too: it reads a sprint and its items into the model in `planning.py` and names
+the fields that record hours. The replies it reads are the ones its manifest lists under
+`planning.replies`, fetched by a skill through the host's tools and handed over as a mapping.
+
 Values are plain and immutable. Text that is absent is `""`, never `None`.
 """
 
@@ -19,6 +23,8 @@ from types import MappingProxyType
 from typing import Any
 
 from core.result import Result
+
+from .planning import EstimableItem, IterationReading
 
 EMPTY: Mapping[str, Any] = MappingProxyType({})
 
@@ -154,6 +160,14 @@ class Artifact:
 
 
 @dataclass(frozen=True)
+class PlanningReply:
+    """A provider reply the tracker's planning operations read, and what to fetch for it."""
+
+    key: str
+    description: str
+
+
+@dataclass(frozen=True)
 class Manifest:
     """A checked `tracker.json`. `document` keeps the file as read, for `tracker_describe`."""
 
@@ -171,6 +185,7 @@ class Manifest:
     settings: tuple[str, ...]
     required_settings: tuple[str, ...]
     text_format: str
+    planning: tuple[PlanningReply, ...]
     document: Mapping[str, Any] = field(compare=False)
 
 
@@ -192,6 +207,13 @@ class TrackerOps:
     list_artifacts: Callable[[str], Result[tuple[ArtifactRef, ...]]]
     add_artifact: Callable[[str, ArtifactDraft], Result[ArtifactRef]]
     link_development_artifact: Callable[[str, str, str], Result[Mapping[str, Any]]]
+    # Planning: (replies, iteration ref) in. Hour fields: (hours, first estimate) -> the provider
+    # fields to write; empty when the tracker records no hours.
+    read_iteration: Callable[[Mapping[str, Any], str], Result[IterationReading]]
+    iteration_items: Callable[
+        [Mapping[str, Any], str], Result[tuple[EstimableItem, ...]]
+    ]
+    hour_fields: Callable[[float, bool], Mapping[str, float]]
 
 
 @dataclass(frozen=True)

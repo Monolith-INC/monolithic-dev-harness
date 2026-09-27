@@ -2,8 +2,11 @@
 
     .harness/tracker/<state>/<KEY>.json          a work item, in the folder of its state
     .harness/tracker/artifacts/<KEY>/<file>.md   its artifacts, in the shared artifact format
+    .harness/tracker/capacity/<sprint>.json      a sprint's dates and team, in the capacity format
 
-Keys are `<PREFIX>-<number>` (`STORY-0007`). Hierarchy follows the manifest's artifacts.
+Keys are `<PREFIX>-<number>` (`STORY-0007`). Hierarchy follows the manifest's artifacts. A work
+item joins a sprint through its `iteration`; its estimate is `points`, its hours `remainingHours`,
+`estimatedHours`, and `completedHours`. Planning reads these files, so it needs no replies.
 """
 
 from __future__ import annotations
@@ -28,6 +31,7 @@ from integrations.contracts import (
     WorkItem,
     WorkItemKind,
 )
+from integrations.planning import EstimableItem, as_float, read_capacity_file
 
 ROOT = Path(".harness") / "tracker"
 PAGE_SIZE = 50
@@ -78,6 +82,21 @@ def adapter(context: AdapterContext) -> TrackerOps:
         link_development_artifact=lambda ref, url, kind: bind(
             _find(context, root, ref), lambda found: _link(found, url, kind)
         ),
+        read_iteration=lambda replies, ref: read_capacity_file(
+            root / "capacity" / f"{_safe(ref)}.json", ref
+        ),
+        iteration_items=lambda replies, ref: fmap(
+            _records(context, root),
+            lambda found: tuple(
+                _estimable(record)
+                for _, record in found
+                if str(record.get("iteration") or "") == ref
+            ),
+        ),
+        hour_fields=lambda hours, first: {
+            "remainingHours": hours,
+            **({"estimatedHours": hours} if first and hours > 0 else {}),
+        },
     )
 
 
@@ -351,4 +370,20 @@ def _link(found: Record, url: str, kind: str) -> Result[Mapping[str, Any]]:
             _write(path, {**record, "links": [*links, link], "updatedAt": _now()}),
             lambda _: reply,
         )
+    )
+
+
+def _estimable(record: Mapping[str, Any]) -> EstimableItem:
+    return EstimableItem(
+        item_id=str(record["key"]),
+        title=str(record.get("title", "")),
+        item_type=str(record.get("kind", "")),
+        points=as_float(record.get("points")),
+        estimated_hours=as_float(record.get("estimatedHours")),
+        remaining_hours=as_float(record.get("remainingHours")),
+        completed_hours=as_float(record.get("completedHours")),
+        activity=str(record.get("activity") or "") or None,
+        assigned_to=str(record.get("assignedTo") or "") or None,
+        state=str(record.get("state", "")),
+        iteration=str(record.get("iteration") or "") or None,
     )

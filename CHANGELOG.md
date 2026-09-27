@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Sprint planning is part of the one tracker contract: every tracker's `TrackerOps` provides
+  `read_iteration`, `iteration_items`, and `hour_fields`, and every `tracker.json` lists the
+  replies its planning reads under `planning.replies` (now required). Azure DevOps, Linear, and the
+  local tracker all implement them; Linear reports cycle dates and point estimates but no team
+  capacity or hours.
+- The backlog runtime reads sprints only through the selected tracker: `capacity --provider`
+  takes `filesystem` or `tracker`, and `--process` is gone (the process comes from the settings).
+- The local tracker reads a sprint from `.harness/tracker/capacity/<sprint>.json`, the same format
+  as the planning files under `artifacts_path`, through one shared parser.
+
+### Removed
+
+- The backlog runtime's own Azure DevOps and Linear providers, including its HTTP client that
+  used a personal access token; Azure field names and capacity mapping now live only in
+  `trackers/azure-devops/adapter.py`.
+- The personal-access-token and direct REST fallbacks in the enrich skill's Azure reference.
+
 ## [0.2.0] - 2026-09-26
 
 ### Breaking

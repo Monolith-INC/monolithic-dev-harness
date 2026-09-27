@@ -65,10 +65,12 @@ scripts/integrations/   contracts (TrackerOps, ScmOps, domain types), registry, 
   delivery, harness), `ruff check`, `ruff format --check`, `shellcheck`, `scripts/check_repo.py`,
   `scripts/check_versions.py`, `markdownlint-cli2`. Not run locally: `claude plugin validate` and the
   sandboxed install job (CI runs them).
-- Out of scope, noted for later: the backlog runtime keeps its own Azure DevOps and Linear providers
-  (`runtime/orchestrator_core/providers/`), a second translation layer beside the tracker adapters.
+- Follow-up done on `codex/scoped-sessions` after the merge: the backlog runtime's own Azure DevOps
+  and Linear providers are gone. Planning (`read_iteration`, `iteration_items`, `hour_fields`) is a
+  required part of `TrackerOps` for every tracker, `tracker.json` declares `planning.replies`, and
+  number, date, and capacity-file reading is shared in `scripts/integrations/planning.py`.
 
 ## Next
 
-Nothing left in this rework. Follow-ups: the live Linear check, and folding the backlog runtime's
-providers onto the tracker adapters.
+Nothing left in this rework. Follow-up: the live Linear check (including `list_cycles` for
+planning).

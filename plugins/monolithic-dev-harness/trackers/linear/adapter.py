@@ -2,6 +2,8 @@
 
 Issues are addressed by their identifier (`ENG-12`). The harness work kind travels as an issue
 label named in the manifest's `kinds`; artifacts and development links are issue comments.
+A sprint is a cycle: Linear knows its dates and each issue's point estimate, but no team capacity
+and no hours, so planning reports that and names no hour fields.
 """
 
 from __future__ import annotations
@@ -12,12 +14,25 @@ from typing import Any
 from core.result import Ok, Result, bind, err, fmap
 from integrations import artifacts, payloads
 from integrations.contracts import (
+    EMPTY,
     AdapterContext,
     LogicalState,
     Page,
     TrackerOps,
     WorkItem,
     WorkItemKind,
+)
+from integrations.planning import (
+    EstimableItem,
+    IterationCapacity,
+    IterationReading,
+    first_number,
+    parse_date,
+)
+
+NO_CAPACITY = (
+    "Linear records no team capacity; only the cycle's dates are known, so availability is "
+    "not checked"
 )
 
 
@@ -69,6 +84,15 @@ def adapter(context: AdapterContext) -> TrackerOps:
             call("comment", {"issueId": ref.upper(), "body": f"{kind}: {url}"}),
             payloads.mapping,
         ),
+        read_iteration=lambda replies, ref: Ok(_cycle(replies.get("cycle"), ref)),
+        iteration_items=lambda replies, ref: Ok(
+            tuple(
+                _estimable(context, record)
+                for record in payloads.records(replies.get("issues"))
+                if payloads.text(record, "identifier", "id")
+            )
+        ),
+        hour_fields=lambda hours, first: EMPTY,
     )
 
 
@@ -145,4 +169,38 @@ def _parent(record: Mapping[str, Any]) -> str:
 def _comment(reply: Any) -> Mapping[str, Any]:
     return payloads.mapping(
         reply.get("comment", reply) if isinstance(reply, dict) else reply
+    )
+
+
+def _cycle(reply: Any, iteration_ref: str) -> IterationReading:
+    """A cycle's dates, from one cycle or a listing whose first entry is the one asked for."""
+    cycle = (
+        reply
+        if isinstance(reply, dict) and ("startsAt" in reply or "endsAt" in reply)
+        else next(iter(payloads.records(reply)), EMPTY)
+    )
+    return IterationReading(
+        IterationCapacity(
+            iteration_ref=iteration_ref,
+            start_date=parse_date(cycle.get("startsAt")),
+            finish_date=parse_date(cycle.get("endsAt")),
+        ),
+        (NO_CAPACITY,),
+    )
+
+
+def _estimable(context: AdapterContext, record: Mapping[str, Any]) -> EstimableItem:
+    item = work_item(context, record)
+    person = payloads.object_or_empty(record.get("assignee"))
+    cycle = payloads.object_or_empty(record.get("cycle"))
+    return EstimableItem(
+        item_id=item.id,
+        title=item.title,
+        item_type=item.kind.value,
+        points=first_number(record, "estimate"),
+        assigned_to=payloads.text(person, "displayName", "name")
+        or payloads.text(record, "assignee")
+        or None,
+        state=_name(record.get("state") or record.get("status")),
+        iteration=payloads.text(cycle, "name", "number") or None,
     )

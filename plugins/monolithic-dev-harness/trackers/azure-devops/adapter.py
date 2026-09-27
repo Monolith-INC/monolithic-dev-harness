@@ -24,15 +24,110 @@ from integrations.contracts import (
     WorkItem,
     WorkItemKind,
 )
-
-FIELDS = (
-    "System.Id",
-    "System.Title",
-    "System.WorkItemType",
-    "System.State",
-    "System.Description",
-    "System.Parent",
+from integrations.planning import (
+    DEFAULT_WEEKEND_DAYS,
+    ActivityCapacity,
+    DateRange,
+    EstimableItem,
+    IterationCapacity,
+    IterationReading,
+    MemberCapacity,
+    as_float,
+    date_ranges,
+    first_number,
+    parse_date,
 )
+
+# The single home of the Azure DevOps field reference names this tracker reads and writes.
+# -- Backlog tier: relative size ------------------------------------------
+# All three map to the same `Effort` slot in the project's process configuration, which is
+# why any of them can feed velocity and the burndown's "sum of" selector. Which one exists
+# depends on the process the project was created from.
+STORY_POINTS = "Microsoft.VSTS.Scheduling.StoryPoints"  # Agile: User Story, Bug
+EFFORT = "Microsoft.VSTS.Scheduling.Effort"  # Scrum: Product Backlog Item, Bug
+SIZE = "Microsoft.VSTS.Scheduling.Size"  # CMMI: Requirement
+
+# -- Task tier: absolute hours --------------------------------------------
+REMAINING_WORK = "Microsoft.VSTS.Scheduling.RemainingWork"
+"""Drives capacity bars and the sprint burndown. Present on every process."""
+
+ORIGINAL_ESTIMATE = "Microsoft.VSTS.Scheduling.OriginalEstimate"
+"""NOT present on Scrum projects -- guard every write with `supports_original_estimate`."""
+
+COMPLETED_WORK = "Microsoft.VSTS.Scheduling.CompletedWork"
+"""NOT present on Scrum projects."""
+
+ACTIVITY = "Microsoft.VSTS.Common.Activity"
+"""Named `Discipline` in CMMI. Allowed values are configured per project."""
+
+DISCIPLINE = "Microsoft.VSTS.Common.Discipline"  # CMMI equivalent of Activity
+
+# -- System fields ---------------------------------------------------------
+TITLE = "System.Title"
+DESCRIPTION = "System.Description"
+WORK_ITEM_TYPE = "System.WorkItemType"
+STATE = "System.State"
+PARENT = "System.Parent"
+ASSIGNED_TO = "System.AssignedTo"
+ITERATION_PATH = "System.IterationPath"
+
+# -- Processes -------------------------------------------------------------
+PROCESS_AGILE = "agile"
+PROCESS_SCRUM = "scrum"
+PROCESS_CMMI = "cmmi"
+
+DEFAULT_PROCESS = PROCESS_AGILE
+
+POINTS_FIELD_BY_PROCESS = {
+    PROCESS_AGILE: STORY_POINTS,
+    PROCESS_SCRUM: EFFORT,
+    PROCESS_CMMI: SIZE,
+}
+
+ACTIVITY_FIELD_BY_PROCESS = {
+    PROCESS_AGILE: ACTIVITY,
+    PROCESS_SCRUM: ACTIVITY,
+    PROCESS_CMMI: DISCIPLINE,
+}
+
+
+def normalize_process(value: str | None) -> str:
+    """The process a name refers to; Agile when the name is missing or unrecognised."""
+    text = (value or "").strip().lower()
+    return next(
+        (
+            known
+            for known in (PROCESS_SCRUM, PROCESS_CMMI, PROCESS_AGILE)
+            if known in text
+        ),
+        DEFAULT_PROCESS,
+    )
+
+
+def points_field(process: str | None = None) -> str:
+    return POINTS_FIELD_BY_PROCESS[normalize_process(process)]
+
+
+def activity_field(process: str | None = None) -> str:
+    return ACTIVITY_FIELD_BY_PROCESS[normalize_process(process)]
+
+
+def supports_original_estimate(process: str | None = None) -> bool:
+    """Scrum ships only Remaining Work; Agile and CMMI ship all three scheduling fields.
+
+    Writing Original Estimate to a Scrum project fails or silently drops the value, so an
+    unstated process counts as unsupported: Remaining Work, which every process has, is enough.
+    """
+    return bool((process or "").strip()) and normalize_process(process) != PROCESS_SCRUM
+
+
+def field_ref(field_name: str) -> str:
+    """JSON-Patch path for a field, as `wit_work_item_write[update]` expects it."""
+    return f"/fields/{field_name}"
+
+
+ID = "System.Id"
+FIELDS = (ID, TITLE, WORK_ITEM_TYPE, STATE, DESCRIPTION, PARENT)
 LIMIT = (
     200  # the server's cap on one WIQL result, one batch read, and one page of comments
 )
@@ -43,6 +138,7 @@ WIQL_FIELD = re.compile(r"\[[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+\]")
 def adapter(context: AdapterContext) -> TrackerOps:
     call = _caller(context)
     read = _reader(context, call)
+    process = context.values.get("process", "")
     return TrackerOps(
         get_work_item=read,
         search_work_items=lambda query, cursor: _search(context, call, query),
@@ -82,6 +178,11 @@ def adapter(context: AdapterContext) -> TrackerOps:
                 payloads.mapping,
             ),
         ),
+        read_iteration=lambda replies, ref: Ok(_reading(replies, ref)),
+        iteration_items=lambda replies, ref: Ok(
+            map_work_items(replies.get("work_items"), process=process)
+        ),
+        hour_fields=lambda hours, first: _hour_fields(process, hours, first),
     )
 
 
@@ -149,20 +250,20 @@ def work_item(context: AdapterContext, record: Mapping[str, Any]) -> WorkItem:
     link = ((record.get("_links") or {}).get("html") or {}).get("href")
     manifest = context.manifest
     return WorkItem(
-        id=payloads.text(record, "id") or payloads.text(fields, "System.Id"),
-        key=payloads.text(record, "id") or payloads.text(fields, "System.Id"),
-        title=payloads.text(fields, "System.Title"),
+        id=payloads.text(record, "id") or payloads.text(fields, ID),
+        key=payloads.text(record, "id") or payloads.text(fields, ID),
+        title=payloads.text(fields, TITLE),
         kind=payloads.reverse(
             manifest.kinds,
-            payloads.text(fields, "System.WorkItemType"),
+            payloads.text(fields, WORK_ITEM_TYPE),
             WorkItemKind.TASK,
         ),
         state=payloads.reverse(
-            manifest.states, payloads.text(fields, "System.State"), LogicalState.BACKLOG
+            manifest.states, payloads.text(fields, STATE), LogicalState.BACKLOG
         ),
         url=str(link or record.get("url") or ""),
-        description=payloads.text(fields, "System.Description"),
-        parent_id=payloads.text(fields, "System.Parent"),
+        description=payloads.text(fields, DESCRIPTION),
+        parent_id=payloads.text(fields, PARENT),
         provider_data=record,
     )
 
@@ -263,7 +364,7 @@ def _create(
             {
                 "workItemType": work_type,
                 "fields": [
-                    {"name": "System.Title", "value": title},
+                    {"name": TITLE, "value": title},
                     {
                         "name": "System.Description",
                         "value": description,
@@ -293,7 +394,7 @@ def _transition(
     update = [
         {
             "op": "add",
-            "path": "/fields/System.State",
+            "path": field_ref(STATE),
             "value": context.manifest.states[state],
         }
     ]
@@ -333,4 +434,226 @@ def _comment(call, ref: str, draft: ArtifactDraft) -> Result[ArtifactRef]:
             ),
             lambda reply: artifacts.added(payloads.mapping(reply), draft),
         ),
+    )
+
+
+# --- planning: the sprint, its items, and the fields that record hours ----------------------
+
+
+def _reading(replies: Mapping[str, Any], iteration_ref: str) -> IterationReading:
+    """The sprint from the replies the manifest's `planning.replies` names."""
+    listing = replies.get("iteration")
+    sprint = current_iteration(listing) or (
+        listing if isinstance(listing, dict) and not payloads.records(listing) else None
+    )
+    return IterationReading(
+        map_iteration(
+            iteration_ref,
+            iteration=sprint,
+            capacities=replies.get("capacities"),
+            team_settings=replies.get("team_settings"),
+        ),
+        (
+            ()
+            if sprint is not None or listing is None
+            else ("the iteration reply names no current sprint, so it has no dates",)
+        )
+        + _capacity_cross_check(replies.get("capacities")),
+    )
+
+
+def _hour_fields(process: str | None, hours: float, first: bool) -> Mapping[str, float]:
+    """Remaining Work always; Original Estimate once, on a task's first estimate, where it exists."""
+    return {
+        field_ref(REMAINING_WORK): hours,
+        **(
+            {field_ref(ORIGINAL_ESTIMATE): hours}
+            if first and hours > 0 and supports_original_estimate(process)
+            else {}
+        ),
+    }
+
+
+WEEKDAY_INDEX = {
+    "monday": 0,
+    "tuesday": 1,
+    "wednesday": 2,
+    "thursday": 3,
+    "friday": 4,
+    "saturday": 5,
+    "sunday": 6,
+}
+
+
+def _weekday_index(value: Any) -> int | None:
+    """One working-day entry as Python's weekday number (Monday = 0).
+
+    Azure sends day names through the REST API but integers through the MCP server, and those
+    count from Sunday = 0 the JavaScript way; a team working [1,2,3,4,5] works Monday to Friday.
+    """
+    match value:
+        case bool():
+            return None
+        case int():
+            return (value - 1) % 7 if 0 <= value <= 6 else None
+        case _:
+            text = str(value).strip().lower()
+            return (
+                _weekday_index(int(text)) if text.isdigit() else WEEKDAY_INDEX.get(text)
+            )
+
+
+def map_days_off(payload: Any) -> tuple[DateRange, ...]:
+    """A daysOff list, bare or under a `daysOff` key."""
+    return date_ranges(payload.get("daysOff") if isinstance(payload, dict) else payload)
+
+
+def map_capacities(payload: Any) -> tuple[MemberCapacity, ...]:
+    """The team capacity reply: one member per entry, with hours per day for each activity."""
+    return tuple(_member(entry) for entry in payloads.records(payload))
+
+
+def _member(entry: Mapping[str, Any]) -> MemberCapacity:
+    person = payloads.object_or_empty(entry.get("teamMember"))
+    return MemberCapacity(
+        member_id=payloads.text(person, "id"),
+        display_name=payloads.text(person, "displayName"),
+        # An unreadable figure is left out rather than counted as zero; the cross-check against
+        # Azure's own total reports the shortfall.
+        activities=tuple(
+            ActivityCapacity(payloads.text(activity, "name"), per_day)
+            for activity in payloads.records(entry.get("activities"))
+            if (per_day := as_float(activity.get("capacityPerDay"))) is not None
+        ),
+        days_off=map_days_off(entry.get("daysOff")),
+    )
+
+
+# Azure's iteration timeFrame: 0 past, 1 current, 2 future.
+TIMEFRAME_CURRENT = 1
+
+
+def current_iteration(payload: Any) -> Mapping[str, Any] | None:
+    """The active sprint in an iteration listing, or None when none is marked active.
+
+    A `timeframe: current` query returns only the active sprint, so a lone unmarked entry is it.
+    An entry marked past or future is never taken as current.
+    """
+    entries = payloads.records(payload)
+    unmarked = tuple(entry for entry in entries if _time_frame(entry) is None)
+    return next(
+        (entry for entry in entries if _time_frame(entry) == TIMEFRAME_CURRENT),
+        unmarked[0] if len(entries) == 1 and unmarked else None,
+    )
+
+
+def _time_frame(entry: Mapping[str, Any]) -> Any:
+    return payloads.object_or_empty(entry.get("attributes")).get("timeFrame")
+
+
+def reported_daily_total(payload: Any) -> float | None:
+    """Azure's own `totalCapacityPerDay`, when the capacity reply carries it."""
+    return (
+        as_float(payload.get("totalCapacityPerDay"))
+        if isinstance(payload, dict)
+        else None
+    )
+
+
+def map_weekend_days(team_settings: Any) -> tuple[int, ...] | None:
+    """The days a team does not work, from the working days its settings state.
+
+    None means "not stated" (no settings, or no readable day), so the default stays. An empty
+    tuple is a real answer: a team that works all seven days has no weekend.
+    """
+    working = payloads.object_or_empty(team_settings).get("workingDays")
+    worked = frozenset(
+        index
+        for index in map(_weekday_index, working if isinstance(working, list) else ())
+        if index is not None
+    )
+    return tuple(sorted(frozenset(range(7)) - worked)) if worked else None
+
+
+def map_iteration(
+    iteration_ref: str,
+    *,
+    iteration: Any = None,
+    capacities: Any = None,
+    team_settings: Any = None,
+) -> IterationCapacity:
+    """A sprint from the three Azure replies that describe it."""
+    sprint = payloads.object_or_empty(iteration)
+    attributes = payloads.object_or_empty(sprint.get("attributes"))
+    weekend = map_weekend_days(team_settings)
+    return IterationCapacity(
+        iteration_ref=iteration_ref,
+        start_date=parse_date(attributes.get("startDate") or sprint.get("startDate")),
+        finish_date=parse_date(
+            attributes.get("finishDate") or sprint.get("finishDate")
+        ),
+        members=map_capacities(capacities),
+        team_days_off=map_days_off(
+            payloads.object_or_empty(team_settings).get("teamDaysOff")
+        ),
+        weekend_days=DEFAULT_WEEKEND_DAYS if weekend is None else weekend,
+    )
+
+
+def map_work_item(payload: Any, *, process: str | None = None) -> EstimableItem | None:
+    """One work item as the planner sees it; None when the record carries no id."""
+    record = payloads.object_or_empty(payload)
+    fields = payloads.object_or_empty(record.get("fields"))
+    item_id = payloads.text(record, "id") or payloads.text(fields, ID)
+    person = fields.get(ASSIGNED_TO)
+    assigned = (
+        payloads.text(person, "displayName", "uniqueName")
+        if isinstance(person, dict)
+        else str(person or "")
+    )
+    activity = payloads.text(fields, activity_field(process), ACTIVITY)
+    return (
+        EstimableItem(
+            item_id=item_id,
+            title=payloads.text(fields, TITLE),
+            item_type=payloads.text(fields, WORK_ITEM_TYPE),
+            points=first_number(
+                fields, points_field(process), STORY_POINTS, EFFORT, SIZE
+            ),
+            estimated_hours=as_float(fields.get(ORIGINAL_ESTIMATE)),
+            remaining_hours=as_float(fields.get(REMAINING_WORK)),
+            completed_hours=as_float(fields.get(COMPLETED_WORK)),
+            activity=activity or None,
+            assigned_to=assigned or None,
+            state=payloads.text(fields, STATE),
+            iteration=payloads.text(fields, ITERATION_PATH) or None,
+        )
+        if item_id
+        else None
+    )
+
+
+def map_work_items(
+    payload: Any, *, process: str | None = None
+) -> tuple[EstimableItem, ...]:
+    return tuple(
+        item
+        for item in (
+            map_work_item(record, process=process) for record in _records(payload)
+        )
+        if item is not None
+    )
+
+
+def _capacity_cross_check(capacities: Any) -> tuple[str, ...]:
+    """The mapped per-member total against Azure's own; a gap means someone was misread."""
+    reported = reported_daily_total(capacities)
+    mapped = round(sum(member.daily_hours for member in map_capacities(capacities)), 2)
+    return (
+        ()
+        if reported is None or abs(mapped - reported) < 0.01
+        else (
+            f"capacity mismatch: mapped {mapped:g}h/day but Azure reports {reported:g}h/day — "
+            "some members or activities could not be read, so availability is understated",
+        )
     )

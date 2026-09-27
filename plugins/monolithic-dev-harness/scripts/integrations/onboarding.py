@@ -99,6 +99,7 @@ def _summary(repo: Path, manifest: Manifest) -> str:
         f"  writes (need approval): server {manifest.writes.server or '-'}, tools {list(manifest.writes.tools)}",
         f"  ids: {manifest.ids.pattern}; branch key: {manifest.ids.branch_key}",
         f"  mentions link items: {manifest.ids.mentions_link}; forms: {list(manifest.ids.mention)}",
+        f"  planning reads: {[reply.key for reply in manifest.planning] or 'its own files'}",
         f"  settings: {list(manifest.settings)} (required: {list(manifest.required_settings)})",
         f"  files: {list(files)}",
         f"  digest: {digest}",

@@ -16,6 +16,9 @@ LIST_KEYS = (
     "threads",
     "comments",
     "issues",
+    "teamMembers",
+    "iterations",
+    "values",
 )
 
 
@@ -72,3 +75,8 @@ def normalized(value: str) -> str:
 
 def mapping(reply: Any) -> Mapping[str, Any]:
     return reply if isinstance(reply, dict) else {"result": reply}
+
+
+def object_or_empty(value: Any) -> Mapping[str, Any]:
+    """A nested object from a reply, or an empty one when the reply holds something else there."""
+    return value if isinstance(value, dict) else {}

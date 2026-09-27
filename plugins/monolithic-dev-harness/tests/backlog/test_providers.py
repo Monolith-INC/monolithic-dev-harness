@@ -4,23 +4,22 @@ import unittest
 from datetime import date
 from pathlib import Path
 
+from azure_tracker import azure, tracker
+
 from orchestrator_core.capacity import plan_iteration
-from orchestrator_core.ingest import ArtifactRecord
-from orchestrator_core.providers import PROVIDERS, get_provider
-from orchestrator_core.providers.azure_devops import AzureDevOpsProvider
-from orchestrator_core.providers.azure_devops import fields as f
-from orchestrator_core.providers.azure_devops.client import AzureCapacityClient
-from orchestrator_core.providers.azure_devops.mapping import (
-    map_capacities,
-    map_days_off,
-    map_iteration,
-    map_weekend_days,
-    map_work_item,
-    map_work_items,
+from orchestrator_core.providers import (
+    CapacityProvider,
+    FilesystemProvider,
+    TrackerProvider,
 )
-from orchestrator_core.providers.base import CapacityProvider, WorkItemWriter, WriteOp
-from orchestrator_core.providers.filesystem import FilesystemProvider
-from orchestrator_core.providers.linear import LinearProvider
+
+f = azure
+map_capacities = azure.map_capacities
+map_days_off = azure.map_days_off
+map_iteration = azure.map_iteration
+map_weekend_days = azure.map_weekend_days
+map_work_item = azure.map_work_item
+map_work_items = azure.map_work_items
 
 # Shaped after the responses documented for the Azure DevOps work/capacities API.
 CAPACITIES_PAYLOAD = {
@@ -82,87 +81,16 @@ WORK_ITEMS_PAYLOAD = {
 }
 
 
-class TestProviderRegistry(unittest.TestCase):
-    """Tests for provider lookup."""
+class TestCapacitySources(unittest.TestCase):
+    """The planner reads from the user's planning files or from the selected tracker."""
 
-    def test_known_providers_registered(self):
-        """Both shipped adapters are discoverable by name."""
-        self.assertIn("azure-devops", PROVIDERS)
-        self.assertIn("filesystem", PROVIDERS)
-        self.assertIn("linear", PROVIDERS)
-
-    def test_unknown_provider_returns_none(self):
-        """An unknown name degrades to None rather than raising."""
-        self.assertIsNone(get_provider("jira"))
-
-    def test_get_filesystem_provider(self):
-        """The filesystem provider is built with the configured artifacts directory."""
+    def test_both_sources_satisfy_the_protocol(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            provider = get_provider("filesystem", artifacts_dir=Path(tmpdir))
-            self.assertIsInstance(provider, FilesystemProvider)
-
-    def test_providers_satisfy_the_protocols(self):
-        """Both adapters structurally match the seam they are meant to fill."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            for provider in (FilesystemProvider(Path(tmpdir)), AzureDevOpsProvider()):
+            for provider in (
+                FilesystemProvider(Path(tmpdir)),
+                TrackerProvider(tracker(), {}),
+            ):
                 self.assertIsInstance(provider, CapacityProvider)
-                self.assertIsInstance(provider, WorkItemWriter)
-
-
-class TestLinearWorkItemHierarchy(unittest.TestCase):
-    def test_create_and_read_preserves_four_level_parent_chain_and_labels(self):
-        provider = LinearProvider(team="team-1")
-        chain = (
-            ("Epic", "epic-1", None),
-            ("Feature", "feature-1", "epic-1"),
-            ("User Story", "story-1", "feature-1"),
-            ("Task", "task-1", "story-1"),
-        )
-        for item_type, provider_id, parent_id in chain:
-            with self.subTest(item_type=item_type):
-                artifact = ArtifactRecord(
-                    type=item_type,
-                    title=f"{item_type} title",
-                    body=f"{item_type} body",
-                    story_points=None,
-                    parent_id=parent_id,
-                    provider="linear",
-                    provider_id=None,
-                    source="test",
-                    filename=None,
-                )
-                create = provider.create_request(artifact)
-                self.assertTrue(create.ok, create.error)
-                self.assertEqual(
-                    create.data.payload["labels"],
-                    [f"agile:{item_type.lower().replace(' ', '-')}"],
-                )
-                self.assertNotIn(
-                    "project",
-                    create.data.payload,
-                    "Linear Projects are not Agile Epics",
-                )
-                self.assertEqual(create.data.payload.get("parentId"), parent_id)
-
-                read = provider.read_result(
-                    {
-                        "id": provider_id,
-                        "title": artifact.title,
-                        "description": artifact.body,
-                        "labels": create.data.payload["labels"],
-                        "parentId": parent_id,
-                    }
-                )
-                self.assertTrue(read.ok, read.error)
-                self.assertEqual(
-                    (
-                        read.data.type,
-                        read.data.provider,
-                        read.data.provider_id,
-                        read.data.parent_id,
-                    ),
-                    (item_type, "linear", provider_id, parent_id),
-                )
 
 
 class TestAzureFields(unittest.TestCase):
@@ -298,33 +226,31 @@ class TestAzureMapping(unittest.TestCase):
         self.assertEqual(len(map_work_items(payload)), 1)
 
 
-class TestAzureProvider(unittest.TestCase):
-    """Tests for the Azure adapter, driven by injected payloads."""
+class TestAzurePlanning(unittest.TestCase):
+    """The Azure tracker's planning capability, driven by the replies a skill fetched."""
 
-    def _provider(self, process="Agile"):
-        return AzureDevOpsProvider(
-            process=process,
-            payloads={
-                "iteration": ITERATION_PAYLOAD,
-                "capacities": CAPACITIES_PAYLOAD,
-                "team_settings": TEAM_SETTINGS_PAYLOAD,
-                "work_items": WORK_ITEMS_PAYLOAD,
-            },
-        )
+    REPLIES = {
+        "iteration": ITERATION_PAYLOAD,
+        "capacities": CAPACITIES_PAYLOAD,
+        "team_settings": TEAM_SETTINGS_PAYLOAD,
+        "work_items": WORK_ITEMS_PAYLOAD,
+    }
 
-    def test_fetch_iteration_from_injected_payloads(self):
-        """Injection is the primary path and needs no credentials."""
+    def _provider(self, process="agile"):
+        return TrackerProvider(tracker(process), self.REPLIES)
+
+    def test_fetch_iteration_from_the_replies(self):
+        """The replies are all it needs; there is no credential and no network."""
         result = self._provider().fetch_iteration("it1")
         self.assertTrue(result.ok)
         self.assertEqual(len(result.data.members), 2)
 
-    def test_fetch_work_items_from_injected_payloads(self):
-        """Work items map without any network access."""
+    def test_fetch_work_items_from_the_replies(self):
         result = self._provider().fetch_work_items("it1")
         self.assertTrue(result.ok)
         self.assertEqual(len(result.data), 2)
 
-    def test_end_to_end_plan_from_azure_payloads(self):
+    def test_end_to_end_plan_from_azure_replies(self):
         """Azure JSON in, capacity plan out.
 
         u1 gives 8h/day over 8 present days (two days off) and u2 gives 6h/day over 10,
@@ -338,69 +264,16 @@ class TestAzureProvider(unittest.TestCase):
         self.assertEqual(plan.planned_hours, 12.0)
         self.assertEqual(plan.items_estimated, 1)
 
-    def test_no_payloads_and_no_client_fails_cleanly(self):
-        """A provider with no way to read reports why instead of raising."""
-        result = AzureDevOpsProvider().fetch_iteration("it1")
-        self.assertFalse(result.ok)
-        self.assertIn("no payloads injected", result.error)
-
-    def test_plan_hour_write_targets_remaining_work(self):
+    def test_hour_fields_target_remaining_work(self):
         """Remaining Work is the field capacity and burndown actually read."""
-        ops = self._provider().plan_hour_write("101", 6.0)
-        paths = [op.field_path for op in ops]
-        self.assertIn(f.field_ref(f.REMAINING_WORK), paths)
+        self.assertIn(f.field_ref(f.REMAINING_WORK), tracker().hour_fields(6.0, False))
 
-    def test_plan_hour_write_omits_original_estimate_on_scrum(self):
-        """The Scrum guard, at the level that matters."""
-        agile = AzureDevOpsProvider(process="Agile").plan_hour_write("1", 4.0)
-        scrum = AzureDevOpsProvider(process="Scrum").plan_hour_write("1", 4.0)
-        self.assertIn(f.field_ref(f.ORIGINAL_ESTIMATE), [o.field_path for o in agile])
-        self.assertNotIn(
-            f.field_ref(f.ORIGINAL_ESTIMATE), [o.field_path for o in scrum]
-        )
-
-    def test_plan_hour_write_includes_activity_when_given(self):
-        """Activity is written only when the caller could determine one."""
-        with_activity = self._provider().plan_hour_write(
-            "1", 4.0, activity="Development"
-        )
-        without = self._provider().plan_hour_write("1", 4.0)
-        self.assertIn(f.field_ref(f.ACTIVITY), [o.field_path for o in with_activity])
-        self.assertNotIn(f.field_ref(f.ACTIVITY), [o.field_path for o in without])
-
-    def test_writes_are_planned_not_performed(self):
-        """Every planned write demands confirmation before anything happens."""
-        for op in self._provider().plan_hour_write("1", 4.0, provenance="seed-default"):
-            self.assertIsInstance(op, WriteOp)
-            self.assertTrue(op.requires_confirmation)
-            self.assertIn("seed-default", op.describe())
-
-
-class TestAzureClientConfiguration(unittest.TestCase):
-    """Tests for the optional direct client. No network is touched."""
-
-    def test_client_without_pat_is_not_configured(self):
-        """Missing credentials are detected before any request is attempted."""
-        client = AzureCapacityClient("org", "proj", pat=None)
-        if client.pat is None:  # a real PAT in the environment would defeat this
-            self.assertFalse(client.configured)
-
-    def test_unconfigured_client_returns_error_not_exception(self):
-        """A misconfigured client reports the problem, following never-raise."""
-        client = AzureCapacityClient("", "", pat=None)
-        data, error = client.get_capacities("it1")
-        self.assertIsNone(data)
-        self.assertIn("not configured", error)
-
-    def test_scope_includes_team_when_given(self):
-        """Capacity endpoints are team-scoped when a team is supplied."""
-        self.assertNotIn(
-            "/myteam", AzureCapacityClient("org", "proj", pat="x")._scope()
-        )
-        self.assertIn(
-            "/myteam",
-            AzureCapacityClient("org", "proj", team="myteam", pat="x")._scope(),
-        )
+    def test_original_estimate_is_set_once_and_never_on_scrum(self):
+        original = f.field_ref(f.ORIGINAL_ESTIMATE)
+        self.assertIn(original, tracker("agile").hour_fields(4.0, True))
+        self.assertNotIn(original, tracker("agile").hour_fields(4.0, False))
+        self.assertNotIn(original, tracker("scrum").hour_fields(4.0, True))
+        self.assertNotIn(original, tracker("agile").hour_fields(0.0, True))
 
 
 class TestFilesystemProvider(unittest.TestCase):
@@ -476,15 +349,6 @@ class TestFilesystemProvider(unittest.TestCase):
             iteration = FilesystemProvider(artifacts).fetch_iteration("sprint-1").data
             self.assertEqual(len(iteration.members), 1)
             self.assertEqual(iteration.members[0].daily_hours, 6.0)
-
-    def test_plan_hour_write_targets_frontmatter(self):
-        """The filesystem adapter writes to frontmatter keys, not Azure fields."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            ops = FilesystemProvider(Path(tmpdir)).plan_hour_write(
-                "1", 4.0, activity="Development"
-            )
-            self.assertEqual(ops[0].field_path, "frontmatter.effort_hours")
-            self.assertEqual(ops[1].field_path, "frontmatter.activity")
 
 
 if __name__ == "__main__":

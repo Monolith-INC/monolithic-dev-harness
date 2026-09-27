@@ -72,11 +72,10 @@ chart — it is invisible to the tooling that shows whether their sprint fits.
 Once the Task list is settled, **compute the estimates — do not reason them out.** The arithmetic
 is deterministic and lives in the orchestrator, so the same Story always yields the same hours.
 
-1. **Fetch the sprint context** through MCP and save it as one JSON file:
-   - `work[list_team_iterations]` with `timeframe: "current"` → `iteration`
-   - `work[get_team_capacity]` for that iteration → `capacities`
-   - `work[get_team_settings]` → `team_settings`
-   - `wit_work_item[list_for_iteration]` → `work_items` (so existing commitments count)
+1. **Fetch the sprint context** and save it as one JSON object: one entry per reply the selected
+   tracker lists under `planning.replies` in its `tracker.json`, fetched through the host's tools
+   as each entry describes. For Azure DevOps that is `iteration`, `capacities`, `team_settings`,
+   and `work_items`; the local tracker needs none. See `references/estimation.md`.
 2. **Write the Task list** as JSON: `story_id`, `story_points`, `assignee`, `iteration_ref`, and
    `tasks[]` of `{id, title, current_hours}`. Pass a `weight` per Task only when the Implementation
    Plan says one is materially larger; otherwise the role default applies.

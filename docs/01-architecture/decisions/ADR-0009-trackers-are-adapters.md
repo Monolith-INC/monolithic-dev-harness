@@ -25,8 +25,10 @@ copied into each repository's `integrations.json`; and a repository's settings w
    `adapter.py`. `tracker.json` is checked against `config/tracker.schema.json` and the registry's
    own rules (hierarchy, id expressions, settings). `adapter.py` exports
    `adapter(context) -> TrackerOps`, a record of functions each returning `Ok` or `Err`
-   (`scripts/integrations/contracts.py`). Azure DevOps, Linear, and the local tracker ship this way;
-   nothing about a tracker lives outside its folder.
+   (`scripts/integrations/contracts.py`). Every function is required, sprint planning included
+   (`read_iteration`, `iteration_items`, `hour_fields`), and `tracker.json` lists the replies that
+   planning reads. Azure DevOps, Linear, and the local tracker ship this way; nothing about a
+   tracker lives outside its folder, and the backlog runtime reads sprints only through it.
 2. **One source per value.** The manifest owns kinds, states, hierarchy, id formats, mention
    forms, write tools, tool names, and how to connect. The repository's `.harness/settings.json` owns
    only the choice and the values the manifest asks for. Shared templates stay in

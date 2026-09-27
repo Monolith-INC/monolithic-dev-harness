@@ -100,28 +100,46 @@ total, and saying so is the difference between a useful report and a misleading 
 Capacity is read, never written. Changing capacity settings rewrites other people's sprint
 configuration, which is not this plugin's business.
 
+## Where the sprint comes from
+
+Every tracker plans through the same contract (`TrackerOps` in `scripts/integrations/contracts.py`):
+`read_iteration` gives the sprint's dates and team, `iteration_items` what it already holds, and
+`hour_fields` the fields that record hours. Each tracker's `tracker.json` lists, under
+`planning.replies`, the replies its planning reads; fetch each one through the host's tools as
+described there and pass them together as `--payloads`.
+
+| Tracker | Replies | Team capacity | Hour fields |
+| --- | --- | --- | --- |
+| Azure DevOps | `iteration`, `capacities`, `team_settings`, `work_items` | yes | Remaining Work; Original Estimate on a first estimate, except on Scrum |
+| Linear | `cycle`, `issues` | no (dates and point estimates only) | none; hours are recorded by hand |
+| local | none; reads `.harness/tracker/capacity/<sprint>.json` and its work items | yes | `remainingHours`; `estimatedHours` on a first estimate |
+
+The planning files a person keeps under `artifacts_path` (`--provider filesystem`) use the same
+capacity format as the local tracker, read by one parser (`scripts/integrations/planning.py`).
+
 ## Commands
 
 ```bash
 bin/agile-backlog-toolkit estimate --file <path>          # suggest hours for a draft
 bin/agile-backlog-toolkit estimate --points 5             # suggest hours for a point value
-bin/agile-backlog-toolkit capacity --provider filesystem  # plan from local drafts
-bin/agile-backlog-toolkit capacity --provider azure-devops --iteration <id> --payloads <json>
+bin/agile-backlog-toolkit capacity --provider filesystem  # plan from local planning files
+bin/agile-backlog-toolkit capacity --provider tracker --iteration <id> --payloads <json>
 ```
 
 `capacity` exits non-zero when the sprint is overcommitted, so it works as a gate.
 
 ## Adding another backlog system
 
-The estimation and capacity logic knows nothing about any particular tracker. A new adapter means
-one module under `orchestrator_core/providers/` implementing two reads and one write-planner, plus
-a line in the registry. Nothing in the estimation or capacity code changes.
+The estimation and capacity logic knows nothing about any particular tracker. A new tracker folder
+provides planning as part of its adapter (see [tracker-contract.md](tracker-contract.md)); nothing in
+the estimation or capacity code changes.
 
 ## References
 
 - `orchestrator_core/estimation/` — scales, bands, calibration
 - `orchestrator_core/capacity/` — the sprint model and planner
-- `orchestrator_core/providers/azure_devops/fields.py` — field reference names
+- `trackers/azure-devops/adapter.py` — Azure field reference names and capacity mapping
+- `scripts/integrations/planning.py` — the sprint model and the shared capacity-file parser
 - `azure-mechanics.md` — which field each process actually has
 - Halstead, *Elements of Software Science* (1977) — the `T = E / 18` time formula used only as a
   retrospective cross-check against code that already exists

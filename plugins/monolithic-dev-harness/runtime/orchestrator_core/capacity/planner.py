@@ -2,13 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .model import (
-    ActivityBreakdown,
-    CapacityPlan,
-    EstimableItem,
-    IterationCapacity,
-    MemberCapacity,
-)
+from integrations.planning import EstimableItem, IterationCapacity, MemberCapacity
+
+from .model import ActivityBreakdown, CapacityPlan
 
 UNASSIGNED_ACTIVITY = "(unassigned)"
 

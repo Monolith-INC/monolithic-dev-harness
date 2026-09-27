@@ -1,6 +1,6 @@
 """Contract tests for the Azure mappers.
 
-The fixtures in test_providers.py are shaped from Microsoft's published response examples.
+The mappers live in the Azure tracker's adapter.py. The fixtures in test_providers.py are shaped from Microsoft's published response examples.
 Real payloads carry extra keys, richer identity objects, and occasionally a type nobody
 expected. These tests assert the mappers degrade rather than raise when reality differs
 from the documented example -- which is what protects the plugin when Azure's payload
@@ -12,16 +12,18 @@ Rule under test: a mapper may return less, but it must never raise and must neve
 import unittest
 from datetime import date
 
+from azure_tracker import azure
+
+from integrations.planning import DateRange
 from orchestrator_core.capacity import plan_iteration
-from orchestrator_core.providers.azure_devops.mapping import (
-    map_capacities,
-    map_days_off,
-    map_iteration,
-    map_weekend_days,
-    map_work_item,
-    map_work_items,
-    reported_daily_total,
-)
+
+map_capacities = azure.map_capacities
+map_days_off = azure.map_days_off
+map_iteration = azure.map_iteration
+map_weekend_days = azure.map_weekend_days
+map_work_item = azure.map_work_item
+map_work_items = azure.map_work_items
+reported_daily_total = azure.reported_daily_total
 
 # A capacity entry as a real organisation returns it: full identity object, _links, descriptor.
 REALISTIC_CAPACITY_ENTRY = {
@@ -167,8 +169,15 @@ class TestDaysOffDegradation(unittest.TestCase):
 
     def test_hostile_inputs_return_empty(self):
         """Unmappable days-off payloads yield nothing."""
-        for payload in (None, "text", 42, [None], ["2026-08-05"], {"daysOff": None}):
+        for payload in (None, "text", 42, [None], [42], {"daysOff": None}):
             self.assertEqual(map_days_off(payload), ())
+
+    def test_a_bare_date_is_one_day_off(self):
+        """Days off share one reader with capacity files, where a bare date means that day."""
+        self.assertEqual(
+            map_days_off(["2026-08-05"]),
+            (DateRange(date(2026, 8, 5), date(2026, 8, 5)),),
+        )
 
 
 class TestWeekendDegradation(unittest.TestCase):
@@ -338,7 +347,7 @@ class TestWorkItemDegradation(unittest.TestCase):
         for payload in (None, "text", 42, [], {}, {"fields": {}}):
             self.assertIsNone(map_work_item(payload))
         for payload in (None, "text", {"value": None}, [None]):
-            self.assertEqual(map_work_items(payload), [])
+            self.assertEqual(map_work_items(payload), ())
 
 
 class TestMcpServerShapes(unittest.TestCase):

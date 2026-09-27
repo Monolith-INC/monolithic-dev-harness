@@ -1,6 +1,8 @@
 import unittest
 from datetime import date
 
+from azure_tracker import azure, select_azure
+
 from orchestrator_core.capacity import (
     ActivityCapacity,
     DateRange,
@@ -16,7 +18,8 @@ from orchestrator_core.estimation import (
     estimate_breakdown,
     recompute_breakdown,
 )
-from orchestrator_core.providers.azure_devops.mapping import current_iteration
+
+current_iteration = azure.current_iteration
 
 
 def _sprint(members=()):
@@ -389,6 +392,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
         from orchestrator_core.handlers import handle_estimate_breakdown
 
         with tempfile.TemporaryDirectory() as tmpdir:
+            select_azure(P(tmpdir), arguments.pop("process", "agile"))
             state = P(tmpdir) / ".harness" / "backlog"
             state.mkdir(parents=True)
             return handle_estimate_breakdown(
@@ -470,6 +474,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
                     }
                 ]
             },
+            "work_items": {"value": []},
         }
         result = self._run(
             dict(self.BASE, story_points=21, assignee="Ana", payloads=payloads)

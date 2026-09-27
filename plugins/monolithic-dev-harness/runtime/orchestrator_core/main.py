@@ -89,12 +89,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     capacity_p.add_argument("--iteration", default="", help="Iteration reference")
     capacity_p.add_argument(
-        "--provider", default="filesystem", choices=("filesystem", "azure-devops")
+        "--provider",
+        default="filesystem",
+        choices=("filesystem", "tracker"),
+        help="your planning files, or the selected tracker (needs --payloads)",
     )
     capacity_p.add_argument(
-        "--payloads", help="Path to JSON of pre-fetched Azure payloads"
+        "--payloads", help="Path to JSON of the tracker replies a skill fetched"
     )
-    capacity_p.add_argument("--process", help="Azure process: agile | scrum | cmmi")
 
     breakdown_p = sub.add_parser(
         "estimate-breakdown",
@@ -104,7 +106,7 @@ def main(argv: list[str] | None = None) -> int:
         "--input", required=True, help="Path to JSON: story_id, story_points, tasks[]"
     )
     breakdown_p.add_argument(
-        "--payloads", help="Path to JSON of pre-fetched Azure capacity payloads"
+        "--payloads", help="Path to JSON of the tracker replies a skill fetched"
     )
 
     config_p = sub.add_parser(
@@ -222,7 +224,6 @@ def main(argv: list[str] | None = None) -> int:
                 "iteration_ref": args.iteration,
                 "provider": args.provider,
                 "payloads": payloads,
-                "process": args.process,
             },
             skills_dir=skills_dir,
             state_dir=state_dir,
@@ -274,7 +275,7 @@ def main(argv: list[str] | None = None) -> int:
         if result["blocked"]:
             # Exit 2 distinguishes "cannot fit" from "failed to run".
             return 2
-        print("\n  Write these to Azure (nothing has been written yet):")
+        print("\n  Write these to the tracker (nothing has been written yet):")
         for op in result["write_ops"]:
             for field, value in op["fields"].items():
                 print(f"    {op['item_id']}  {field} = {value}")

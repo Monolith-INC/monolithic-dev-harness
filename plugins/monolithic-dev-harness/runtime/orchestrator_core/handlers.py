@@ -3,6 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
+from integrations.planning import as_float
+
 from .artifact_validator import critiques_from_results, validate_artifact
 from .ingest import ingest_file, ingest_from_text
 from .reflection import (
@@ -170,55 +172,24 @@ def handle_plan_capacity(
     from .capacity import format_plan, plan_iteration
     from .estimation import config_diagnostics, estimate_hours, load_config
     from .project_config import load_project_config, project_root_of
-    from .providers import get_provider
 
     iteration_ref = str(arguments.get("iteration_ref", "")).strip()
     provider_name = str(arguments.get("provider", "filesystem")).strip() or "filesystem"
 
     project_root = project_root_of(state_dir)
     project_config = load_project_config(project_root)
-
-    provider_kwargs: dict[str, Any] = {}
-    if provider_name == "azure-devops":
-        payloads = arguments.get("payloads") or {}
-        if not isinstance(payloads, dict):
-            return {
-                "ok": False,
-                "error": "payloads must be an object",
-                "instructions": instructions,
-            }
-        provider_kwargs["payloads"] = payloads
-        provider_kwargs["process"] = (
-            arguments.get("process") or project_config.azure.process
-        )
-
-        # Identity is only needed when the provider has to fetch for itself. With payloads
-        # injected, the caller has already done the reading and none of this applies.
-        if not provider_kwargs["payloads"]:
-            missing = project_config.missing()
-            if missing:
-                return {
-                    "ok": False,
-                    "error": (
-                        f"Azure configuration incomplete: {', '.join(missing)} not set. "
-                        "Discover the values through the Azure DevOps MCP tools and ask the user "
-                        "to add them to tracker.values in .harness/settings.json."
-                    ),
-                    "missing_config": missing,
-                    "instructions": instructions,
-                }
-
-    provider = get_provider(
-        provider_name,
-        artifacts_dir=project_config.resolve_artifacts_dir(project_root),
-        **provider_kwargs,
-    )
-    if provider is None:
+    payloads = arguments.get("payloads") or {}
+    if not isinstance(payloads, dict):
         return {
             "ok": False,
-            "error": f"unknown provider: {provider_name}",
+            "error": "payloads must be an object",
             "instructions": instructions,
         }
+    provider, error = _capacity_source(
+        provider_name, project_root, project_config, payloads
+    )
+    if provider is None:
+        return {"ok": False, "error": error, "instructions": instructions}
 
     iteration_result = provider.fetch_iteration(iteration_ref)
     if not iteration_result.ok:
@@ -300,9 +271,8 @@ def handle_estimate_breakdown(
         estimate_breakdown,
         load_config,
     )
-    from .project_config import load_project_config, project_root_of
-    from .providers.azure_devops import AzureDevOpsProvider
-    from .providers.azure_devops import fields as azure_fields
+    from .project_config import project_root_of
+    from .providers import TrackerProvider
 
     if not isinstance(arguments, dict):
         return {
@@ -341,8 +311,8 @@ def handle_estimate_breakdown(
         TaskInput(
             task_id=_as_text(entry.get("id")) or _as_text(entry.get("task_id")),
             title=_as_text(entry.get("title")),
-            current_hours=_as_float(entry.get("current_hours")),
-            weight=_as_float(entry.get("weight")),
+            current_hours=as_float(entry.get("current_hours")),
+            weight=as_float(entry.get("weight")),
         )
         for entry in raw_tasks
         if isinstance(entry, dict)
@@ -365,8 +335,7 @@ def handle_estimate_breakdown(
         }
 
     project_root = project_root_of(state_dir)
-    project_config = load_project_config(project_root)
-    process = _as_text(arguments.get("process")) or project_config.azure.process
+    tracker, missing, reason = _selected_tracker(project_root, payloads)
 
     # Capacity is optional: without it the estimate still stands, it is simply unchecked.
     # But a failure to read it is not the same as not asking, so it is reported.
@@ -374,8 +343,14 @@ def handle_estimate_breakdown(
     capacity_errors: list[str] = []
     provider_warnings: list[str] = []
     iteration_ref = _as_text(arguments.get("iteration_ref")) or None
-    if payloads:
-        provider = AzureDevOpsProvider(payloads=payloads, process=process)
+    if tracker is None and payloads:
+        capacity_errors.append(f"capacity not checked: {reason}")
+    if tracker is not None and missing and payloads:
+        capacity_errors.append(
+            f"capacity not checked: tracker replies missing: {', '.join(missing)}"
+        )
+    if tracker is not None and not missing:
+        provider = TrackerProvider(tracker, payloads)
         iteration_result = provider.fetch_iteration(iteration_ref or "current")
         provider_warnings.extend(iteration_result.warnings)
         if not iteration_result.ok:
@@ -404,7 +379,7 @@ def handle_estimate_breakdown(
     config = load_config(state_dir)
     estimate = estimate_breakdown(
         story_id,
-        _as_float(arguments.get("story_points")),
+        as_float(arguments.get("story_points")),
         tasks,
         config=config,
         assignee=assignee,
@@ -421,19 +396,29 @@ def handle_estimate_breakdown(
 
     # Every task whose figure moved is written, including one that dropped to zero: leaving
     # stale Remaining Work behind is exactly the drift this feature exists to prevent.
-    write_ops: list[dict[str, Any]] = []
-    if not estimate.blocked:
-        for task in estimate.tasks:
-            if not task.changed:
-                continue
-            ops = {azure_fields.field_ref(azure_fields.REMAINING_WORK): task.hours}
-            if (
-                azure_fields.supports_original_estimate(process)
-                and task.is_new
-                and task.hours > 0
-            ):
-                ops[azure_fields.field_ref(azure_fields.ORIGINAL_ESTIMATE)] = task.hours
-            write_ops.append({"item_id": task.task_id, "fields": ops})
+    # The tracker names its own hour fields; one without them gets the neutral `hours` key and a
+    # warning, so nobody writes a field the tracker does not have.
+    hour_fields = (
+        tracker.hour_fields if tracker is not None else lambda hours, first: {}
+    )
+    if not estimate.blocked and not hour_fields(1.0, True):
+        capacity_errors.append(
+            "the tracker names no hour fields, record hours by hand"
+            + (f": {reason}" if tracker is None else "")
+        )
+    write_ops = (
+        []
+        if estimate.blocked
+        else [
+            {
+                "item_id": task.task_id,
+                "fields": dict(hour_fields(task.hours, task.is_new))
+                or {"hours": task.hours},
+            }
+            for task in estimate.tasks
+            if task.changed
+        ]
+    )
 
     return {
         "ok": True,
@@ -471,6 +456,60 @@ def handle_estimate_breakdown(
     }
 
 
+def _selected_tracker(
+    project_root: Path, replies: dict[str, Any]
+) -> tuple[Any, tuple[str, ...], str]:
+    """The selected tracker's operations and the declared replies not given, or (None, (), why)."""
+    from core.result import Err, Ok
+    from harness import settings
+    from integrations import registry
+
+    match registry.selected(project_root, settings.load(project_root)):
+        case Err(failure):
+            return None, (), failure.message
+        case Ok(active):
+            missing = tuple(
+                reply.key
+                for reply in active.manifest.planning
+                if reply.key not in replies
+            )
+            match registry.open_tracker(active, project_root):
+                case Ok(tracker):
+                    return tracker, missing, ""
+                case Err(failure):
+                    return None, (), failure.message
+
+
+def _capacity_source(
+    provider_name: str,
+    project_root: Path,
+    project_config: Any,
+    payloads: dict[str, Any],
+) -> tuple[Any, str]:
+    """The user's planning files, or the selected tracker reading the replies a skill fetched."""
+    from .providers import FilesystemProvider, TrackerProvider
+
+    if provider_name == "filesystem":
+        return FilesystemProvider(
+            project_config.resolve_artifacts_dir(project_root)
+        ), ""
+    if provider_name not in ("tracker", project_config.provider_mode):
+        return None, (
+            f"unknown provider: {provider_name}; use filesystem, or tracker for the selected "
+            f"tracker ({project_config.provider_mode})"
+        )
+    tracker, missing, reason = _selected_tracker(project_root, payloads)
+    if tracker is None:
+        return None, reason
+    if missing:
+        return None, (
+            f"tracker replies missing: {', '.join(missing)}. Fetch each one through the "
+            "tracker's tools as its tracker.json planning.replies describes, and pass them "
+            "as payloads"
+        )
+    return TrackerProvider(tracker, payloads), ""
+
+
 def _as_text(value: Any) -> str:
     """Coerce a JSON scalar to text. Objects and arrays are not identifiers."""
     if isinstance(value, str):
@@ -478,19 +517,6 @@ def _as_text(value: Any) -> str:
     if isinstance(value, (int, float)) and not isinstance(value, bool):
         return str(value)
     return ""
-
-
-def _as_float(value: Any) -> float | None:
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value.strip())
-        except ValueError:
-            return None
-    return None
 
 
 HANDLERS = {

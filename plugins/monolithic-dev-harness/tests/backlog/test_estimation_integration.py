@@ -3,9 +3,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from azure_tracker import select_azure
+
+from integrations.planning import as_float
 from orchestrator_core.artifact_validator import validate_artifact
 from orchestrator_core.handlers import HANDLERS, handle_plan_capacity
-from orchestrator_core.ingest import coerce_float, ingest_file, ingest_from_text
+from orchestrator_core.ingest import ingest_file, ingest_from_text
 
 AZURE_PAYLOADS = {
     "iteration": {
@@ -53,14 +56,14 @@ class TestCoerceFloat(unittest.TestCase):
 
     def test_numbers_and_numeric_strings(self):
         """Both a real number and its string form coerce."""
-        self.assertEqual(coerce_float(4), 4.0)
-        self.assertEqual(coerce_float("4.5"), 4.5)
+        self.assertEqual(as_float(4), 4.0)
+        self.assertEqual(as_float("4.5"), 4.5)
 
     def test_non_numeric_returns_none(self):
         """Anything unparseable is None, never a guessed value."""
-        self.assertIsNone(coerce_float(None))
-        self.assertIsNone(coerce_float("many"))
-        self.assertIsNone(coerce_float(True))
+        self.assertIsNone(as_float(None))
+        self.assertIsNone(as_float("many"))
+        self.assertIsNone(as_float(True))
 
 
 class TestIngestEffortHours(unittest.TestCase):
@@ -178,6 +181,8 @@ class TestPlanCapacityHandler(unittest.TestCase):
         root = Path(project_root)
         state_dir = root / ".harness" / "backlog"
         state_dir.mkdir(parents=True, exist_ok=True)
+        if arguments.get("provider", "filesystem") != "filesystem":
+            select_azure(root)
         if artifacts_path:
             settings = {
                 "schemaVersion": 1,
@@ -199,7 +204,6 @@ class TestPlanCapacityHandler(unittest.TestCase):
                     "iteration_ref": "it1",
                     "provider": "azure-devops",
                     "payloads": AZURE_PAYLOADS,
-                    "process": "agile",
                 },
                 Path(tmpdir),
             )
@@ -218,7 +222,7 @@ class TestPlanCapacityHandler(unittest.TestCase):
             result = self._run(
                 {
                     "iteration_ref": "it1",
-                    "provider": "azure-devops",
+                    "provider": "tracker",
                     "payloads": payloads,
                 },
                 Path(tmpdir),
