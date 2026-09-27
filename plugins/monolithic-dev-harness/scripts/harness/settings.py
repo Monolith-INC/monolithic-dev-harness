@@ -130,7 +130,16 @@ def write_tracker(repo: Path, tracker: Mapping[str, Any]) -> Result[Path]:
     """
     file = path(repo)
     return bind(
-        bind(_read(file), lambda raw: Ok({**raw, "tracker": dict(tracker)})),
+        bind(
+            _read(file),
+            lambda raw: (
+                Ok({**raw, "tracker": dict(tracker)})
+                if isinstance(raw, dict)
+                else err(
+                    "invalid_settings", f"{SETTINGS_RELATIVE_PATH} is not an object"
+                )
+            ),
+        ),
         lambda updated: bind(
             parse(updated),
             lambda _: attempt(
@@ -144,9 +153,12 @@ def write_tracker(repo: Path, tracker: Mapping[str, Any]) -> Result[Path]:
 
 
 def _write(file: Path, raw: Mapping[str, Any]) -> Path:
-    file.write_text(
+    """Write beside the file, then swap it in: readers see the old settings or the new, never half."""
+    tmp = file.with_suffix(file.suffix + ".tmp")
+    tmp.write_text(
         json.dumps(raw, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
+    tmp.replace(file)
     return file
 
 

@@ -51,6 +51,16 @@ def short_id(name: str, folder_digest: str) -> str:
     )
 
 
+def trusted_names(repo: Path) -> tuple[str, ...]:
+    """Every tracker with a trust record, whether or not its folder still exists."""
+    folder = repo / TRUST_RELATIVE_PATH
+    return (
+        tuple(sorted(path.stem for path in folder.glob("*.json")))
+        if folder.is_dir()
+        else ()
+    )
+
+
 def _record_path(repo: Path, name: str) -> Path:
     return repo / TRUST_RELATIVE_PATH / f"{name}.json"
 

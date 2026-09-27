@@ -73,6 +73,7 @@ Validate in staging (G3); a person publishes and approves the pull request (G4).
 | `harness manual-check <name> ok` | records that you validated a guarded change by hand |
 | `approve HT-XXXXXX` | trusts an onboarded tracker as it was shown to you (Cursor; in Claude, click **Trust**) |
 | `use HT-XXXXXX` | makes that trusted tracker the project's tracker (Cursor; in Claude, click **Use it**) |
+| `stop trusting the <name> tracker` | withdraws that trust (Cursor; in Claude, click **Stop trusting**) |
 
 To add a tracker the harness does not ship, ask the agent. It prepares the tracker, explains what
 it does and what it writes, then asks you two questions: whether to trust it, and whether to use it

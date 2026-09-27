@@ -8,7 +8,7 @@ Two hooks use this module:
   filled in is refused: only the user answers.
 - After the user answers (`approval`): picking the `Approve` option of a question opens an approval
   window, exactly like typing `approve HB-…`. The click comes from the user, not the agent.
-- Tracker questions (`tracker_action`, `tracker_choice`): a question whose options include
+- Tracker questions (`tracker_action`, `tracker_choice`): a question that says "tracker" and offers
   `Trust`, `Use it`, or `Stop trusting` is about one onboarded tracker it names. The "before" hook
   pins that tracker's exact version to the question; the "after" hook acts on the click.
 
@@ -154,16 +154,25 @@ def _first_question(tool_input: dict[str, Any]) -> dict[str, Any]:
     return first if isinstance(first, dict) else {}
 
 
-def tracker_action(tool_input: dict[str, Any]) -> tuple[str, str] | None:
-    """(action, question text) when the question offers Trust, Use it, or Stop trusting."""
+def tracker_action(tool_input: dict[str, Any]) -> tuple[tuple[str, ...], str] | None:
+    """(actions offered, question text) for a question about a tracker; None for any other.
+
+    It must say "tracker" and offer Trust, Use it, or Stop trusting: "Use it" alone is an
+    everyday label ("Should I reuse the cached build?") and never makes a tracker question.
+    """
     question = _first_question(tool_input)
-    actions = [
-        TRACKER_ACTIONS[label]
-        for option in question.get("options") or []
-        if isinstance(option, dict)
-        and (label := str(option.get("label", "")).strip().lower()) in TRACKER_ACTIONS
-    ]
-    return (actions[0], str(question.get("question", ""))) if actions else None
+    text = str(question.get("question", ""))
+    actions = tuple(
+        dict.fromkeys(
+            TRACKER_ACTIONS[label]
+            for option in question.get("options") or []
+            if isinstance(option, dict)
+            and (label := str(option.get("label", "")).strip().lower())
+            in TRACKER_ACTIONS
+        )
+    )
+    mentions = re.search(r"\btrackers?\b", text, re.IGNORECASE)
+    return (actions, text) if actions and mentions else None
 
 
 def tracker_choice(tool_input: dict[str, Any], tool_response: Any) -> str | None:

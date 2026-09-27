@@ -29,8 +29,13 @@ A tracker is one folder: `tracker.json`, checked against `config/tracker.schema.
    **Use it**, the harness writes the tracker and its staged values into the settings file. You
    cannot edit that file yourself.
 6. In Cursor, which has no buttons, show the short id the summary printed and ask the user to reply
-   `approve HT-XXXXXX` to trust it, then `use HT-XXXXXX` to use it.
-7. To stop using a tracker's trust, ask a question naming it with the options **Stop trusting** and
-   **Keep it**. Any edit to the folder also drops trust until the user trusts it again.
+   `approve HT-XXXXXX` to trust it, then `use HT-XXXXXX` to use it. Each reply counts only as the
+   whole message.
+7. To withdraw trust, ask a question naming it with the options **Stop trusting** and **Keep it**
+   (in Cursor, the user replies `stop trusting the <name> tracker`). Any edit to the folder also
+   drops trust until the user trusts it again.
+
+Every tracker question must say "tracker" and name the tracker by its label, or the harness does
+not treat it as one. Staging refuses a tracker that is missing a required value.
 8. Check with `harness doctor` (add `--tools` to confirm the provider offers every tool the
    manifest names).

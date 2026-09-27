@@ -104,12 +104,21 @@ class ClickOnboardingTest(unittest.TestCase):
             onboarding.select(self.repo, "acme").failure.code, "untrusted_tracker"
         )
 
-    def test_select_needs_every_required_value(self) -> None:
-        staged = onboarding.stage(self.repo, self.source).value
-        trust.trust(self.repo, "acme", staged, trust.digest(staged))
-        self.assertEqual(
-            onboarding.select(self.repo, "acme").failure.code, "invalid_settings"
-        )
+    def test_stage_refuses_missing_or_empty_required_values(self) -> None:
+        for values in ({}, {"org": ""}, {"org": "  "}):
+            with self.subTest(values=values):
+                failure = onboarding.stage(self.repo, self.source, values).failure
+                self.assertEqual(failure.code, "invalid_settings")
+                self.assertIn("--value org=", failure.message)
+        self.assertFalse((self.repo / ".harness" / "trackers" / "acme").exists())
+
+    def test_write_tracker_refuses_a_settings_file_that_is_not_an_object(self) -> None:
+        from core.result import Err
+        from harness import settings
+
+        (self.repo / ".harness" / "settings.json").write_text("[]")
+        self.assertIsInstance(settings.write_tracker(self.repo, {"name": "x"}), Err)
+        self.assertEqual((self.repo / ".harness" / "settings.json").read_text(), "[]")
 
     def test_select_writes_only_the_tracker_selection(self) -> None:
         staged = onboarding.stage(self.repo, self.source, {"org": "monolith"}).value

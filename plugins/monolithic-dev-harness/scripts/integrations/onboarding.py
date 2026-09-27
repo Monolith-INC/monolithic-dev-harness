@@ -48,7 +48,10 @@ def stage(
             lambda _: bind(
                 registry.read_manifest(source, "onboarded"),
                 lambda manifest: bind(
-                    _known_values(manifest, dict(values or {})),
+                    bind(
+                        _known_values(manifest, dict(values or {})),
+                        lambda known: _complete(manifest, known),
+                    ),
                     lambda known: bind(
                         _copy(repo, source, manifest),
                         lambda folder: _write_values(folder, known),
@@ -97,17 +100,13 @@ def _known_values(manifest: Manifest, values: dict[str, str]) -> Result[dict[str
 
 
 def _write_values(folder: Path, values: dict[str, str]) -> Result[Path]:
-    return attempt(
-        lambda: (
-            (folder / VALUES).write_text(
-                json.dumps(values, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-            )
-            and folder
-        ),
-        "unwritable",
-        f"could not write {folder / VALUES}",
-        OSError,
-    )
+    def write() -> Path:
+        (folder / VALUES).write_text(
+            json.dumps(values, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        return folder
+
+    return attempt(write, "unwritable", f"could not write {folder / VALUES}", OSError)
 
 
 def staged_values(folder: Path) -> dict[str, str]:
@@ -136,27 +135,48 @@ def staged(repo: Path) -> tuple[Manifest, ...]:
     )
 
 
-def named_in(repo: Path, text: str) -> Manifest | None:
-    """The one staged tracker a question names, by its label or its name; None if not exactly one."""
-    named = tuple(
-        manifest
-        for manifest in staged(repo)
-        if any(
-            re.search(rf"(?<![\w-]){re.escape(word)}(?![\w-])", text, re.IGNORECASE)
-            for word in (manifest.label, manifest.name)
+def named_in(repo: Path, text: str) -> str | None:
+    """The one tracker a question names, by label or name; None when it names none or several.
+
+    Candidates are the staged trackers and any tracker the user still trusts (so trust can be
+    withdrawn after its folder is gone). When one match lies inside a longer one ("Acme" inside
+    "Acme Boards"), the longer one is meant.
+    """
+    words = {
+        **{name: (name,) for name in trust.trusted_names(repo)},
+        **{manifest.name: (manifest.label, manifest.name) for manifest in staged(repo)},
+    }
+    hits = {
+        name: max(found, key=len)
+        for name, candidates in words.items()
+        if (
+            found := [
+                word
+                for word in candidates
+                if re.search(
+                    rf"(?<![\w-]){re.escape(word)}(?![\w-])", text, re.IGNORECASE
+                )
+            ]
         )
-    )
-    return named[0] if len(named) == 1 else None
+    }
+    longest = [
+        name
+        for name, word in hits.items()
+        if not any(
+            other != word and word.lower() in other.lower() for other in hits.values()
+        )
+    ]
+    return longest[0] if len(longest) == 1 else None
 
 
-def by_short_id(repo: Path, short: str) -> Manifest | None:
-    """The staged tracker whose current version has this short reply id."""
+def by_short_id(repo: Path, short: str) -> tuple[Manifest, str] | None:
+    """The staged tracker, and its digest, whose current version has this short reply id."""
+    versions = ((manifest, trust.digest(manifest.root)) for manifest in staged(repo))
     return next(
         (
-            manifest
-            for manifest in staged(repo)
-            if trust.short_id(manifest.name, trust.digest(manifest.root))
-            == short.upper()
+            (manifest, digest)
+            for manifest, digest in versions
+            if trust.short_id(manifest.name, digest) == short.upper()
         ),
         None,
     )
@@ -187,6 +207,7 @@ def select(repo: Path, name: str) -> Result[str]:
 
 
 def _complete(manifest: Manifest, values: dict[str, str]) -> Result[dict[str, str]]:
+    """Every value the tracker requires, non-blank; checked when staging, and again on select."""
     missing = [
         key for key in manifest.required_settings if not values.get(key, "").strip()
     ]
@@ -195,7 +216,8 @@ def _complete(manifest: Manifest, values: dict[str, str]) -> Result[dict[str, st
         if not missing
         else err(
             "invalid_settings",
-            f"the {manifest.name} tracker needs {missing}; stage it again with those values",
+            f"the {manifest.name} tracker needs a value for {missing}; stage it with "
+            + " ".join(f"--value {key}=..." for key in missing),
         )
     )
 

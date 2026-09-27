@@ -536,6 +536,76 @@ class TestTrackerTrustByClick(HookTestCase):
         )
         self.assertFalse(self.trusted())
 
+    def test_an_ordinary_question_with_a_use_it_option_is_not_a_tracker_question(
+        self,
+    ) -> None:
+        before = self.settings()
+        text, labels = "Should I reuse the cached build?", ("Use it", "Rebuild")
+        self.assertIsNone(self.ask(text, labels, "toolu_cache"))
+        self.click(text, labels, "Use it", "toolu_cache")
+        self.assertEqual(self.settings(), before)
+
+    def test_a_question_about_a_shipped_tracker_is_not_blocked(self) -> None:
+        text, labels = "Use Linear as the tracker?", ("Use it", "Keep the current one")
+        self.assertIsNone(self.ask(text, labels, "toolu_linear"))
+
+    def test_the_longest_matching_label_wins(self) -> None:
+        import shutil
+
+        other = self.repo / ".harness" / "trackers" / "acme-lite"
+        shutil.copytree(self.folder, other)
+        manifest = json.loads((other / "tracker.json").read_text())
+        (other / "tracker.json").write_text(
+            json.dumps({**manifest, "name": "acme-lite", "label": "Acme"})
+        )
+        self.trust_by_click()
+        self.assertTrue(self.trusted())
+        from integrations import trust
+
+        self.assertFalse(trust.is_trusted(self.repo, "acme-lite", other))
+
+    def test_one_question_can_offer_trust_and_stop_trusting(self) -> None:
+        self.trust_by_click()
+        text = "What should happen to the Acme Boards tracker?"
+        labels = ("Trust", "Stop trusting")
+        self.ask(text, labels, "toolu_both")
+        self.click(text, labels, "Stop trusting", "toolu_both")
+        self.assertFalse(self.trusted())
+
+    def test_stop_trusting_works_after_the_folder_is_gone(self) -> None:
+        import shutil
+
+        from integrations import trust
+
+        self.trust_by_click()
+        shutil.rmtree(self.folder)
+        labels = ("Stop trusting", "Keep it")
+        self.assertIsNone(self.ask(self.STOP, labels, "toolu_stop"))
+        self.click(self.STOP, labels, "Stop trusting", "toolu_stop")
+        self.assertEqual(trust.trusted_digest(self.repo, "acme"), "")
+
+    def test_a_cursor_reply_counts_only_as_the_whole_message(self) -> None:
+        from integrations import onboarding
+
+        summary = onboarding.show(self.repo, "acme").value
+        short = next(word for word in summary.split() if word.startswith("HT-"))
+        self.hook("cursor", "prompt", {"prompt": f"what does approve {short} do?"})
+        self.assertFalse(self.trusted())
+        self.hook("cursor", "prompt", {"prompt": f"don't approve {short} yet"})
+        self.assertFalse(self.trusted())
+
+    def test_cursor_users_stop_trusting_by_name(self) -> None:
+        from integrations import onboarding
+
+        summary = onboarding.show(self.repo, "acme").value
+        short = next(word for word in summary.split() if word.startswith("HT-"))
+        self.hook("cursor", "prompt", {"prompt": f"approve {short}"})
+        self.assertTrue(self.trusted())
+        self.hook(
+            "cursor", "prompt", {"prompt": "stop trusting the Acme Boards tracker"}
+        )
+        self.assertFalse(self.trusted())
+
     def test_cursor_users_reply_with_the_short_id_the_tracker_summary_shows(
         self,
     ) -> None:
