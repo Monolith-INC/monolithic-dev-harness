@@ -13,12 +13,6 @@ from tests.settings_fixture import MINIMAL
 
 from .fakes import FakeTransport, copy_tracker
 
-SETTINGS = {
-    "schemaVersion": 1,
-    "scm": {"name": "github", "values": {"owner": "o", "repo": "r"}},
-    "branch_template": "feature/{key}-{slug}",
-}
-
 
 def settings(tracker: dict):
     return parse({**MINIMAL, "tracker": tracker})

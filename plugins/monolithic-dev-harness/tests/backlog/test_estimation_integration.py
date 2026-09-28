@@ -5,7 +5,7 @@ from pathlib import Path
 
 from azure_tracker import select_azure
 
-from integrations.planning import as_float
+from integrations.payloads import as_float
 from orchestrator_core.artifact_validator import validate_artifact
 from orchestrator_core.handlers import HANDLERS, handle_plan_capacity
 from orchestrator_core.ingest import ingest_file, ingest_from_text

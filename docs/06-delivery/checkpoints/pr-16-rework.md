@@ -68,7 +68,8 @@ scripts/integrations/   contracts (TrackerOps, ScmOps, domain types), registry, 
 - Follow-up done on `codex/scoped-sessions` after the merge: the backlog runtime's own Azure DevOps
   and Linear providers are gone. Planning (`read_iteration`, `iteration_items`, `hour_fields`) is a
   required part of `TrackerOps` for every tracker, `tracker.json` declares `planning.replies`, and
-  number, date, and capacity-file reading is shared in `scripts/integrations/planning.py`.
+  value reading is shared in `scripts/integrations/payloads.py`, and the capacity file and planning
+  items have one reader in `scripts/integrations/planning_files.py`.
 
 ## PR 17 review fixes (thermos on `codex/scoped-sessions`)
 
@@ -82,6 +83,16 @@ scripts/integrations/   contracts (TrackerOps, ScmOps, domain types), registry, 
 | 6 | A broken onboarded folder dropped its writes from approval: every folder counts, unreadable fails closed | done |
 | 7 | Copies: runtime Azure/Linear settings, `azure-devops` provider alias, replies check twice, settings read twice, hour-field probe and `hours` key, test helpers, field literals, local field names, float and story-point coercion, draft builders, docs repeating `tracker.json` | done |
 | 8 | Names: `--payloads` is `--replies`; Azure adapter helpers private, tested through `TrackerOps` | done |
+
+Second review round (same branch):
+
+| # | Finding | Status |
+|---|---------|--------|
+| 9 | Unreadable sprint items counted existing work as none; the CLI hid every warning | done: the run stops; the CLI prints notes |
+| 10 | A reply holding an error text read as "no team capacity"; local sprint with no capacity file read as empty | done: refused |
+| 11 | An empty Azure sprint was refused as ids-only; "nan"/"inf" read as numbers; input `replies` overwritten | done |
+| 12 | Quality: second `writes` parser, sprint picking copied in two adapters, "current" undefined, hour rule twice, three text converters, untyped handler helpers, planning module mixing model and file reading | done |
+| 13 | Deliberately left: planner's own result type (TD-3), scripts/runtime import cycle (TD-2) | tech debt |
 
 ## Next
 

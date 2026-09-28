@@ -5,7 +5,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from integrations.planning import ESTIMATED_HOURS, POINTS, as_float
+from integrations.payloads import as_float, as_text
+from integrations.planning_files import ESTIMATED_HOURS, POINTS
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
@@ -85,13 +86,8 @@ def normalize_work_item_type(value: str | None) -> str | None:
     return mapping.get(normalized, value.strip())
 
 
-def _text_or_none(value: Any) -> str | None:
-    if isinstance(value, str):
-        text = value.strip()
-        return text or None
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return str(value)
-    return None
+def _optional(value: Any) -> str | None:
+    return as_text(value) or None
 
 
 def ingest_from_text(text: str, *, filename: str | None = None) -> ArtifactRecord:
@@ -108,9 +104,9 @@ def ingest_from_text(text: str, *, filename: str | None = None) -> ArtifactRecor
         title=extract_title(body, frontmatter),
         body=body,
         story_points=as_float(frontmatter.get(POINTS)),
-        parent_id=_text_or_none(frontmatter.get("parent_id")),
-        provider=_text_or_none(frontmatter.get("provider")),
-        provider_id=_text_or_none(frontmatter.get("provider_id")),
+        parent_id=_optional(frontmatter.get("parent_id")),
+        provider=_optional(frontmatter.get("provider")),
+        provider_id=_optional(frontmatter.get("provider_id")),
         source="file",
         filename=filename,
         frontmatter=frontmatter,

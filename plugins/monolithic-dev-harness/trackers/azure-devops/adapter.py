@@ -12,7 +12,17 @@ import re
 from collections.abc import Mapping
 from typing import Any
 
-from core.result import Ok, Result, attempt, bind, err, fmap, sequence, value_or
+from core.result import (
+    Ok,
+    Result,
+    attempt,
+    bind,
+    err,
+    fmap,
+    require,
+    sequence,
+    value_or,
+)
 from integrations import artifacts, payloads
 from integrations.contracts import (
     AdapterContext,
@@ -24,18 +34,19 @@ from integrations.contracts import (
     WorkItem,
     WorkItemKind,
 )
+from integrations.payloads import as_float, first_number, parse_date
 from integrations.planning import (
     DEFAULT_WEEKEND_DAYS,
     ActivityCapacity,
     DateRange,
     EstimableItem,
+    HourFields,
     IterationCapacity,
     IterationReading,
     MemberCapacity,
-    as_float,
     date_ranges,
-    first_number,
-    parse_date,
+    hour_writer,
+    pick_sprint,
 )
 
 # The single home of the Azure DevOps field reference names this tracker reads and writes.
@@ -92,6 +103,13 @@ SPRINT_MARKERS = (
     "finishDate",
 )  # a single sprint, not a listing
 
+# -- Queries ---------------------------------------------------------------
+LIMIT = (
+    200  # the server's cap on one WIQL result, one batch read, and one page of comments
+)
+# A WIQL condition names a field (`[System.State]`, `[Custom.Team]`); anything else is search text.
+WIQL_FIELD = re.compile(r"\[[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+\]")
+
 # -- Processes -------------------------------------------------------------
 PROCESS_AGILE = "agile"
 PROCESS_SCRUM = "scrum"
@@ -147,13 +165,6 @@ def _field_ref(field_name: str) -> str:
     return f"/fields/{field_name}"
 
 
-LIMIT = (
-    200  # the server's cap on one WIQL result, one batch read, and one page of comments
-)
-# A WIQL condition names a field (`[System.State]`, `[Custom.Team]`); anything else is search text.
-WIQL_FIELD = re.compile(r"\[[A-Za-z][A-Za-z0-9_]*(\.[A-Za-z0-9_]+)+\]")
-
-
 def adapter(context: AdapterContext) -> TrackerOps:
     call = _caller(context)
     read = _reader(context, call)
@@ -197,9 +208,11 @@ def adapter(context: AdapterContext) -> TrackerOps:
                 payloads.mapping,
             ),
         ),
-        read_iteration=lambda replies, ref: Ok(_reading(replies, ref)),
+        read_iteration=lambda replies, ref: fmap(
+            _usable(replies), lambda _: _reading(replies, ref)
+        ),
         iteration_items=lambda replies, ref: _sprint_items(replies, process),
-        hour_fields=lambda hours, first: _hour_fields(process, hours, first),
+        hour_fields=_hour_fields(process),
     )
 
 
@@ -234,7 +247,7 @@ def _reader(context: AdapterContext, call):
 def _first(context: AdapterContext, reply: Any, missing: str) -> Result[WorkItem]:
     match _records(reply):
         case (record, *_):
-            return Ok(work_item(context, record))
+            return Ok(_item(context, record))
         case ():
             return err("not_found", missing)
 
@@ -259,7 +272,7 @@ def _unwrapped(item: Any) -> Any:
             return item
 
 
-def work_item(context: AdapterContext, record: Mapping[str, Any]) -> WorkItem:
+def _item(context: AdapterContext, record: Mapping[str, Any]) -> WorkItem:
     fields = record.get("fields") if isinstance(record.get("fields"), dict) else {}
     link = ((record.get("_links") or {}).get("html") or {}).get("href")
     manifest = context.manifest
@@ -282,7 +295,7 @@ def work_item(context: AdapterContext, record: Mapping[str, Any]) -> WorkItem:
     )
 
 
-def wiql(query: str) -> str:
+def _wiql(query: str) -> str:
     """A WIQL statement from a statement, a condition naming a field, or plain search text."""
     text = query.strip()
     condition = (
@@ -319,9 +332,7 @@ def _batch(
             for chunk in chunks
         ),
         lambda replies: tuple(
-            work_item(context, record)
-            for reply in replies
-            for record in _records(reply)
+            _item(context, record) for reply in replies for record in _records(reply)
         ),
     )
 
@@ -335,7 +346,7 @@ def _query(
 def _search(context: AdapterContext, call, query: str) -> Result[Page]:
     # The server caps a WIQL result; say so rather than implying the result is complete.
     return bind(
-        _ids(call, wiql(query)),
+        _ids(call, _wiql(query)),
         lambda ids: fmap(
             _batch(context, call, ids), lambda found: Page(found, "", len(ids) >= LIMIT)
         ),
@@ -455,20 +466,13 @@ def _comment(call, ref: str, draft: ArtifactDraft) -> Result[ArtifactRef]:
 
 
 def _reading(replies: Mapping[str, Any], iteration_ref: str) -> IterationReading:
-    """The sprint from the replies the manifest's `planning.replies` names.
-
-    A single sprint is the one that was asked for. From a listing, "current" (or no name) takes
-    the active sprint and any other reference the sprint of that id, name, or path.
-    """
-    reply = replies.get("iteration")
-    sprints = payloads.one_or_many(reply, *SPRINT_MARKERS)
-    current = iteration_ref.strip().lower() in ("", "current")
-    sprint = (
-        reply
-        if sprints == (reply,)
-        else _current_sprint(reply)
-        if current
-        else payloads.named(sprints, iteration_ref, "id", "name", "path")
+    """The sprint from the replies the manifest's `planning.replies` names; see `pick_sprint`."""
+    sprint, missing = pick_sprint(
+        replies.get("iteration"),
+        iteration_ref,
+        SPRINT_MARKERS,
+        ("id", "name", "path"),
+        _current_sprint,
     )
     return IterationReading(
         _iteration(
@@ -477,54 +481,72 @@ def _reading(replies: Mapping[str, Any], iteration_ref: str) -> IterationReading
             capacities=replies.get("capacities"),
             team_settings=replies.get("team_settings"),
         ),
-        (
-            ()
-            if sprint is not None or reply is None
-            else (
-                "the iteration reply names no current sprint, so it has no dates"
-                if current
-                else f"the iteration reply has no sprint {iteration_ref!r}, so it has no dates",
-            )
-        )
-        + _capacity_cross_check(replies.get("capacities")),
+        missing + _capacity_cross_check(replies.get("capacities")),
+    )
+
+
+# What each reply must be to be read: a sprint (or a listing of them), a capacity listing, the team
+# settings object. A reply that was fetched but holds none of that (an error text, say) is refused,
+# since reading it as "no team" or "no sprint" would let work past the capacity check.
+REPLY_SHAPES = {
+    "iteration": lambda reply: payloads.readable(reply, *SPRINT_MARKERS),
+    "capacities": payloads.is_listing,
+    "team_settings": lambda reply: isinstance(reply, dict),
+}
+
+
+def _usable(replies: Mapping[str, Any]) -> Result[None]:
+    unusable = tuple(
+        key
+        for key, fits in REPLY_SHAPES.items()
+        if key in replies and not fits(replies[key])
+    )
+    return require(
+        not unusable,
+        "unreadable_reply",
+        f"these replies hold no usable data, fetch them again: {', '.join(unusable)}",
     )
 
 
 def _sprint_items(
     replies: Mapping[str, Any], process: str | None
 ) -> Result[tuple[EstimableItem, ...]]:
-    """The sprint's work items with their fields. A reply that lists only ids (what
-    `wit_work_item[list_for_iteration]` returns) is refused rather than read as an empty sprint.
+    """The sprint's work items with their fields.
+
+    A reply that lists only ids (what `wit_work_item[list_for_iteration]` returns) is refused
+    rather than read as an empty sprint; an empty list of ids is an empty sprint.
     """
     reply = replies.get("work_items")
+    relations = payloads.object_or_empty(reply).get("workItemRelations")
     return (
         err(
             "ids_only",
             "the work_items reply lists only work item ids; read them with "
-            "wit_work_item[get_batch] (no fields list) and pass that reply as work_items",
+            "wit_work_item[get_batch] (no fields list) and pass that reply as work_items, "
+            "or [] when the sprint has none",
         )
-        if _ids_only(reply)
-        else Ok(_work_items(reply, process=process))
+        if payloads.listed(relations)
+        or any(
+            "target" in record and "fields" not in record
+            for record in payloads.records(reply)
+        )
+        else Ok(())
+        if isinstance(relations, list)
+        else err(
+            "unreadable_reply",
+            "the work_items reply holds no usable data, fetch it again",
+        )
+        if "work_items" in replies and not payloads.readable(reply, "fields", "id")
+        else Ok(_estimables(reply, process=process))
     )
 
 
-def _ids_only(reply: Any) -> bool:
-    return (isinstance(reply, dict) and "workItemRelations" in reply) or any(
-        "target" in record and "fields" not in record
-        for record in payloads.records(reply)
+def _hour_fields(process: str | None) -> HourFields:
+    """Remaining Work always; Original Estimate once, where the process has it."""
+    return hour_writer(
+        _field_ref(REMAINING_WORK),
+        _field_ref(ORIGINAL_ESTIMATE) if _supports_original_estimate(process) else "",
     )
-
-
-def _hour_fields(process: str | None, hours: float, first: bool) -> Mapping[str, float]:
-    """Remaining Work always; Original Estimate once, on a task's first estimate, where it exists."""
-    return {
-        _field_ref(REMAINING_WORK): hours,
-        **(
-            {_field_ref(ORIGINAL_ESTIMATE): hours}
-            if first and hours > 0 and _supports_original_estimate(process)
-            else {}
-        ),
-    }
 
 
 def _weekday_index(value: Any) -> int | None:
@@ -571,13 +593,14 @@ def _member(entry: Mapping[str, Any]) -> MemberCapacity:
     )
 
 
-def _current_sprint(payload: Any) -> Mapping[str, Any] | None:
+def _current_sprint(
+    entries: tuple[Mapping[str, Any], ...],
+) -> Mapping[str, Any] | None:
     """The active sprint in an iteration listing, or None when none is marked active.
 
     A `timeframe: current` query returns only the active sprint, so a lone unmarked entry is it.
     An entry marked past or future is never taken as current.
     """
-    entries = payloads.records(payload)
     unmarked = tuple(entry for entry in entries if _time_frame(entry) is None)
     return next(
         (entry for entry in entries if _time_frame(entry) == TIMEFRAME_CURRENT),
@@ -638,7 +661,7 @@ def _iteration(
     )
 
 
-def _work_item(payload: Any, *, process: str | None = None) -> EstimableItem | None:
+def _estimable(payload: Any, *, process: str | None = None) -> EstimableItem | None:
     """One work item as the planner sees it; None when the record carries no id."""
     record = payloads.object_or_empty(payload)
     fields = payloads.object_or_empty(record.get("fields"))
@@ -671,13 +694,13 @@ def _work_item(payload: Any, *, process: str | None = None) -> EstimableItem | N
     )
 
 
-def _work_items(
+def _estimables(
     payload: Any, *, process: str | None = None
 ) -> tuple[EstimableItem, ...]:
     return tuple(
         item
         for item in (
-            _work_item(record, process=process) for record in _records(payload)
+            _estimable(record, process=process) for record in _records(payload)
         )
         if item is not None
     )

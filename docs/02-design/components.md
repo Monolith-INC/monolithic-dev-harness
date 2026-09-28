@@ -52,7 +52,7 @@ output schemas enforced.
 | Core | `scripts/core/result.py`, `scripts/core/schema.py` | `Ok`/`Err` values; the standard-library JSON Schema checker |
 | Tracker contract | `scripts/integrations/contracts.py`, `config/tracker.schema.json` | `TrackerOps`, `ScmOps`, and the manifest schema every tracker meets |
 | Tracker registry | `scripts/integrations/registry.py` | checks each tracker folder on its own; resolves the selected tracker (not configured, active, invalid); loads its adapter |
-| Tracker trust | `scripts/integrations/trust.py` | folder digests; trust recorded only from the user's typed line |
+| Tracker trust | `scripts/integrations/trust.py` | folder digests; trust recorded only from the user's click (a reply in Cursor) |
 | Onboarding | `scripts/integrations/onboarding.py` | stages a tracker folder and shows it for review |
 | Trackers | `trackers/azure-devops/`, `trackers/linear/`, `trackers/local/` | one `tracker.json` and one `adapter.py` each |
 | SCM adapters | `scripts/integrations/scm.py` | GitHub (`gh`) and Azure Repos (MCP) behind `ScmOps` |

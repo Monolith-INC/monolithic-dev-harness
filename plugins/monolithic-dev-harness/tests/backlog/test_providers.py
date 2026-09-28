@@ -11,6 +11,7 @@ from azure_tracker import (
     item,
     items,
     members,
+    refused,
     sprint,
     tracker,
     weekend,
@@ -148,9 +149,9 @@ class TestAzureMapping(unittest.TestCase):
 
     def test_map_capacities_tolerates_garbage(self):
         """Malformed payloads yield nothing instead of raising."""
-        self.assertEqual(members(None), ())
-        self.assertEqual(members("nonsense"), ())
         self.assertEqual(members({"value": ["not-an-object"]}), ())
+        self.assertEqual(refused(capacities=None), "unreadable_reply")
+        self.assertEqual(refused(capacities="nonsense"), "unreadable_reply")
 
     def test_map_days_off_single_day(self):
         """A one-day absence with no end date is still a valid range."""
@@ -166,7 +167,7 @@ class TestAzureMapping(unittest.TestCase):
         """Absent settings keep the default weekend."""
         self.assertEqual(weekend({}), DEFAULT_WEEKEND_DAYS)
         self.assertEqual(weekend({"workingDays": []}), DEFAULT_WEEKEND_DAYS)
-        self.assertEqual(weekend(None), DEFAULT_WEEKEND_DAYS)
+        self.assertEqual(refused(team_settings=None), "unreadable_reply")
 
     def test_map_weekend_days_six_day_week(self):
         """A team working Saturdays leaves only Sunday as weekend."""

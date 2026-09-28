@@ -3,7 +3,8 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.result import Result, attempt, failures, oks
-from integrations.planning import EstimableItem, planning_item, read_capacity_file
+from integrations.planning import EstimableItem
+from integrations.planning_files import planning_item, read_capacity_file
 
 from ..ingest import parse_frontmatter
 from .base import ProviderResult

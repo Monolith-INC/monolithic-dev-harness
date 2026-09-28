@@ -101,8 +101,8 @@ class TestArtifactsPathResolution(ConfigTestCase):
 class TestReadFromSettings(ConfigTestCase):
     """The backlog view of `.harness/settings.json`, the only source."""
 
-    def test_reads_the_artifacts_path_and_the_selected_tracker(self):
-        """The tracker's values are the registry's to read; this view names the tracker only."""
+    def test_reads_the_artifacts_path_and_nothing_about_the_tracker(self):
+        """The tracker and its values are the registry's to read, not this view's."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
             write_settings(
@@ -112,7 +112,7 @@ class TestReadFromSettings(ConfigTestCase):
             )
             self.assertEqual(
                 load_project_config(root),
-                ProjectConfig("docs/backlog", "linear", (".harness/settings.json",)),
+                ProjectConfig("docs/backlog", (".harness/settings.json",)),
             )
 
     def test_broken_or_missing_settings_give_an_empty_configuration(self):

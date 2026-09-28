@@ -14,7 +14,17 @@ Rule under test: a mapper may return less, but it must never raise and must neve
 import unittest
 from datetime import date
 
-from azure_tracker import days_off, item, items, members, reading, sprint, weekend
+from azure_tracker import (
+    days_off,
+    item,
+    items,
+    items_refused,
+    members,
+    reading,
+    refused,
+    sprint,
+    weekend,
+)
 
 from integrations.planning import DEFAULT_WEEKEND_DAYS, DateRange
 from orchestrator_core.capacity import plan_iteration
@@ -118,20 +128,16 @@ class TestCapacityMapperDegradation(unittest.TestCase):
         )
         self.assertEqual(team[0].activities[0].name, "")
 
-    def test_hostile_inputs_return_empty(self):
-        """Anything unmappable yields nothing rather than raising."""
-        for payload in (
-            None,
-            "text",
-            42,
-            [],
-            {},
-            {"value": None},
-            [None],
-            [[]],
-            {"value": "text"},
-        ):
+    def test_unmappable_entries_in_a_listing_yield_nothing(self):
+        """Entries the mapper cannot read are skipped rather than raising."""
+        for payload in ([], [None], [[]], {"value": []}, {"value": ["text"]}):
             self.assertEqual(members(payload), ())
+
+    def test_a_reply_that_is_no_listing_is_refused(self):
+        """An error text or other non-list is refused: reading it as "no team" would let work
+        past the capacity check."""
+        for payload in (None, "text", 42, {}, {"value": None}, {"value": "text"}):
+            self.assertEqual(refused(capacities=payload), "unreadable_reply")
 
 
 class TestDaysOffDegradation(unittest.TestCase):
@@ -334,8 +340,13 @@ class TestWorkItemDegradation(unittest.TestCase):
         """Unmappable work-item payloads yield nothing."""
         for payload in (None, "text", 42, [], {}, {"fields": {}}):
             self.assertIsNone(item(payload))
-        for payload in (None, "text", {"value": None}, [None]):
-            self.assertEqual(items(payload), ())
+        self.assertEqual(items([None]), ())
+        for payload in (None, "text", {"value": None}):
+            self.assertEqual(items_refused(payload), "unreadable_reply")
+
+    def test_an_empty_sprint_is_empty_not_ids_only(self):
+        """No ids to read is a sprint with no work, which get_batch could not be asked for."""
+        self.assertEqual(items({"workItemRelations": []}), ())
 
 
 class TestMcpServerShapes(unittest.TestCase):
@@ -411,7 +422,6 @@ class TestMcpServerShapes(unittest.TestCase):
     def test_reported_total_absent_offers_no_cross_check(self):
         """A payload without the total simply offers no cross-check."""
         self.assertEqual(reading(capacities={"teamMembers": []}).warnings, ())
-        self.assertEqual(reading(capacities="garbage").warnings, ())
 
     def test_rest_envelope_still_works(self):
         """Supporting the MCP shape must not break the raw REST shape."""
@@ -475,15 +485,13 @@ class TestMcpServerShapes(unittest.TestCase):
 class TestFullPipelineDegradation(unittest.TestCase):
     """A whole plan built from partial and malformed payloads must still be honest."""
 
-    def test_plan_survives_entirely_malformed_payloads(self):
-        """Garbage in produces an empty plan with warnings, never an exception."""
-        iteration = sprint(
-            "it1", iteration="garbage", capacities="garbage", team_settings="garbage"
+    def test_replies_that_hold_no_data_are_refused_never_planned(self):
+        """Garbage in is refused, never read as an empty sprint that fits anything."""
+        self.assertEqual(
+            refused(iteration="garbage", capacities="garbage", team_settings="garbage"),
+            "unreadable_reply",
         )
-        plan = plan_iteration(iteration, items("garbage"))
-        self.assertEqual(plan.available_hours, 0.0)
-        self.assertIsNone(plan.utilisation)
-        self.assertTrue(plan.warnings)
+        self.assertEqual(items_refused("garbage"), "unreadable_reply")
 
     def test_partial_payload_reports_what_is_missing(self):
         """Capacity without dates cannot compute availability, and says so."""

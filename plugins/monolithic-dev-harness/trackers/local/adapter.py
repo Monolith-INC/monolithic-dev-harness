@@ -32,11 +32,12 @@ from integrations.contracts import (
     WorkItem,
     WorkItemKind,
 )
-from integrations.planning import (
+from integrations.planning import IterationReading, is_current
+from integrations.planning_files import (
     ITERATION,
+    RECORDED_HOURS,
     planning_item,
     read_capacity_file,
-    recorded_hours,
 )
 
 ROOT = Path(".harness") / "tracker"
@@ -89,10 +90,7 @@ def adapter(context: AdapterContext) -> TrackerOps:
             _find(context, root, ref), lambda found: _link(found, url, kind)
         ),
         read_iteration=lambda replies, ref: bind(
-            _sprint(ref),
-            lambda name: read_capacity_file(
-                root / "capacity" / f"{_safe(name)}.json", name
-            ),
+            _sprint(ref), lambda name: _capacity(root, name)
         ),
         iteration_items=lambda replies, ref: bind(
             _sprint(ref),
@@ -110,7 +108,7 @@ def adapter(context: AdapterContext) -> TrackerOps:
                 ),
             ),
         ),
-        hour_fields=recorded_hours,
+        hour_fields=RECORDED_HOURS,
     )
 
 
@@ -387,11 +385,23 @@ def _link(found: Record, url: str, kind: str) -> Result[Mapping[str, Any]]:
     )
 
 
+def _capacity(root: Path, name: str) -> Result[IterationReading]:
+    path = root / "capacity" / f"{_safe(name)}.json"
+    return bind(
+        require(
+            path.is_file(),
+            "no_capacity",
+            f"sprint {name!r} has no capacity file at {path.relative_to(root.parent.parent)}",
+        ),
+        lambda _: read_capacity_file(path, name),
+    )
+
+
 def _sprint(ref: str) -> Result[str]:
-    name = ref.strip()
+    """The sprint's name; the local tracker keeps no "current" sprint to fall back on."""
     return (
-        Ok(name)
-        if name
+        Ok(ref.strip())
+        if not is_current(ref)
         else err(
             "invalid_request",
             "name the sprint: the local tracker reads .harness/tracker/capacity/<sprint>.json",

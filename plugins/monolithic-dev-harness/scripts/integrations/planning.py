@@ -1,4 +1,4 @@
-"""The sprint model every tracker's planning operations speak, and the helpers they share.
+"""The sprint model every tracker's planning operations speak.
 
 Each tracker's `TrackerOps` (see `contracts.py`) turns what it knows about a sprint into these
 values: the replies a skill fetched through the host's tools (Azure DevOps, Linear) or the
@@ -8,64 +8,32 @@ They read and plan only: a planned write is shown to a person before anything is
 
 from __future__ import annotations
 
-import json
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import date, timedelta
-from pathlib import Path
 from typing import Any
 
-from core.result import Ok, Result, attempt, bind, err, value_or
+from .payloads import listed, named, one_or_many, parse_date
 
 # Saturday and Sunday. Azure DevOps lets a team configure its own weekend days; when that
 # setting is unknown this is the assumption, and `IterationCapacity.weekend_days` overrides it.
 DEFAULT_WEEKEND_DAYS = (5, 6)
 
+# The sprint reference that means "the active sprint"; an empty reference means the same.
+CURRENT = "current"
 
-def parse_date(value: Any) -> date | None:
-    """An ISO date or datetime string as a date; None when there is none to read."""
-    text = str(value or "").strip()
-    return value_or(
-        attempt(lambda: date.fromisoformat(text[:10]), "no_date", text, ValueError)
-        if text
-        else Ok(None),
-        None,
-    )
+HourFields = Callable[[float, bool], Mapping[str, float]]
 
 
-def as_float(value: Any) -> float | None:
-    """A number from a reply or a file; None when the value is not one (a flag is not)."""
-    match value:
-        case bool():
-            return None
-        case int() | float():
-            return float(value)
-        case str():
-            return value_or(
-                attempt(lambda: float(value.strip()), "no_number", value, ValueError),
-                None,
-            )
-        case _:
-            return None
-
-
-def first_number(record: Mapping[str, Any], *names: str) -> float | None:
-    """The first of `names` holding a number. Not an `or` chain: a real 0 is falsy."""
-    return next(
-        (
-            number
-            for number in (as_float(record.get(name)) for name in names)
-            if number is not None
-        ),
-        None,
-    )
+def is_current(ref: str) -> bool:
+    return ref.strip().lower() in ("", CURRENT)
 
 
 def date_ranges(raw: Any) -> tuple[DateRange, ...]:
     """Days off as ranges: `{start, end}` objects (end defaults to start) or single dates."""
     return tuple(
         DateRange(start, end)
-        for start, end in (_bounds(entry) for entry in _list(raw))
+        for start, end in (_bounds(entry) for entry in listed(raw))
         if start is not None and end is not None
     )
 
@@ -195,118 +163,50 @@ class IterationReading:
     warnings: tuple[str, ...] = ()
 
 
-# The planning fields of a work item, as a person writes them in a planning file's front matter and
-# as the local tracker keeps them in its records. One format, read by `planning_item` alone.
-POINTS = "story_points"
-ESTIMATED_HOURS = "effort_hours"
-REMAINING_HOURS = "remaining_hours"
-COMPLETED_HOURS = "completed_hours"
-ACTIVITY = "activity"
-ASSIGNED_TO = "assigned_to"
-ITERATION = "iteration"
-STATE = "state"
-
-
-def planning_item(
-    item_id: str, title: str, item_type: str, fields: Mapping[str, Any]
-) -> EstimableItem:
-    return EstimableItem(
-        item_id=item_id,
-        title=title,
-        item_type=item_type,
-        points=as_float(fields.get(POINTS)),
-        estimated_hours=as_float(fields.get(ESTIMATED_HOURS)),
-        remaining_hours=as_float(fields.get(REMAINING_HOURS)),
-        completed_hours=as_float(fields.get(COMPLETED_HOURS)),
-        activity=_text(fields.get(ACTIVITY)),
-        assigned_to=_text(fields.get(ASSIGNED_TO)),
-        state=_text(fields.get(STATE)) or "",
-        iteration=_text(fields.get(ITERATION)),
-    )
-
-
-def recorded_hours(hours: float, first: bool) -> Mapping[str, float]:
-    """The planning fields that record a task's hours: remaining always, the estimate once."""
-    return {
-        REMAINING_HOURS: hours,
-        **({ESTIMATED_HOURS: hours} if first and hours > 0 else {}),
-    }
-
-
-def _text(value: Any) -> str | None:
-    return str(value).strip() or None if value is not None else None
-
-
 def empty_reading(iteration_ref: str, warning: str) -> IterationReading:
     return IterationReading(IterationCapacity(iteration_ref=iteration_ref), (warning,))
 
 
-# The capacity file a person writes, for the planning-files source and the local tracker alike:
-#   {"startDate": "...", "finishDate": "...", "teamDaysOff": [...],
-#    "members": [{"id", "name", "daysOff": [...], "activities": [{"name", "capacityPerDay"}]}]}
-# snake_case spellings (start_date, capacity_per_day, ...) are read too.
+def pick_sprint(
+    reply: Any,
+    ref: str,
+    markers: tuple[str, ...],
+    keys: tuple[str, ...],
+    active: Callable[[tuple[Mapping[str, Any], ...]], Mapping[str, Any] | None],
+) -> tuple[Mapping[str, Any] | None, tuple[str, ...]]:
+    """The sprint a reply gives for `ref`, and a warning when it gives none.
 
-
-def read_capacity_file(path: Path, iteration_ref: str) -> Result[IterationReading]:
-    """The sprint a capacity file describes. No file is a sprint with no team or dates; a file
-    that cannot be read is an error, because saying "no file" would send someone the wrong way.
+    A single sprint (a record holding any of `markers`) is the one asked for. From a listing, the
+    current sprint is `active(entries)` and any other reference the entry whose `keys` hold it.
     """
-    return (
-        bind(
-            attempt(
-                lambda: json.loads(path.read_text(encoding="utf-8")),
-                "unreadable_capacity",
-                f"capacity file unreadable: {path}",
-                OSError,
-                ValueError,
-            ),
-            lambda data: (
-                Ok(IterationReading(capacity_document(iteration_ref, data)))
-                if isinstance(data, dict)
-                else err(
-                    "unreadable_capacity", f"capacity file is not an object: {path}"
-                )
-            ),
-        )
-        if path.is_file()
-        else Ok(
-            empty_reading(
-                iteration_ref,
-                f"no capacity file at {path}; iteration has no team or dates",
-            )
+    entries = one_or_many(reply, *markers)
+    sprint = (
+        reply
+        if entries == (reply,)
+        else active(entries)
+        if is_current(ref)
+        else named(entries, ref, *keys)
+    )
+    return sprint, (
+        ()
+        if sprint is not None or reply is None
+        else (
+            "the reply has "
+            + ("no current sprint" if is_current(ref) else f"no sprint {ref!r}")
+            + ", so the sprint has no dates",
         )
     )
 
 
-def capacity_document(iteration_ref: str, data: Mapping[str, Any]) -> IterationCapacity:
-    return IterationCapacity(
-        iteration_ref=iteration_ref,
-        start_date=parse_date(data.get("startDate") or data.get("start_date")),
-        finish_date=parse_date(data.get("finishDate") or data.get("finish_date")),
-        members=tuple(
-            _member(entry)
-            for entry in _list(data.get("members"))
-            if isinstance(entry, dict)
-        ),
-        team_days_off=date_ranges(data.get("teamDaysOff") or data.get("team_days_off")),
-    )
+def no_hours(hours: float, first: bool) -> Mapping[str, float]:
+    """How a tracker that records no hours records them: not at all."""
+    return {}
 
 
-def _member(entry: Mapping[str, Any]) -> MemberCapacity:
-    return MemberCapacity(
-        member_id=str(entry.get("id") or entry.get("name") or ""),
-        display_name=str(entry.get("name") or entry.get("id") or ""),
-        activities=tuple(
-            ActivityCapacity(
-                str(activity.get("name", "")),
-                first_number(activity, "capacityPerDay", "capacity_per_day") or 0.0,
-            )
-            for activity in _list(entry.get("activities"))
-            if isinstance(activity, dict)
-        ),
-        days_off=date_ranges(entry.get("daysOff") or entry.get("days_off")),
-    )
-
-
-def _list(value: Any) -> tuple[Any, ...]:
-    return tuple(value) if isinstance(value, list) else ()
+def hour_writer(remaining: str, estimate: str = "") -> HourFields:
+    """How a tracker records a task's hours: `remaining` always, and `estimate` (when the tracker
+    has one) once, on the task's first non-zero figure."""
+    return lambda hours, first: {
+        remaining: hours,
+        **({estimate: hours} if estimate and first and hours > 0 else {}),
+    }

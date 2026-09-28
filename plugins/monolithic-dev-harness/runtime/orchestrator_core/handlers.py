@@ -1,9 +1,17 @@
 from __future__ import annotations
 
+from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from integrations.planning import as_float
+from core.result import Err, Ok, Result, bind, err, fmap
+from harness import settings
+from harness.settings import Settings
+from integrations import registry
+from integrations.contracts import Manifest, TrackerOps
+from integrations.payloads import as_float, as_text
+from integrations.planning import CURRENT, HourFields, IterationCapacity, no_hours
 
 from .artifact_validator import critiques_from_results, validate_artifact
 from .ingest import ingest_file, ingest_from_text
@@ -169,9 +177,6 @@ def handle_plan_capacity(
     Reads only. Any hour figure it suggests is returned as a planned write for a human to
     confirm -- this handler never sends anything to a backlog system.
     """
-    from core.result import Err, Ok
-    from harness import settings
-
     from .capacity import format_plan, plan_iteration
     from .estimation import config_diagnostics, estimate_hours, load_config
     from .project_config import project_root_of
@@ -180,15 +185,11 @@ def handle_plan_capacity(
     provider_name = str(arguments.get("provider", "filesystem")).strip() or "filesystem"
 
     project_root = project_root_of(state_dir)
-    replies = arguments.get("replies") or {}
-    if not isinstance(replies, dict):
-        return {
-            "ok": False,
-            "error": "replies must be an object",
-            "instructions": instructions,
-        }
-    match _capacity_source(
-        provider_name, project_root, settings.load(project_root), replies
+    match bind(
+        _replies(arguments),
+        lambda replies: _capacity_source(
+            provider_name, project_root, settings.load(project_root), replies
+        ),
     ):
         case Ok(provider):
             pass
@@ -268,9 +269,6 @@ def handle_estimate_breakdown(
     Returns the write operations to apply — it performs none itself. When `blocked` is set,
     `write_ops` is empty: work that cannot fit is never written.
     """
-    from core.result import Err, Ok, bind
-    from harness import settings
-
     from .estimation import (
         TaskInput,
         config_diagnostics,
@@ -286,7 +284,7 @@ def handle_estimate_breakdown(
             "instructions": instructions,
         }
 
-    story_id = _as_text(arguments.get("story_id"))
+    story_id = as_text(arguments.get("story_id"))
     if not story_id:
         return {
             "ok": False,
@@ -302,20 +300,18 @@ def handle_estimate_breakdown(
             "instructions": instructions,
         }
 
-    replies = arguments.get("replies") or {}
-    if not isinstance(replies, dict):
-        return {
-            "ok": False,
-            "error": "replies must be an object",
-            "instructions": instructions,
-        }
+    match _replies(arguments):
+        case Ok(replies):
+            pass
+        case Err(failure):
+            return {"ok": False, "error": failure.message, "instructions": instructions}
 
-    assignee = _as_text(arguments.get("assignee")) or None
+    assignee = as_text(arguments.get("assignee")) or None
 
     tasks = [
         TaskInput(
-            task_id=_as_text(entry.get("id")) or _as_text(entry.get("task_id")),
-            title=_as_text(entry.get("title")),
+            task_id=as_text(entry.get("id")) or as_text(entry.get("task_id")),
+            title=as_text(entry.get("title")),
             current_hours=as_float(entry.get("current_hours")),
             weight=as_float(entry.get("weight")),
         )
@@ -341,26 +337,32 @@ def handle_estimate_breakdown(
 
     project_root = project_root_of(state_dir)
     tracker = _tracker(project_root, settings.load(project_root))
-    iteration_ref = _as_text(arguments.get("iteration_ref")) or None
+    iteration_ref = as_text(arguments.get("iteration_ref")) or None
 
     # Capacity is checked when asked for: replies were given, or a sprint was named. Once asked, a
-    # check that cannot run (no usable tracker, a reply missing) stops the run, since writing
-    # hours past an unchecked ceiling is what the check exists to prevent. What the check finds
-    # (nobody to match, an unreadable sprint) is reported and the estimate stands.
+    # check that cannot run (no usable tracker, a reply missing or unreadable, a sprint or its
+    # items unreadable) stops the run, since writing hours past an unchecked ceiling is what the
+    # check exists to prevent. What a check that ran finds (nobody to match, no team capacity
+    # recorded) is reported and the estimate stands.
     asked = bool(replies) or iteration_ref is not None
-    match bind(tracker, lambda found: _planning(found, replies)) if asked else Ok(None):
+    match (
+        bind(
+            _planning_tracker(tracker, replies),
+            lambda planning: _assignee_capacity(
+                planning, replies, iteration_ref or CURRENT, assignee
+            ),
+        )
+        if asked
+        else Ok(NOT_ASKED)
+    ):
         case Err(failure):
             return {
                 "ok": False,
                 "error": f"capacity cannot be checked: {failure.message}",
                 "instructions": instructions,
             }
-        case Ok(None):
-            availability, provider_warnings, capacity_errors = None, (), ()
-        case Ok(planning):
-            availability, provider_warnings, capacity_errors = _assignee_capacity(
-                planning, replies, iteration_ref or "current", assignee
-            )
+        case Ok(capacity):
+            pass
 
     config = load_config(state_dir)
     estimate = estimate_breakdown(
@@ -370,7 +372,7 @@ def handle_estimate_breakdown(
         config=config,
         assignee=assignee,
         iteration_ref=iteration_ref,
-        availability=availability,
+        availability=capacity.availability,
     )
     if estimate is None:
         return {
@@ -384,7 +386,7 @@ def handle_estimate_breakdown(
     # stale hours behind is exactly the drift this feature exists to prevent. The tracker names
     # its own hour fields; a tracker that records no hours, or none usable, gets no writes and a
     # note to record the figures by hand.
-    hour_fields = _hour_fields(tracker)
+    hour_fields, why_no_hours = _hour_recording(tracker)
     changed = (
         [] if estimate.blocked else [task for task in estimate.tasks if task.changed]
     )
@@ -394,7 +396,7 @@ def handle_estimate_breakdown(
         if (fields := hour_fields(task.hours, task.is_new))
     ]
     by_hand = (
-        (f"record these hours by hand: {_no_hours(tracker)}",)
+        (f"record these hours by hand: {why_no_hours}",)
         if changed and not write_ops
         else ()
     )
@@ -426,21 +428,49 @@ def handle_estimate_breakdown(
         "write_ops": write_ops,
         "warnings": (
             list(estimate.warnings)
-            + list(provider_warnings)
+            + list(capacity.warnings)
             + list(config_diagnostics(config))
-            + list(capacity_errors)
+            + list(capacity.errors)
             + list(by_hand)
         ),
-        "capacity_errors": list(capacity_errors),
+        # Everything above but the estimate's own warnings, which its report already prints.
+        "notes": (
+            list(capacity.warnings)
+            + list(config_diagnostics(config))
+            + list(capacity.errors)
+            + list(by_hand)
+        ),
+        "capacity_errors": list(capacity.errors),
         "instructions": instructions,
     }
 
 
-def _tracker(project_root: Path, loaded: Any) -> Any:
-    """The selected tracker's manifest and operations, as a result."""
-    from core.result import bind, fmap
-    from integrations import registry
+@dataclass(frozen=True)
+class CapacityCheck:
+    """What checking the assignee's capacity found: their availability, if it could be worked
+    out, what the tracker warned about, and why the check fell short."""
 
+    availability: Any
+    warnings: tuple[str, ...]
+    errors: tuple[str, ...]
+
+
+NOT_ASKED = CapacityCheck(None, (), ())
+
+
+def _replies(arguments: Mapping[str, Any]) -> Result[Mapping[str, Any]]:
+    replies = arguments.get("replies") or {}
+    return (
+        Ok(replies)
+        if isinstance(replies, dict)
+        else err("invalid_request", "replies must be an object")
+    )
+
+
+def _tracker(
+    project_root: Path, loaded: Result[Settings]
+) -> Result[tuple[Manifest, TrackerOps]]:
+    """The selected tracker's manifest and operations."""
     return bind(
         registry.selected(project_root, loaded),
         lambda active: fmap(
@@ -450,77 +480,82 @@ def _tracker(project_root: Path, loaded: Any) -> Any:
     )
 
 
-def _planning(found: Any, replies: dict[str, Any]) -> Any:
+def _planning_tracker(
+    tracker: Result[tuple[Manifest, TrackerOps]], replies: Mapping[str, Any]
+) -> Result[TrackerOps]:
     """The tracker's operations, once every reply its planning reads is present."""
-    from core.result import fmap
-    from integrations import registry
-
-    manifest, tracker = found
-    return fmap(registry.require_replies(manifest, replies), lambda _: tracker)
+    return bind(
+        tracker,
+        lambda found: fmap(
+            registry.require_replies(found[0], replies), lambda _: found[1]
+        ),
+    )
 
 
 def _assignee_capacity(
-    tracker: Any, replies: dict[str, Any], iteration_ref: str, assignee: str | None
-) -> tuple[Any, tuple[str, ...], tuple[str, ...]]:
-    """(availability, warnings, capacity errors) for the assignee in the sprint."""
+    tracker: TrackerOps,
+    replies: Mapping[str, Any],
+    iteration_ref: str,
+    assignee: str | None,
+) -> Result[CapacityCheck]:
     from .capacity import availability_for
-    from .providers import TrackerProvider
+    from .providers import ProviderResult, TrackerProvider
 
     provider = TrackerProvider(tracker, replies)
     sprint = provider.fetch_iteration(iteration_ref)
     items = provider.fetch_work_items(iteration_ref) if sprint.ok else sprint
-    availability = (
-        availability_for(sprint.data, assignee, items=items.data if items.ok else None)
-        if sprint.ok
-        else None
-    )
-    found = (
-        ()
-        if availability is not None
-        else (f"iteration unreadable: {sprint.error}",)
-        if not sprint.ok
-        else ("the sprint records no team capacity, so it was not checked",)
-        if not sprint.data.members
-        else (f"assignee '{assignee}' not matched to a team member",)
-        if assignee
-        else ("no assignee on the story, so capacity was not checked",)
-    )
-    return (
-        availability,
-        sprint.warnings + (items.warnings if sprint.ok else ()),
-        (() if items.ok else (f"iteration items unreadable: {items.error}",)) + found,
-    )
+    match (sprint, items):
+        case (ProviderResult(ok=False, error=reason), _):
+            return err("unreadable_sprint", f"the sprint could not be read: {reason}")
+        case (_, ProviderResult(ok=False, error=reason)):
+            return err(
+                "unreadable_sprint",
+                f"the sprint's work items could not be read: {reason}",
+            )
+        case _:
+            availability = availability_for(sprint.data, assignee, items=items.data)
+            return Ok(
+                CapacityCheck(
+                    availability,
+                    sprint.warnings + items.warnings,
+                    _unchecked(availability, sprint.data, assignee),
+                )
+            )
 
 
-def _hour_fields(tracker: Any) -> Any:
-    from core.result import Ok
+def _unchecked(
+    availability: Any, sprint: IterationCapacity, assignee: str | None
+) -> tuple[str, ...]:
+    """Why a readable sprint still gave no availability for the assignee."""
+    match (availability is None, bool(sprint.members), bool(assignee)):
+        case (False, _, _):
+            return ()
+        case (True, False, _):
+            return ("the sprint records no team capacity, so it was not checked",)
+        case (True, True, True):
+            return (f"assignee '{assignee}' not matched to a team member",)
+        case _:
+            return ("no assignee on the story, so capacity was not checked",)
 
+
+def _hour_recording(
+    tracker: Result[tuple[Manifest, TrackerOps]],
+) -> tuple[HourFields, str]:
+    """How the tracker records hours, and why nothing would be written if it records none."""
     match tracker:
         case Ok((_, operations)):
-            return operations.hour_fields
-        case _:
-            return lambda hours, first: {}
-
-
-def _no_hours(tracker: Any) -> str:
-    from core.result import Err
-
-    match tracker:
+            return operations.hour_fields, "the tracker records no hours"
         case Err(failure):
-            return failure.message
-        case _:
-            return "the tracker records no hours"
+            return no_hours, failure.message
 
 
 def _capacity_source(
     provider_name: str,
     project_root: Path,
-    loaded: Any,
-    replies: dict[str, Any],
-) -> Any:
+    loaded: Result[Settings],
+    replies: Mapping[str, Any],
+) -> Result[Any]:
     """The user's planning files, or the selected tracker reading the replies a skill fetched."""
-    from core.result import Ok, bind, err, fmap
-
     from .project_config import from_settings
     from .providers import FilesystemProvider, TrackerProvider
 
@@ -533,10 +568,7 @@ def _capacity_source(
             )
         case "tracker":
             return fmap(
-                bind(
-                    _tracker(project_root, loaded),
-                    lambda found: _planning(found, replies),
-                ),
+                _planning_tracker(_tracker(project_root, loaded), replies),
                 lambda tracker: TrackerProvider(tracker, replies),
             )
         case _:
@@ -544,15 +576,6 @@ def _capacity_source(
                 "invalid_request",
                 f"unknown provider: {provider_name}; use filesystem or tracker",
             )
-
-
-def _as_text(value: Any) -> str:
-    """Coerce a JSON scalar to text. Objects and arrays are not identifiers."""
-    if isinstance(value, str):
-        return value.strip()
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return str(value)
-    return ""
 
 
 HANDLERS = {

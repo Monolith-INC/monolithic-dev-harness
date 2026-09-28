@@ -1,7 +1,7 @@
 """Per-project configuration for the backlog stage, read from the repository's settings.
 
-The one source is `.harness/settings.json` (see `scripts/harness/settings.py`): the artifacts path
-and which tracker is selected. The tracker's own values are the registry's to read and check.
+The one source is `.harness/settings.json` (see `scripts/harness/settings.py`). The backlog stage
+reads the artifacts path from it here; the selected tracker is the registry's to read and check.
 This module only reads the file; people edit it.
 
 `artifacts_path` has **no default**. When it is unset, filesystem output is unavailable and the
@@ -25,9 +25,6 @@ PLUGIN_DIRNAME = ".harness/backlog"
 class ProjectConfig:
     artifacts_path: str | None = None
     """Where the user wants local artifacts written. No default -- ask, never assume."""
-
-    tracker: str = ""
-    """The selected tracker's name. Its values and problems come from the registry, not here."""
 
     sources: tuple[str, ...] = ()
 
@@ -71,7 +68,6 @@ def from_settings(loaded: Result[Settings]) -> ProjectConfig:
         case Ok(chosen):
             return ProjectConfig(
                 artifacts_path=chosen.artifacts_path or None,
-                tracker=chosen.tracker.name,
                 sources=(str(settings.SETTINGS_RELATIVE_PATH),),
             )
         case _:

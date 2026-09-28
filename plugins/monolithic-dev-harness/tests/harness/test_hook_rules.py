@@ -14,6 +14,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from tests.settings_fixture import MINIMAL
+
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 HOOK = PLUGIN_ROOT / "scripts" / "harness" / "hook.py"
 CHECKS = PLUGIN_ROOT / "scripts" / "harness" / "checks.py"
@@ -21,7 +23,7 @@ VERDICT = PLUGIN_ROOT / "scripts" / "harness" / "review_verdict.py"
 AZ = "mcp__plugin_monolithic-dev-harness_azure-devops__"
 
 SETTINGS = {
-    "schemaVersion": 1,
+    **MINIMAL,
     "tracker": {
         "name": "azure-devops",
         "values": {"organization": "o", "project": "demo"},
@@ -363,8 +365,8 @@ class TestTrackers(HookTestCase):
     def test_a_broken_onboarded_tracker_that_is_not_selected_still_needs_approval(
         self,
     ) -> None:
-        """A folder that fails its checks (here: no planning section) may not quietly drop
-        its server's writes from the approval rule."""
+        """A folder that fails its checks (here, a manifest with little but its writes) may not
+        quietly drop its server's writes from the approval rule."""
         folder = self.repo / ".harness" / "trackers" / "custom"
         folder.mkdir(parents=True)
         (folder / "tracker.json").write_text(

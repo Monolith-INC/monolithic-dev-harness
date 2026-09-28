@@ -32,3 +32,28 @@ to close it, and when to revisit. Fix one on a `techdebt/…` branch and remove 
 - **Risk today:** needs an agent working against the user; every other rule still applies to the
   trusted tracker's writes (approval windows, protected items).
 - **Revisit:** before onboarded trackers are used outside the maintainers' own repositories.
+
+## TD-2: The harness scripts and the backlog runtime import each other
+
+- **Where:** `scripts/harness/local_artifacts.py` imports `orchestrator_core.project_config`, while
+  `runtime/orchestrator_core/__init__.py` puts `scripts/` on the import path.
+- **What happens:** the two layers depend on each other, so neither can be read or tested alone,
+  and `project_config.load_project_config` exists only for this import.
+- **Why it is open:** it predates the tracker work and touches the artifact-path logic every skill
+  uses; changing it belongs in its own change.
+- **Options:** move the artifacts-path lookup into `scripts/harness/settings.py` (it only reads
+  `artifacts_path`) and have the runtime call it, or have the runtime's callers pass the resolved
+  path in.
+- **Revisit:** the next change to how skills resolve the artifacts path.
+
+## TD-3: The capacity planner has its own result type
+
+- **Where:** `runtime/orchestrator_core/providers/base.py` (`ProviderResult`), beside `core.result`.
+- **What happens:** trackers answer with `Ok`/`Err`; the planner reads `ProviderResult`, so
+  `ProviderResult.of` translates between the two, and warnings travel beside the value instead of in
+  it.
+- **Why it is open:** the planner, both capacity sources, and their tests speak `ProviderResult`;
+  replacing it is a refactor of its own with no change in behaviour.
+- **Options:** have the sources return `Result[(value, warnings)]` and the handlers `match` on it,
+  then delete `ProviderResult`.
+- **Revisit:** the next change to the capacity planner.

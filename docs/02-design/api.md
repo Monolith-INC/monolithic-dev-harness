@@ -238,7 +238,7 @@ story tasks; `ids.pattern`, `ids.branch_key` (with a named group `id`), and ever
 (`scripts/integrations/contracts.py`). `TrackerOps` holds `get_work_item`, `search_work_items`,
 `create_work_item`, `transition_work_item`, `list_children`, `list_artifacts`, `add_artifact`,
 `link_development_artifact`, and the planning operations `read_iteration`, `iteration_items`, and
-`hour_fields` (the sprint model is in `scripts/integrations/planning.py`). Every tracker provides all
+`hour_fields` (the sprint model is in `scripts/integrations/planning.py`; the sprint reference `current`, or none, means the active sprint). Every tracker provides all
 of them; each returns `Ok` or `Err` and never raises for an expected condition.
 
 ## Gateway tools — `workflow-integrations`

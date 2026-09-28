@@ -32,6 +32,15 @@ def sprint(ref: str = "it1", **replies: Any) -> IterationCapacity:
     return reading(ref, **replies).capacity
 
 
+def refused(ref: str = "it1", **replies: Any) -> str:
+    """Why the tracker refuses to read these replies as a sprint."""
+    return tracker().read_iteration(replies, ref).failure.code
+
+
+def items_refused(work_items: Any) -> str:
+    return tracker().iteration_items({"work_items": work_items}, "it1").failure.code
+
+
 def members(capacities: Any):
     return sprint(capacities=capacities).members
 

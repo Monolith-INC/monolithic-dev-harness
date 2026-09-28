@@ -44,7 +44,7 @@ def build(repo: Path, settings: Result[Settings]) -> TrackerPolicy:
     everything = (*results, *registry.onboarded(repo))
     manifests = oks(everything)
     onboarded_writes = registry.onboarded_writes(repo)
-    shipped_problem = next(
+    folder_problem = next(
         (failure.message for failure in failures((*results, *onboarded_writes))), ""
     )
     return TrackerPolicy(
@@ -55,7 +55,7 @@ def build(repo: Path, settings: Result[Settings]) -> TrackerPolicy:
         ids=tuple(re.compile(manifest.ids.pattern) for manifest in manifests),
         mentions=tuple(_mentions(manifests)),
         protected=frozenset(item.upper() for item in _protected(settings)),
-        problem=shipped_problem
+        problem=folder_problem
         or _problem(registry.resolve_among(everything, repo, settings)),
     )
 

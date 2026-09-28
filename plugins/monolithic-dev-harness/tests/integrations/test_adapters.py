@@ -11,7 +11,7 @@ from core.result import Err, Ok
 from integrations import artifacts
 from integrations.contracts import ArtifactDraft, LogicalState, WorkItemKind
 
-from .fakes import FakeTransport, module, ops
+from .fakes import FakeTransport, ops
 
 AZURE = {"organization": "o", "project": "proj"}
 
@@ -123,18 +123,21 @@ class AzureTest(unittest.TestCase):
         self.assertEqual(self.call.calls, [])
 
     def test_search_builds_wiql_from_text_conditions_or_statements(self) -> None:
-        wiql = module("azure-devops").wiql
+        def sent(query: str) -> str:
+            self.tracker.search_work_items(query, "")
+            return self.call.sent("wit_query")[-1]["wiql"]
+
         self.assertIn(
-            "[System.Title] CONTAINS 'foto d''estudante'", wiql("foto d'estudante")
+            "[System.Title] CONTAINS 'foto d''estudante'", sent("foto d'estudante")
         )
         self.assertIn(
             "AND ([System.WorkItemType] = 'Epic')",
-            wiql("[System.WorkItemType] = 'Epic'"),
+            sent("[System.WorkItemType] = 'Epic'"),
         )
-        self.assertIn("AND ([Custom.Team] = 'A')", wiql("[Custom.Team] = 'A'"))
-        self.assertIn("[System.Title] CONTAINS 'bug [urgent]'", wiql("bug [urgent]"))
+        self.assertIn("AND ([Custom.Team] = 'A')", sent("[Custom.Team] = 'A'"))
+        self.assertIn("[System.Title] CONTAINS 'bug [urgent]'", sent("bug [urgent]"))
         self.assertEqual(
-            wiql("SELECT [System.Id] FROM WorkItems"),
+            sent("SELECT [System.Id] FROM WorkItems"),
             "SELECT [System.Id] FROM WorkItems",
         )
         page = self.tracker.search_work_items("x", "").value
@@ -421,9 +424,10 @@ class LocalTest(unittest.TestCase):
             (item.item_id, item.points, item.planned_hours), (story.key, 5.0, 8.0)
         )
         self.assertEqual(self.tracker.iteration_items({}, "S2").value, ())
-        self.assertIn(
-            "no capacity file", self.tracker.read_iteration({}, "S2").value.warnings[0]
-        )
+        # A sprint with no capacity file cannot be checked, so it is refused, not read as empty.
+        missing = self.tracker.read_iteration({}, "S2").failure
+        self.assertEqual(missing.code, "no_capacity")
+        self.assertIn(".harness/tracker/capacity/S2.json", missing.message)
         self.assertEqual(
             dict(self.tracker.hour_fields(4.0, True)),
             {"remaining_hours": 4.0, "effort_hours": 4.0},

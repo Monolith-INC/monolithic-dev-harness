@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, TypeVar
 
 from core.result import (
     Err,
@@ -49,6 +49,8 @@ from .contracts import (
     WorkItemKind,
     WriteRules,
 )
+
+T = TypeVar("T")
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 SHIPPED_ROOT = PLUGIN_ROOT / "trackers"
@@ -131,7 +133,7 @@ def _read_manifest(
     )
 
 
-def _labelled(folder: Path, result: Result[Manifest]) -> Result[Manifest]:
+def _labelled(folder: Path, result: Result[T]) -> Result[T]:
     match result:
         case Err(failure):
             return err(
@@ -339,7 +341,7 @@ def _manifest(folder: Path, source: str, document: Mapping[str, Any]) -> Manifes
             tuple(map(str, ids["mention"])),
             bool(ids["mentions_link"]),
         ),
-        writes=WriteRules(str(writes["server"]), tuple(map(str, writes["tools"]))),
+        writes=_write_rules(writes),
         tools=MappingProxyType(dict(document.get("tools", {}))),
         connection=MappingProxyType(dict(document["connection"])),
         settings=tuple(str(item["key"]) for item in document["settings"]),
@@ -621,41 +623,36 @@ def onboarded_writes(repo: Path) -> tuple[Result[WriteRules], ...]:
     """What each onboarded folder says writes, read on its own: trusted or not, valid or not.
 
     Counting a broken or untrusted folder's writes can only ask for more approvals, never fewer;
-    a folder whose writes cannot be read at all is an `Err`, so the rules can fail closed.
+    a folder whose writes cannot be read is an `Err`, so the rules can fail closed.
     """
     return tuple(
-        _declared_writes(folder) for folder in _folders(repo / ONBOARDED_RELATIVE_PATH)
+        _declared_writes(folder, _stamp(folder / MANIFEST))
+        for folder in _folders(repo / ONBOARDED_RELATIVE_PATH)
     )
 
 
-def _declared_writes(folder: Path) -> Result[WriteRules]:
+@lru_cache(maxsize=64)
+def _declared_writes(folder: Path, stamp: tuple[int, int]) -> Result[WriteRules]:
+    return _labelled(
+        folder,
+        fmap(bind(_json(folder / MANIFEST), _writes_section), _write_rules),
+    )
+
+
+def _writes_section(document: Any) -> Result[Mapping[str, Any]]:
+    """The manifest's `writes`, checked against its part of the tracker schema."""
     return bind(
-        attempt(
-            lambda: json.loads((folder / MANIFEST).read_text(encoding="utf-8")),
-            "invalid_tracker",
-            f"{folder.name}/{MANIFEST} could not be read",
-            OSError,
-            ValueError,
+        load_schema(SCHEMA_PATH),
+        lambda schema: validate(
+            {"$defs": schema.get("$defs", {}), **schema["properties"]["writes"]},
+            document.get("writes") if isinstance(document, dict) else None,
+            "writes",
         ),
-        lambda document: _write_rules(folder, document),
     )
 
 
-def _write_rules(folder: Path, document: Any) -> Result[WriteRules]:
-    writes = document.get("writes") if isinstance(document, dict) else None
-    server = writes.get("server") if isinstance(writes, dict) else None
-    tools = writes.get("tools") if isinstance(writes, dict) else None
-    return (
-        Ok(WriteRules(server, tuple(tools)))
-        if isinstance(server, str)
-        and isinstance(tools, list)
-        and all(isinstance(tool, str) for tool in tools)
-        else err(
-            "invalid_tracker",
-            f"onboarded tracker {folder.name!r} does not say which tools write "
-            f"(writes.server, writes.tools in {MANIFEST}); fix or remove the folder",
-        )
-    )
+def _write_rules(writes: Mapping[str, Any]) -> WriteRules:
+    return WriteRules(str(writes["server"]), tuple(map(str, writes["tools"])))
 
 
 def _import(module_name: str, file: Path) -> Any:

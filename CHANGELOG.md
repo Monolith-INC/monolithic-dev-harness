@@ -41,6 +41,15 @@ All notable changes to this project are documented here. The format follows
   (`story_points`, `effort_hours`, `remaining_hours`, ...), read by one function.
 - `bin/agile-backlog-toolkit config` shows the selected tracker and the values its `tracker.json`
   declares, for any tracker; `--require-team` is gone.
+- Once asked, the capacity check also stops the run when a reply holds no data (an error text, a
+  non-list), when the sprint or its work items cannot be read, or when a local sprint has no
+  capacity file. An Azure sprint with no work items (`{"workItemRelations": []}`) is an empty
+  sprint, not a refusal.
+- `estimate-breakdown` prints every note (what the tracker warned about, why capacity was not
+  checked, hours to record by hand), and lists writes only when there are some.
+- Numbers read from replies and files must be finite: "nan" and "inf" are not numbers.
+- A tracker's sprint reference `current`, or none, means the active sprint; the local tracker,
+  which keeps no active sprint, refuses it.
 
 ### Security
 

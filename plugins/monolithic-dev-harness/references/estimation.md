@@ -112,12 +112,13 @@ tracker then needs the sprint named. Which fields record hours is the adapter's 
 command prints them.
 
 Capacity is checked only when asked: replies were passed, or a sprint was named. Once asked, a
-check that cannot run (a reply missing, no usable tracker) stops the run rather than writing
-hours past an unchecked limit. A tracker that records no team capacity (Linear) or no hours says
+check that cannot run stops the run rather than writing hours past an unchecked limit: a reply
+missing, a reply that holds no data (an error text, say), no usable tracker, a sprint or its items
+that cannot be read, or, for the local tracker, a sprint with no capacity file. A tracker that records no team capacity (Linear) or no hours says
 so, and the figures are recorded by hand.
 
 The planning files a person keeps under `artifacts_path` (`--provider filesystem`) and the local
-tracker's records share one format, read in one place (`scripts/integrations/planning.py`): the
+tracker's records share one format, read in one place (`scripts/integrations/planning_files.py`): the
 capacity file, and the planning fields `story_points`, `effort_hours`, `remaining_hours`,
 `completed_hours`, `activity`, `assigned_to`, `iteration`, and `state`.
 
@@ -143,7 +144,8 @@ the estimation or capacity code changes.
 - `orchestrator_core/estimation/` — scales, bands, calibration
 - `orchestrator_core/capacity/` — the sprint model and planner
 - `trackers/azure-devops/adapter.py` — Azure field reference names and capacity mapping
-- `scripts/integrations/planning.py` — the sprint model and the shared capacity-file parser
+- `scripts/integrations/planning.py` — the sprint model, and what the sprint reference `current` means
+- `scripts/integrations/planning_files.py` — the capacity file and planning-item format, and their one reader
 - `azure-mechanics.md` — which field each process actually has
 - Halstead, *Elements of Software Science* (1977) — the `T = E / 18` time formula used only as a
   retrospective cross-check against code that already exists

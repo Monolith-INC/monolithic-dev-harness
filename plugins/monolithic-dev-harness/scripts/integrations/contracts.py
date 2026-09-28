@@ -207,8 +207,10 @@ class TrackerOps:
     list_artifacts: Callable[[str], Result[tuple[ArtifactRef, ...]]]
     add_artifact: Callable[[str, ArtifactDraft], Result[ArtifactRef]]
     link_development_artifact: Callable[[str, str, str], Result[Mapping[str, Any]]]
-    # Planning: (replies, iteration ref) in. Hour fields: (hours, first estimate) -> the provider
-    # fields to write; empty when the tracker records no hours.
+    # Planning: (replies, sprint reference) in. The reference "current", or none, means the active
+    # sprint (`planning.CURRENT`); a tracker that cannot tell which that is refuses it. A reply
+    # that was given but holds no data is refused, never read as an empty sprint. Hour fields:
+    # (hours, first estimate) -> the provider fields to write; empty when it records no hours.
     read_iteration: Callable[[Mapping[str, Any], str], Result[IterationReading]]
     iteration_items: Callable[
         [Mapping[str, Any], str], Result[tuple[EstimableItem, ...]]

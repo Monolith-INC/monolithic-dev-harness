@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from .artifact_validator import validate_artifact
 from .engine import OrchestratorEngine
@@ -34,16 +35,17 @@ def _state_dir(project_root: Path) -> Path:
     return plugin_dir(project_root)
 
 
-def _replies(path: str | None) -> dict | None:
-    """The tracker replies a skill saved, `{}` when none were given, None when unreadable."""
-    if not path:
-        return {}
-    try:
-        replies = json.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        print(f"[!] Could not read replies: {exc}")
-        return None
-    return replies
+def _read_json(path: str, what: str) -> Any:
+    """The JSON file at `path` as a result."""
+    from core.result import attempt
+
+    return attempt(
+        lambda: json.loads(Path(path).read_text(encoding="utf-8")),
+        "unreadable",
+        f"could not read {what}",
+        OSError,
+        json.JSONDecodeError,
+    )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -68,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     validate_p.add_argument(
         "--hierarchy-parent-is-feature",
         choices=("true", "false"),
-        help="Optional Azure hierarchy assertion for stories",
+        help="Optional hierarchy assertion for stories, from the tracker",
     )
 
     eval_p = sub.add_parser(
@@ -215,11 +217,16 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "capacity":
+        from core.result import Err, Ok
+
         from .handlers import handle_plan_capacity
 
-        replies = _replies(args.replies)
-        if replies is None:
-            return 1
+        match _read_json(args.replies, "replies") if args.replies else Ok({}):
+            case Ok(replies):
+                pass
+            case Err(failure):
+                print(f"[!] {failure.message}")
+                return 1
 
         result = handle_plan_capacity(
             {
@@ -247,17 +254,26 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if result.get("overcommitted") else 0
 
     if args.command == "estimate-breakdown":
+        from core.result import Err, Ok, bind, fmap
+
         from .handlers import handle_estimate_breakdown
 
-        try:
-            payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            print(f"[!] Could not read input: {exc}")
-            return 1
-        replies = _replies(args.replies)
-        if replies is None:
-            return 1
-        payload["replies"] = replies
+        match bind(
+            _read_json(args.input, "input"),
+            lambda payload: (
+                fmap(
+                    _read_json(args.replies, "replies"),
+                    lambda replies: {**payload, "replies": replies},
+                )
+                if args.replies
+                else Ok(payload)
+            ),
+        ):
+            case Ok(payload):
+                pass
+            case Err(failure):
+                print(f"[!] {failure.message}")
+                return 1
 
         result = handle_estimate_breakdown(
             payload, skills_dir=skills_dir, state_dir=state_dir, instructions=""
@@ -270,10 +286,13 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         print(result["report"])
+        for note in result["notes"]:
+            print(f"  ! {note}")
         if result["blocked"]:
             # Exit 2 distinguishes "cannot fit" from "failed to run".
             return 2
-        print("\n  Write these to the tracker (nothing has been written yet):")
+        if result["write_ops"]:
+            print("\n  Write these to the tracker (nothing has been written yet):")
         for op in result["write_ops"]:
             for field, value in op["fields"].items():
                 print(f"    {op['item_id']}  {field} = {value}")

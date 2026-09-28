@@ -12,7 +12,7 @@ from collections.abc import Mapping
 from datetime import datetime, timezone
 from typing import Any
 
-from core.result import Ok, Result, bind, err, fmap
+from core.result import Ok, Result, bind, err, fmap, require
 from integrations import artifacts, payloads
 from integrations.contracts import (
     EMPTY,
@@ -23,13 +23,13 @@ from integrations.contracts import (
     WorkItem,
     WorkItemKind,
 )
+from integrations.payloads import as_float, first_number, parse_date
 from integrations.planning import (
     EstimableItem,
     IterationCapacity,
     IterationReading,
-    as_float,
-    first_number,
-    parse_date,
+    no_hours,
+    pick_sprint,
 )
 
 CYCLE_MARKERS = ("startsAt", "endsAt")  # a single cycle, not a listing
@@ -87,15 +87,19 @@ def adapter(context: AdapterContext) -> TrackerOps:
             call("comment", {"issueId": ref.upper(), "body": f"{kind}: {url}"}),
             payloads.mapping,
         ),
-        read_iteration=lambda replies, ref: Ok(_cycle(replies.get("cycle"), ref)),
-        iteration_items=lambda replies, ref: Ok(
-            tuple(
+        read_iteration=lambda replies, ref: fmap(
+            _usable(replies, "cycle", CYCLE_MARKERS),
+            lambda _: _cycle(replies.get("cycle"), ref),
+        ),
+        iteration_items=lambda replies, ref: fmap(
+            _usable(replies, "issues", ("identifier",)),
+            lambda _: tuple(
                 _estimable(context, record)
                 for record in payloads.records(replies.get("issues"))
                 if payloads.text(record, "identifier", "id")
-            )
+            ),
         ),
-        hour_fields=lambda hours, first: EMPTY,
+        hour_fields=no_hours,
     )
 
 
@@ -107,14 +111,14 @@ def _caller(context: AdapterContext):
 def _issue(context: AdapterContext, reply: Any) -> Result[WorkItem]:
     record = reply.get("issue", reply) if isinstance(reply, dict) else None
     return (
-        Ok(work_item(context, record))
+        Ok(_item(context, record))
         if isinstance(record, dict) and payloads.text(record, "identifier", "id")
         else err("provider_error", "Linear did not return an issue")
     )
 
 
 def _issues(context: AdapterContext, reply: Any) -> tuple[WorkItem, ...]:
-    return tuple(work_item(context, record) for record in payloads.records(reply))
+    return tuple(_item(context, record) for record in payloads.records(reply))
 
 
 def _cursor(reply: Any) -> str:
@@ -124,7 +128,7 @@ def _cursor(reply: Any) -> str:
     ) or (payloads.text(page, "endCursor") if page.get("hasNextPage") else "")
 
 
-def work_item(context: AdapterContext, record: Mapping[str, Any]) -> WorkItem:
+def _item(context: AdapterContext, record: Mapping[str, Any]) -> WorkItem:
     manifest = context.manifest
     identifier = payloads.text(record, "identifier", "id")
     return WorkItem(
@@ -175,18 +179,22 @@ def _comment(reply: Any) -> Mapping[str, Any]:
     )
 
 
+def _usable(
+    replies: Mapping[str, Any], key: str, markers: tuple[str, ...]
+) -> Result[None]:
+    """A reply that was fetched but holds no data (an error text, say) is refused, not read as
+    an empty cycle."""
+    return require(
+        key not in replies or payloads.readable(replies[key], *markers),
+        "unreadable_reply",
+        f"the {key} reply holds no usable data, fetch it again",
+    )
+
+
 def _cycle(reply: Any, iteration_ref: str) -> IterationReading:
-    """A cycle's dates. A single cycle is the one asked for; from a listing, "current" (or no
-    name) takes the active cycle and any other reference the cycle of that id, name, or number.
-    """
-    cycles = payloads.one_or_many(reply, *CYCLE_MARKERS)
-    current = iteration_ref.strip().lower() in ("", "current")
-    cycle = (
-        reply
-        if cycles == (reply,)
-        else _active(cycles)
-        if current
-        else payloads.named(cycles, iteration_ref, "id", "name", "number")
+    """A cycle's dates; see `pick_sprint`. Linear records no team capacity, and says so."""
+    cycle, missing = pick_sprint(
+        reply, iteration_ref, CYCLE_MARKERS, ("id", "name", "number"), _active
     )
     return IterationReading(
         IterationCapacity(
@@ -194,14 +202,7 @@ def _cycle(reply: Any, iteration_ref: str) -> IterationReading:
             start_date=parse_date((cycle or EMPTY).get("startsAt")),
             finish_date=parse_date((cycle or EMPTY).get("endsAt")),
         ),
-        (NO_CAPACITY,)
-        + (
-            ()
-            if cycle is not None or reply is None
-            else (
-                f"the cycle reply has no cycle {iteration_ref or 'current'!r}, so it has no dates",
-            )
-        ),
+        (NO_CAPACITY, *missing),
     )
 
 
@@ -224,7 +225,7 @@ def _active(cycles: tuple[Mapping[str, Any], ...]) -> Mapping[str, Any] | None:
 
 
 def _estimable(context: AdapterContext, record: Mapping[str, Any]) -> EstimableItem:
-    item = work_item(context, record)
+    item = _item(context, record)
     person = record.get("assignee")
     estimate = record.get("estimate")
     return EstimableItem(

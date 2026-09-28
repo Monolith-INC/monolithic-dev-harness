@@ -412,7 +412,7 @@ def validate_artifact(
         elif not record.parent_id:
             outcome, detail = "PASS", "no parent (a Story may stand alone)"
         else:
-            outcome, detail = "SKIP", "hierarchy not verified (no Azure MCP data)"
+            outcome, detail = "SKIP", "hierarchy not verified (no tracker data)"
         results.append(
             CheckResult(
                 "hierarchy-story-parent-is-feature", outcome, detail, "HIERARCHY"

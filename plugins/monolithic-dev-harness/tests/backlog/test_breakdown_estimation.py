@@ -1,7 +1,14 @@
 import unittest
 from datetime import date
 
-from azure_tracker import reading, select_azure, sprint
+from azure_tracker import (
+    ORIGINAL_ESTIMATE,
+    REMAINING_WORK,
+    reading,
+    refused,
+    select_azure,
+    sprint,
+)
 
 from orchestrator_core.capacity import (
     ActivityCapacity,
@@ -327,10 +334,13 @@ class TestSprintSelection(unittest.TestCase):
             any("no current sprint" in warning for warning in found.warnings)
         )
 
-    def test_hostile_inputs(self):
-        """Malformed listings yield nothing rather than raising."""
-        for payload in (None, {}, "text", {"value": []}, [None]):
+    def test_listings_without_a_sprint_give_no_dates(self):
+        for payload in ({"value": []}, [None]):
             self.assertIsNone(self._start(payload))
+
+    def test_a_reply_that_holds_no_sprint_is_refused(self):
+        for payload in (None, {}, "text"):
+            self.assertEqual(refused("current", iteration=payload), "unreadable_reply")
 
 
 if __name__ == "__main__":
@@ -415,8 +425,8 @@ class TestRoleWeights(unittest.TestCase):
 class TestEstimateBreakdownHandler(unittest.TestCase):
     """The orchestrator handler -- deterministic, and it performs no writes."""
 
-    def _run(self, arguments, select=None, prepare=None):
-        """Runs in a fresh repository that selects Azure DevOps unless `select` writes otherwise."""
+    def _run(self, arguments, setup=select_azure):
+        """Runs in a fresh repository prepared by `setup` (Azure DevOps, agile, by default)."""
         import tempfile
         from pathlib import Path as P
 
@@ -424,10 +434,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
 
         with tempfile.TemporaryDirectory() as tmpdir:
             root = P(tmpdir)
-            (select or (lambda r: select_azure(r, arguments.pop("process", "agile"))))(
-                root
-            )
-            (prepare or (lambda r: None))(root)
+            setup(root)
             state = root / ".harness" / "backlog"
             state.mkdir(parents=True)
             return handle_estimate_breakdown(
@@ -459,6 +466,58 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
         self.assertIn("work_items", result["error"])
         self.assertIn("get_batch", result["error"])
 
+    def test_an_ids_only_work_items_reply_stops_the_run(self):
+        """The round-two regression: the adapter refused the reply, and the handler then counted
+        the assignee's existing work as none and wrote the hours."""
+        replies = dict(
+            self.SPRINT, work_items={"workItemRelations": [{"target": {"id": 9}}]}
+        )
+        result = self._run(dict(self.BASE, assignee="Ana", replies=replies))
+        self.assertFalse(result["ok"])
+        self.assertIn("get_batch", result["error"])
+
+    def test_a_reply_that_holds_no_data_stops_the_run(self):
+        """An error text in place of the capacities is not "no team capacity"."""
+        replies = dict(self.SPRINT, capacities="Error: 401", work_items=[])
+        result = self._run(dict(self.BASE, assignee="Ana", replies=replies))
+        self.assertFalse(result["ok"])
+        self.assertIn("capacities", result["error"])
+
+    def test_the_command_line_prints_every_note(self):
+        """What the check found reaches the person running the command, and an empty write list
+        is not announced."""
+        import contextlib
+        import io
+        import json
+        import os
+        import tempfile
+        from pathlib import Path as P
+        from unittest import mock
+
+        from orchestrator_core.main import main
+
+        with tempfile.TemporaryDirectory() as tmpdir:
+            root = P(tmpdir)
+            write_settings(root, tracker={"name": "linear", "values": {"team": "ENG"}})
+            (root / "in.json").write_text(json.dumps(dict(self.BASE, assignee="Ana")))
+            (root / "replies.json").write_text('{"cycle": [], "issues": []}')
+            out = io.StringIO()
+            with mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": tmpdir}):
+                with contextlib.redirect_stdout(out):
+                    code = main(
+                        [
+                            "estimate-breakdown",
+                            "--input",
+                            str(root / "in.json"),
+                            "--replies",
+                            str(root / "replies.json"),
+                        ]
+                    )
+        self.assertEqual(code, 0)
+        self.assertIn("record these hours by hand", out.getvalue())
+        self.assertIn("records no team capacity", out.getvalue())
+        self.assertNotIn("Write these to the tracker", out.getvalue())
+
     def test_capacity_is_not_checked_unless_asked(self):
         """No replies and no sprint named: the estimate stands, with no invented warnings."""
         result = self._run(dict(self.BASE, assignee="Ana"))
@@ -469,7 +528,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
     def test_the_local_tracker_writes_its_own_hour_fields(self):
         result = self._run(
             dict(self.BASE, assignee="Ana"),
-            select=lambda root: write_settings(root),
+            write_settings,
         )
         fields = {name for op in result["write_ops"] for name in op["fields"]}
         self.assertEqual(fields, {"remaining_hours", "effort_hours"})
@@ -486,8 +545,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
 
         result = self._run(
             dict(self.BASE, story_points=21, assignee="Ana", iteration_ref="S1"),
-            select=lambda root: write_settings(root),
-            prepare=sprint_file,
+            lambda root: (write_settings(root), sprint_file(root)),
         )
         self.assertTrue(result["blocked"])
         self.assertEqual(result["write_ops"], [])
@@ -495,7 +553,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
     def test_linear_says_it_has_no_capacity_rather_than_blaming_the_assignee(self):
         result = self._run(
             dict(self.BASE, assignee="Ana", replies={"cycle": [], "issues": []}),
-            select=lambda root: write_settings(
+            lambda root: write_settings(
                 root, tracker={"name": "linear", "values": {"team": "ENG"}}
             ),
         )
@@ -508,7 +566,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
 
     def test_no_usable_tracker_means_no_writes_and_says_why(self):
         """Nobody gets a field the tracker does not have, not even a neutral one."""
-        result = self._run(dict(self.BASE), select=lambda root: None)
+        result = self._run(dict(self.BASE), lambda root: None)
         self.assertTrue(result["estimated"])
         self.assertEqual(result["write_ops"], [])
         self.assertTrue(any("by hand" in w for w in result["warnings"]))
@@ -535,7 +593,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
         self.assertTrue(result["ok"])
         self.assertTrue(result["estimated"])
         paths = {f for op in result["write_ops"] for f in op["fields"]}
-        self.assertIn("/fields/Microsoft.VSTS.Scheduling.RemainingWork", paths)
+        self.assertIn(REMAINING_WORK, paths)
 
     def test_new_zero_hour_task_is_not_written(self):
         """A Breakdown marker that never had hours needs no write."""
@@ -557,20 +615,16 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
         result = self._run(base)
         ops = {op["item_id"]: op["fields"] for op in result["write_ops"]}
         self.assertIn("102", ops)
-        self.assertEqual(
-            ops["102"]["/fields/Microsoft.VSTS.Scheduling.RemainingWork"], 0.0
-        )
+        self.assertEqual(ops["102"][REMAINING_WORK], 0.0)
 
     def test_original_estimate_omitted_on_scrum(self):
         """The process guard applies to the handler's write ops too."""
-        scrum = self._run(dict(self.BASE, process="scrum"))
-        agile = self._run(dict(self.BASE, process="agile"))
+        scrum = self._run(dict(self.BASE), lambda root: select_azure(root, "scrum"))
+        agile = self._run(dict(self.BASE), lambda root: select_azure(root, "agile"))
         scrum_paths = {f for op in scrum["write_ops"] for f in op["fields"]}
         agile_paths = {f for op in agile["write_ops"] for f in op["fields"]}
-        self.assertNotIn(
-            "/fields/Microsoft.VSTS.Scheduling.OriginalEstimate", scrum_paths
-        )
-        self.assertIn("/fields/Microsoft.VSTS.Scheduling.OriginalEstimate", agile_paths)
+        self.assertNotIn(ORIGINAL_ESTIMATE, scrum_paths)
+        self.assertIn(ORIGINAL_ESTIMATE, agile_paths)
 
     def test_blocked_estimate_produces_no_write_ops(self):
         """Work that cannot fit is never written."""
