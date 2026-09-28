@@ -360,6 +360,37 @@ class TestTrackers(HookTestCase):
             )
         )
 
+    def test_a_broken_onboarded_tracker_that_is_not_selected_still_needs_approval(
+        self,
+    ) -> None:
+        """A folder that fails its checks (here: no planning section) may not quietly drop
+        its server's writes from the approval rule."""
+        folder = self.repo / ".harness" / "trackers" / "custom"
+        folder.mkdir(parents=True)
+        (folder / "tracker.json").write_text(
+            json.dumps(
+                {
+                    "name": "custom",
+                    "writes": {"server": "customsrv", "tools": ["save_*"]},
+                }
+            )
+        )
+        self.assertDenied(
+            self.claude("mcp__customsrv__save_thing", {}), "approval-required"
+        )
+        self.assertAllowed(self.claude("mcp__customsrv__get_thing", {}))
+
+    def test_an_onboarded_folder_that_does_not_say_what_writes_fails_closed(
+        self,
+    ) -> None:
+        folder = self.repo / ".harness" / "trackers" / "custom"
+        folder.mkdir(parents=True)
+        (folder / "tracker.json").write_text("{ not json")
+        self.approve()
+        self.assertDenied(
+            self.claude("mcp__customsrv__anything", {}), "tracker-invalid"
+        )
+
     def test_linking_a_protected_item_through_the_gateway_is_denied(self) -> None:
         self.approve()
         call = "mcp__plugin_x_workflow-integrations__scm_link_work_item"

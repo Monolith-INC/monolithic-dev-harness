@@ -1,4 +1,3 @@
-import json
 import re
 import tempfile
 import unittest
@@ -6,24 +5,11 @@ from pathlib import Path
 
 from orchestrator_core.project_config import (
     PLUGIN_DIRNAME,
-    AzureConfig,
     ProjectConfig,
     load_project_config,
     plugin_dir,
 )
-
-SETTINGS = {
-    "schemaVersion": 1,
-    "tracker": {"name": "local"},
-    "scm": {"name": "github", "values": {"owner": "o", "repo": "r"}},
-    "branch_template": "feature/{key}-{slug}",
-}
-
-
-def _settings(root: Path, **changes) -> None:
-    path = root / ".harness" / "settings.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps({**SETTINGS, **changes}), encoding="utf-8")
+from tests.settings_fixture import write_settings
 
 
 class ConfigTestCase(unittest.TestCase):
@@ -115,38 +101,19 @@ class TestArtifactsPathResolution(ConfigTestCase):
 class TestReadFromSettings(ConfigTestCase):
     """The backlog view of `.harness/settings.json`, the only source."""
 
-    def test_reads_the_artifacts_path_and_the_azure_values(self):
+    def test_reads_the_artifacts_path_and_the_selected_tracker(self):
+        """The tracker's values are the registry's to read; this view names the tracker only."""
         with tempfile.TemporaryDirectory() as tmpdir:
             root = Path(tmpdir)
-            values = {
-                "organization": "contoso",
-                "project": "Shop",
-                "team": "Web",
-                "process": "scrum",
-            }
-            _settings(
+            write_settings(
                 root,
-                tracker={"name": "azure-devops", "values": values},
+                tracker={"name": "linear", "values": {"team": "ENG"}},
                 artifacts_path="docs/backlog",
             )
-            config = load_project_config(root)
-            self.assertEqual(config.artifacts_path, "docs/backlog")
             self.assertEqual(
-                config.azure, AzureConfig("contoso", "Shop", "Web", "scrum")
+                load_project_config(root),
+                ProjectConfig("docs/backlog", "linear", (".harness/settings.json",)),
             )
-            self.assertEqual(
-                (config.provider_mode, config.sources),
-                ("azure-devops", (".harness/settings.json",)),
-            )
-            self.assertTrue(config.azure_ready)
-
-    def test_linear_values_and_no_azure(self):
-        with tempfile.TemporaryDirectory() as tmpdir:
-            root = Path(tmpdir)
-            _settings(root, tracker={"name": "linear", "values": {"team": "ENG"}})
-            config = load_project_config(root)
-            self.assertEqual((config.linear.team, config.azure), ("ENG", AzureConfig()))
-            self.assertEqual(config.missing(), ["org", "project"])
 
     def test_broken_or_missing_settings_give_an_empty_configuration(self):
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -155,8 +122,3 @@ class TestReadFromSettings(ConfigTestCase):
             (root / ".harness").mkdir()
             (root / ".harness" / "settings.json").write_text("{")
             self.assertEqual(load_project_config(root), ProjectConfig())
-
-    def test_team_is_optional_unless_asked_for(self):
-        config = ProjectConfig(azure=AzureConfig(org="o", project="p"))
-        self.assertEqual(config.missing(), [])
-        self.assertEqual(config.missing(require_team=True), ["team"])

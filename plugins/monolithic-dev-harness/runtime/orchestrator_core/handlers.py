@@ -169,27 +169,31 @@ def handle_plan_capacity(
     Reads only. Any hour figure it suggests is returned as a planned write for a human to
     confirm -- this handler never sends anything to a backlog system.
     """
+    from core.result import Err, Ok
+    from harness import settings
+
     from .capacity import format_plan, plan_iteration
     from .estimation import config_diagnostics, estimate_hours, load_config
-    from .project_config import load_project_config, project_root_of
+    from .project_config import project_root_of
 
     iteration_ref = str(arguments.get("iteration_ref", "")).strip()
     provider_name = str(arguments.get("provider", "filesystem")).strip() or "filesystem"
 
     project_root = project_root_of(state_dir)
-    project_config = load_project_config(project_root)
-    payloads = arguments.get("payloads") or {}
-    if not isinstance(payloads, dict):
+    replies = arguments.get("replies") or {}
+    if not isinstance(replies, dict):
         return {
             "ok": False,
-            "error": "payloads must be an object",
+            "error": "replies must be an object",
             "instructions": instructions,
         }
-    provider, error = _capacity_source(
-        provider_name, project_root, project_config, payloads
-    )
-    if provider is None:
-        return {"ok": False, "error": error, "instructions": instructions}
+    match _capacity_source(
+        provider_name, project_root, settings.load(project_root), replies
+    ):
+        case Ok(provider):
+            pass
+        case Err(failure):
+            return {"ok": False, "error": failure.message, "instructions": instructions}
 
     iteration_result = provider.fetch_iteration(iteration_ref)
     if not iteration_result.ok:
@@ -264,7 +268,9 @@ def handle_estimate_breakdown(
     Returns the write operations to apply — it performs none itself. When `blocked` is set,
     `write_ops` is empty: work that cannot fit is never written.
     """
-    from .capacity import availability_for
+    from core.result import Err, Ok, bind
+    from harness import settings
+
     from .estimation import (
         TaskInput,
         config_diagnostics,
@@ -272,7 +278,6 @@ def handle_estimate_breakdown(
         load_config,
     )
     from .project_config import project_root_of
-    from .providers import TrackerProvider
 
     if not isinstance(arguments, dict):
         return {
@@ -297,11 +302,11 @@ def handle_estimate_breakdown(
             "instructions": instructions,
         }
 
-    payloads = arguments.get("payloads") or {}
-    if not isinstance(payloads, dict):
+    replies = arguments.get("replies") or {}
+    if not isinstance(replies, dict):
         return {
             "ok": False,
-            "error": "payloads must be an object",
+            "error": "replies must be an object",
             "instructions": instructions,
         }
 
@@ -335,46 +340,27 @@ def handle_estimate_breakdown(
         }
 
     project_root = project_root_of(state_dir)
-    tracker, missing, reason = _selected_tracker(project_root, payloads)
-
-    # Capacity is optional: without it the estimate still stands, it is simply unchecked.
-    # But a failure to read it is not the same as not asking, so it is reported.
-    availability = None
-    capacity_errors: list[str] = []
-    provider_warnings: list[str] = []
+    tracker = _tracker(project_root, settings.load(project_root))
     iteration_ref = _as_text(arguments.get("iteration_ref")) or None
-    if tracker is None and payloads:
-        capacity_errors.append(f"capacity not checked: {reason}")
-    if tracker is not None and missing and payloads:
-        capacity_errors.append(
-            f"capacity not checked: tracker replies missing: {', '.join(missing)}"
-        )
-    if tracker is not None and not missing:
-        provider = TrackerProvider(tracker, payloads)
-        iteration_result = provider.fetch_iteration(iteration_ref or "current")
-        provider_warnings.extend(iteration_result.warnings)
-        if not iteration_result.ok:
-            capacity_errors.append(f"iteration unreadable: {iteration_result.error}")
-        else:
-            items_result = provider.fetch_work_items(iteration_ref or "current")
-            provider_warnings.extend(items_result.warnings)
-            if not items_result.ok:
-                capacity_errors.append(
-                    f"iteration items unreadable: {items_result.error}"
-                )
-            availability = availability_for(
-                iteration_result.data,
-                assignee,
-                items=items_result.data if items_result.ok else None,
+
+    # Capacity is checked when asked for: replies were given, or a sprint was named. Once asked, a
+    # check that cannot run (no usable tracker, a reply missing) stops the run, since writing
+    # hours past an unchecked ceiling is what the check exists to prevent. What the check finds
+    # (nobody to match, an unreadable sprint) is reported and the estimate stands.
+    asked = bool(replies) or iteration_ref is not None
+    match bind(tracker, lambda found: _planning(found, replies)) if asked else Ok(None):
+        case Err(failure):
+            return {
+                "ok": False,
+                "error": f"capacity cannot be checked: {failure.message}",
+                "instructions": instructions,
+            }
+        case Ok(None):
+            availability, provider_warnings, capacity_errors = None, (), ()
+        case Ok(planning):
+            availability, provider_warnings, capacity_errors = _assignee_capacity(
+                planning, replies, iteration_ref or "current", assignee
             )
-            if availability is None and assignee:
-                capacity_errors.append(
-                    f"assignee '{assignee}' not matched to a team member"
-                )
-            elif availability is None:
-                capacity_errors.append(
-                    "no assignee on the story, so capacity was not checked"
-                )
 
     config = load_config(state_dir)
     estimate = estimate_breakdown(
@@ -395,29 +381,22 @@ def handle_estimate_breakdown(
         }
 
     # Every task whose figure moved is written, including one that dropped to zero: leaving
-    # stale Remaining Work behind is exactly the drift this feature exists to prevent.
-    # The tracker names its own hour fields; one without them gets the neutral `hours` key and a
-    # warning, so nobody writes a field the tracker does not have.
-    hour_fields = (
-        tracker.hour_fields if tracker is not None else lambda hours, first: {}
+    # stale hours behind is exactly the drift this feature exists to prevent. The tracker names
+    # its own hour fields; a tracker that records no hours, or none usable, gets no writes and a
+    # note to record the figures by hand.
+    hour_fields = _hour_fields(tracker)
+    changed = (
+        [] if estimate.blocked else [task for task in estimate.tasks if task.changed]
     )
-    if not estimate.blocked and not hour_fields(1.0, True):
-        capacity_errors.append(
-            "the tracker names no hour fields, record hours by hand"
-            + (f": {reason}" if tracker is None else "")
-        )
-    write_ops = (
-        []
-        if estimate.blocked
-        else [
-            {
-                "item_id": task.task_id,
-                "fields": dict(hour_fields(task.hours, task.is_new))
-                or {"hours": task.hours},
-            }
-            for task in estimate.tasks
-            if task.changed
-        ]
+    write_ops = [
+        {"item_id": task.task_id, "fields": dict(fields)}
+        for task in changed
+        if (fields := hour_fields(task.hours, task.is_new))
+    ]
+    by_hand = (
+        (f"record these hours by hand: {_no_hours(tracker)}",)
+        if changed and not write_ops
+        else ()
     )
 
     return {
@@ -447,67 +426,124 @@ def handle_estimate_breakdown(
         "write_ops": write_ops,
         "warnings": (
             list(estimate.warnings)
-            + provider_warnings
+            + list(provider_warnings)
             + list(config_diagnostics(config))
-            + capacity_errors
+            + list(capacity_errors)
+            + list(by_hand)
         ),
-        "capacity_errors": capacity_errors,
+        "capacity_errors": list(capacity_errors),
         "instructions": instructions,
     }
 
 
-def _selected_tracker(
-    project_root: Path, replies: dict[str, Any]
-) -> tuple[Any, tuple[str, ...], str]:
-    """The selected tracker's operations and the declared replies not given, or (None, (), why)."""
-    from core.result import Err, Ok
-    from harness import settings
+def _tracker(project_root: Path, loaded: Any) -> Any:
+    """The selected tracker's manifest and operations, as a result."""
+    from core.result import bind, fmap
     from integrations import registry
 
-    match registry.selected(project_root, settings.load(project_root)):
+    return bind(
+        registry.selected(project_root, loaded),
+        lambda active: fmap(
+            registry.open_tracker(active, project_root),
+            lambda tracker: (active.manifest, tracker),
+        ),
+    )
+
+
+def _planning(found: Any, replies: dict[str, Any]) -> Any:
+    """The tracker's operations, once every reply its planning reads is present."""
+    from core.result import fmap
+    from integrations import registry
+
+    manifest, tracker = found
+    return fmap(registry.require_replies(manifest, replies), lambda _: tracker)
+
+
+def _assignee_capacity(
+    tracker: Any, replies: dict[str, Any], iteration_ref: str, assignee: str | None
+) -> tuple[Any, tuple[str, ...], tuple[str, ...]]:
+    """(availability, warnings, capacity errors) for the assignee in the sprint."""
+    from .capacity import availability_for
+    from .providers import TrackerProvider
+
+    provider = TrackerProvider(tracker, replies)
+    sprint = provider.fetch_iteration(iteration_ref)
+    items = provider.fetch_work_items(iteration_ref) if sprint.ok else sprint
+    availability = (
+        availability_for(sprint.data, assignee, items=items.data if items.ok else None)
+        if sprint.ok
+        else None
+    )
+    found = (
+        ()
+        if availability is not None
+        else (f"iteration unreadable: {sprint.error}",)
+        if not sprint.ok
+        else ("the sprint records no team capacity, so it was not checked",)
+        if not sprint.data.members
+        else (f"assignee '{assignee}' not matched to a team member",)
+        if assignee
+        else ("no assignee on the story, so capacity was not checked",)
+    )
+    return (
+        availability,
+        sprint.warnings + (items.warnings if sprint.ok else ()),
+        (() if items.ok else (f"iteration items unreadable: {items.error}",)) + found,
+    )
+
+
+def _hour_fields(tracker: Any) -> Any:
+    from core.result import Ok
+
+    match tracker:
+        case Ok((_, operations)):
+            return operations.hour_fields
+        case _:
+            return lambda hours, first: {}
+
+
+def _no_hours(tracker: Any) -> str:
+    from core.result import Err
+
+    match tracker:
         case Err(failure):
-            return None, (), failure.message
-        case Ok(active):
-            missing = tuple(
-                reply.key
-                for reply in active.manifest.planning
-                if reply.key not in replies
-            )
-            match registry.open_tracker(active, project_root):
-                case Ok(tracker):
-                    return tracker, missing, ""
-                case Err(failure):
-                    return None, (), failure.message
+            return failure.message
+        case _:
+            return "the tracker records no hours"
 
 
 def _capacity_source(
     provider_name: str,
     project_root: Path,
-    project_config: Any,
-    payloads: dict[str, Any],
-) -> tuple[Any, str]:
+    loaded: Any,
+    replies: dict[str, Any],
+) -> Any:
     """The user's planning files, or the selected tracker reading the replies a skill fetched."""
+    from core.result import Ok, bind, err, fmap
+
+    from .project_config import from_settings
     from .providers import FilesystemProvider, TrackerProvider
 
-    if provider_name == "filesystem":
-        return FilesystemProvider(
-            project_config.resolve_artifacts_dir(project_root)
-        ), ""
-    if provider_name not in ("tracker", project_config.provider_mode):
-        return None, (
-            f"unknown provider: {provider_name}; use filesystem, or tracker for the selected "
-            f"tracker ({project_config.provider_mode})"
-        )
-    tracker, missing, reason = _selected_tracker(project_root, payloads)
-    if tracker is None:
-        return None, reason
-    if missing:
-        return None, (
-            f"tracker replies missing: {', '.join(missing)}. Fetch each one through the "
-            "tracker's tools as its tracker.json planning.replies describes, and pass them "
-            "as payloads"
-        )
-    return TrackerProvider(tracker, payloads), ""
+    match provider_name:
+        case "filesystem":
+            return Ok(
+                FilesystemProvider(
+                    from_settings(loaded).resolve_artifacts_dir(project_root)
+                )
+            )
+        case "tracker":
+            return fmap(
+                bind(
+                    _tracker(project_root, loaded),
+                    lambda found: _planning(found, replies),
+                ),
+                lambda tracker: TrackerProvider(tracker, replies),
+            )
+        case _:
+            return err(
+                "invalid_request",
+                f"unknown provider: {provider_name}; use filesystem or tracker",
+            )
 
 
 def _as_text(value: Any) -> str:

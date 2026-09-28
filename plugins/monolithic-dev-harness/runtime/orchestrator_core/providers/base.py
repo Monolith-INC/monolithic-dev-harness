@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
+
+from core.result import Err, Ok, Result
 
 
 @dataclass(frozen=True)
@@ -22,6 +25,20 @@ class ProviderResult:
     @classmethod
     def success(cls, data: Any, *, warnings: tuple[str, ...] = ()) -> ProviderResult:
         return cls(ok=True, data=data, warnings=warnings)
+
+    @classmethod
+    def of(
+        cls,
+        result: Result[Any],
+        data: Callable[[Any], Any] = lambda value: value,
+        warnings: Callable[[Any], tuple[str, ...]] = lambda value: (),
+    ) -> ProviderResult:
+        """The planner's view of an `Ok`/`Err` answer."""
+        match result:
+            case Ok(value):
+                return cls.success(data(value), warnings=warnings(value))
+            case Err(failure):
+                return cls.failure(failure.message)
 
 
 @runtime_checkable

@@ -5,7 +5,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from integrations.planning import as_float
+from integrations.planning import ESTIMATED_HOURS, POINTS, as_float
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
@@ -97,25 +97,17 @@ def _text_or_none(value: Any) -> str | None:
 def ingest_from_text(text: str, *, filename: str | None = None) -> ArtifactRecord:
     frontmatter, body = parse_frontmatter(text)
     artifact_type = normalize_work_item_type(
-        str(
-            frontmatter.get("work_item_type") or frontmatter.get("type") or "User Story"
-        )
+        str(frontmatter.get("work_item_type") or frontmatter.get("type") or "")
     )
     if artifact_type == "ticket":
         artifact_type = normalize_work_item_type(
             str(frontmatter.get("work_item_type", "User Story"))
         )
-    title = extract_title(body, frontmatter)
-    story_points = frontmatter.get("story_points")
-    if isinstance(story_points, str) and story_points.replace(".", "", 1).isdigit():
-        story_points = float(story_points)
     return ArtifactRecord(
         type=artifact_type or "User Story",
-        title=title,
+        title=extract_title(body, frontmatter),
         body=body,
-        story_points=float(story_points)
-        if isinstance(story_points, (int, float))
-        else None,
+        story_points=as_float(frontmatter.get(POINTS)),
         parent_id=_text_or_none(frontmatter.get("parent_id")),
         provider=_text_or_none(frontmatter.get("provider")),
         provider_id=_text_or_none(frontmatter.get("provider_id")),
@@ -123,37 +115,9 @@ def ingest_from_text(text: str, *, filename: str | None = None) -> ArtifactRecor
         filename=filename,
         frontmatter=frontmatter,
         raw=text,
-        effort_hours=as_float(frontmatter.get("effort_hours")),
+        effort_hours=as_float(frontmatter.get(ESTIMATED_HOURS)),
     )
 
 
 def ingest_file(path: Path) -> ArtifactRecord:
-    raw = path.read_text(encoding="utf-8")
-    frontmatter, body = parse_frontmatter(raw)
-    artifact_type = normalize_work_item_type(
-        str(frontmatter.get("work_item_type") or frontmatter.get("type") or "")
-    )
-    if artifact_type == "ticket":
-        artifact_type = normalize_work_item_type(
-            str(frontmatter.get("work_item_type", "User Story"))
-        )
-    title = extract_title(body, frontmatter)
-    story_points = frontmatter.get("story_points")
-    if isinstance(story_points, str) and story_points.replace(".", "", 1).isdigit():
-        story_points = float(story_points)
-    return ArtifactRecord(
-        type=artifact_type or "User Story",
-        title=title,
-        body=body,
-        story_points=float(story_points)
-        if isinstance(story_points, (int, float))
-        else None,
-        parent_id=_text_or_none(frontmatter.get("parent_id")),
-        provider=_text_or_none(frontmatter.get("provider")),
-        provider_id=_text_or_none(frontmatter.get("provider_id")),
-        source="file",
-        filename=path.stem,
-        frontmatter=frontmatter,
-        raw=raw,
-        effort_hours=as_float(frontmatter.get("effort_hours")),
-    )
+    return ingest_from_text(path.read_text(encoding="utf-8"), filename=path.stem)

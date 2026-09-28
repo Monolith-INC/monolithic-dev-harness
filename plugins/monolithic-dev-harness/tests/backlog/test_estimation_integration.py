@@ -9,8 +9,9 @@ from integrations.planning import as_float
 from orchestrator_core.artifact_validator import validate_artifact
 from orchestrator_core.handlers import HANDLERS, handle_plan_capacity
 from orchestrator_core.ingest import ingest_file, ingest_from_text
+from tests.settings_fixture import write_settings
 
-AZURE_PAYLOADS = {
+AZURE_REPLIES = {
     "iteration": {
         "id": "it1",
         "attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"},
@@ -184,26 +185,19 @@ class TestPlanCapacityHandler(unittest.TestCase):
         if arguments.get("provider", "filesystem") != "filesystem":
             select_azure(root)
         if artifacts_path:
-            settings = {
-                "schemaVersion": 1,
-                "tracker": {"name": "local"},
-                "scm": {"name": "github", "values": {"owner": "o", "repo": "r"}},
-                "branch_template": "feature/{key}-{slug}",
-                "artifacts_path": str(artifacts_path),
-            }
-            (root / ".harness" / "settings.json").write_text(json.dumps(settings))
+            write_settings(root, artifacts_path=str(artifacts_path))
         return handle_plan_capacity(
             arguments, skills_dir=Path("."), state_dir=state_dir, instructions=""
         )
 
-    def test_azure_payloads_produce_a_plan(self):
+    def test_azure_replies_produce_a_plan(self):
         """Injected Azure JSON flows through to a capacity plan."""
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self._run(
                 {
                     "iteration_ref": "it1",
-                    "provider": "azure-devops",
-                    "payloads": AZURE_PAYLOADS,
+                    "provider": "tracker",
+                    "replies": AZURE_REPLIES,
                 },
                 Path(tmpdir),
             )
@@ -214,8 +208,8 @@ class TestPlanCapacityHandler(unittest.TestCase):
 
     def test_overcommitment_is_reported(self):
         """Planning beyond capacity is flagged on the result."""
-        payloads = json.loads(json.dumps(AZURE_PAYLOADS))
-        payloads["work_items"]["value"][0]["fields"][
+        replies = json.loads(json.dumps(AZURE_REPLIES))
+        replies["work_items"]["value"][0]["fields"][
             "Microsoft.VSTS.Scheduling.RemainingWork"
         ] = 90
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -223,11 +217,27 @@ class TestPlanCapacityHandler(unittest.TestCase):
                 {
                     "iteration_ref": "it1",
                     "provider": "tracker",
-                    "payloads": payloads,
+                    "replies": replies,
                 },
                 Path(tmpdir),
             )
             self.assertTrue(result["overcommitted"])
+
+    def test_a_tracker_name_is_not_a_provider(self):
+        """Only filesystem and tracker are accepted, as on the command line."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self._run({"provider": "azure-devops"}, Path(tmpdir))
+            self.assertFalse(result["ok"])
+            self.assertIn("unknown provider", result["error"])
+
+    def test_missing_replies_are_named_with_how_to_fetch_them(self):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            result = self._run(
+                {"provider": "tracker", "replies": {"iteration": {}}}, Path(tmpdir)
+            )
+            self.assertFalse(result["ok"])
+            for key in ("capacities", "team_settings", "work_items"):
+                self.assertIn(key, result["error"])
 
     def test_unknown_provider_errors_cleanly(self):
         """An unknown provider is an error message, not an exception."""

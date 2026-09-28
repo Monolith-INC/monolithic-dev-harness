@@ -1,48 +1,59 @@
-"""The shipped Azure DevOps tracker adapter, loaded the way the registry loads it.
+"""The shipped Azure DevOps tracker, driven the way the backlog stage drives it: through TrackerOps.
 
-Its planning operations, capacity mapping, and field names live in
-`trackers/azure-devops/adapter.py`, the one place that knows Azure's replies; these tests exercise
-them there.
+The translation of Azure's replies stays private to `trackers/azure-devops/adapter.py`; these
+helpers only hand replies to `read_iteration` and `iteration_items` and read what comes back.
 """
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
-from types import MappingProxyType
+from typing import Any
 
 import orchestrator_core  # noqa: F401 - puts the plugin's scripts/ on the import path
-from integrations import registry
-from integrations.contracts import AdapterContext
-from integrations.transport import unavailable
+from integrations.planning import EstimableItem, IterationCapacity, IterationReading
+from tests.integrations.fakes import ops
+from tests.settings_fixture import write_settings
 
-azure = registry._import(
-    "test_backlog_azure_tracker",
-    registry.SHIPPED_ROOT / "azure-devops" / registry.ADAPTER,
-)
-MANIFEST = registry.read_manifest(
-    registry.SHIPPED_ROOT / "azure-devops", "shipped"
-).value
+AZURE = {"organization": "o", "project": "p"}
+REMAINING_WORK = "/fields/Microsoft.VSTS.Scheduling.RemainingWork"
+ORIGINAL_ESTIMATE = "/fields/Microsoft.VSTS.Scheduling.OriginalEstimate"
 
 
 def tracker(process: str = "agile"):
     """The Azure adapter's `TrackerOps`, with no server behind it."""
-    values = MappingProxyType({"organization": "o", "project": "p", "process": process})
-    return azure.adapter(
-        AdapterContext(MANIFEST, values, registry.PLUGIN_ROOT, unavailable("tests"))
-    )
+    return ops("azure-devops", {**AZURE, "process": process})
+
+
+def reading(ref: str = "it1", **replies: Any) -> IterationReading:
+    return tracker().read_iteration(replies, ref).value
+
+
+def sprint(ref: str = "it1", **replies: Any) -> IterationCapacity:
+    return reading(ref, **replies).capacity
+
+
+def members(capacities: Any):
+    return sprint(capacities=capacities).members
+
+
+def days_off(payload: Any):
+    return sprint(team_settings={"teamDaysOff": payload}).team_days_off
+
+
+def weekend(team_settings: Any) -> tuple[int, ...]:
+    return sprint(team_settings=team_settings).weekend_days
+
+
+def items(work_items: Any, process: str = "agile") -> tuple[EstimableItem, ...]:
+    return tracker(process).iteration_items({"work_items": work_items}, "it1").value
+
+
+def item(record: Any, process: str = "agile") -> EstimableItem | None:
+    return next(iter(items([record], process)), None)
 
 
 def select_azure(root: Path, process: str = "agile") -> None:
     """Write the repository's settings, selecting Azure DevOps with this process."""
-    settings = {
-        "schemaVersion": 1,
-        "tracker": {
-            "name": "azure-devops",
-            "values": {"organization": "o", "project": "p", "process": process},
-        },
-        "scm": {"name": "github", "values": {"owner": "o", "repo": "r"}},
-        "branch_template": "feature/{key}-{slug}",
-    }
-    (root / ".harness").mkdir(parents=True, exist_ok=True)
-    (root / ".harness" / "settings.json").write_text(json.dumps(settings))
+    write_settings(
+        root, tracker={"name": "azure-devops", "values": {**AZURE, "process": process}}
+    )

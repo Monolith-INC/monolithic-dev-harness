@@ -73,16 +73,16 @@ Once the Task list is settled, **compute the estimates — do not reason them ou
 is deterministic and lives in the orchestrator, so the same Story always yields the same hours.
 
 1. **Fetch the sprint context** and save it as one JSON object: one entry per reply the selected
-   tracker lists under `planning.replies` in its `tracker.json`, fetched through the host's tools
-   as each entry describes. For Azure DevOps that is `iteration`, `capacities`, `team_settings`,
-   and `work_items`; the local tracker needs none. See `references/estimation.md`.
+   tracker lists under `planning.replies` in its `tracker.json` (`tracker_describe`), fetched
+   through the host's tools as each entry describes. A tracker that lists none (local) reads its
+   own files; pass `iteration_ref` so it knows which sprint. See `references/estimation.md`.
 2. **Write the Task list** as JSON: `story_id`, `story_points`, `assignee`, `iteration_ref`, and
    `tasks[]` of `{id, title, current_hours}`. Pass a `weight` per Task only when the Implementation
    Plan says one is materially larger; otherwise the role default applies.
 3. **Run it:**
 
 ```bash
-bin/agile-backlog-toolkit estimate-breakdown --input <tasks>.json --payloads <sprint>.json
+bin/agile-backlog-toolkit estimate-breakdown --input <tasks>.json --replies <sprint>.json
 ```
 
 Exit codes: `0` estimated and fits, `2` **blocked** (see below), `1` could not run.

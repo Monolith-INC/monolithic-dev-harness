@@ -1,7 +1,7 @@
 import unittest
 from datetime import date
 
-from azure_tracker import azure, select_azure
+from azure_tracker import reading, select_azure, sprint
 
 from orchestrator_core.capacity import (
     ActivityCapacity,
@@ -18,8 +18,7 @@ from orchestrator_core.estimation import (
     estimate_breakdown,
     recompute_breakdown,
 )
-
-current_iteration = azure.current_iteration
+from tests.settings_fixture import write_settings
 
 
 def _sprint(members=()):
@@ -268,39 +267,70 @@ class TestRecompute(unittest.TestCase):
         self.assertIn("2h → 32h", estimate.tasks[0].describe_change())
 
 
-class TestCurrentIteration(unittest.TestCase):
-    """Resolving the active sprint so nobody has to pass an id."""
+def _listed(name, time_frame=None, start="2026-08-03"):
+    attributes = {
+        "startDate": start,
+        **({} if time_frame is None else {"timeFrame": time_frame}),
+    }
+    return {
+        "id": name.lower().replace(" ", "-"),
+        "name": name,
+        "attributes": attributes,
+    }
 
-    def test_picks_the_iteration_marked_current(self):
+
+LISTING = {
+    "value": [
+        _listed("Sprint 58", 0, "2026-07-20"),
+        _listed("Sprint 59", 1, "2026-08-03"),
+        _listed("Sprint 60", 2, "2026-08-17"),
+    ]
+}
+
+
+class TestSprintSelection(unittest.TestCase):
+    """Which sprint an iteration listing gives, so nobody has to pass an id."""
+
+    def _start(self, listing, ref="current"):
+        return sprint(ref, iteration=listing).start_date
+
+    def test_current_takes_the_sprint_marked_current(self):
         """Azure marks the active sprint with timeFrame 1."""
-        payload = {
-            "value": [
-                {"id": "a", "name": "Sprint 58", "attributes": {"timeFrame": 0}},
-                {"id": "b", "name": "Sprint 59", "attributes": {"timeFrame": 1}},
-                {"id": "c", "name": "Sprint 60", "attributes": {"timeFrame": 2}},
-            ]
-        }
-        self.assertEqual(current_iteration(payload)["name"], "Sprint 59")
+        self.assertEqual(str(self._start(LISTING)), "2026-08-03")
 
-    def test_single_entry_is_taken_as_current(self):
-        """A $timeframe=current query returns only the active sprint."""
-        payload = {"value": [{"id": "b", "name": "Sprint 59"}]}
-        self.assertEqual(current_iteration(payload)["name"], "Sprint 59")
+    def test_a_named_sprint_is_found_by_name_id_or_path(self):
+        """Asking for another sprint must not quietly give the current one's dates."""
+        self.assertEqual(str(self._start(LISTING, "Sprint 60")), "2026-08-17")
+        self.assertEqual(str(self._start(LISTING, "sprint-58")), "2026-07-20")
 
-    def test_no_current_sprint_yields_none(self):
+    def test_a_named_sprint_missing_from_the_listing_is_reported(self):
+        found = reading("Sprint 99", iteration=LISTING)
+        self.assertIsNone(found.capacity.start_date)
+        self.assertTrue(any("Sprint 99" in warning for warning in found.warnings))
+
+    def test_single_unmarked_entry_is_taken_as_current(self):
+        """A timeframe=current query returns only the active sprint."""
+        listing = {"value": [_listed("Sprint 59", start="2026-08-03")]}
+        self.assertEqual(str(self._start(listing)), "2026-08-03")
+
+    def test_one_sprint_object_is_the_sprint_asked_for(self):
+        self.assertEqual(
+            str(self._start(_listed("Sprint 60", 2, "2026-08-17"), "it")), "2026-08-17"
+        )
+
+    def test_no_current_sprint_gives_no_dates_and_says_so(self):
         """Between sprints there may be no active one."""
-        payload = {
-            "value": [
-                {"attributes": {"timeFrame": 0}},
-                {"attributes": {"timeFrame": 2}},
-            ]
-        }
-        self.assertIsNone(current_iteration(payload))
+        listing = {"value": [_listed("Sprint 58", 0), _listed("Sprint 60", 2)]}
+        found = reading("current", iteration=listing)
+        self.assertIsNone(found.capacity.start_date)
+        self.assertTrue(
+            any("no current sprint" in warning for warning in found.warnings)
+        )
 
     def test_hostile_inputs(self):
         """Malformed listings yield nothing rather than raising."""
         for payload in (None, {}, "text", {"value": []}, [None]):
-            self.assertIsNone(current_iteration(payload))
+            self.assertIsNone(self._start(payload))
 
 
 if __name__ == "__main__":
@@ -385,19 +415,103 @@ class TestRoleWeights(unittest.TestCase):
 class TestEstimateBreakdownHandler(unittest.TestCase):
     """The orchestrator handler -- deterministic, and it performs no writes."""
 
-    def _run(self, arguments):
+    def _run(self, arguments, select=None, prepare=None):
+        """Runs in a fresh repository that selects Azure DevOps unless `select` writes otherwise."""
         import tempfile
         from pathlib import Path as P
 
         from orchestrator_core.handlers import handle_estimate_breakdown
 
         with tempfile.TemporaryDirectory() as tmpdir:
-            select_azure(P(tmpdir), arguments.pop("process", "agile"))
-            state = P(tmpdir) / ".harness" / "backlog"
+            root = P(tmpdir)
+            (select or (lambda r: select_azure(r, arguments.pop("process", "agile"))))(
+                root
+            )
+            (prepare or (lambda r: None))(root)
+            state = root / ".harness" / "backlog"
             state.mkdir(parents=True)
             return handle_estimate_breakdown(
                 arguments, skills_dir=P("."), state_dir=state, instructions=""
             )
+
+    SPRINT = {
+        "iteration": {
+            "attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"}
+        },
+        "team_settings": {"workingDays": [1, 2, 3, 4, 5]},
+        "capacities": {
+            "teamMembers": [
+                {
+                    "teamMember": {"id": "u1", "displayName": "Ana"},
+                    "activities": [{"capacityPerDay": 1, "name": ""}],
+                }
+            ]
+        },
+    }
+
+    def test_a_missing_reply_stops_the_run_instead_of_skipping_the_ceiling(self):
+        """The regression: without work_items the check used to switch off and the hours were
+        written past the assignee's capacity."""
+        result = self._run(
+            dict(self.BASE, story_points=21, assignee="Ana", replies=self.SPRINT)
+        )
+        self.assertFalse(result["ok"])
+        self.assertIn("work_items", result["error"])
+        self.assertIn("get_batch", result["error"])
+
+    def test_capacity_is_not_checked_unless_asked(self):
+        """No replies and no sprint named: the estimate stands, with no invented warnings."""
+        result = self._run(dict(self.BASE, assignee="Ana"))
+        self.assertTrue(result["ok"])
+        self.assertEqual(result["capacity_errors"], [])
+        self.assertFalse(result["capacity_known"])
+
+    def test_the_local_tracker_writes_its_own_hour_fields(self):
+        result = self._run(
+            dict(self.BASE, assignee="Ana"),
+            select=lambda root: write_settings(root),
+        )
+        fields = {name for op in result["write_ops"] for name in op["fields"]}
+        self.assertEqual(fields, {"remaining_hours", "effort_hours"})
+        self.assertEqual(result["capacity_errors"], [])
+
+    def test_the_local_tracker_checks_capacity_for_a_named_sprint(self):
+        def sprint_file(root):
+            folder = root / ".harness" / "tracker" / "capacity"
+            folder.mkdir(parents=True)
+            (folder / "S1.json").write_text(
+                '{"startDate": "2026-08-03", "finishDate": "2026-08-14", '
+                '"members": [{"name": "Ana", "activities": [{"capacityPerDay": 1}]}]}'
+            )
+
+        result = self._run(
+            dict(self.BASE, story_points=21, assignee="Ana", iteration_ref="S1"),
+            select=lambda root: write_settings(root),
+            prepare=sprint_file,
+        )
+        self.assertTrue(result["blocked"])
+        self.assertEqual(result["write_ops"], [])
+
+    def test_linear_says_it_has_no_capacity_rather_than_blaming_the_assignee(self):
+        result = self._run(
+            dict(self.BASE, assignee="Ana", replies={"cycle": [], "issues": []}),
+            select=lambda root: write_settings(
+                root, tracker={"name": "linear", "values": {"team": "ENG"}}
+            ),
+        )
+        self.assertEqual(
+            result["capacity_errors"],
+            ["the sprint records no team capacity, so it was not checked"],
+        )
+        self.assertEqual(result["write_ops"], [])
+        self.assertTrue(any("by hand" in w for w in result["warnings"]))
+
+    def test_no_usable_tracker_means_no_writes_and_says_why(self):
+        """Nobody gets a field the tracker does not have, not even a neutral one."""
+        result = self._run(dict(self.BASE), select=lambda root: None)
+        self.assertTrue(result["estimated"])
+        self.assertEqual(result["write_ops"], [])
+        self.assertTrue(any("by hand" in w for w in result["warnings"]))
 
     BASE = {
         "story_id": "US-1",
@@ -460,7 +574,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
 
     def test_blocked_estimate_produces_no_write_ops(self):
         """Work that cannot fit is never written."""
-        payloads = {
+        replies = {
             "iteration": {
                 "attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"}
             },
@@ -477,7 +591,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
             "work_items": {"value": []},
         }
         result = self._run(
-            dict(self.BASE, story_points=21, assignee="Ana", payloads=payloads)
+            dict(self.BASE, story_points=21, assignee="Ana", replies=replies)
         )
         self.assertTrue(result["blocked"])
         self.assertEqual(result["write_ops"], [])
@@ -485,7 +599,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
 
     def test_capacity_cross_check_warning_reaches_the_handler(self):
         """A mismatch with Azure's reported total must not disappear at the provider seam."""
-        payloads = {
+        replies = {
             "iteration": {
                 "attributes": {"startDate": "2026-08-03", "finishDate": "2026-08-14"}
             },
@@ -501,7 +615,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
             },
             "work_items": {"value": []},
         }
-        result = self._run(dict(self.BASE, assignee="Ana", payloads=payloads))
+        result = self._run(dict(self.BASE, assignee="Ana", replies=replies))
         self.assertTrue(
             any("capacity mismatch" in warning for warning in result["warnings"])
         )

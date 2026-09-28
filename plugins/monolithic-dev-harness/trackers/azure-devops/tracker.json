@@ -53,7 +53,7 @@
       {"key": "iteration", "description": "work[list_team_iterations] with project, team, timeframe \"current\" (or the named sprint)"},
       {"key": "capacities", "description": "work[get_team_capacity] with project, team, and that iteration's id"},
       {"key": "team_settings", "description": "work[get_team_settings] with project and team"},
-      {"key": "work_items", "description": "wit_work_item[list_for_iteration] for that iteration, so existing commitments count"}
+      {"key": "work_items", "description": "wit_work_item[list_for_iteration] for that iteration, then wit_work_item[get_batch] for the ids it lists (no fields list); pass the batch reply, so existing commitments count"}
     ]
   },
   "text_format": "markdown"

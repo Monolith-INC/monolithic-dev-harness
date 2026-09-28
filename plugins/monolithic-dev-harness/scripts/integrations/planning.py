@@ -65,9 +65,7 @@ def date_ranges(raw: Any) -> tuple[DateRange, ...]:
     """Days off as ranges: `{start, end}` objects (end defaults to start) or single dates."""
     return tuple(
         DateRange(start, end)
-        for start, end in (
-            _bounds(entry) for entry in (raw if isinstance(raw, list) else ())
-        )
+        for start, end in (_bounds(entry) for entry in _list(raw))
         if start is not None and end is not None
     )
 
@@ -195,6 +193,48 @@ class IterationReading:
 
     capacity: IterationCapacity
     warnings: tuple[str, ...] = ()
+
+
+# The planning fields of a work item, as a person writes them in a planning file's front matter and
+# as the local tracker keeps them in its records. One format, read by `planning_item` alone.
+POINTS = "story_points"
+ESTIMATED_HOURS = "effort_hours"
+REMAINING_HOURS = "remaining_hours"
+COMPLETED_HOURS = "completed_hours"
+ACTIVITY = "activity"
+ASSIGNED_TO = "assigned_to"
+ITERATION = "iteration"
+STATE = "state"
+
+
+def planning_item(
+    item_id: str, title: str, item_type: str, fields: Mapping[str, Any]
+) -> EstimableItem:
+    return EstimableItem(
+        item_id=item_id,
+        title=title,
+        item_type=item_type,
+        points=as_float(fields.get(POINTS)),
+        estimated_hours=as_float(fields.get(ESTIMATED_HOURS)),
+        remaining_hours=as_float(fields.get(REMAINING_HOURS)),
+        completed_hours=as_float(fields.get(COMPLETED_HOURS)),
+        activity=_text(fields.get(ACTIVITY)),
+        assigned_to=_text(fields.get(ASSIGNED_TO)),
+        state=_text(fields.get(STATE)) or "",
+        iteration=_text(fields.get(ITERATION)),
+    )
+
+
+def recorded_hours(hours: float, first: bool) -> Mapping[str, float]:
+    """The planning fields that record a task's hours: remaining always, the estimate once."""
+    return {
+        REMAINING_HOURS: hours,
+        **({ESTIMATED_HOURS: hours} if first and hours > 0 else {}),
+    }
+
+
+def _text(value: Any) -> str | None:
+    return str(value).strip() or None if value is not None else None
 
 
 def empty_reading(iteration_ref: str, warning: str) -> IterationReading:

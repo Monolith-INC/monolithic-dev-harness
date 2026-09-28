@@ -10,7 +10,6 @@ from __future__ import annotations
 from collections.abc import Mapping
 from typing import Any
 
-from core.result import Err, Ok
 from integrations.contracts import TrackerOps
 
 from .base import ProviderResult
@@ -24,17 +23,13 @@ class TrackerProvider:
         self.replies = replies
 
     def fetch_iteration(self, iteration_ref: str) -> ProviderResult:
-        match self.tracker.read_iteration(self.replies, iteration_ref):
-            case Ok(reading):
-                return ProviderResult.success(
-                    reading.capacity, warnings=reading.warnings
-                )
-            case Err(failure):
-                return ProviderResult.failure(failure.message)
+        return ProviderResult.of(
+            self.tracker.read_iteration(self.replies, iteration_ref),
+            lambda reading: reading.capacity,
+            lambda reading: reading.warnings,
+        )
 
     def fetch_work_items(self, iteration_ref: str) -> ProviderResult:
-        match self.tracker.iteration_items(self.replies, iteration_ref):
-            case Ok(items):
-                return ProviderResult.success(list(items))
-            case Err(failure):
-                return ProviderResult.failure(failure.message)
+        return ProviderResult.of(
+            self.tracker.iteration_items(self.replies, iteration_ref), list
+        )

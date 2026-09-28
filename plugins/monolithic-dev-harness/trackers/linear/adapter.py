@@ -9,6 +9,7 @@ and no hours, so planning reports that and names no hour fields.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from datetime import datetime, timezone
 from typing import Any
 
 from core.result import Ok, Result, bind, err, fmap
@@ -26,10 +27,12 @@ from integrations.planning import (
     EstimableItem,
     IterationCapacity,
     IterationReading,
+    as_float,
     first_number,
     parse_date,
 )
 
+CYCLE_MARKERS = ("startsAt", "endsAt")  # a single cycle, not a listing
 NO_CAPACITY = (
     "Linear records no team capacity; only the cycle's dates are known, so availability is "
     "not checked"
@@ -173,34 +176,73 @@ def _comment(reply: Any) -> Mapping[str, Any]:
 
 
 def _cycle(reply: Any, iteration_ref: str) -> IterationReading:
-    """A cycle's dates, from one cycle or a listing whose first entry is the one asked for."""
+    """A cycle's dates. A single cycle is the one asked for; from a listing, "current" (or no
+    name) takes the active cycle and any other reference the cycle of that id, name, or number.
+    """
+    cycles = payloads.one_or_many(reply, *CYCLE_MARKERS)
+    current = iteration_ref.strip().lower() in ("", "current")
     cycle = (
         reply
-        if isinstance(reply, dict) and ("startsAt" in reply or "endsAt" in reply)
-        else next(iter(payloads.records(reply)), EMPTY)
+        if cycles == (reply,)
+        else _active(cycles)
+        if current
+        else payloads.named(cycles, iteration_ref, "id", "name", "number")
     )
     return IterationReading(
         IterationCapacity(
             iteration_ref=iteration_ref,
-            start_date=parse_date(cycle.get("startsAt")),
-            finish_date=parse_date(cycle.get("endsAt")),
+            start_date=parse_date((cycle or EMPTY).get("startsAt")),
+            finish_date=parse_date((cycle or EMPTY).get("endsAt")),
         ),
-        (NO_CAPACITY,),
+        (NO_CAPACITY,)
+        + (
+            ()
+            if cycle is not None or reply is None
+            else (
+                f"the cycle reply has no cycle {iteration_ref or 'current'!r}, so it has no dates",
+            )
+        ),
+    )
+
+
+def _active(cycles: tuple[Mapping[str, Any], ...]) -> Mapping[str, Any] | None:
+    """The cycle Linear marks active, else the one running today."""
+    today = datetime.now(timezone.utc).date()
+    return next(
+        (cycle for cycle in cycles if cycle.get("isActive") is True),
+        next(
+            (
+                cycle
+                for cycle in cycles
+                if (start := parse_date(cycle.get("startsAt"))) is not None
+                and (end := parse_date(cycle.get("endsAt"))) is not None
+                and start <= today <= end
+            ),
+            None,
+        ),
     )
 
 
 def _estimable(context: AdapterContext, record: Mapping[str, Any]) -> EstimableItem:
     item = work_item(context, record)
-    person = payloads.object_or_empty(record.get("assignee"))
-    cycle = payloads.object_or_empty(record.get("cycle"))
+    person = record.get("assignee")
+    estimate = record.get("estimate")
     return EstimableItem(
         item_id=item.id,
         title=item.title,
         item_type=item.kind.value,
-        points=first_number(record, "estimate"),
-        assigned_to=payloads.text(person, "displayName", "name")
-        or payloads.text(record, "assignee")
+        points=as_float(estimate)
+        if not isinstance(estimate, dict)
+        else first_number(estimate, "value"),
+        assigned_to=(
+            payloads.text(person, "displayName", "name")
+            if isinstance(person, dict)
+            else str(person or "")
+        )
         or None,
         state=_name(record.get("state") or record.get("status")),
-        iteration=payloads.text(cycle, "name", "number") or None,
+        iteration=payloads.text(
+            payloads.object_or_empty(record.get("cycle")), "name", "number"
+        )
+        or None,
     )

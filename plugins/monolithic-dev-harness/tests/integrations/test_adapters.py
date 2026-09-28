@@ -163,6 +163,15 @@ class AzureTest(unittest.TestCase):
             {"/fields/Microsoft.VSTS.Scheduling.RemainingWork": 4.0},
         )
 
+    def test_a_work_items_reply_of_ids_alone_is_refused_not_read_as_empty(self) -> None:
+        """list_for_iteration answers with ids only; counting that as no work would overstate
+        everyone's free hours, so the tracker asks for the batch read instead."""
+        relations = {"workItemRelations": [{"rel": None, "target": {"id": 5}}]}
+        for reply in (relations, relations["workItemRelations"]):
+            refused = self.tracker.iteration_items({"work_items": reply}, "current")
+            self.assertEqual(refused.failure.code, "ids_only")
+            self.assertIn("get_batch", refused.failure.message)
+
     def test_link_sends_a_hyperlink(self) -> None:
         self.assertEqual(
             self.tracker.link_development_artifact(
@@ -259,11 +268,13 @@ class LinearTest(unittest.TestCase):
     def test_planning_reads_cycle_dates_and_issue_estimates(self) -> None:
         replies = {
             "cycle": [
+                {"number": 6, "startsAt": "2026-07-20", "endsAt": "2026-07-31"},
                 {
                     "number": 7,
+                    "isActive": True,
                     "startsAt": "2026-08-03T00:00:00Z",
                     "endsAt": "2026-08-14",
-                }
+                },
             ],
             "issues": {
                 "issues": [
@@ -296,6 +307,26 @@ class LinearTest(unittest.TestCase):
             ("ENG-2", 3.0, "Ana", "user_story", "7"),
         )
         self.assertEqual(dict(self.tracker.hour_fields(4.0, True)), {})
+        named = self.tracker.read_iteration(replies, "6").value.capacity
+        self.assertEqual(str(named.start_date), "2026-07-20")
+        missing = self.tracker.read_iteration(replies, "99").value
+        self.assertIsNone(missing.capacity.start_date)
+        self.assertIn("'99'", missing.warnings[-1])
+
+    def test_planning_tolerates_odd_assignee_and_estimate_shapes(self) -> None:
+        replies = {
+            "issues": [
+                {
+                    **self.issue("ENG-3"),
+                    "assignee": {"id": "u1"},
+                    "estimate": {"value": 2},
+                },
+                {**self.issue("ENG-4"), "assignee": "Bia", "estimate": "x"},
+            ]
+        }
+        first, second = self.tracker.iteration_items(replies, "current").value
+        self.assertEqual((first.assigned_to, first.points), (None, 2.0))
+        self.assertEqual((second.assigned_to, second.points), ("Bia", None))
 
 
 class LocalTest(unittest.TestCase):
@@ -376,7 +407,12 @@ class LocalTest(unittest.TestCase):
         path = self.repo / ".harness/tracker/backlog" / f"{story.key}.json"
         record = json.loads(path.read_text())
         path.write_text(
-            json.dumps({**record, "iteration": "S1", "points": 5, "remainingHours": 8})
+            json.dumps(
+                {**record, "iteration": "S1", "story_points": 5, "remaining_hours": 8}
+            )
+        )
+        (path.parent / "stray.json").write_text(
+            json.dumps({"kind": "task", "state": "backlog", "iteration": "S1"})
         )
         reading = self.tracker.read_iteration({}, "S1").value
         self.assertEqual(reading.capacity.members[0].daily_hours, 6.0)
@@ -390,11 +426,21 @@ class LocalTest(unittest.TestCase):
         )
         self.assertEqual(
             dict(self.tracker.hour_fields(4.0, True)),
-            {"remainingHours": 4.0, "estimatedHours": 4.0},
+            {"remaining_hours": 4.0, "effort_hours": 4.0},
         )
         self.assertEqual(
-            dict(self.tracker.hour_fields(4.0, False)), {"remainingHours": 4.0}
+            dict(self.tracker.hour_fields(4.0, False)), {"remaining_hours": 4.0}
         )
+
+    def test_planning_needs_the_sprint_named(self) -> None:
+        """No sprint name must not read a made-up file or count every unplanned item."""
+        for ref in ("", "  "):
+            self.assertEqual(
+                self.tracker.read_iteration({}, ref).failure.code, "invalid_request"
+            )
+            self.assertEqual(
+                self.tracker.iteration_items({}, ref).failure.code, "invalid_request"
+            )
 
     def test_search_pages_and_missing_items(self) -> None:
         tuple(

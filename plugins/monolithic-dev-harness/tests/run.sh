@@ -4,5 +4,5 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PY="${PYTHON:-python3}"
 cd "$ROOT"
-PYTHONPATH=runtime:tests/backlog "$PY" -m pytest tests/backlog -q -p no:cacheprovider
+PYTHONPATH=runtime:tests/backlog:. "$PY" -m pytest tests/backlog -q -p no:cacheprovider
 PYTHONPATH=.:scripts "$PY" -m pytest tests/core tests/integrations tests/delivery tests/harness -q -p no:cacheprovider

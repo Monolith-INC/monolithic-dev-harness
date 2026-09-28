@@ -4,22 +4,25 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-from azure_tracker import azure, tracker
+from azure_tracker import (
+    ORIGINAL_ESTIMATE,
+    REMAINING_WORK,
+    days_off,
+    item,
+    items,
+    members,
+    sprint,
+    tracker,
+    weekend,
+)
 
+from integrations.planning import DEFAULT_WEEKEND_DAYS
 from orchestrator_core.capacity import plan_iteration
 from orchestrator_core.providers import (
     CapacityProvider,
     FilesystemProvider,
     TrackerProvider,
 )
-
-f = azure
-map_capacities = azure.map_capacities
-map_days_off = azure.map_days_off
-map_iteration = azure.map_iteration
-map_weekend_days = azure.map_weekend_days
-map_work_item = azure.map_work_item
-map_work_items = azure.map_work_items
 
 # Shaped after the responses documented for the Azure DevOps work/capacities API.
 CAPACITIES_PAYLOAD = {
@@ -94,39 +97,38 @@ class TestCapacitySources(unittest.TestCase):
 
 
 class TestAzureFields(unittest.TestCase):
-    """Tests for the field-reference constants and process guards."""
+    """Which Azure field each process uses, seen through the work items the tracker reads."""
 
-    def test_process_normalisation(self):
-        """Process names resolve case-insensitively and default to Agile."""
-        self.assertEqual(f.normalize_process("Scrum"), f.PROCESS_SCRUM)
-        self.assertEqual(f.normalize_process("Agile"), f.PROCESS_AGILE)
-        self.assertEqual(f.normalize_process("CMMI"), f.PROCESS_CMMI)
-        self.assertEqual(f.normalize_process(None), f.PROCESS_AGILE)
-        self.assertEqual(f.normalize_process("something else"), f.PROCESS_AGILE)
+    SIZES = {
+        "Microsoft.VSTS.Scheduling.StoryPoints": 3,
+        "Microsoft.VSTS.Scheduling.Effort": 8,
+        "Microsoft.VSTS.Scheduling.Size": 5,
+    }
+
+    def _points(self, process):
+        return item({"id": 1, "fields": self.SIZES}, process=process).points
 
     def test_points_field_varies_by_process(self):
         """Each process keeps its relative-size field under a different name."""
-        self.assertEqual(f.points_field("agile"), f.STORY_POINTS)
-        self.assertEqual(f.points_field("scrum"), f.EFFORT)
-        self.assertEqual(f.points_field("cmmi"), f.SIZE)
+        self.assertEqual(self._points("agile"), 3.0)
+        self.assertEqual(self._points("scrum"), 8.0)
+        self.assertEqual(self._points("cmmi"), 5.0)
 
-    def test_scrum_lacks_original_estimate(self):
-        """The guard that stops a silent write failure on Scrum projects."""
-        self.assertFalse(f.supports_original_estimate("scrum"))
-        self.assertTrue(f.supports_original_estimate("agile"))
-        self.assertTrue(f.supports_original_estimate("cmmi"))
+    def test_process_names_resolve_case_insensitively_and_default_to_agile(self):
+        self.assertEqual(self._points("Scrum process"), 8.0)
+        self.assertEqual(self._points(""), 3.0)
+        self.assertEqual(self._points("something else"), 3.0)
 
     def test_cmmi_uses_discipline_not_activity(self):
         """CMMI names the activity field Discipline."""
-        self.assertEqual(f.activity_field("cmmi"), f.DISCIPLINE)
-        self.assertEqual(f.activity_field("agile"), f.ACTIVITY)
+        record = {"id": 1, "fields": {"Microsoft.VSTS.Common.Discipline": "Dev"}}
+        self.assertEqual(item(record, process="cmmi").activity, "Dev")
+        self.assertIsNone(item(record, process="agile").activity)
 
-    def test_field_ref_builds_patch_path(self):
-        """Writes address fields by JSON-Patch path."""
-        self.assertEqual(
-            f.field_ref(f.REMAINING_WORK),
-            "/fields/Microsoft.VSTS.Scheduling.RemainingWork",
-        )
+    def test_original_estimate_needs_a_stated_process_that_is_not_scrum(self):
+        """Writing it to Scrum fails silently, so an unstated process does not risk it."""
+        self.assertIn(ORIGINAL_ESTIMATE, tracker("cmmi").hour_fields(4.0, True))
+        self.assertNotIn(ORIGINAL_ESTIMATE, tracker("").hour_fields(4.0, True))
 
 
 class TestAzureMapping(unittest.TestCase):
@@ -134,37 +136,37 @@ class TestAzureMapping(unittest.TestCase):
 
     def test_map_capacities_reads_members_and_activities(self):
         """Team members, their activities, and their leave all survive the mapping."""
-        members = map_capacities(CAPACITIES_PAYLOAD)
-        self.assertEqual(len(members), 2)
-        self.assertEqual(members[0].display_name, "Chuck Reinhart")
-        self.assertEqual(members[0].daily_hours, 8.0)
-        self.assertEqual(len(members[0].days_off), 1)
+        team = members(CAPACITIES_PAYLOAD)
+        self.assertEqual(len(team), 2)
+        self.assertEqual(team[0].display_name, "Chuck Reinhart")
+        self.assertEqual(team[0].daily_hours, 8.0)
+        self.assertEqual(len(team[0].days_off), 1)
 
     def test_map_capacities_accepts_bare_list(self):
         """Both the {count,value} envelope and a bare list are accepted."""
-        self.assertEqual(len(map_capacities(CAPACITIES_PAYLOAD["value"])), 2)
+        self.assertEqual(len(members(CAPACITIES_PAYLOAD["value"])), 2)
 
     def test_map_capacities_tolerates_garbage(self):
         """Malformed payloads yield nothing instead of raising."""
-        self.assertEqual(map_capacities(None), ())
-        self.assertEqual(map_capacities("nonsense"), ())
-        self.assertEqual(map_capacities({"value": ["not-an-object"]}), ())
+        self.assertEqual(members(None), ())
+        self.assertEqual(members("nonsense"), ())
+        self.assertEqual(members({"value": ["not-an-object"]}), ())
 
     def test_map_days_off_single_day(self):
         """A one-day absence with no end date is still a valid range."""
-        ranges = map_days_off([{"start": "2026-08-05T00:00:00Z"}])
+        ranges = days_off([{"start": "2026-08-05T00:00:00Z"}])
         self.assertEqual(ranges[0].start, date(2026, 8, 5))
         self.assertEqual(ranges[0].end, date(2026, 8, 5))
 
     def test_map_weekend_days_is_complement_of_working_days(self):
         """Azure states which days are worked; the model wants the rest."""
-        self.assertEqual(map_weekend_days(TEAM_SETTINGS_PAYLOAD), (5, 6))
+        self.assertEqual(weekend(TEAM_SETTINGS_PAYLOAD), (5, 6))
 
     def test_map_weekend_days_absent_setting_keeps_default(self):
-        """Absent settings report None, so map_iteration keeps its default weekend."""
-        self.assertIsNone(map_weekend_days({}))
-        self.assertIsNone(map_weekend_days({"workingDays": []}))
-        self.assertIsNone(map_weekend_days(None))
+        """Absent settings keep the default weekend."""
+        self.assertEqual(weekend({}), DEFAULT_WEEKEND_DAYS)
+        self.assertEqual(weekend({"workingDays": []}), DEFAULT_WEEKEND_DAYS)
+        self.assertEqual(weekend(None), DEFAULT_WEEKEND_DAYS)
 
     def test_map_weekend_days_six_day_week(self):
         """A team working Saturdays leaves only Sunday as weekend."""
@@ -178,11 +180,11 @@ class TestAzureMapping(unittest.TestCase):
                 "saturday",
             ]
         }
-        self.assertEqual(map_weekend_days(settings), (6,))
+        self.assertEqual(weekend(settings), (6,))
 
     def test_map_iteration_assembles_dates_and_team(self):
         """The three payloads combine into one iteration."""
-        iteration = map_iteration(
+        iteration = sprint(
             "it1",
             iteration=ITERATION_PAYLOAD,
             capacities=CAPACITIES_PAYLOAD,
@@ -194,36 +196,36 @@ class TestAzureMapping(unittest.TestCase):
 
     def test_map_iteration_without_payloads_degrades(self):
         """Nothing to map is not an error."""
-        iteration = map_iteration("it1")
+        iteration = sprint("it1")
         self.assertEqual(iteration.members, ())
         self.assertIsNone(iteration.start_date)
 
     def test_map_work_item_reads_scheduling_fields(self):
         """Remaining work, activity, and assignee come through."""
-        item = map_work_item(WORK_ITEMS_PAYLOAD["value"][0])
-        self.assertEqual(item.item_id, "101")
-        self.assertEqual(item.remaining_hours, 12.0)
-        self.assertEqual(item.activity, "Development")
-        self.assertEqual(item.assigned_to, "Chuck Reinhart")
+        found = item(WORK_ITEMS_PAYLOAD["value"][0])
+        self.assertEqual(found.item_id, "101")
+        self.assertEqual(found.remaining_hours, 12.0)
+        self.assertEqual(found.activity, "Development")
+        self.assertEqual(found.assigned_to, "Chuck Reinhart")
 
     def test_map_work_item_reads_points(self):
         """Story points map to the generic points field."""
-        self.assertEqual(map_work_item(WORK_ITEMS_PAYLOAD["value"][1]).points, 5.0)
+        self.assertEqual(item(WORK_ITEMS_PAYLOAD["value"][1]).points, 5.0)
 
     def test_map_work_item_finds_points_across_processes(self):
         """A Scrum project stores size under Effort, not StoryPoints."""
         payload = {"id": 7, "fields": {"Microsoft.VSTS.Scheduling.Effort": 8}}
-        self.assertEqual(map_work_item(payload, process="scrum").points, 8.0)
+        self.assertEqual(item(payload, process="scrum").points, 8.0)
 
     def test_map_work_item_without_id_is_dropped(self):
         """An item with no id cannot be addressed, so it is not returned."""
-        self.assertIsNone(map_work_item({"fields": {"System.Title": "orphan"}}))
-        self.assertIsNone(map_work_item("nonsense"))
+        self.assertIsNone(item({"fields": {"System.Title": "orphan"}}))
+        self.assertIsNone(item("nonsense"))
 
     def test_map_work_items_filters_unmappable(self):
         """A mixed payload yields only the items that mapped."""
         payload = {"value": [{"id": 1}, {"no": "id"}]}
-        self.assertEqual(len(map_work_items(payload)), 1)
+        self.assertEqual(len(items(payload)), 1)
 
 
 class TestAzurePlanning(unittest.TestCase):
@@ -266,10 +268,10 @@ class TestAzurePlanning(unittest.TestCase):
 
     def test_hour_fields_target_remaining_work(self):
         """Remaining Work is the field capacity and burndown actually read."""
-        self.assertIn(f.field_ref(f.REMAINING_WORK), tracker().hour_fields(6.0, False))
+        self.assertIn(REMAINING_WORK, tracker().hour_fields(6.0, False))
 
     def test_original_estimate_is_set_once_and_never_on_scrum(self):
-        original = f.field_ref(f.ORIGINAL_ESTIMATE)
+        original = ORIGINAL_ESTIMATE
         self.assertIn(original, tracker("agile").hour_fields(4.0, True))
         self.assertNotIn(original, tracker("agile").hour_fields(4.0, False))
         self.assertNotIn(original, tracker("scrum").hour_fields(4.0, True))

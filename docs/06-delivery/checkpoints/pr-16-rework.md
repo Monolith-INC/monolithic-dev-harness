@@ -70,6 +70,19 @@ scripts/integrations/   contracts (TrackerOps, ScmOps, domain types), registry, 
   required part of `TrackerOps` for every tracker, `tracker.json` declares `planning.replies`, and
   number, date, and capacity-file reading is shared in `scripts/integrations/planning.py`.
 
+## PR 17 review fixes (thermos on `codex/scoped-sessions`)
+
+| # | Finding | Status |
+|---|---------|--------|
+| 1 | A missing reply switched the capacity limit off: now the run stops and names the reply | done |
+| 2 | Azure `work_items` reply of ids only read as an empty sprint: refused, with the batch read to use | done |
+| 3 | A named sprint got the current sprint's dates (Azure, Linear): found by id, name, path or number | done |
+| 4 | Local tracker with no sprint named read a made-up file: sprint name required | done |
+| 5 | False capacity warnings for local and Linear: checked only when asked; "no team capacity" said plainly | done |
+| 6 | A broken onboarded folder dropped its writes from approval: every folder counts, unreadable fails closed | done |
+| 7 | Copies: runtime Azure/Linear settings, `azure-devops` provider alias, replies check twice, settings read twice, hour-field probe and `hours` key, test helpers, field literals, local field names, float and story-point coercion, draft builders, docs repeating `tracker.json` | done |
+| 8 | Names: `--payloads` is `--replies`; Azure adapter helpers private, tested through `TrackerOps` | done |
+
 ## Next
 
 Nothing left in this rework. Follow-up: the live Linear check (including `list_cycles` for

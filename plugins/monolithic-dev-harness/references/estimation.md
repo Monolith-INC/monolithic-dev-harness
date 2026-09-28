@@ -104,18 +104,22 @@ configuration, which is not this plugin's business.
 
 Every tracker plans through the same contract (`TrackerOps` in `scripts/integrations/contracts.py`):
 `read_iteration` gives the sprint's dates and team, `iteration_items` what it already holds, and
-`hour_fields` the fields that record hours. Each tracker's `tracker.json` lists, under
-`planning.replies`, the replies its planning reads; fetch each one through the host's tools as
-described there and pass them together as `--payloads`.
+`hour_fields` the fields that record hours. What each tracker reads is declared in its own
+`tracker.json` under `planning.replies` (call `tracker_describe`): fetch each reply through the
+host's tools as its description says, save them together as one JSON object keyed by reply, and
+pass that file as `--replies`. A tracker that lists no replies reads its own files; the local
+tracker then needs the sprint named. Which fields record hours is the adapter's to say, and the
+command prints them.
 
-| Tracker | Replies | Team capacity | Hour fields |
-| --- | --- | --- | --- |
-| Azure DevOps | `iteration`, `capacities`, `team_settings`, `work_items` | yes | Remaining Work; Original Estimate on a first estimate, except on Scrum |
-| Linear | `cycle`, `issues` | no (dates and point estimates only) | none; hours are recorded by hand |
-| local | none; reads `.harness/tracker/capacity/<sprint>.json` and its work items | yes | `remainingHours`; `estimatedHours` on a first estimate |
+Capacity is checked only when asked: replies were passed, or a sprint was named. Once asked, a
+check that cannot run (a reply missing, no usable tracker) stops the run rather than writing
+hours past an unchecked limit. A tracker that records no team capacity (Linear) or no hours says
+so, and the figures are recorded by hand.
 
-The planning files a person keeps under `artifacts_path` (`--provider filesystem`) use the same
-capacity format as the local tracker, read by one parser (`scripts/integrations/planning.py`).
+The planning files a person keeps under `artifacts_path` (`--provider filesystem`) and the local
+tracker's records share one format, read in one place (`scripts/integrations/planning.py`): the
+capacity file, and the planning fields `story_points`, `effort_hours`, `remaining_hours`,
+`completed_hours`, `activity`, `assigned_to`, `iteration`, and `state`.
 
 ## Commands
 
@@ -123,7 +127,7 @@ capacity format as the local tracker, read by one parser (`scripts/integrations/
 bin/agile-backlog-toolkit estimate --file <path>          # suggest hours for a draft
 bin/agile-backlog-toolkit estimate --points 5             # suggest hours for a point value
 bin/agile-backlog-toolkit capacity --provider filesystem  # plan from local planning files
-bin/agile-backlog-toolkit capacity --provider tracker --iteration <id> --payloads <json>
+bin/agile-backlog-toolkit capacity --provider tracker --iteration <id> --replies <json>
 ```
 
 `capacity` exits non-zero when the sprint is overcommitted, so it works as a gate.

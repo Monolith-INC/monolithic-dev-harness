@@ -19,6 +19,7 @@ LIST_KEYS = (
     "teamMembers",
     "iterations",
     "values",
+    "cycles",
 )
 
 
@@ -42,6 +43,31 @@ def items(value: Any) -> tuple[Any, ...]:
 
 def records(value: Any) -> tuple[Mapping[str, Any], ...]:
     return tuple(item for item in items(value) if isinstance(item, dict))
+
+
+def one_or_many(value: Any, *markers: str) -> tuple[Mapping[str, Any], ...]:
+    """A reply that is one record (it holds any of `markers`) or a list of them, as records."""
+    return (
+        (value,)
+        if isinstance(value, dict) and any(key in value for key in markers)
+        else records(value)
+    )
+
+
+def named(
+    entries: tuple[Mapping[str, Any], ...], ref: str, *keys: str
+) -> Mapping[str, Any] | None:
+    """The first entry whose `keys` hold `ref`, compared without case; None when none does."""
+    wanted = ref.strip().lower()
+    return next(
+        (
+            entry
+            for entry in entries
+            if wanted
+            and any(str(entry.get(key, "")).strip().lower() == wanted for key in keys)
+        ),
+        None,
+    )
 
 
 def text(value: Mapping[str, Any], *keys: str) -> str:

@@ -34,6 +34,18 @@ def _state_dir(project_root: Path) -> Path:
     return plugin_dir(project_root)
 
 
+def _replies(path: str | None) -> dict | None:
+    """The tracker replies a skill saved, `{}` when none were given, None when unreadable."""
+    if not path:
+        return {}
+    try:
+        replies = json.loads(Path(path).read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        print(f"[!] Could not read replies: {exc}")
+        return None
+    return replies
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Agile Workflow deterministic orchestrator"
@@ -92,10 +104,10 @@ def main(argv: list[str] | None = None) -> int:
         "--provider",
         default="filesystem",
         choices=("filesystem", "tracker"),
-        help="your planning files, or the selected tracker (needs --payloads)",
+        help="your planning files, or the selected tracker (with the --replies its tracker.json lists)",
     )
     capacity_p.add_argument(
-        "--payloads", help="Path to JSON of the tracker replies a skill fetched"
+        "--replies", help="Path to JSON of the tracker replies a skill fetched"
     )
 
     breakdown_p = sub.add_parser(
@@ -106,7 +118,7 @@ def main(argv: list[str] | None = None) -> int:
         "--input", required=True, help="Path to JSON: story_id, story_points, tasks[]"
     )
     breakdown_p.add_argument(
-        "--payloads", help="Path to JSON of the tracker replies a skill fetched"
+        "--replies", help="Path to JSON of the tracker replies a skill fetched"
     )
 
     config_p = sub.add_parser(
@@ -114,11 +126,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     config_p.add_argument(
         "--show", action="store_true", help="Print resolved configuration"
-    )
-    config_p.add_argument(
-        "--require-team",
-        action="store_true",
-        help="Treat the team as required when reporting what is missing",
     )
 
     sub.add_parser("mcp", help="Run MCP stdio server")
@@ -210,20 +217,15 @@ def main(argv: list[str] | None = None) -> int:
     if args.command == "capacity":
         from .handlers import handle_plan_capacity
 
-        payloads = {}
-        if args.payloads:
-            payload_path = Path(args.payloads)
-            try:
-                payloads = json.loads(payload_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as exc:
-                print(f"[!] Could not read payloads: {exc}")
-                return 1
+        replies = _replies(args.replies)
+        if replies is None:
+            return 1
 
         result = handle_plan_capacity(
             {
                 "iteration_ref": args.iteration,
                 "provider": args.provider,
-                "payloads": payloads,
+                "replies": replies,
             },
             skills_dir=skills_dir,
             state_dir=state_dir,
@@ -252,14 +254,10 @@ def main(argv: list[str] | None = None) -> int:
         except (OSError, json.JSONDecodeError) as exc:
             print(f"[!] Could not read input: {exc}")
             return 1
-        if args.payloads:
-            try:
-                payload["payloads"] = json.loads(
-                    Path(args.payloads).read_text(encoding="utf-8")
-                )
-            except (OSError, json.JSONDecodeError) as exc:
-                print(f"[!] Could not read payloads: {exc}")
-                return 1
+        replies = _replies(args.replies)
+        if replies is None:
+            return 1
+        payload["replies"] = replies
 
         result = handle_estimate_breakdown(
             payload, skills_dir=skills_dir, state_dir=state_dir, instructions=""
@@ -282,9 +280,14 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "config":
-        from .project_config import load_project_config
+        from core.result import Err, Ok
+        from harness import settings
+        from integrations import registry
 
-        config = load_project_config(project_root)
+        from .project_config import from_settings
+
+        loaded = settings.load(project_root)
+        config = from_settings(loaded)
         artifacts = config.resolve_artifacts_dir(project_root)
         print("Project configuration")
         print("=" * 60)
@@ -295,21 +298,21 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"                  → {artifacts}{'' if artifacts.is_dir() else '  (does not exist yet)'}"
             )
-        print(f"  azure.org     : {config.azure.org or '<unset>'}")
-        print(f"  azure.project : {config.azure.project or '<unset>'}")
-        print(f"  azure.team    : {config.azure.team or '<unset>'}")
-        print(f"  azure.process : {config.azure.process or '<unset (assumed agile)>'}")
         print(f"  plugin state  : {_state_dir(project_root)}")
         print(
             f"  sources       : {', '.join(config.sources) or '<none — nothing configured>'}"
         )
-
-        missing = config.missing(require_team=args.require_team)
-        if missing:
-            print(f"\n  Missing: {', '.join(missing)}")
-            print("  Set it in .harness/settings.json under tracker.values.")
-            return 1
-        return 0
+        match registry.selected(project_root, loaded):
+            case Ok(active):
+                print(
+                    f"  tracker       : {active.manifest.name} ({active.manifest.source})"
+                )
+                for key in active.manifest.settings:
+                    print(f"    {key:<12}: {active.values.get(key) or '<unset>'}")
+                return 0
+            case Err(failure):
+                print(f"\n  Tracker: {failure.message}")
+                return 1
 
     if args.command == "mcp":
         from . import mcp_server

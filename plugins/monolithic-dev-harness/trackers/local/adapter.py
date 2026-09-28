@@ -5,8 +5,9 @@
     .harness/tracker/capacity/<sprint>.json      a sprint's dates and team, in the capacity format
 
 Keys are `<PREFIX>-<number>` (`STORY-0007`). Hierarchy follows the manifest's artifacts. A work
-item joins a sprint through its `iteration`; its estimate is `points`, its hours `remainingHours`,
-`estimatedHours`, and `completedHours`. Planning reads these files, so it needs no replies.
+item's planning fields (its sprint, points, and hours) use the same names as a planning file's
+front matter (`integrations.planning`). Planning reads these files, so it needs no replies, but it
+does need the sprint named: there is no "current" sprint to fall back on.
 """
 
 from __future__ import annotations
@@ -31,7 +32,12 @@ from integrations.contracts import (
     WorkItem,
     WorkItemKind,
 )
-from integrations.planning import EstimableItem, as_float, read_capacity_file
+from integrations.planning import (
+    ITERATION,
+    planning_item,
+    read_capacity_file,
+    recorded_hours,
+)
 
 ROOT = Path(".harness") / "tracker"
 PAGE_SIZE = 50
@@ -82,21 +88,29 @@ def adapter(context: AdapterContext) -> TrackerOps:
         link_development_artifact=lambda ref, url, kind: bind(
             _find(context, root, ref), lambda found: _link(found, url, kind)
         ),
-        read_iteration=lambda replies, ref: read_capacity_file(
-            root / "capacity" / f"{_safe(ref)}.json", ref
-        ),
-        iteration_items=lambda replies, ref: fmap(
-            _records(context, root),
-            lambda found: tuple(
-                _estimable(record)
-                for _, record in found
-                if str(record.get("iteration") or "") == ref
+        read_iteration=lambda replies, ref: bind(
+            _sprint(ref),
+            lambda name: read_capacity_file(
+                root / "capacity" / f"{_safe(name)}.json", name
             ),
         ),
-        hour_fields=lambda hours, first: {
-            "remainingHours": hours,
-            **({"estimatedHours": hours} if first and hours > 0 else {}),
-        },
+        iteration_items=lambda replies, ref: bind(
+            _sprint(ref),
+            lambda name: fmap(
+                _records(context, root),
+                lambda found: tuple(
+                    planning_item(
+                        str(record["key"]),
+                        str(record.get("title", "")),
+                        str(record.get("kind", "")),
+                        record,
+                    )
+                    for _, record in found
+                    if record.get("key") and str(record.get(ITERATION) or "") == name
+                ),
+            ),
+        ),
+        hour_fields=recorded_hours,
     )
 
 
@@ -373,17 +387,13 @@ def _link(found: Record, url: str, kind: str) -> Result[Mapping[str, Any]]:
     )
 
 
-def _estimable(record: Mapping[str, Any]) -> EstimableItem:
-    return EstimableItem(
-        item_id=str(record["key"]),
-        title=str(record.get("title", "")),
-        item_type=str(record.get("kind", "")),
-        points=as_float(record.get("points")),
-        estimated_hours=as_float(record.get("estimatedHours")),
-        remaining_hours=as_float(record.get("remainingHours")),
-        completed_hours=as_float(record.get("completedHours")),
-        activity=str(record.get("activity") or "") or None,
-        assigned_to=str(record.get("assignedTo") or "") or None,
-        state=str(record.get("state", "")),
-        iteration=str(record.get("iteration") or "") or None,
+def _sprint(ref: str) -> Result[str]:
+    name = ref.strip()
+    return (
+        Ok(name)
+        if name
+        else err(
+            "invalid_request",
+            "name the sprint: the local tracker reads .harness/tracker/capacity/<sprint>.json",
+        )
     )

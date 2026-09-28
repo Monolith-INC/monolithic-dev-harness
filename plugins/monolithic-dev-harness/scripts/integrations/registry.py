@@ -585,19 +585,15 @@ def build(active: Active, repo: Path, call: Transport) -> Result[TrackerOps]:
     )
 
 
-def _adapter_module(manifest: Manifest) -> Result[Any]:
-    module_name = f"harness_tracker_{manifest.source}_{manifest.name.replace('-', '_')}"
-    return attempt(
-        lambda: _import(module_name, manifest.root / ADAPTER),
-        "invalid_tracker",
-        f"{manifest.name}/{ADAPTER} could not be loaded",
-        Exception,
-    )
-
-
 def _adapter_function(manifest: Manifest) -> Result[Any]:
+    module_name = f"harness_tracker_{manifest.source}_{manifest.name.replace('-', '_')}"
     return bind(
-        _adapter_module(manifest),
+        attempt(
+            lambda: _import(module_name, manifest.root / ADAPTER),
+            "invalid_tracker",
+            f"{manifest.name}/{ADAPTER} could not be loaded",
+            Exception,
+        ),
         lambda module: (
             Ok(module.adapter)
             if callable(getattr(module, "adapter", None))
@@ -606,6 +602,59 @@ def _adapter_function(manifest: Manifest) -> Result[Any]:
                 f"{manifest.name}/{ADAPTER} does not export adapter(context)",
             )
         ),
+    )
+
+
+def require_replies(manifest: Manifest, replies: Mapping[str, Any]) -> Result[None]:
+    """Every reply the tracker's planning reads is present, or which are missing and how to fetch them."""
+    missing = tuple(reply for reply in manifest.planning if reply.key not in replies)
+    return require(
+        not missing,
+        "missing_replies",
+        f"{manifest.name} planning needs these replies, fetched through the host's tools and "
+        "passed as --replies: "
+        + "; ".join(f"{reply.key} ({reply.description})" for reply in missing),
+    )
+
+
+def onboarded_writes(repo: Path) -> tuple[Result[WriteRules], ...]:
+    """What each onboarded folder says writes, read on its own: trusted or not, valid or not.
+
+    Counting a broken or untrusted folder's writes can only ask for more approvals, never fewer;
+    a folder whose writes cannot be read at all is an `Err`, so the rules can fail closed.
+    """
+    return tuple(
+        _declared_writes(folder) for folder in _folders(repo / ONBOARDED_RELATIVE_PATH)
+    )
+
+
+def _declared_writes(folder: Path) -> Result[WriteRules]:
+    return bind(
+        attempt(
+            lambda: json.loads((folder / MANIFEST).read_text(encoding="utf-8")),
+            "invalid_tracker",
+            f"{folder.name}/{MANIFEST} could not be read",
+            OSError,
+            ValueError,
+        ),
+        lambda document: _write_rules(folder, document),
+    )
+
+
+def _write_rules(folder: Path, document: Any) -> Result[WriteRules]:
+    writes = document.get("writes") if isinstance(document, dict) else None
+    server = writes.get("server") if isinstance(writes, dict) else None
+    tools = writes.get("tools") if isinstance(writes, dict) else None
+    return (
+        Ok(WriteRules(server, tuple(tools)))
+        if isinstance(server, str)
+        and isinstance(tools, list)
+        and all(isinstance(tool, str) for tool in tools)
+        else err(
+            "invalid_tracker",
+            f"onboarded tracker {folder.name!r} does not say which tools write "
+            f"(writes.server, writes.tools in {MANIFEST}); fix or remove the folder",
+        )
     )
 
 

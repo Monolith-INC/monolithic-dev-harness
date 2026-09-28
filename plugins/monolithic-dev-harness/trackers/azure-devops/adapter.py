@@ -52,7 +52,7 @@ REMAINING_WORK = "Microsoft.VSTS.Scheduling.RemainingWork"
 """Drives capacity bars and the sprint burndown. Present on every process."""
 
 ORIGINAL_ESTIMATE = "Microsoft.VSTS.Scheduling.OriginalEstimate"
-"""NOT present on Scrum projects -- guard every write with `supports_original_estimate`."""
+"""NOT present on Scrum projects -- guard every write with `_supports_original_estimate`."""
 
 COMPLETED_WORK = "Microsoft.VSTS.Scheduling.CompletedWork"
 """NOT present on Scrum projects."""
@@ -63,6 +63,7 @@ ACTIVITY = "Microsoft.VSTS.Common.Activity"
 DISCIPLINE = "Microsoft.VSTS.Common.Discipline"  # CMMI equivalent of Activity
 
 # -- System fields ---------------------------------------------------------
+ID = "System.Id"
 TITLE = "System.Title"
 DESCRIPTION = "System.Description"
 WORK_ITEM_TYPE = "System.WorkItemType"
@@ -70,6 +71,26 @@ STATE = "System.State"
 PARENT = "System.Parent"
 ASSIGNED_TO = "System.AssignedTo"
 ITERATION_PATH = "System.IterationPath"
+TEAM_PROJECT = "System.TeamProject"
+CHANGED_DATE = "System.ChangedDate"
+FIELDS = (ID, TITLE, WORK_ITEM_TYPE, STATE, DESCRIPTION, PARENT)
+
+# -- Sprints ---------------------------------------------------------------
+WEEKDAY_INDEX = {
+    "monday": 0,
+    "tuesday": 1,
+    "wednesday": 2,
+    "thursday": 3,
+    "friday": 4,
+    "saturday": 5,
+    "sunday": 6,
+}
+TIMEFRAME_CURRENT = 1  # Azure's iteration timeFrame: 0 past, 1 current, 2 future
+SPRINT_MARKERS = (
+    "attributes",
+    "startDate",
+    "finishDate",
+)  # a single sprint, not a listing
 
 # -- Processes -------------------------------------------------------------
 PROCESS_AGILE = "agile"
@@ -91,7 +112,7 @@ ACTIVITY_FIELD_BY_PROCESS = {
 }
 
 
-def normalize_process(value: str | None) -> str:
+def _process(value: str | None) -> str:
     """The process a name refers to; Agile when the name is missing or unrecognised."""
     text = (value or "").strip().lower()
     return next(
@@ -104,30 +125,28 @@ def normalize_process(value: str | None) -> str:
     )
 
 
-def points_field(process: str | None = None) -> str:
-    return POINTS_FIELD_BY_PROCESS[normalize_process(process)]
+def _points_field(process: str | None = None) -> str:
+    return POINTS_FIELD_BY_PROCESS[_process(process)]
 
 
-def activity_field(process: str | None = None) -> str:
-    return ACTIVITY_FIELD_BY_PROCESS[normalize_process(process)]
+def _activity_field(process: str | None = None) -> str:
+    return ACTIVITY_FIELD_BY_PROCESS[_process(process)]
 
 
-def supports_original_estimate(process: str | None = None) -> bool:
+def _supports_original_estimate(process: str | None = None) -> bool:
     """Scrum ships only Remaining Work; Agile and CMMI ship all three scheduling fields.
 
     Writing Original Estimate to a Scrum project fails or silently drops the value, so an
     unstated process counts as unsupported: Remaining Work, which every process has, is enough.
     """
-    return bool((process or "").strip()) and normalize_process(process) != PROCESS_SCRUM
+    return bool((process or "").strip()) and _process(process) != PROCESS_SCRUM
 
 
-def field_ref(field_name: str) -> str:
+def _field_ref(field_name: str) -> str:
     """JSON-Patch path for a field, as `wit_work_item_write[update]` expects it."""
     return f"/fields/{field_name}"
 
 
-ID = "System.Id"
-FIELDS = (ID, TITLE, WORK_ITEM_TYPE, STATE, DESCRIPTION, PARENT)
 LIMIT = (
     200  # the server's cap on one WIQL result, one batch read, and one page of comments
 )
@@ -153,7 +172,7 @@ def adapter(context: AdapterContext) -> TrackerOps:
             lambda parent: _query(
                 context,
                 call,
-                f"SELECT [System.Id] FROM WorkItems WHERE [System.Parent] = {parent}",
+                f"SELECT [{ID}] FROM WorkItems WHERE [{PARENT}] = {parent}",
             ),
         ),
         list_artifacts=lambda ref: _comments(call, ref),
@@ -179,9 +198,7 @@ def adapter(context: AdapterContext) -> TrackerOps:
             ),
         ),
         read_iteration=lambda replies, ref: Ok(_reading(replies, ref)),
-        iteration_items=lambda replies, ref: Ok(
-            map_work_items(replies.get("work_items"), process=process)
-        ),
+        iteration_items=lambda replies, ref: _sprint_items(replies, process),
         hour_fields=lambda hours, first: _hour_fields(process, hours, first),
     )
 
@@ -224,13 +241,10 @@ def _first(context: AdapterContext, reply: Any, missing: str) -> Result[WorkItem
 
 def _records(reply: Any) -> tuple[Mapping[str, Any], ...]:
     """Work item records from one record, a wrapped list, or a batch whose items carry JSON text."""
-    candidates = (
-        (reply,)
-        if isinstance(reply, dict) and ("fields" in reply or "id" in reply)
-        else payloads.items(reply)
-    )
     return tuple(
-        record for record in map(_unwrapped, candidates) if isinstance(record, dict)
+        record
+        for record in map(_unwrapped, payloads.one_or_many(reply, "fields", "id"))
+        if isinstance(record, dict)
     )
 
 
@@ -274,13 +288,13 @@ def wiql(query: str) -> str:
     condition = (
         text
         if WIQL_FIELD.search(text)
-        else "[System.Title] CONTAINS '{}'".format(text.replace("'", "''"))
+        else f"[{TITLE}] CONTAINS '{{}}'".format(text.replace("'", "''"))
     )
     return (
         text
         if text.upper().startswith("SELECT")
-        else "SELECT [System.Id] FROM WorkItems WHERE [System.TeamProject] = @project "
-        f"AND ({condition}) ORDER BY [System.ChangedDate] DESC"
+        else f"SELECT [{ID}] FROM WorkItems WHERE [{TEAM_PROJECT}] = @project "
+        f"AND ({condition}) ORDER BY [{CHANGED_DATE}] DESC"
     )
 
 
@@ -366,7 +380,7 @@ def _create(
                 "fields": [
                     {"name": TITLE, "value": title},
                     {
-                        "name": "System.Description",
+                        "name": DESCRIPTION,
                         "value": description,
                         "format": "Markdown",
                     },
@@ -394,7 +408,7 @@ def _transition(
     update = [
         {
             "op": "add",
-            "path": field_ref(STATE),
+            "path": _field_ref(STATE),
             "value": context.manifest.states[state],
         }
     ]
@@ -441,13 +455,23 @@ def _comment(call, ref: str, draft: ArtifactDraft) -> Result[ArtifactRef]:
 
 
 def _reading(replies: Mapping[str, Any], iteration_ref: str) -> IterationReading:
-    """The sprint from the replies the manifest's `planning.replies` names."""
-    listing = replies.get("iteration")
-    sprint = current_iteration(listing) or (
-        listing if isinstance(listing, dict) and not payloads.records(listing) else None
+    """The sprint from the replies the manifest's `planning.replies` names.
+
+    A single sprint is the one that was asked for. From a listing, "current" (or no name) takes
+    the active sprint and any other reference the sprint of that id, name, or path.
+    """
+    reply = replies.get("iteration")
+    sprints = payloads.one_or_many(reply, *SPRINT_MARKERS)
+    current = iteration_ref.strip().lower() in ("", "current")
+    sprint = (
+        reply
+        if sprints == (reply,)
+        else _current_sprint(reply)
+        if current
+        else payloads.named(sprints, iteration_ref, "id", "name", "path")
     )
     return IterationReading(
-        map_iteration(
+        _iteration(
             iteration_ref,
             iteration=sprint,
             capacities=replies.get("capacities"),
@@ -455,34 +479,52 @@ def _reading(replies: Mapping[str, Any], iteration_ref: str) -> IterationReading
         ),
         (
             ()
-            if sprint is not None or listing is None
-            else ("the iteration reply names no current sprint, so it has no dates",)
+            if sprint is not None or reply is None
+            else (
+                "the iteration reply names no current sprint, so it has no dates"
+                if current
+                else f"the iteration reply has no sprint {iteration_ref!r}, so it has no dates",
+            )
         )
         + _capacity_cross_check(replies.get("capacities")),
+    )
+
+
+def _sprint_items(
+    replies: Mapping[str, Any], process: str | None
+) -> Result[tuple[EstimableItem, ...]]:
+    """The sprint's work items with their fields. A reply that lists only ids (what
+    `wit_work_item[list_for_iteration]` returns) is refused rather than read as an empty sprint.
+    """
+    reply = replies.get("work_items")
+    return (
+        err(
+            "ids_only",
+            "the work_items reply lists only work item ids; read them with "
+            "wit_work_item[get_batch] (no fields list) and pass that reply as work_items",
+        )
+        if _ids_only(reply)
+        else Ok(_work_items(reply, process=process))
+    )
+
+
+def _ids_only(reply: Any) -> bool:
+    return (isinstance(reply, dict) and "workItemRelations" in reply) or any(
+        "target" in record and "fields" not in record
+        for record in payloads.records(reply)
     )
 
 
 def _hour_fields(process: str | None, hours: float, first: bool) -> Mapping[str, float]:
     """Remaining Work always; Original Estimate once, on a task's first estimate, where it exists."""
     return {
-        field_ref(REMAINING_WORK): hours,
+        _field_ref(REMAINING_WORK): hours,
         **(
-            {field_ref(ORIGINAL_ESTIMATE): hours}
-            if first and hours > 0 and supports_original_estimate(process)
+            {_field_ref(ORIGINAL_ESTIMATE): hours}
+            if first and hours > 0 and _supports_original_estimate(process)
             else {}
         ),
     }
-
-
-WEEKDAY_INDEX = {
-    "monday": 0,
-    "tuesday": 1,
-    "wednesday": 2,
-    "thursday": 3,
-    "friday": 4,
-    "saturday": 5,
-    "sunday": 6,
-}
 
 
 def _weekday_index(value: Any) -> int | None:
@@ -503,12 +545,12 @@ def _weekday_index(value: Any) -> int | None:
             )
 
 
-def map_days_off(payload: Any) -> tuple[DateRange, ...]:
+def _days_off(payload: Any) -> tuple[DateRange, ...]:
     """A daysOff list, bare or under a `daysOff` key."""
     return date_ranges(payload.get("daysOff") if isinstance(payload, dict) else payload)
 
 
-def map_capacities(payload: Any) -> tuple[MemberCapacity, ...]:
+def _capacities(payload: Any) -> tuple[MemberCapacity, ...]:
     """The team capacity reply: one member per entry, with hours per day for each activity."""
     return tuple(_member(entry) for entry in payloads.records(payload))
 
@@ -525,15 +567,11 @@ def _member(entry: Mapping[str, Any]) -> MemberCapacity:
             for activity in payloads.records(entry.get("activities"))
             if (per_day := as_float(activity.get("capacityPerDay"))) is not None
         ),
-        days_off=map_days_off(entry.get("daysOff")),
+        days_off=_days_off(entry.get("daysOff")),
     )
 
 
-# Azure's iteration timeFrame: 0 past, 1 current, 2 future.
-TIMEFRAME_CURRENT = 1
-
-
-def current_iteration(payload: Any) -> Mapping[str, Any] | None:
+def _current_sprint(payload: Any) -> Mapping[str, Any] | None:
     """The active sprint in an iteration listing, or None when none is marked active.
 
     A `timeframe: current` query returns only the active sprint, so a lone unmarked entry is it.
@@ -551,7 +589,7 @@ def _time_frame(entry: Mapping[str, Any]) -> Any:
     return payloads.object_or_empty(entry.get("attributes")).get("timeFrame")
 
 
-def reported_daily_total(payload: Any) -> float | None:
+def _reported_daily_total(payload: Any) -> float | None:
     """Azure's own `totalCapacityPerDay`, when the capacity reply carries it."""
     return (
         as_float(payload.get("totalCapacityPerDay"))
@@ -560,7 +598,7 @@ def reported_daily_total(payload: Any) -> float | None:
     )
 
 
-def map_weekend_days(team_settings: Any) -> tuple[int, ...] | None:
+def _weekend_days(team_settings: Any) -> tuple[int, ...] | None:
     """The days a team does not work, from the working days its settings state.
 
     None means "not stated" (no settings, or no readable day), so the default stays. An empty
@@ -575,7 +613,7 @@ def map_weekend_days(team_settings: Any) -> tuple[int, ...] | None:
     return tuple(sorted(frozenset(range(7)) - worked)) if worked else None
 
 
-def map_iteration(
+def _iteration(
     iteration_ref: str,
     *,
     iteration: Any = None,
@@ -585,22 +623,22 @@ def map_iteration(
     """A sprint from the three Azure replies that describe it."""
     sprint = payloads.object_or_empty(iteration)
     attributes = payloads.object_or_empty(sprint.get("attributes"))
-    weekend = map_weekend_days(team_settings)
+    weekend = _weekend_days(team_settings)
     return IterationCapacity(
         iteration_ref=iteration_ref,
         start_date=parse_date(attributes.get("startDate") or sprint.get("startDate")),
         finish_date=parse_date(
             attributes.get("finishDate") or sprint.get("finishDate")
         ),
-        members=map_capacities(capacities),
-        team_days_off=map_days_off(
+        members=_capacities(capacities),
+        team_days_off=_days_off(
             payloads.object_or_empty(team_settings).get("teamDaysOff")
         ),
         weekend_days=DEFAULT_WEEKEND_DAYS if weekend is None else weekend,
     )
 
 
-def map_work_item(payload: Any, *, process: str | None = None) -> EstimableItem | None:
+def _work_item(payload: Any, *, process: str | None = None) -> EstimableItem | None:
     """One work item as the planner sees it; None when the record carries no id."""
     record = payloads.object_or_empty(payload)
     fields = payloads.object_or_empty(record.get("fields"))
@@ -611,14 +649,14 @@ def map_work_item(payload: Any, *, process: str | None = None) -> EstimableItem 
         if isinstance(person, dict)
         else str(person or "")
     )
-    activity = payloads.text(fields, activity_field(process), ACTIVITY)
+    activity = payloads.text(fields, _activity_field(process), ACTIVITY)
     return (
         EstimableItem(
             item_id=item_id,
             title=payloads.text(fields, TITLE),
             item_type=payloads.text(fields, WORK_ITEM_TYPE),
             points=first_number(
-                fields, points_field(process), STORY_POINTS, EFFORT, SIZE
+                fields, _points_field(process), STORY_POINTS, EFFORT, SIZE
             ),
             estimated_hours=as_float(fields.get(ORIGINAL_ESTIMATE)),
             remaining_hours=as_float(fields.get(REMAINING_WORK)),
@@ -633,13 +671,13 @@ def map_work_item(payload: Any, *, process: str | None = None) -> EstimableItem 
     )
 
 
-def map_work_items(
+def _work_items(
     payload: Any, *, process: str | None = None
 ) -> tuple[EstimableItem, ...]:
     return tuple(
         item
         for item in (
-            map_work_item(record, process=process) for record in _records(payload)
+            _work_item(record, process=process) for record in _records(payload)
         )
         if item is not None
     )
@@ -647,8 +685,8 @@ def map_work_items(
 
 def _capacity_cross_check(capacities: Any) -> tuple[str, ...]:
     """The mapped per-member total against Azure's own; a gap means someone was misread."""
-    reported = reported_daily_total(capacities)
-    mapped = round(sum(member.daily_hours for member in map_capacities(capacities)), 2)
+    reported = _reported_daily_total(capacities)
+    mapped = round(sum(member.daily_hours for member in _capacities(capacities)), 2)
     return (
         ()
         if reported is None or abs(mapped - reported) < 0.01
