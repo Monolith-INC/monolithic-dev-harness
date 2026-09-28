@@ -14,6 +14,7 @@ Before choosing a hierarchy, a destination, a provider call, or an id format, ca
 | `states` | the provider state for each harness state: backlog, ready, in_progress, done, canceled |
 | `ids` | how an id looks (`pattern`), how a branch carries it (`branch_key`), which text links it (`mention`, `mentions_link`) |
 | `writes` | the host tools that change the tracker; each needs an approval window |
+| `planning` | the replies sprint planning reads (`replies[].key`), and how to fetch each (`description`) |
 | `text_format` | markdown, html, or plain, for descriptions and comments |
 
 Use the harness kinds and states with the gateway (`tracker_create_work_item`,

@@ -11,7 +11,7 @@ from core.result import Err, Ok
 from integrations import artifacts
 from integrations.contracts import ArtifactDraft, LogicalState, WorkItemKind
 
-from .fakes import FakeTransport, module, ops
+from .fakes import FakeTransport, ops
 
 AZURE = {"organization": "o", "project": "proj"}
 
@@ -123,22 +123,57 @@ class AzureTest(unittest.TestCase):
         self.assertEqual(self.call.calls, [])
 
     def test_search_builds_wiql_from_text_conditions_or_statements(self) -> None:
-        wiql = module("azure-devops").wiql
+        def sent(query: str) -> str:
+            self.tracker.search_work_items(query, "")
+            return self.call.sent("wit_query")[-1]["wiql"]
+
         self.assertIn(
-            "[System.Title] CONTAINS 'foto d''estudante'", wiql("foto d'estudante")
+            "[System.Title] CONTAINS 'foto d''estudante'", sent("foto d'estudante")
         )
         self.assertIn(
             "AND ([System.WorkItemType] = 'Epic')",
-            wiql("[System.WorkItemType] = 'Epic'"),
+            sent("[System.WorkItemType] = 'Epic'"),
         )
-        self.assertIn("AND ([Custom.Team] = 'A')", wiql("[Custom.Team] = 'A'"))
-        self.assertIn("[System.Title] CONTAINS 'bug [urgent]'", wiql("bug [urgent]"))
+        self.assertIn("AND ([Custom.Team] = 'A')", sent("[Custom.Team] = 'A'"))
+        self.assertIn("[System.Title] CONTAINS 'bug [urgent]'", sent("bug [urgent]"))
         self.assertEqual(
-            wiql("SELECT [System.Id] FROM WorkItems"),
+            sent("SELECT [System.Id] FROM WorkItems"),
             "SELECT [System.Id] FROM WorkItems",
         )
         page = self.tracker.search_work_items("x", "").value
         self.assertEqual((len(page.items), page.truncated), (2, False))
+
+    def test_planning_reads_replies_and_names_hour_fields(self) -> None:
+        tracker = ops("azure-devops", {**AZURE, "process": "Scrum"}, self.call)
+        replies = {
+            "iteration": {
+                "value": [
+                    {"name": "S0", "attributes": {"timeFrame": 0}},
+                    {
+                        "name": "S1",
+                        "attributes": {"timeFrame": 1, "startDate": "2026-08-03"},
+                    },
+                ]
+            },
+            "work_items": {"value": [{"body": json.dumps(ado_item(5, "Task", "New"))}]},
+        }
+        reading = tracker.read_iteration(replies, "current").value
+        self.assertEqual(str(reading.capacity.start_date), "2026-08-03")
+        (item,) = tracker.iteration_items(replies, "current").value
+        self.assertEqual(item.item_id, "5")
+        self.assertEqual(
+            dict(tracker.hour_fields(4.0, True)),
+            {"/fields/Microsoft.VSTS.Scheduling.RemainingWork": 4.0},
+        )
+
+    def test_a_work_items_reply_of_ids_alone_is_refused_not_read_as_empty(self) -> None:
+        """list_for_iteration answers with ids only; counting that as no work would overstate
+        everyone's free hours, so the tracker asks for the batch read instead."""
+        relations = {"workItemRelations": [{"rel": None, "target": {"id": 5}}]}
+        for reply in (relations, relations["workItemRelations"]):
+            refused = self.tracker.iteration_items({"work_items": reply}, "current")
+            self.assertEqual(refused.failure.code, "ids_only")
+            self.assertIn("get_batch", refused.failure.message)
 
     def test_link_sends_a_hyperlink(self) -> None:
         self.assertEqual(
@@ -233,6 +268,69 @@ class LinearTest(unittest.TestCase):
         )
         self.assertEqual(tracker.get_work_item("ENG-1").failure.code, "provider_error")
 
+    def test_planning_reads_cycle_dates_and_issue_estimates(self) -> None:
+        replies = {
+            "cycle": [
+                {"number": 6, "startsAt": "2026-07-20", "endsAt": "2026-07-31"},
+                {
+                    "number": 7,
+                    "isActive": True,
+                    "startsAt": "2026-08-03T00:00:00Z",
+                    "endsAt": "2026-08-14",
+                },
+            ],
+            "issues": {
+                "issues": [
+                    {
+                        **self.issue("ENG-2"),
+                        "estimate": 3,
+                        "assignee": {"name": "Ana"},
+                        "cycle": {"number": 7},
+                    },
+                    {"title": "no identifier"},
+                ]
+            },
+        }
+        reading = self.tracker.read_iteration(replies, "current").value
+        self.assertEqual(
+            (str(reading.capacity.start_date), str(reading.capacity.finish_date)),
+            ("2026-08-03", "2026-08-14"),
+        )
+        self.assertEqual(reading.capacity.members, ())
+        self.assertIn("no team capacity", reading.warnings[0])
+        (item,) = self.tracker.iteration_items(replies, "current").value
+        self.assertEqual(
+            (
+                item.item_id,
+                item.points,
+                item.assigned_to,
+                item.item_type,
+                item.iteration,
+            ),
+            ("ENG-2", 3.0, "Ana", "user_story", "7"),
+        )
+        self.assertEqual(dict(self.tracker.hour_fields(4.0, True)), {})
+        named = self.tracker.read_iteration(replies, "6").value.capacity
+        self.assertEqual(str(named.start_date), "2026-07-20")
+        missing = self.tracker.read_iteration(replies, "99").value
+        self.assertIsNone(missing.capacity.start_date)
+        self.assertIn("'99'", missing.warnings[-1])
+
+    def test_planning_tolerates_odd_assignee_and_estimate_shapes(self) -> None:
+        replies = {
+            "issues": [
+                {
+                    **self.issue("ENG-3"),
+                    "assignee": {"id": "u1"},
+                    "estimate": {"value": 2},
+                },
+                {**self.issue("ENG-4"), "assignee": "Bia", "estimate": "x"},
+            ]
+        }
+        first, second = self.tracker.iteration_items(replies, "current").value
+        self.assertEqual((first.assigned_to, first.points), (None, 2.0))
+        self.assertEqual((second.assigned_to, second.points), ("Bia", None))
+
 
 class LocalTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -293,6 +391,60 @@ class LocalTest(unittest.TestCase):
         self.assertEqual(
             len(self.tracker.get_work_item(story.key).value.provider_data["links"]), 1
         )
+
+    def test_planning_reads_the_capacity_file_and_sprint_items(self) -> None:
+        folder = self.repo / ".harness/tracker/capacity"
+        folder.mkdir(parents=True)
+        (folder / "S1.json").write_text(
+            json.dumps(
+                {
+                    "startDate": "2026-08-03",
+                    "finishDate": "2026-08-14",
+                    "members": [{"name": "Ana", "activities": [{"capacityPerDay": 6}]}],
+                }
+            )
+        )
+        story = self.tracker.create_work_item(
+            WorkItemKind.USER_STORY, "S", "", ""
+        ).value
+        path = self.repo / ".harness/tracker/backlog" / f"{story.key}.json"
+        record = json.loads(path.read_text())
+        path.write_text(
+            json.dumps(
+                {**record, "iteration": "S1", "story_points": 5, "remaining_hours": 8}
+            )
+        )
+        (path.parent / "stray.json").write_text(
+            json.dumps({"kind": "task", "state": "backlog", "iteration": "S1"})
+        )
+        reading = self.tracker.read_iteration({}, "S1").value
+        self.assertEqual(reading.capacity.members[0].daily_hours, 6.0)
+        (item,) = self.tracker.iteration_items({}, "S1").value
+        self.assertEqual(
+            (item.item_id, item.points, item.planned_hours), (story.key, 5.0, 8.0)
+        )
+        self.assertEqual(self.tracker.iteration_items({}, "S2").value, ())
+        # A sprint with no capacity file cannot be checked, so it is refused, not read as empty.
+        missing = self.tracker.read_iteration({}, "S2").failure
+        self.assertEqual(missing.code, "no_capacity")
+        self.assertIn(".harness/tracker/capacity/S2.json", missing.message)
+        self.assertEqual(
+            dict(self.tracker.hour_fields(4.0, True)),
+            {"remaining_hours": 4.0, "effort_hours": 4.0},
+        )
+        self.assertEqual(
+            dict(self.tracker.hour_fields(4.0, False)), {"remaining_hours": 4.0}
+        )
+
+    def test_planning_needs_the_sprint_named(self) -> None:
+        """No sprint name must not read a made-up file or count every unplanned item."""
+        for ref in ("", "  "):
+            self.assertEqual(
+                self.tracker.read_iteration({}, ref).failure.code, "invalid_request"
+            )
+            self.assertEqual(
+                self.tracker.iteration_items({}, ref).failure.code, "invalid_request"
+            )
 
     def test_search_pages_and_missing_items(self) -> None:
         tuple(

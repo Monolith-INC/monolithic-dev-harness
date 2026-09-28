@@ -35,10 +35,8 @@ unavailable and the correct behaviour is to **ask**, never to invent a path.
 ```
 
 - `artifacts_path`: relative to the project root or absolute; `~` expands. No default.
-- `tracker.values`: the values the selected tracker's `tracker.json` declares. For Azure DevOps,
-  `organization` and `project` are needed for most work, `team` for sprint capacity (it is
-  team-scoped), and `process` decides which fields exist (on Scrum, Original Estimate is absent
-  and writing it fails silently). For Linear, `team`.
+- `tracker.values`: the values the selected tracker's `tracker.json` declares under `settings`,
+  each with what it is for and whether it is required. `config --show` lists them.
 
 No secrets live here: authentication comes from the provider's MCP server and its sign-in.
 Commit the file so the team shares one configuration.
@@ -49,8 +47,9 @@ Commit the file so the team shares one configuration.
 bin/agile-backlog-toolkit config --show
 ```
 
-Prints every value, the file it came from, and whether the artifacts directory exists yet. Exits
-non-zero when a required Azure value is missing, so it works as a precondition check.
+Prints the artifacts path (and whether that directory exists yet), the file it came from, the
+selected tracker, and each value its `tracker.json` declares. Exits non-zero when the tracker
+cannot be used, a required value missing for example, so it works as a precondition check.
 
 ## Filling in a missing value
 

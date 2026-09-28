@@ -1,7 +1,8 @@
 """Per-project configuration for the backlog stage, read from the repository's settings.
 
-The one source is `.harness/settings.json` (see `scripts/harness/settings.py`): the artifacts path
-and the selected tracker's values. This module only reads it; people edit the file.
+The one source is `.harness/settings.json` (see `scripts/harness/settings.py`). The backlog stage
+reads the artifacts path from it here; the selected tracker is the registry's to read and check.
+This module only reads the file; people edit it.
 
 `artifacts_path` has **no default**. When it is unset, filesystem output is unavailable and the
 caller must ask for a path rather than inventing one. Nothing here raises: missing values are
@@ -10,45 +11,14 @@ reported by `missing()`, never guessed.
 
 from __future__ import annotations
 
-import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
-_SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
-if str(_SCRIPTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_SCRIPTS_DIR))
-
-from core.result import Ok  # noqa: E402
-from harness import settings  # noqa: E402
+from core.result import Ok, Result
+from harness import settings
+from harness.settings import Settings
 
 PLUGIN_DIRNAME = ".harness/backlog"
-
-
-@dataclass(frozen=True)
-class AzureConfig:
-    org: str | None = None
-    project: str | None = None
-    team: str | None = None
-    process: str | None = None
-    """agile | scrum | cmmi -- decides whether Original Estimate exists on this project."""
-
-    def as_dict(self) -> dict[str, str]:
-        pairs = (
-            ("org", self.org),
-            ("project", self.project),
-            ("team", self.team),
-            ("process", self.process),
-        )
-        return {k: v for k, v in pairs if v}
-
-
-@dataclass(frozen=True)
-class LinearConfig:
-    team: str | None = None
-
-    def as_dict(self) -> dict[str, str]:
-        return {"team": self.team} if self.team else {}
 
 
 @dataclass(frozen=True)
@@ -56,21 +26,7 @@ class ProjectConfig:
     artifacts_path: str | None = None
     """Where the user wants local artifacts written. No default -- ask, never assume."""
 
-    azure: AzureConfig = AzureConfig()
-    linear: LinearConfig = LinearConfig()
-    provider_mode: str = "local"
     sources: tuple[str, ...] = ()
-
-    REQUIRED_AZURE = ("org", "project")
-    """Team is optional: most calls work without it, and a project has a default team."""
-
-    def missing(self, *, require_team: bool = False) -> list[str]:
-        needed = list(self.REQUIRED_AZURE) + (["team"] if require_team else [])
-        return [key for key in needed if not getattr(self.azure, key)]
-
-    @property
-    def azure_ready(self) -> bool:
-        return not self.missing()
 
     @property
     def artifacts_ready(self) -> bool:
@@ -88,19 +44,6 @@ class ProjectConfig:
         candidate = Path(self.artifacts_path).expanduser()
         return candidate if candidate.is_absolute() else Path(project_root) / candidate
 
-    def as_dict(self) -> dict[str, Any]:
-        payload: dict[str, Any] = {}
-        if self.artifacts_path:
-            payload["artifacts_path"] = self.artifacts_path
-        azure = self.azure.as_dict()
-        if azure:
-            payload["azure"] = azure
-        linear = self.linear.as_dict()
-        if linear:
-            payload["linear"] = linear
-        payload["provider_mode"] = self.provider_mode
-        return payload
-
 
 def plugin_dir(project_root: Path) -> Path:
     """`.harness/backlog/`: where the backlog stage keeps its own reports and records.
@@ -115,31 +58,16 @@ def project_root_of(state_dir: Path) -> Path:
     return Path(state_dir).parents[len(Path(PLUGIN_DIRNAME).parts) - 1]
 
 
-def _value(values: Any, key: str) -> str | None:
-    text = str(values.get(key, "")).strip()
-    return text or None
-
-
 def load_project_config(project_root: Path) -> ProjectConfig:
     """The backlog view of the repository's settings; empty when the settings cannot be read."""
-    match settings.load(Path(project_root)):
+    return from_settings(settings.load(Path(project_root)))
+
+
+def from_settings(loaded: Result[Settings]) -> ProjectConfig:
+    match loaded:
         case Ok(chosen):
-            values = chosen.tracker.values
-            azure = chosen.tracker.name == "azure-devops"
             return ProjectConfig(
                 artifacts_path=chosen.artifacts_path or None,
-                azure=AzureConfig(
-                    org=_value(values, "organization"),
-                    project=_value(values, "project"),
-                    team=_value(values, "team"),
-                    process=_value(values, "process"),
-                )
-                if azure
-                else AzureConfig(),
-                linear=LinearConfig(team=_value(values, "team"))
-                if chosen.tracker.name == "linear"
-                else LinearConfig(),
-                provider_mode=chosen.tracker.name,
                 sources=(str(settings.SETTINGS_RELATIVE_PATH),),
             )
         case _:

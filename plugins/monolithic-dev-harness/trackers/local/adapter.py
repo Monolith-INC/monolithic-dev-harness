@@ -2,8 +2,12 @@
 
     .harness/tracker/<state>/<KEY>.json          a work item, in the folder of its state
     .harness/tracker/artifacts/<KEY>/<file>.md   its artifacts, in the shared artifact format
+    .harness/tracker/capacity/<sprint>.json      a sprint's dates and team, in the capacity format
 
-Keys are `<PREFIX>-<number>` (`STORY-0007`). Hierarchy follows the manifest's artifacts.
+Keys are `<PREFIX>-<number>` (`STORY-0007`). Hierarchy follows the manifest's artifacts. A work
+item's planning fields (its sprint, points, and hours) use the same names as a planning file's
+front matter (`integrations.planning`). Planning reads these files, so it needs no replies, but it
+does need the sprint named: there is no "current" sprint to fall back on.
 """
 
 from __future__ import annotations
@@ -27,6 +31,13 @@ from integrations.contracts import (
     TrackerOps,
     WorkItem,
     WorkItemKind,
+)
+from integrations.planning import IterationReading, is_current
+from integrations.planning_files import (
+    ITERATION,
+    RECORDED_HOURS,
+    planning_item,
+    read_capacity_file,
 )
 
 ROOT = Path(".harness") / "tracker"
@@ -78,6 +89,26 @@ def adapter(context: AdapterContext) -> TrackerOps:
         link_development_artifact=lambda ref, url, kind: bind(
             _find(context, root, ref), lambda found: _link(found, url, kind)
         ),
+        read_iteration=lambda replies, ref: bind(
+            _sprint(ref), lambda name: _capacity(root, name)
+        ),
+        iteration_items=lambda replies, ref: bind(
+            _sprint(ref),
+            lambda name: fmap(
+                _records(context, root),
+                lambda found: tuple(
+                    planning_item(
+                        str(record["key"]),
+                        str(record.get("title", "")),
+                        str(record.get("kind", "")),
+                        record,
+                    )
+                    for _, record in found
+                    if record.get("key") and str(record.get(ITERATION) or "") == name
+                ),
+            ),
+        ),
+        hour_fields=RECORDED_HOURS,
     )
 
 
@@ -350,5 +381,29 @@ def _link(found: Record, url: str, kind: str) -> Result[Mapping[str, Any]]:
         else fmap(
             _write(path, {**record, "links": [*links, link], "updatedAt": _now()}),
             lambda _: reply,
+        )
+    )
+
+
+def _capacity(root: Path, name: str) -> Result[IterationReading]:
+    path = root / "capacity" / f"{_safe(name)}.json"
+    return bind(
+        require(
+            path.is_file(),
+            "no_capacity",
+            f"sprint {name!r} has no capacity file at {path.relative_to(root.parent.parent)}",
+        ),
+        lambda _: read_capacity_file(path, name),
+    )
+
+
+def _sprint(ref: str) -> Result[str]:
+    """The sprint's name; the local tracker keeps no "current" sprint to fall back on."""
+    return (
+        Ok(ref.strip())
+        if not is_current(ref)
+        else err(
+            "invalid_request",
+            "name the sprint: the local tracker reads .harness/tracker/capacity/<sprint>.json",
         )
     )

@@ -1,9 +1,10 @@
 """What the rules need to know about trackers, built once per hook call from the tracker folders.
 
-Which calls write to a tracker comes from every usable tracker (shipped, or onboarded and trusted),
-not only the selected one: the Azure DevOps server is registered with the host whichever tracker a
-repository selects, and its writes need approval all the same. Protected ids are found the same
-way. When the selected tracker is missing or invalid, `problem` says why and the rules refuse
+Which calls write to a tracker comes from every shipped tracker and every onboarded folder, not only
+the selected one: the Azure DevOps server is registered with the host whichever tracker a repository
+selects, and its writes need approval all the same. An onboarded folder counts even when it is not
+trusted or fails its checks, since that can only ask for more approvals. Protected ids come from
+every usable tracker (shipped, or onboarded and trusted). When the selected tracker is missing or invalid, `problem` says why and the rules refuse
 tracker writes until a person fixes it.
 """
 
@@ -35,18 +36,26 @@ def build(repo: Path, settings: Result[Settings]) -> TrackerPolicy:
     """Every tracker folder is read once here; the selection is resolved among the same reads.
 
     A shipped tracker that fails its checks means the installation is broken, which is a problem
-    as much as a broken selection: which tools write can no longer be known.
+    as much as a broken selection: which tools write can no longer be known. The same goes for an
+    onboarded folder that does not say which tools write. One that says, but is untrusted or
+    fails its other checks, still counts toward the writes: that only asks for more approvals.
     """
     results = registry.shipped()
     everything = (*results, *registry.onboarded(repo))
     manifests = oks(everything)
-    shipped_problem = next((failure.message for failure in failures(results)), "")
+    onboarded_writes = registry.onboarded_writes(repo)
+    folder_problem = next(
+        (failure.message for failure in failures((*results, *onboarded_writes))), ""
+    )
     return TrackerPolicy(
-        writes=tuple(manifest.writes for manifest in manifests),
+        writes=(
+            *(manifest.writes for manifest in oks(results)),
+            *oks(onboarded_writes),
+        ),
         ids=tuple(re.compile(manifest.ids.pattern) for manifest in manifests),
         mentions=tuple(_mentions(manifests)),
         protected=frozenset(item.upper() for item in _protected(settings)),
-        problem=shipped_problem
+        problem=folder_problem
         or _problem(registry.resolve_among(everything, repo, settings)),
     )
 

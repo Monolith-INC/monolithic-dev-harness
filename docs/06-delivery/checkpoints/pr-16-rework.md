@@ -65,10 +65,36 @@ scripts/integrations/   contracts (TrackerOps, ScmOps, domain types), registry, 
   delivery, harness), `ruff check`, `ruff format --check`, `shellcheck`, `scripts/check_repo.py`,
   `scripts/check_versions.py`, `markdownlint-cli2`. Not run locally: `claude plugin validate` and the
   sandboxed install job (CI runs them).
-- Out of scope, noted for later: the backlog runtime keeps its own Azure DevOps and Linear providers
-  (`runtime/orchestrator_core/providers/`), a second translation layer beside the tracker adapters.
+- Follow-up done on `codex/scoped-sessions` after the merge: the backlog runtime's own Azure DevOps
+  and Linear providers are gone. Planning (`read_iteration`, `iteration_items`, `hour_fields`) is a
+  required part of `TrackerOps` for every tracker, `tracker.json` declares `planning.replies`, and
+  value reading is shared in `scripts/integrations/payloads.py`, and the capacity file and planning
+  items have one reader in `scripts/integrations/planning_files.py`.
+
+## PR 17 review fixes (thermos on `codex/scoped-sessions`)
+
+| # | Finding | Status |
+|---|---------|--------|
+| 1 | A missing reply switched the capacity limit off: now the run stops and names the reply | done |
+| 2 | Azure `work_items` reply of ids only read as an empty sprint: refused, with the batch read to use | done |
+| 3 | A named sprint got the current sprint's dates (Azure, Linear): found by id, name, path or number | done |
+| 4 | Local tracker with no sprint named read a made-up file: sprint name required | done |
+| 5 | False capacity warnings for local and Linear: checked only when asked; "no team capacity" said plainly | done |
+| 6 | A broken onboarded folder dropped its writes from approval: every folder counts, unreadable fails closed | done |
+| 7 | Copies: runtime Azure/Linear settings, `azure-devops` provider alias, replies check twice, settings read twice, hour-field probe and `hours` key, test helpers, field literals, local field names, float and story-point coercion, draft builders, docs repeating `tracker.json` | done |
+| 8 | Names: `--payloads` is `--replies`; Azure adapter helpers private, tested through `TrackerOps` | done |
+
+Second review round (same branch):
+
+| # | Finding | Status |
+|---|---------|--------|
+| 9 | Unreadable sprint items counted existing work as none; the CLI hid every warning | done: the run stops; the CLI prints notes |
+| 10 | A reply holding an error text read as "no team capacity"; local sprint with no capacity file read as empty | done: refused |
+| 11 | An empty Azure sprint was refused as ids-only; "nan"/"inf" read as numbers; input `replies` overwritten | done |
+| 12 | Quality: second `writes` parser, sprint picking copied in two adapters, "current" undefined, hour rule twice, three text converters, untyped handler helpers, planning module mixing model and file reading | done |
+| 13 | Deliberately left: planner's own result type (TD-3), scripts/runtime import cycle (TD-2) | tech debt |
 
 ## Next
 
-Nothing left in this rework. Follow-ups: the live Linear check, and folding the backlog runtime's
-providers onto the tracker adapters.
+Nothing left in this rework. Follow-up: the live Linear check (including `list_cycles` for
+planning).

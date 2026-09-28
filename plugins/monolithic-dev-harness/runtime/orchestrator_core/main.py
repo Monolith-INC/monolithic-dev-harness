@@ -4,6 +4,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+from typing import Any
 
 from .artifact_validator import validate_artifact
 from .engine import OrchestratorEngine
@@ -34,6 +35,19 @@ def _state_dir(project_root: Path) -> Path:
     return plugin_dir(project_root)
 
 
+def _read_json(path: str, what: str) -> Any:
+    """The JSON file at `path` as a result."""
+    from core.result import attempt
+
+    return attempt(
+        lambda: json.loads(Path(path).read_text(encoding="utf-8")),
+        "unreadable",
+        f"could not read {what}",
+        OSError,
+        json.JSONDecodeError,
+    )
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Agile Workflow deterministic orchestrator"
@@ -56,7 +70,7 @@ def main(argv: list[str] | None = None) -> int:
     validate_p.add_argument(
         "--hierarchy-parent-is-feature",
         choices=("true", "false"),
-        help="Optional Azure hierarchy assertion for stories",
+        help="Optional hierarchy assertion for stories, from the tracker",
     )
 
     eval_p = sub.add_parser(
@@ -89,12 +103,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     capacity_p.add_argument("--iteration", default="", help="Iteration reference")
     capacity_p.add_argument(
-        "--provider", default="filesystem", choices=("filesystem", "azure-devops")
+        "--provider",
+        default="filesystem",
+        choices=("filesystem", "tracker"),
+        help="your planning files, or the selected tracker (with the --replies its tracker.json lists)",
     )
     capacity_p.add_argument(
-        "--payloads", help="Path to JSON of pre-fetched Azure payloads"
+        "--replies", help="Path to JSON of the tracker replies a skill fetched"
     )
-    capacity_p.add_argument("--process", help="Azure process: agile | scrum | cmmi")
 
     breakdown_p = sub.add_parser(
         "estimate-breakdown",
@@ -104,7 +120,7 @@ def main(argv: list[str] | None = None) -> int:
         "--input", required=True, help="Path to JSON: story_id, story_points, tasks[]"
     )
     breakdown_p.add_argument(
-        "--payloads", help="Path to JSON of pre-fetched Azure capacity payloads"
+        "--replies", help="Path to JSON of the tracker replies a skill fetched"
     )
 
     config_p = sub.add_parser(
@@ -112,11 +128,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     config_p.add_argument(
         "--show", action="store_true", help="Print resolved configuration"
-    )
-    config_p.add_argument(
-        "--require-team",
-        action="store_true",
-        help="Treat the team as required when reporting what is missing",
     )
 
     sub.add_parser("mcp", help="Run MCP stdio server")
@@ -206,23 +217,22 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "capacity":
+        from core.result import Err, Ok
+
         from .handlers import handle_plan_capacity
 
-        payloads = {}
-        if args.payloads:
-            payload_path = Path(args.payloads)
-            try:
-                payloads = json.loads(payload_path.read_text(encoding="utf-8"))
-            except (OSError, json.JSONDecodeError) as exc:
-                print(f"[!] Could not read payloads: {exc}")
+        match _read_json(args.replies, "replies") if args.replies else Ok({}):
+            case Ok(replies):
+                pass
+            case Err(failure):
+                print(f"[!] {failure.message}")
                 return 1
 
         result = handle_plan_capacity(
             {
                 "iteration_ref": args.iteration,
                 "provider": args.provider,
-                "payloads": payloads,
-                "process": args.process,
+                "replies": replies,
             },
             skills_dir=skills_dir,
             state_dir=state_dir,
@@ -244,20 +254,25 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if result.get("overcommitted") else 0
 
     if args.command == "estimate-breakdown":
+        from core.result import Err, Ok, bind, fmap
+
         from .handlers import handle_estimate_breakdown
 
-        try:
-            payload = json.loads(Path(args.input).read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as exc:
-            print(f"[!] Could not read input: {exc}")
-            return 1
-        if args.payloads:
-            try:
-                payload["payloads"] = json.loads(
-                    Path(args.payloads).read_text(encoding="utf-8")
+        match bind(
+            _read_json(args.input, "input"),
+            lambda payload: (
+                fmap(
+                    _read_json(args.replies, "replies"),
+                    lambda replies: {**payload, "replies": replies},
                 )
-            except (OSError, json.JSONDecodeError) as exc:
-                print(f"[!] Could not read payloads: {exc}")
+                if args.replies
+                else Ok(payload)
+            ),
+        ):
+            case Ok(payload):
+                pass
+            case Err(failure):
+                print(f"[!] {failure.message}")
                 return 1
 
         result = handle_estimate_breakdown(
@@ -271,19 +286,27 @@ def main(argv: list[str] | None = None) -> int:
             return 1
 
         print(result["report"])
+        for note in result["notes"]:
+            print(f"  ! {note}")
         if result["blocked"]:
             # Exit 2 distinguishes "cannot fit" from "failed to run".
             return 2
-        print("\n  Write these to Azure (nothing has been written yet):")
+        if result["write_ops"]:
+            print("\n  Write these to the tracker (nothing has been written yet):")
         for op in result["write_ops"]:
             for field, value in op["fields"].items():
                 print(f"    {op['item_id']}  {field} = {value}")
         return 0
 
     if args.command == "config":
-        from .project_config import load_project_config
+        from core.result import Err, Ok
+        from harness import settings
+        from integrations import registry
 
-        config = load_project_config(project_root)
+        from .project_config import from_settings
+
+        loaded = settings.load(project_root)
+        config = from_settings(loaded)
         artifacts = config.resolve_artifacts_dir(project_root)
         print("Project configuration")
         print("=" * 60)
@@ -294,21 +317,21 @@ def main(argv: list[str] | None = None) -> int:
             print(
                 f"                  → {artifacts}{'' if artifacts.is_dir() else '  (does not exist yet)'}"
             )
-        print(f"  azure.org     : {config.azure.org or '<unset>'}")
-        print(f"  azure.project : {config.azure.project or '<unset>'}")
-        print(f"  azure.team    : {config.azure.team or '<unset>'}")
-        print(f"  azure.process : {config.azure.process or '<unset (assumed agile)>'}")
         print(f"  plugin state  : {_state_dir(project_root)}")
         print(
             f"  sources       : {', '.join(config.sources) or '<none — nothing configured>'}"
         )
-
-        missing = config.missing(require_team=args.require_team)
-        if missing:
-            print(f"\n  Missing: {', '.join(missing)}")
-            print("  Set it in .harness/settings.json under tracker.values.")
-            return 1
-        return 0
+        match registry.selected(project_root, loaded):
+            case Ok(active):
+                print(
+                    f"  tracker       : {active.manifest.name} ({active.manifest.source})"
+                )
+                for key in active.manifest.settings:
+                    print(f"    {key:<12}: {active.values.get(key) or '<unset>'}")
+                return 0
+            case Err(failure):
+                print(f"\n  Tracker: {failure.message}")
+                return 1
 
     if args.command == "mcp":
         from . import mcp_server

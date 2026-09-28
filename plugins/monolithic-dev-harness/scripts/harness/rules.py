@@ -423,8 +423,9 @@ def rule_tracker_valid(call: ToolCall, policy: TrackerPolicy) -> Decision:
     return (
         Decision.deny(
             "tracker-invalid",
-            f"`{call.name}` writes to the tracker or the repository's server, and the selected tracker "
-            f"cannot be used: {policy.problem}. Ask a person to fix .harness/settings.json or the tracker folder.",
+            f"`{call.name}` writes to the tracker or the repository's server, and which calls write "
+            f"cannot be known: {policy.problem}. Ask a person to fix .harness/settings.json or the "
+            "tracker folder it names.",
         )
         if policy.problem and is_remote_write(call, policy)
         else Decision.allow()

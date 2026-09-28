@@ -27,7 +27,7 @@ See [deployment.md](deployment.md).
 | --- | --- | --- |
 | `AZURE_DEVOPS_ORG` | Claude `settings.json` → `env`; Cursor `cursor.mcp.json` (pinned) | installer (`--org`); used only by the host-registered `azure-devops` server |
 | `.harness/settings.json` | repository (committed) | people; `harness bootstrap` copies a first version in once |
-| `.harness/trackers/<name>/` | repository (committed) | `harness tracker stage`; trusted by the user's typed line |
+| `.harness/trackers/<name>/` | repository (committed) | `harness tracker stage`; trusted only by the user's click (or `approve HT-XXXXXX` in Cursor) |
 | `.harness/review/sources.json` | repository | the `review-setup` skill |
 | `HARNESS_HOME`, `HARNESS_BIN_DIR`, `CURSOR_PLUGIN_DIR` | installer environment | optional overrides |
 

@@ -100,7 +100,7 @@ Tasks — so they are written without asking, and every figure set or changed is
 summary. The one thing that stops a write is the capacity ceiling: if the total exceeds the
 assignee's remaining hours in the active sprint, STOP and ask. See
 `orchestrator_core/estimation/breakdown.py`, and take field names from
-`orchestrator_core/providers/azure_devops/fields.py` rather than retyping them.
+`trackers/azure-devops/adapter.py` rather than retyping them.
 
 Capacity itself lives under a different API area from `wit_*` and is read-only for these skills:
 

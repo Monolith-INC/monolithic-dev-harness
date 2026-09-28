@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from types import MappingProxyType
-from typing import Any
+from typing import Any, TypeVar
 
 from core.result import (
     Err,
@@ -43,11 +43,14 @@ from .contracts import (
     IdRules,
     LogicalState,
     Manifest,
+    PlanningReply,
     TrackerOps,
     Transport,
     WorkItemKind,
     WriteRules,
 )
+
+T = TypeVar("T")
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 SHIPPED_ROOT = PLUGIN_ROOT / "trackers"
@@ -130,7 +133,7 @@ def _read_manifest(
     )
 
 
-def _labelled(folder: Path, result: Result[Manifest]) -> Result[Manifest]:
+def _labelled(folder: Path, result: Result[T]) -> Result[T]:
     match result:
         case Err(failure):
             return err(
@@ -164,6 +167,7 @@ def _consistent(folder: Path, document: Mapping[str, Any]) -> Result[None]:
     }
     kinds = document["kinds"]
     settings = tuple(str(item["key"]) for item in document["settings"])
+    replies = tuple(str(item["key"]) for item in document["planning"]["replies"])
     return bind(
         sequence(
             (
@@ -209,6 +213,11 @@ def _consistent(folder: Path, document: Mapping[str, Any]) -> Result[None]:
                     len(set(settings)) == len(settings),
                     "invalid_tracker",
                     "setting keys must be unique",
+                ),
+                require(
+                    len(set(replies)) == len(replies),
+                    "invalid_tracker",
+                    "planning reply keys must be unique",
                 ),
                 _placeholders(document["connection"], frozenset(settings)),
             )
@@ -332,10 +341,14 @@ def _manifest(folder: Path, source: str, document: Mapping[str, Any]) -> Manifes
             tuple(map(str, ids["mention"])),
             bool(ids["mentions_link"]),
         ),
-        writes=WriteRules(str(writes["server"]), tuple(map(str, writes["tools"]))),
+        writes=_write_rules(writes),
         tools=MappingProxyType(dict(document.get("tools", {}))),
         connection=MappingProxyType(dict(document["connection"])),
         settings=tuple(str(item["key"]) for item in document["settings"]),
+        planning=tuple(
+            PlanningReply(str(item["key"]), str(item["description"]))
+            for item in document["planning"]["replies"]
+        ),
         required_settings=tuple(
             str(item["key"]) for item in document["settings"] if item["required"]
         ),
@@ -592,6 +605,54 @@ def _adapter_function(manifest: Manifest) -> Result[Any]:
             )
         ),
     )
+
+
+def require_replies(manifest: Manifest, replies: Mapping[str, Any]) -> Result[None]:
+    """Every reply the tracker's planning reads is present, or which are missing and how to fetch them."""
+    missing = tuple(reply for reply in manifest.planning if reply.key not in replies)
+    return require(
+        not missing,
+        "missing_replies",
+        f"{manifest.name} planning needs these replies, fetched through the host's tools and "
+        "passed as --replies: "
+        + "; ".join(f"{reply.key} ({reply.description})" for reply in missing),
+    )
+
+
+def onboarded_writes(repo: Path) -> tuple[Result[WriteRules], ...]:
+    """What each onboarded folder says writes, read on its own: trusted or not, valid or not.
+
+    Counting a broken or untrusted folder's writes can only ask for more approvals, never fewer;
+    a folder whose writes cannot be read is an `Err`, so the rules can fail closed.
+    """
+    return tuple(
+        _declared_writes(folder, _stamp(folder / MANIFEST))
+        for folder in _folders(repo / ONBOARDED_RELATIVE_PATH)
+    )
+
+
+@lru_cache(maxsize=64)
+def _declared_writes(folder: Path, stamp: tuple[int, int]) -> Result[WriteRules]:
+    return _labelled(
+        folder,
+        fmap(bind(_json(folder / MANIFEST), _writes_section), _write_rules),
+    )
+
+
+def _writes_section(document: Any) -> Result[Mapping[str, Any]]:
+    """The manifest's `writes`, checked against its part of the tracker schema."""
+    return bind(
+        load_schema(SCHEMA_PATH),
+        lambda schema: validate(
+            {"$defs": schema.get("$defs", {}), **schema["properties"]["writes"]},
+            document.get("writes") if isinstance(document, dict) else None,
+            "writes",
+        ),
+    )
+
+
+def _write_rules(writes: Mapping[str, Any]) -> WriteRules:
+    return WriteRules(str(writes["server"]), tuple(map(str, writes["tools"])))
 
 
 def _import(module_name: str, file: Path) -> Any:

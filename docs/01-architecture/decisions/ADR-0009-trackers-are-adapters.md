@@ -25,8 +25,10 @@ copied into each repository's `integrations.json`; and a repository's settings w
    `adapter.py`. `tracker.json` is checked against `config/tracker.schema.json` and the registry's
    own rules (hierarchy, id expressions, settings). `adapter.py` exports
    `adapter(context) -> TrackerOps`, a record of functions each returning `Ok` or `Err`
-   (`scripts/integrations/contracts.py`). Azure DevOps, Linear, and the local tracker ship this way;
-   nothing about a tracker lives outside its folder.
+   (`scripts/integrations/contracts.py`). Every function is required, sprint planning included
+   (`read_iteration`, `iteration_items`, `hour_fields`), and `tracker.json` lists the replies that
+   planning reads. Azure DevOps, Linear, and the local tracker ship this way; nothing about a
+   tracker lives outside its folder, and the backlog runtime reads a tracker's sprints only through it.
 2. **One source per value.** The manifest owns kinds, states, hierarchy, id formats, mention
    forms, write tools, tool names, and how to connect. The repository's `.harness/settings.json` owns
    only the choice and the values the manifest asks for. Shared templates stay in
@@ -38,11 +40,14 @@ copied into each repository's `integrations.json`; and a repository's settings w
    hiding the others. The selected tracker resolves to not configured, active, or invalid; anything
    but active refuses tracker and SCM writes (`tracker-invalid`). When the rules cannot run, every
    MCP call counts as a write.
-5. **Rules read every usable tracker.** Which calls write, how ids look, and which text links come
-   from every shipped or trusted tracker, not only the selected one, because the Azure DevOps server
-   is registered with the host whatever a repository selects.
-6. **Trust is a person's click.** An onboarded tracker (`.harness/trackers/<name>/`) counts only
-   while its folder matches the version the user trusted. The agent asks a question that names the
+5. **Rules read every tracker folder.** Which calls write comes from every shipped tracker and every
+   onboarded folder, trusted or not, valid or not (counting more writes only asks for more
+   approvals), and a folder that does not say what writes fails closed. How ids look and which text
+   links come from every shipped or trusted tracker. Not only the selected one: the Azure DevOps
+   server is registered with the host whatever a repository selects.
+6. **Trust is a person's click.** An onboarded tracker (`.harness/trackers/<name>/`) can be
+   selected, and its ids and mention forms count, only while its folder matches the version the
+   user trusted. The agent asks a question that names the
    tracker with a **Trust** option; the question hook pins the folder's digest when the question is
    shown, and the answer hook trusts that digest only on the user's click, and only if the folder
    has not changed since. A second question (**Use it**) makes the harness write the tracker into

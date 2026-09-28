@@ -66,7 +66,7 @@ contracts, evidence), and routes every provider call through a place the runtime
 | `scripts/harness/hook.py` | Single hook entry point for both hosts; runs the harness rules, then delegates to the workflow policy runtime. |
 | `scripts/harness/rules.py` | The nine named rules. |
 | `scripts/harness/settings.py` | Reads `.harness/settings.json` once per process into a value nothing can change; holds the defaults for omitted sections. |
-| `scripts/harness/tracker_policy.py` | What the rules know about trackers, built once per call from every usable tracker folder. |
+| `scripts/harness/tracker_policy.py` | What the rules know about trackers, built once per call from the tracker folders. |
 | `scripts/harness/sessions.py` | Binds a work item to one checkout; the workflow policy reads the active session. |
 | `scripts/core/` | `Ok`/`Err` values for every step that can fail, and the standard-library JSON Schema checker. |
 | `scripts/harness/state.py` | Evidence store under `.harness/state/`. |

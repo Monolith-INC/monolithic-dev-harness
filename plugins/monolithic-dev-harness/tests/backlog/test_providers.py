@@ -4,23 +4,26 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-from orchestrator_core.capacity import plan_iteration
-from orchestrator_core.ingest import ArtifactRecord
-from orchestrator_core.providers import PROVIDERS, get_provider
-from orchestrator_core.providers.azure_devops import AzureDevOpsProvider
-from orchestrator_core.providers.azure_devops import fields as f
-from orchestrator_core.providers.azure_devops.client import AzureCapacityClient
-from orchestrator_core.providers.azure_devops.mapping import (
-    map_capacities,
-    map_days_off,
-    map_iteration,
-    map_weekend_days,
-    map_work_item,
-    map_work_items,
+from azure_tracker import (
+    ORIGINAL_ESTIMATE,
+    REMAINING_WORK,
+    days_off,
+    item,
+    items,
+    members,
+    refused,
+    sprint,
+    tracker,
+    weekend,
 )
-from orchestrator_core.providers.base import CapacityProvider, WorkItemWriter, WriteOp
-from orchestrator_core.providers.filesystem import FilesystemProvider
-from orchestrator_core.providers.linear import LinearProvider
+
+from integrations.planning import DEFAULT_WEEKEND_DAYS
+from orchestrator_core.capacity import plan_iteration
+from orchestrator_core.providers import (
+    CapacityProvider,
+    FilesystemProvider,
+    TrackerProvider,
+)
 
 # Shaped after the responses documented for the Azure DevOps work/capacities API.
 CAPACITIES_PAYLOAD = {
@@ -82,123 +85,51 @@ WORK_ITEMS_PAYLOAD = {
 }
 
 
-class TestProviderRegistry(unittest.TestCase):
-    """Tests for provider lookup."""
+class TestCapacitySources(unittest.TestCase):
+    """The planner reads from the user's planning files or from the selected tracker."""
 
-    def test_known_providers_registered(self):
-        """Both shipped adapters are discoverable by name."""
-        self.assertIn("azure-devops", PROVIDERS)
-        self.assertIn("filesystem", PROVIDERS)
-        self.assertIn("linear", PROVIDERS)
-
-    def test_unknown_provider_returns_none(self):
-        """An unknown name degrades to None rather than raising."""
-        self.assertIsNone(get_provider("jira"))
-
-    def test_get_filesystem_provider(self):
-        """The filesystem provider is built with the configured artifacts directory."""
+    def test_both_sources_satisfy_the_protocol(self):
         with tempfile.TemporaryDirectory() as tmpdir:
-            provider = get_provider("filesystem", artifacts_dir=Path(tmpdir))
-            self.assertIsInstance(provider, FilesystemProvider)
-
-    def test_providers_satisfy_the_protocols(self):
-        """Both adapters structurally match the seam they are meant to fill."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            for provider in (FilesystemProvider(Path(tmpdir)), AzureDevOpsProvider()):
+            for provider in (
+                FilesystemProvider(Path(tmpdir)),
+                TrackerProvider(tracker(), {}),
+            ):
                 self.assertIsInstance(provider, CapacityProvider)
-                self.assertIsInstance(provider, WorkItemWriter)
-
-
-class TestLinearWorkItemHierarchy(unittest.TestCase):
-    def test_create_and_read_preserves_four_level_parent_chain_and_labels(self):
-        provider = LinearProvider(team="team-1")
-        chain = (
-            ("Epic", "epic-1", None),
-            ("Feature", "feature-1", "epic-1"),
-            ("User Story", "story-1", "feature-1"),
-            ("Task", "task-1", "story-1"),
-        )
-        for item_type, provider_id, parent_id in chain:
-            with self.subTest(item_type=item_type):
-                artifact = ArtifactRecord(
-                    type=item_type,
-                    title=f"{item_type} title",
-                    body=f"{item_type} body",
-                    story_points=None,
-                    parent_id=parent_id,
-                    provider="linear",
-                    provider_id=None,
-                    source="test",
-                    filename=None,
-                )
-                create = provider.create_request(artifact)
-                self.assertTrue(create.ok, create.error)
-                self.assertEqual(
-                    create.data.payload["labels"],
-                    [f"agile:{item_type.lower().replace(' ', '-')}"],
-                )
-                self.assertNotIn(
-                    "project",
-                    create.data.payload,
-                    "Linear Projects are not Agile Epics",
-                )
-                self.assertEqual(create.data.payload.get("parentId"), parent_id)
-
-                read = provider.read_result(
-                    {
-                        "id": provider_id,
-                        "title": artifact.title,
-                        "description": artifact.body,
-                        "labels": create.data.payload["labels"],
-                        "parentId": parent_id,
-                    }
-                )
-                self.assertTrue(read.ok, read.error)
-                self.assertEqual(
-                    (
-                        read.data.type,
-                        read.data.provider,
-                        read.data.provider_id,
-                        read.data.parent_id,
-                    ),
-                    (item_type, "linear", provider_id, parent_id),
-                )
 
 
 class TestAzureFields(unittest.TestCase):
-    """Tests for the field-reference constants and process guards."""
+    """Which Azure field each process uses, seen through the work items the tracker reads."""
 
-    def test_process_normalisation(self):
-        """Process names resolve case-insensitively and default to Agile."""
-        self.assertEqual(f.normalize_process("Scrum"), f.PROCESS_SCRUM)
-        self.assertEqual(f.normalize_process("Agile"), f.PROCESS_AGILE)
-        self.assertEqual(f.normalize_process("CMMI"), f.PROCESS_CMMI)
-        self.assertEqual(f.normalize_process(None), f.PROCESS_AGILE)
-        self.assertEqual(f.normalize_process("something else"), f.PROCESS_AGILE)
+    SIZES = {
+        "Microsoft.VSTS.Scheduling.StoryPoints": 3,
+        "Microsoft.VSTS.Scheduling.Effort": 8,
+        "Microsoft.VSTS.Scheduling.Size": 5,
+    }
+
+    def _points(self, process):
+        return item({"id": 1, "fields": self.SIZES}, process=process).points
 
     def test_points_field_varies_by_process(self):
         """Each process keeps its relative-size field under a different name."""
-        self.assertEqual(f.points_field("agile"), f.STORY_POINTS)
-        self.assertEqual(f.points_field("scrum"), f.EFFORT)
-        self.assertEqual(f.points_field("cmmi"), f.SIZE)
+        self.assertEqual(self._points("agile"), 3.0)
+        self.assertEqual(self._points("scrum"), 8.0)
+        self.assertEqual(self._points("cmmi"), 5.0)
 
-    def test_scrum_lacks_original_estimate(self):
-        """The guard that stops a silent write failure on Scrum projects."""
-        self.assertFalse(f.supports_original_estimate("scrum"))
-        self.assertTrue(f.supports_original_estimate("agile"))
-        self.assertTrue(f.supports_original_estimate("cmmi"))
+    def test_process_names_resolve_case_insensitively_and_default_to_agile(self):
+        self.assertEqual(self._points("Scrum process"), 8.0)
+        self.assertEqual(self._points(""), 3.0)
+        self.assertEqual(self._points("something else"), 3.0)
 
     def test_cmmi_uses_discipline_not_activity(self):
         """CMMI names the activity field Discipline."""
-        self.assertEqual(f.activity_field("cmmi"), f.DISCIPLINE)
-        self.assertEqual(f.activity_field("agile"), f.ACTIVITY)
+        record = {"id": 1, "fields": {"Microsoft.VSTS.Common.Discipline": "Dev"}}
+        self.assertEqual(item(record, process="cmmi").activity, "Dev")
+        self.assertIsNone(item(record, process="agile").activity)
 
-    def test_field_ref_builds_patch_path(self):
-        """Writes address fields by JSON-Patch path."""
-        self.assertEqual(
-            f.field_ref(f.REMAINING_WORK),
-            "/fields/Microsoft.VSTS.Scheduling.RemainingWork",
-        )
+    def test_original_estimate_needs_a_stated_process_that_is_not_scrum(self):
+        """Writing it to Scrum fails silently, so an unstated process does not risk it."""
+        self.assertIn(ORIGINAL_ESTIMATE, tracker("cmmi").hour_fields(4.0, True))
+        self.assertNotIn(ORIGINAL_ESTIMATE, tracker("").hour_fields(4.0, True))
 
 
 class TestAzureMapping(unittest.TestCase):
@@ -206,37 +137,37 @@ class TestAzureMapping(unittest.TestCase):
 
     def test_map_capacities_reads_members_and_activities(self):
         """Team members, their activities, and their leave all survive the mapping."""
-        members = map_capacities(CAPACITIES_PAYLOAD)
-        self.assertEqual(len(members), 2)
-        self.assertEqual(members[0].display_name, "Chuck Reinhart")
-        self.assertEqual(members[0].daily_hours, 8.0)
-        self.assertEqual(len(members[0].days_off), 1)
+        team = members(CAPACITIES_PAYLOAD)
+        self.assertEqual(len(team), 2)
+        self.assertEqual(team[0].display_name, "Chuck Reinhart")
+        self.assertEqual(team[0].daily_hours, 8.0)
+        self.assertEqual(len(team[0].days_off), 1)
 
     def test_map_capacities_accepts_bare_list(self):
         """Both the {count,value} envelope and a bare list are accepted."""
-        self.assertEqual(len(map_capacities(CAPACITIES_PAYLOAD["value"])), 2)
+        self.assertEqual(len(members(CAPACITIES_PAYLOAD["value"])), 2)
 
     def test_map_capacities_tolerates_garbage(self):
         """Malformed payloads yield nothing instead of raising."""
-        self.assertEqual(map_capacities(None), ())
-        self.assertEqual(map_capacities("nonsense"), ())
-        self.assertEqual(map_capacities({"value": ["not-an-object"]}), ())
+        self.assertEqual(members({"value": ["not-an-object"]}), ())
+        self.assertEqual(refused(capacities=None), "unreadable_reply")
+        self.assertEqual(refused(capacities="nonsense"), "unreadable_reply")
 
     def test_map_days_off_single_day(self):
         """A one-day absence with no end date is still a valid range."""
-        ranges = map_days_off([{"start": "2026-08-05T00:00:00Z"}])
+        ranges = days_off([{"start": "2026-08-05T00:00:00Z"}])
         self.assertEqual(ranges[0].start, date(2026, 8, 5))
         self.assertEqual(ranges[0].end, date(2026, 8, 5))
 
     def test_map_weekend_days_is_complement_of_working_days(self):
         """Azure states which days are worked; the model wants the rest."""
-        self.assertEqual(map_weekend_days(TEAM_SETTINGS_PAYLOAD), (5, 6))
+        self.assertEqual(weekend(TEAM_SETTINGS_PAYLOAD), (5, 6))
 
     def test_map_weekend_days_absent_setting_keeps_default(self):
-        """Absent settings report None, so map_iteration keeps its default weekend."""
-        self.assertIsNone(map_weekend_days({}))
-        self.assertIsNone(map_weekend_days({"workingDays": []}))
-        self.assertIsNone(map_weekend_days(None))
+        """Absent settings keep the default weekend."""
+        self.assertEqual(weekend({}), DEFAULT_WEEKEND_DAYS)
+        self.assertEqual(weekend({"workingDays": []}), DEFAULT_WEEKEND_DAYS)
+        self.assertEqual(refused(team_settings=None), "unreadable_reply")
 
     def test_map_weekend_days_six_day_week(self):
         """A team working Saturdays leaves only Sunday as weekend."""
@@ -250,11 +181,11 @@ class TestAzureMapping(unittest.TestCase):
                 "saturday",
             ]
         }
-        self.assertEqual(map_weekend_days(settings), (6,))
+        self.assertEqual(weekend(settings), (6,))
 
     def test_map_iteration_assembles_dates_and_team(self):
         """The three payloads combine into one iteration."""
-        iteration = map_iteration(
+        iteration = sprint(
             "it1",
             iteration=ITERATION_PAYLOAD,
             capacities=CAPACITIES_PAYLOAD,
@@ -266,65 +197,63 @@ class TestAzureMapping(unittest.TestCase):
 
     def test_map_iteration_without_payloads_degrades(self):
         """Nothing to map is not an error."""
-        iteration = map_iteration("it1")
+        iteration = sprint("it1")
         self.assertEqual(iteration.members, ())
         self.assertIsNone(iteration.start_date)
 
     def test_map_work_item_reads_scheduling_fields(self):
         """Remaining work, activity, and assignee come through."""
-        item = map_work_item(WORK_ITEMS_PAYLOAD["value"][0])
-        self.assertEqual(item.item_id, "101")
-        self.assertEqual(item.remaining_hours, 12.0)
-        self.assertEqual(item.activity, "Development")
-        self.assertEqual(item.assigned_to, "Chuck Reinhart")
+        found = item(WORK_ITEMS_PAYLOAD["value"][0])
+        self.assertEqual(found.item_id, "101")
+        self.assertEqual(found.remaining_hours, 12.0)
+        self.assertEqual(found.activity, "Development")
+        self.assertEqual(found.assigned_to, "Chuck Reinhart")
 
     def test_map_work_item_reads_points(self):
         """Story points map to the generic points field."""
-        self.assertEqual(map_work_item(WORK_ITEMS_PAYLOAD["value"][1]).points, 5.0)
+        self.assertEqual(item(WORK_ITEMS_PAYLOAD["value"][1]).points, 5.0)
 
     def test_map_work_item_finds_points_across_processes(self):
         """A Scrum project stores size under Effort, not StoryPoints."""
         payload = {"id": 7, "fields": {"Microsoft.VSTS.Scheduling.Effort": 8}}
-        self.assertEqual(map_work_item(payload, process="scrum").points, 8.0)
+        self.assertEqual(item(payload, process="scrum").points, 8.0)
 
     def test_map_work_item_without_id_is_dropped(self):
         """An item with no id cannot be addressed, so it is not returned."""
-        self.assertIsNone(map_work_item({"fields": {"System.Title": "orphan"}}))
-        self.assertIsNone(map_work_item("nonsense"))
+        self.assertIsNone(item({"fields": {"System.Title": "orphan"}}))
+        self.assertIsNone(item("nonsense"))
 
     def test_map_work_items_filters_unmappable(self):
         """A mixed payload yields only the items that mapped."""
         payload = {"value": [{"id": 1}, {"no": "id"}]}
-        self.assertEqual(len(map_work_items(payload)), 1)
+        self.assertEqual(len(items(payload)), 1)
 
 
-class TestAzureProvider(unittest.TestCase):
-    """Tests for the Azure adapter, driven by injected payloads."""
+class TestAzurePlanning(unittest.TestCase):
+    """The Azure tracker's planning capability, driven by the replies a skill fetched."""
 
-    def _provider(self, process="Agile"):
-        return AzureDevOpsProvider(
-            process=process,
-            payloads={
-                "iteration": ITERATION_PAYLOAD,
-                "capacities": CAPACITIES_PAYLOAD,
-                "team_settings": TEAM_SETTINGS_PAYLOAD,
-                "work_items": WORK_ITEMS_PAYLOAD,
-            },
-        )
+    REPLIES = {
+        "iteration": ITERATION_PAYLOAD,
+        "capacities": CAPACITIES_PAYLOAD,
+        "team_settings": TEAM_SETTINGS_PAYLOAD,
+        "work_items": WORK_ITEMS_PAYLOAD,
+    }
 
-    def test_fetch_iteration_from_injected_payloads(self):
-        """Injection is the primary path and needs no credentials."""
+    def _provider(self, process="agile"):
+        return TrackerProvider(tracker(process), self.REPLIES)
+
+    def test_fetch_iteration_from_the_replies(self):
+        """The replies are all it needs; there is no credential and no network."""
         result = self._provider().fetch_iteration("it1")
         self.assertTrue(result.ok)
         self.assertEqual(len(result.data.members), 2)
 
-    def test_fetch_work_items_from_injected_payloads(self):
-        """Work items map without any network access."""
+    def test_fetch_work_items_from_the_replies(self):
         result = self._provider().fetch_work_items("it1")
         self.assertTrue(result.ok)
         self.assertEqual(len(result.data), 2)
 
-    def test_end_to_end_plan_from_azure_payloads(self):
+    def test_end_to_end_plan_from_azure_replies(self):
         """Azure JSON in, capacity plan out.
 
         u1 gives 8h/day over 8 present days (two days off) and u2 gives 6h/day over 10,
@@ -338,69 +267,16 @@ class TestAzureProvider(unittest.TestCase):
         self.assertEqual(plan.planned_hours, 12.0)
         self.assertEqual(plan.items_estimated, 1)
 
-    def test_no_payloads_and_no_client_fails_cleanly(self):
-        """A provider with no way to read reports why instead of raising."""
-        result = AzureDevOpsProvider().fetch_iteration("it1")
-        self.assertFalse(result.ok)
-        self.assertIn("no payloads injected", result.error)
-
-    def test_plan_hour_write_targets_remaining_work(self):
+    def test_hour_fields_target_remaining_work(self):
         """Remaining Work is the field capacity and burndown actually read."""
-        ops = self._provider().plan_hour_write("101", 6.0)
-        paths = [op.field_path for op in ops]
-        self.assertIn(f.field_ref(f.REMAINING_WORK), paths)
+        self.assertIn(REMAINING_WORK, tracker().hour_fields(6.0, False))
 
-    def test_plan_hour_write_omits_original_estimate_on_scrum(self):
-        """The Scrum guard, at the level that matters."""
-        agile = AzureDevOpsProvider(process="Agile").plan_hour_write("1", 4.0)
-        scrum = AzureDevOpsProvider(process="Scrum").plan_hour_write("1", 4.0)
-        self.assertIn(f.field_ref(f.ORIGINAL_ESTIMATE), [o.field_path for o in agile])
-        self.assertNotIn(
-            f.field_ref(f.ORIGINAL_ESTIMATE), [o.field_path for o in scrum]
-        )
-
-    def test_plan_hour_write_includes_activity_when_given(self):
-        """Activity is written only when the caller could determine one."""
-        with_activity = self._provider().plan_hour_write(
-            "1", 4.0, activity="Development"
-        )
-        without = self._provider().plan_hour_write("1", 4.0)
-        self.assertIn(f.field_ref(f.ACTIVITY), [o.field_path for o in with_activity])
-        self.assertNotIn(f.field_ref(f.ACTIVITY), [o.field_path for o in without])
-
-    def test_writes_are_planned_not_performed(self):
-        """Every planned write demands confirmation before anything happens."""
-        for op in self._provider().plan_hour_write("1", 4.0, provenance="seed-default"):
-            self.assertIsInstance(op, WriteOp)
-            self.assertTrue(op.requires_confirmation)
-            self.assertIn("seed-default", op.describe())
-
-
-class TestAzureClientConfiguration(unittest.TestCase):
-    """Tests for the optional direct client. No network is touched."""
-
-    def test_client_without_pat_is_not_configured(self):
-        """Missing credentials are detected before any request is attempted."""
-        client = AzureCapacityClient("org", "proj", pat=None)
-        if client.pat is None:  # a real PAT in the environment would defeat this
-            self.assertFalse(client.configured)
-
-    def test_unconfigured_client_returns_error_not_exception(self):
-        """A misconfigured client reports the problem, following never-raise."""
-        client = AzureCapacityClient("", "", pat=None)
-        data, error = client.get_capacities("it1")
-        self.assertIsNone(data)
-        self.assertIn("not configured", error)
-
-    def test_scope_includes_team_when_given(self):
-        """Capacity endpoints are team-scoped when a team is supplied."""
-        self.assertNotIn(
-            "/myteam", AzureCapacityClient("org", "proj", pat="x")._scope()
-        )
-        self.assertIn(
-            "/myteam",
-            AzureCapacityClient("org", "proj", team="myteam", pat="x")._scope(),
-        )
+    def test_original_estimate_is_set_once_and_never_on_scrum(self):
+        original = ORIGINAL_ESTIMATE
+        self.assertIn(original, tracker("agile").hour_fields(4.0, True))
+        self.assertNotIn(original, tracker("agile").hour_fields(4.0, False))
+        self.assertNotIn(original, tracker("scrum").hour_fields(4.0, True))
+        self.assertNotIn(original, tracker("agile").hour_fields(0.0, True))
 
 
 class TestFilesystemProvider(unittest.TestCase):
@@ -476,15 +352,6 @@ class TestFilesystemProvider(unittest.TestCase):
             iteration = FilesystemProvider(artifacts).fetch_iteration("sprint-1").data
             self.assertEqual(len(iteration.members), 1)
             self.assertEqual(iteration.members[0].daily_hours, 6.0)
-
-    def test_plan_hour_write_targets_frontmatter(self):
-        """The filesystem adapter writes to frontmatter keys, not Azure fields."""
-        with tempfile.TemporaryDirectory() as tmpdir:
-            ops = FilesystemProvider(Path(tmpdir)).plan_hour_write(
-                "1", 4.0, activity="Development"
-            )
-            self.assertEqual(ops[0].field_path, "frontmatter.effort_hours")
-            self.assertEqual(ops[1].field_path, "frontmatter.activity")
 
 
 if __name__ == "__main__":

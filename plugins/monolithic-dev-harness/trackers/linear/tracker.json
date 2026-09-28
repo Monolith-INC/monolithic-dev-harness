@@ -39,5 +39,11 @@
     "tools": ["save_*", "create_*", "update_*", "delete_*"]
   },
   "attachments": {"spec": "comment", "report": "comment", "pull_request": "comment"},
+  "planning": {
+    "replies": [
+      {"key": "cycle", "description": "list_cycles for the team with type \"current\" (or the named cycle); Linear records no team capacity"},
+      {"key": "issues", "description": "list_issues filtered to that cycle, so existing commitments count"}
+    ]
+  },
   "text_format": "markdown"
 }

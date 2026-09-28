@@ -19,10 +19,52 @@ All notable changes to this project are documented here. The format follows
 - `harness tracker stage <folder> --value KEY=VALUE` keeps the values the tracker's settings need
   (organization, project, ...) in the staged folder, so trusting it covers them. Staging refuses a
   tracker that is missing a required value.
+- Sprint planning is part of the one tracker contract: every tracker's `TrackerOps` provides
+  `read_iteration`, `iteration_items`, and `hour_fields`, and every `tracker.json` lists the
+  replies its planning reads under `planning.replies` (now required). Azure DevOps, Linear, and the
+  local tracker all implement them; Linear reports cycle dates and point estimates but no team
+  capacity or hours.
+- The backlog runtime reads a tracker's sprints only through that tracker's adapter:
+  `capacity --provider` takes `filesystem` (your planning files) or `tracker`, `--process` is gone
+  (the process comes from the settings), and `--payloads` is now `--replies`.
+- Capacity is checked when asked (replies passed, or a sprint named). Once asked, a missing reply
+  or an unusable tracker stops `estimate-breakdown` instead of skipping the capacity limit, and
+  the error says which replies to fetch and how.
+- A tracker that records no hours, or none usable, gets no write operations and a note to record
+  the figures by hand; there is no neutral `hours` field any more.
+- Azure DevOps: a named sprint is found in the iteration listing (by id, name, or path) instead of
+  taking the current one, and a `work_items` reply that lists only ids is refused with how to read
+  the items (`wit_work_item[get_batch]`), instead of counting as an empty sprint.
+- Linear: `current` takes the active cycle, a named cycle is found by id, name, or number.
+- The local tracker reads a sprint from `.harness/tracker/capacity/<sprint>.json` and needs the
+  sprint named. Its planning fields use the same names as a planning file's front matter
+  (`story_points`, `effort_hours`, `remaining_hours`, ...), read by one function.
+- `bin/agile-backlog-toolkit config` shows the selected tracker and the values its `tracker.json`
+  declares, for any tracker; `--require-team` is gone.
+- Once asked, the capacity check also stops the run when a reply holds no data (an error text, a
+  non-list), when the sprint or its work items cannot be read, or when a local sprint has no
+  capacity file. An Azure sprint with no work items (`{"workItemRelations": []}`) is an empty
+  sprint, not a refusal.
+- `estimate-breakdown` prints every note (what the tracker warned about, why capacity was not
+  checked, hours to record by hand), and lists writes only when there are some.
+- Numbers read from replies and files must be finite: "nan" and "inf" are not numbers.
+- A tracker's sprint reference `current`, or none, means the active sprint; the local tracker,
+  which keeps no active sprint, refuses it.
+
+### Security
+
+- Every onboarded tracker folder counts toward which tools need approval, even when it is
+  untrusted or fails its checks; a folder whose `writes` cannot be read at all fails closed.
+  Before, a broken onboarded folder that was not selected dropped its server's writes from the
+  approval rule.
 
 ### Removed
 
 - The typed `harness trust-tracker <name> <digest>` and `harness untrust-tracker <name>` lines.
+- The backlog runtime's own Azure DevOps and Linear providers and settings types, including its
+  HTTP client that used a personal access token; Azure field names and capacity mapping now live
+  only in `trackers/azure-devops/adapter.py`.
+- The personal-access-token and direct REST fallbacks in the enrich skill's Azure reference.
 
 ## [0.2.0] - 2026-09-26
 

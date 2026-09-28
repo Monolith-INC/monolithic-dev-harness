@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from .ingest import FILENAME_RE, ArtifactRecord
+from .ingest import FILENAME_RE, LEGACY_FRONTMATTER_KEYS, ArtifactRecord
 
 # Section labels keyed by semantic name, one dict per supported `language:` frontmatter value.
 # Order matters: dict insertion order is the required section order for that language.
@@ -127,11 +127,7 @@ def _detect_body_format(body: str) -> BodyFormat:
 
 
 def _legacy_schema_message(frontmatter: dict[str, Any]) -> str | None:
-    legacy = [
-        key
-        for key in ("azure_id", "parent_feature", "parent_epic")
-        if key in frontmatter
-    ]
+    legacy = [key for key in LEGACY_FRONTMATTER_KEYS if key in frontmatter]
     if not legacy:
         return None
     return (
@@ -416,7 +412,7 @@ def validate_artifact(
         elif not record.parent_id:
             outcome, detail = "PASS", "no parent (a Story may stand alone)"
         else:
-            outcome, detail = "SKIP", "hierarchy not verified (no Azure MCP data)"
+            outcome, detail = "SKIP", "hierarchy not verified (no tracker data)"
         results.append(
             CheckResult(
                 "hierarchy-story-parent-is-feature", outcome, detail, "HIERARCHY"

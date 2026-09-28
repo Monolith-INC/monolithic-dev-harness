@@ -13,12 +13,6 @@ from tests.settings_fixture import MINIMAL
 
 from .fakes import FakeTransport, copy_tracker
 
-SETTINGS = {
-    "schemaVersion": 1,
-    "scm": {"name": "github", "values": {"owner": "o", "repo": "r"}},
-    "branch_template": "feature/{key}-{slug}",
-}
-
 
 def settings(tracker: dict):
     return parse({**MINIMAL, "tracker": tracker})
@@ -111,6 +105,15 @@ class RegistryTest(unittest.TestCase):
             "placeholder": {
                 "connection": {"kind": "mcp", "command": "x", "args": ["{token}"]}
             },
+            "reply keys": {
+                "planning": {
+                    "replies": [
+                        {"key": "cycle", "description": "one"},
+                        {"key": "cycle", "description": "two"},
+                    ]
+                }
+            },
+            "no planning": {"planning": None},
         }
         for label, change in cases.items():
             folder = copy_tracker(
@@ -119,6 +122,15 @@ class RegistryTest(unittest.TestCase):
             self.assertIsInstance(
                 registry.read_manifest(folder, "onboarded"), Err, label
             )
+
+    def test_the_manifest_declares_the_replies_planning_reads(self) -> None:
+        manifest = registry.read_manifest(
+            registry.SHIPPED_ROOT / "azure-devops", "shipped"
+        ).value
+        self.assertEqual(
+            tuple(reply.key for reply in manifest.planning),
+            ("iteration", "capacities", "team_settings", "work_items"),
+        )
 
     def test_a_wide_diamond_hierarchy_is_checked_quickly(self) -> None:
         import time
