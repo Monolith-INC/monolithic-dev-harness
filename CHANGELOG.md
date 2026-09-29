@@ -10,6 +10,7 @@ All notable changes to this project are documented here. The format follows
 
 - Provider-neutral tracker and SCM calls reuse one process-local MCP connection, avoiding a fresh
   interactive OAuth process per gateway call.
+- `check --staged` fails closed unless the working-file tree exactly matches the staged tree.
 
 ## [0.2.0] - 2026-09-28
 

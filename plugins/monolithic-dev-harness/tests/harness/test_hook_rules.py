@@ -1019,6 +1019,27 @@ class TestGuarded(HookTestCase):
         sh(self.repo, "add", "security.rules")
         self.assertDenied(self.commit_call(), "guarded-paths")
 
+    def test_staged_checks_refuse_different_working_files(self) -> None:
+        self.write("security.rules", "staged\n")
+        sh(self.repo, "add", "security.rules")
+        self.write("security.rules", "unstaged\n")
+        checked = subprocess.run(
+            [
+                sys.executable,
+                str(CHECKS),
+                "--repo",
+                str(self.repo),
+                "--staged",
+                "--only",
+                "rules",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(checked.returncode, 2)
+        self.assertIn("staged and working files differ", checked.stderr)
+        self.assertDenied(self.commit_call(), "guarded-paths")
+
     def test_manual_guard_needs_the_users_record(self) -> None:
         self.write("infra/main.tf")
         sh(self.repo, "add", "infra/main.tf")

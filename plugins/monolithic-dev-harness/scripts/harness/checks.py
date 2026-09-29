@@ -5,7 +5,8 @@
 
 --head (default) runs against the committed HEAD and records evidence for HEAD's tree; the working
 tree must be clean so the result describes exactly what was committed. --staged records evidence for
-the index tree (what the next commit will contain); use it before committing a guarded path (guarded-paths).
+the index tree only when the working files are byte-for-byte the same tree; this fail-closed rule
+prevents checks run against unstaged content from proving a different staged version.
 Checks come from `.harness/settings.json` → `checks: [{name, run, when}]`; `when` globs select the
 checks that apply to the files changed on the branch.
 """
@@ -45,6 +46,17 @@ def main(argv: list[str] | None = None) -> int:
     chosen = loaded.value
     if args.staged:
         tree = gitstate.index_tree(repo)
+        worktree = gitstate.worktree_tree(repo)
+        match tree == worktree:
+            case False:
+                print(
+                    "staged and working files differ; checks would not prove the staged tree. "
+                    "Use a clean worktree whose files exactly match the index.",
+                    file=sys.stderr,
+                )
+                return 2
+            case True:
+                pass
         changed = gitstate.staged_paths(repo)
     else:
         if gitstate.git(repo, "status", "--porcelain", "--untracked-files=no"):

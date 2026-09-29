@@ -15,7 +15,7 @@ From the repository root:
 
 ```bash
 python3 "<plugin root>/scripts/harness/checks.py"            # committed HEAD (clean tree required)
-python3 "<plugin root>/scripts/harness/checks.py" --staged   # the index: what the next commit records
+python3 "<plugin root>/scripts/harness/checks.py" --staged   # index, only when working files match it exactly
 python3 "<plugin root>/scripts/harness/checks.py" --only <name> ...
 ```
 
@@ -24,8 +24,12 @@ The script runs every applicable check, prints each exit code, and writes eviden
 it stale. The hooks read it:
 
 - **`guarded-paths`:** committing a guarded path whose evidence is `check:<name>` needs that check to pass for the
-  staged tree. Stage, run with `--staged`, then commit.
+staged tree. Stage, run with `--staged`, then commit.
 - **`draft-reviewed-prs`:** creating the pull request needs every applicable check to pass for HEAD's tree.
+
+`--staged` fails before running anything when unstaged or untracked content makes the working-file
+tree differ from the index. Use a clean worktree whose files exactly match what will be committed;
+never treat results from one version as proof for another.
 
 ## When something fails
 
