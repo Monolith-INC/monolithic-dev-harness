@@ -1,7 +1,7 @@
 # monolithic-dev-harness
 
 [![CI](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.2.0-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
+[![Version](https://img.shields.io/badge/version-0.3.0-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![Cursor](https://img.shields.io/badge/Cursor-supported-black.svg)](https://cursor.com)
@@ -460,7 +460,7 @@ See [`docs/05-security/security.md`](./docs/05-security/security.md).
 
 ## Project status
 
-`0.2.0`. The rules, adapters, installer, and test suites are verified in CI. Loading in Cursor, a
+`0.3.0`. The rules, adapters, installer, and test suites are verified in CI. Loading in Cursor, a
 full end-to-end run against a live Azure DevOps project, and a live check of the Linear adapter are
 pending observation.
 
