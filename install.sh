@@ -117,42 +117,45 @@ select_hosts() {
 gh_ready() { have gh && gh auth status >/dev/null 2>&1; }
 token() { printf '%s' "${GH_TOKEN:-${GITHUB_TOKEN:-}}"; }
 
-api() {
-  local url="https://api.github.com/repos/${REPO}$1"
-  if [[ -n "$(token)" ]]; then
-    curl -fsSL -H "Authorization: Bearer $(token)" -H "Accept: application/vnd.github+json" "$url"
+api_get() {  # api_get <path under the repository> [<accept header>]
+  local path="$1" accept="${2:-application/vnd.github+json}"
+  if gh_ready; then
+    gh api -H "Accept: ${accept}" "repos/${REPO}${path}"
+  elif [[ -n "$(token)" ]]; then
+    curl -fsSL -H "Authorization: Bearer $(token)" -H "Accept: ${accept}" \
+      "https://api.github.com/repos/${REPO}${path}"
   else
-    curl -fsSL -H "Accept: application/vnd.github+json" "$url"
+    curl -fsSL -H "Accept: ${accept}" "https://api.github.com/repos/${REPO}${path}"
   fi
+}
+
+json_field() {  # json_field <python expression over `d`>; reads JSON on stdin
+  python3 -c "import json,sys; d=json.load(sys.stdin); print($1)" 2>/dev/null
 }
 
 resolve_version() {
   [[ -n "$VERSION" ]] && return 0
-  if gh_ready; then
-    VERSION="$(gh release view --repo "$REPO" --json tagName --jq .tagName 2>/dev/null || true)"
-  fi
-  if [[ -z "$VERSION" ]] && have curl; then
-    VERSION="$(api /releases/latest 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])' 2>/dev/null || true)"
-  fi
+  VERSION="$(api_get /releases/latest | json_field 'd["tag_name"]' || true)"
   [[ -n "$VERSION" ]] || die "could not find the latest release. Private repository? Run \`gh auth login\` or set GH_TOKEN, or pass --version"
   VERSION="${VERSION#v}"
 }
 
+release_id() {
+  # The release is looked up by tag only for its id. GitHub's by-tag view has been seen to list
+  # no files for a release that has them, so the files are listed by id instead.
+  [[ -n "${RELEASE_ID:-}" ]] && return 0
+  RELEASE_ID="$(api_get "/releases/tags/v${VERSION}" | json_field 'd["id"]' || true)"
+  [[ -n "$RELEASE_ID" ]] || die "could not find release v${VERSION}. Private repository? Run \`gh auth login\` or set GH_TOKEN"
+}
+
 fetch_asset() {  # fetch_asset <asset name> <destination dir>
-  local asset="$1" dest="$2" tag="v${VERSION}"
-  if gh_ready && gh release download "$tag" --repo "$REPO" --pattern "$asset" --dir "$dest" --clobber >/dev/null 2>&1; then
-    return 0
-  fi
-  if [[ -n "$(token)" ]]; then
-    local id
-    id="$(api "/releases/tags/${tag}" | python3 -c "import json,sys; print(next(a['id'] for a in json.load(sys.stdin)['assets'] if a['name']=='${asset}'))" 2>/dev/null || true)"
-    if [[ -n "$id" ]] && curl -fsSL -H "Authorization: Bearer $(token)" -H "Accept: application/octet-stream" \
-        "https://api.github.com/repos/${REPO}/releases/assets/${id}" -o "${dest}/${asset}"; then
-      return 0
-    fi
-  fi
-  curl -fsSL "https://github.com/${REPO}/releases/download/${tag}/${asset}" -o "${dest}/${asset}" 2>/dev/null \
-    || die "could not download ${asset} for ${tag}. Private repository? Run \`gh auth login\` or set GH_TOKEN"
+  local asset="$1" dest="$2" id
+  release_id
+  id="$(api_get "/releases/${RELEASE_ID}/assets?per_page=100" \
+    | json_field "next(a['id'] for a in d if a['name'] == '${asset}')" || true)"
+  [[ -n "$id" ]] || die "release v${VERSION} has no ${asset}"
+  api_get "/releases/assets/${id}" "application/octet-stream" > "${dest}/${asset}" \
+    || die "could not download ${asset} for v${VERSION}. Private repository? Run \`gh auth login\` or set GH_TOKEN"
 }
 
 verify_checksum() {  # verify_checksum <dir> <file>
@@ -249,6 +252,11 @@ install_claude() {
     claude plugin install "$PLUGIN_ID" >/dev/null
   fi
   claude plugin list --json 2>/dev/null | grep -q "\"${PLUGIN_ID}\"" || die "Claude Code did not report the plugin as installed"
+  local details
+  details="$(claude plugin details "$PLUGIN_ID" 2>/dev/null || true)"
+  if grep -q "Hooks (0)" <<<"$details" || grep -q "MCP servers (0)" <<<"$details"; then
+    die "Claude Code loaded the plugin without its hooks or MCP servers; the release is incomplete"
+  fi
   if [[ -n "$ORG" ]]; then
     claude_settings_env set "$ORG"
     say "Claude Code: AZURE_DEVOPS_ORG=${ORG} recorded in ${CLAUDE_SETTINGS}"
@@ -292,7 +300,7 @@ uninstall() {
   fi
   rm -rf "$CURSOR_DIR" "$HARNESS_HOME"
   if [[ -L "${BIN_DIR}/harness" ]]; then rm -f "${BIN_DIR}/harness"; fi
-  say "Done. Repositories keep their .harness/ policy files; delete them if you no longer want them."
+  say "Done. Repositories keep their .harness/ folders (settings and records); delete them if you no longer want them."
 }
 
 main() {

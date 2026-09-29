@@ -1,7 +1,7 @@
 {
   "name": "monolithic-dev-harness",
   "displayName": "Monolithic Dev Harness",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI delivery harness for Azure DevOps teams: linear backlog (Epic → Feature → Story → Task with estimates), Feature Owner spec-driven delivery, requirements-first review with thermos, and deterministic hooks that gate every tracker write, commit, and pull request.",
   "author": {
     "name": "Théo Carranza"

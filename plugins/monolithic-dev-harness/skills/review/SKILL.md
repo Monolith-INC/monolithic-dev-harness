@@ -13,13 +13,13 @@ advisory.
 
 Run `review-story-preflight` on the Story branch. It checks the whole branch against the Story's
 description, acceptance criteria, and Definition of Done, and ends with a ready/blocked verdict.
-It needs `.monolithic-code-review/sources.json`; run `review-setup` once per repository if it is
+It needs `.harness/review/sources.json`; run `review-setup` once per repository if it is
 missing. Add `--lenses typescript` for TypeScript subprojects and `--lenses maintainability` when
 the Story reshapes structure.
 
 ## 2. Deep audit
 
-Run `thermos` on the same branch diff (base: `git.base_branch` from `.harness/policy.json`). Pass
+Run `thermos` on the same branch diff (base: `git.base_branch` from `.harness/settings.json`). Pass
 the repository's review guides as house rules: the root `docs/review.md` and the touched
 subproject's `docs/review.md` when they exist, plus the rules list `implement-story` carried. Items
 no linter catches go here explicitly, for example masking personal data in the UI when the repository requires it.

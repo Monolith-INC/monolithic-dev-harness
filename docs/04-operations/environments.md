@@ -2,7 +2,7 @@
 title: Environments
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Environments
@@ -25,15 +25,14 @@ See [deployment.md](deployment.md).
 
 | Setting | Where | Written by |
 | --- | --- | --- |
-| `AZURE_DEVOPS_ORG` | Claude `settings.json` → `env`; Cursor `cursor.mcp.json` (pinned) | installer (`--org`) |
-| `.harness/policy.json` | repository (committed) | `harness bootstrap`, then people |
-| `.codex-workflows/integrations.json` | repository | bootstrap: Azure Boards tracker, Azure Repos SCM, branch template |
-| `.agile-backlog-toolkit/config.json` | repository | bootstrap: org, project, team, artifacts path, `provider_mode: azure` |
-| `.monolithic-code-review/sources.json` | repository | the `review-setup` skill |
+| `AZURE_DEVOPS_ORG` | Claude `settings.json` → `env`; Cursor `cursor.mcp.json` (pinned) | installer (`--org`); used only by the host-registered `azure-devops` server |
+| `.harness/settings.json` | repository (committed) | people; `harness bootstrap` copies a first version in once |
+| `.harness/trackers/<name>/` | repository (committed) | `harness tracker stage`; trusted only by the user's click (or `approve HT-XXXXXX` in Cursor) |
+| `.harness/review/sources.json` | repository | the `review-setup` skill |
 | `HARNESS_HOME`, `HARNESS_BIN_DIR`, `CURSOR_PLUGIN_DIR` | installer environment | optional overrides |
 
-A governed repository commits `.harness/policy.json` and ignores `.harness/state/` (bootstrap adds
-the ignore line).
+A governed repository commits `.harness/settings.json` and ignores `.harness/state/` (bootstrap adds
+the ignore line to `.git/info/exclude`, this clone only).
 
 ## Health Checks
 
@@ -49,11 +48,12 @@ See [runbook.md](runbook.md).
 
 ## Recovery
 
-Delete `.harness/state/` to clear all approvals and evidence; nothing else depends on it.
+Delete `.harness/state/` to clear all approvals, evidence, sessions, tracker trust, and the
+tracking mode; nothing else depends on it. Sessions then need starting again.
 
 ## Rollback
 
-Remove `.harness/policy.json` to stop governing a repository (the rules stop applying at once).
+Remove `.harness/settings.json` to stop governing a repository (the rules stop applying at once).
 
 ## Evidence to Preserve
 

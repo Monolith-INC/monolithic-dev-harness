@@ -3,8 +3,10 @@
 
     check_repo.py
 
+- every file the plugin must ship is tracked by git;
 - every tracked *.json file parses;
-- the example policy validates against the policy schema (needs `jsonschema`);
+- the example settings validate against the settings schema, and every shipped tracker folder
+  meets the tracker contract (both with the plugin's own standard-library checker);
 - every skill's frontmatter `name` matches its folder;
 - every document under docs/ has title / status / owner / last_reviewed frontmatter;
 - every relative Markdown link in README.md, CHANGELOG.md, THIRD_PARTY_NOTICES.md, and docs/
@@ -16,12 +18,25 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "plugins" / "monolithic-dev-harness"
 LINK = re.compile(r"\[[^\]]*\]\(([^)\s]+)\)")
 FRONTMATTER_KEYS = ("title", "status", "owner", "last_reviewed")
+# Files the hosts load from the plugin. A global gitignore once kept hooks/ and .mcp.json out of a
+# release, so their presence in git is checked, not assumed.
+REQUIRED_PLUGIN_FILES = (
+    ".claude-plugin/plugin.json",
+    ".cursor-plugin/plugin.json",
+    ".mcp.json",
+    "cursor.mcp.json",
+    "hooks/hooks.json",
+    "hooks/cursor.hooks.json",
+    "bin/harness",
+    "scripts/harness/hook.py",
+)
 
 
 def tracked(pattern: str) -> list[Path]:
@@ -43,27 +58,39 @@ def tracked(pattern: str) -> list[Path]:
     return [ROOT / line for line in out.splitlines() if line]
 
 
+def check_required_files(problems: list[str]) -> None:
+    tracked_files = set(
+        subprocess.run(
+            ["git", "-C", str(ROOT), "ls-files", "plugins/monolithic-dev-harness"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.splitlines()
+    )
+    for rel in REQUIRED_PLUGIN_FILES:
+        if f"plugins/monolithic-dev-harness/{rel}" not in tracked_files:
+            problems.append(
+                f"plugins/monolithic-dev-harness/{rel} is not tracked by git"
+            )
+
+
 def check_json(problems: list[str]) -> None:
     for path in tracked("*.json"):
         try:
             json.loads(path.read_text(encoding="utf-8"))
         except json.JSONDecodeError as exc:
             problems.append(f"{path.relative_to(ROOT)}: invalid JSON ({exc})")
-    try:
-        import jsonschema
-    except ImportError:
-        problems.append(
-            "jsonschema is not installed; cannot validate the example policy"
-        )
-        return
-    schema = json.loads((PLUGIN / "config/policy.schema.json").read_text())
-    example = json.loads((PLUGIN / "examples/policy.example.json").read_text())
-    try:
-        jsonschema.validate(example, schema)
-    except jsonschema.ValidationError as exc:
-        problems.append(
-            f"examples/policy.example.json does not match the schema: {exc.message}"
-        )
+    sys.path.insert(0, str(PLUGIN / "scripts"))
+    from core.result import failures
+    from core.schema import errors
+    from integrations import registry
+
+    schema = json.loads((PLUGIN / "config/settings.schema.json").read_text())
+    example = json.loads((PLUGIN / "examples/settings.example.json").read_text())
+    problems.extend(
+        f"examples/settings.example.json: {error}" for error in errors(schema, example)
+    )
+    problems.extend(failure.message for failure in failures(registry.shipped()))
 
 
 def check_skills(problems: list[str]) -> None:
@@ -114,7 +141,13 @@ def check_links(problems: list[str]) -> None:
 
 def main() -> int:
     problems: list[str] = []
-    for check in (check_json, check_skills, check_docs, check_links):
+    for check in (
+        check_required_files,
+        check_json,
+        check_skills,
+        check_docs,
+        check_links,
+    ):
         check(problems)
     for problem in problems:
         print(f"FAIL {problem}")

@@ -60,9 +60,9 @@ optional `## 📎 Anexos / Referências`, `## 📄 Descrição Original`
 
 Illustrative dummy outputs (content patterns only — **not** the shape contract):
 
-- `examples/example-epic.md`
-- `examples/example-feature.md`
-- `examples/example-user-story.md`
+- `../../skills/enrich-work-item/references/examples/example-epic.md`
+- `../../skills/enrich-work-item/references/examples/example-feature.md`
+- `../../skills/enrich-work-item/references/examples/example-user-story.md`
 
 Shape contracts: `canonical-*.md` (read-only; see above).
 

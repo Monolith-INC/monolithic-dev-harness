@@ -2,11 +2,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-MAILBOX_DIRNAME = ".agentic/workflow_prompts"
+# Scratch space: under `.harness/state/`, so it is never committed.
+MAILBOX_DIRNAME = ".harness/state/prompts"
 
 
 def mailbox_dir(project_root: Path) -> Path:
-    return project_root / ".agentic" / "workflow_prompts"
+    return project_root / MAILBOX_DIRNAME
 
 
 def prompt_path(project_root: Path, skill_name: str) -> Path:

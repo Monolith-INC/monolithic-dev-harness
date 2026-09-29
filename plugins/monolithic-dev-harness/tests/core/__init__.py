@@ -1,0 +1,10 @@
+"""Test package bootstrap: bare imports under scripts/ need scripts/ on sys.path."""
+
+from __future__ import annotations
+
+import sys
+from pathlib import Path
+
+SCRIPTS_DIR = Path(__file__).resolve().parents[2] / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))

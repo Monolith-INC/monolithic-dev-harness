@@ -18,9 +18,9 @@ COLLECT → INGEST → ROUTE ENRICHER → [WRITE SPEC] → ENRICH → GATE → P
 
 | `work_item_type` | Enricher | Spec blueprint | Canonical template | Example |
 | --- | --- | --- | --- | --- |
-| `epic` | `enrichers/epic-enricher.prompt.md` | `blueprints/spec-epic.md` | `../templates/canonical-epic.md` | `examples/example-epic.md` |
-| `feature` | `enrichers/feature-enricher.prompt.md` | `blueprints/spec-feature.md` | `../templates/canonical-feature.md` | `examples/example-feature.md` |
-| `user-story` | `enrichers/work-item-enricher.prompt.md` | `blueprints/spec-work-item.md` | `../templates/canonical-user-story.md` | `examples/example-user-story.md` |
+| `epic` | `enrichers/epic-enricher.prompt.md` | `../specs/enrich-work-item/spec-epic.md` | `../templates/canonical-epic.md` | `../../skills/enrich-work-item/references/examples/example-epic.md` |
+| `feature` | `enrichers/feature-enricher.prompt.md` | `../specs/enrich-work-item/spec-feature.md` | `../templates/canonical-feature.md` | `../../skills/enrich-work-item/references/examples/example-feature.md` |
+| `user-story` | `enrichers/work-item-enricher.prompt.md` | `../specs/enrich-work-item/spec-work-item.md` | `../templates/canonical-user-story.md` | `../../skills/enrich-work-item/references/examples/example-user-story.md` |
 | `task` | `enrichers/task-enricher.prompt.md` | `../specs/enrich-work-item/spec-work-item.md` | `../templates/canonical-task.md` | — |
 
 Enricher prompts are bundled under `./enrichers/` — authoritative; no local override.

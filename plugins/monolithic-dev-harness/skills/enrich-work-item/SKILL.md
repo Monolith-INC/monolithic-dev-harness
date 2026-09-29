@@ -30,6 +30,11 @@ References (start at `../../common/workflows/enrich-work-item.md`):
 
 **Not in scope:** generating a raw work item from a title alone — use `generate-work-item` first.
 
+## Active tracker
+
+Call `tracker_describe` before choosing a hierarchy, destination, provider call, or id format, and
+follow [the tracker contract](../../references/tracker-contract.md).
+
 ---
 
 ## PHASE 0 — COLLECT INPUTS
@@ -40,7 +45,7 @@ Gather inputs **one at a time** via the host UI. Each step: brief purpose, requi
 | --- | --- | --- |
 | `source` | yes | `url` \| local `path` \| pasted `text` — the material to enrich |
 | `work_item_type` | yes | `epic` \| `feature` \| `user-story` \| `task` |
-| `parent` | when type ≠ epic | Parent id or Azure URL for hierarchy context |
+| `parent` | only for a Task | Parent id or Azure URL for hierarchy context; Features and Stories may have none |
 | `attachment` | no | Extra doc URL or path |
 
 Accept `/enrich-work-item` flags or conversational inference (see Examples).
@@ -48,7 +53,7 @@ Accept `/enrich-work-item` flags or conversational inference (see Examples).
 Normalize type → enricher + Azure `workItemType` per `pipeline.md`.
 
 Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which reads
-`.agile-backlog-toolkit/config.json` and falls back to older locations. See
+`artifacts_path` from `.harness/settings.json`. See
 `../../references/project-config.md`.
 
 ---

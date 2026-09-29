@@ -15,9 +15,10 @@ Use the bundled `@azure-devops/mcp` server with interactive OAuth. Do not switch
 do not ask the user to run `az login`, and do not fall back to a PAT unless the user changes that
 policy explicitly.
 
-The organization comes from `AZURE_DEVOPS_ORG`, which is required: the plugin has no default. The
-project, repository, and team come from the repository's `.harness/policy.json` (`azure` block).
-Never hard-code them in a stage.
+The organization, project, and team come from the repository's `.harness/settings.json`
+(`tracker.values` when the tracker is `azure-devops`; `scm.values` for Azure Repos). The plugin has
+no defaults. Never hard-code them in a stage. The host-registered server reads the organization
+from `AZURE_DEVOPS_ORG`, which the installer sets.
 
 ## Finding the tools
 
@@ -94,8 +95,8 @@ review threads, votes, and pipeline runs belong to the stage skills that own the
 passes the harness hooks:
 
 - **Approval gate:** a write tool call is blocked unless the user approved that batch in the chat.
-- **Protected items:** ids listed in `.harness/policy.json` → `azure.protected_work_items` are
-  never written.
+- **Protected items:** ids listed in `.harness/settings.json` → `protected_work_items` are
+  never written, linked, parented, or mentioned in linking text.
 
 When a hook blocks a write, show the user the batch and ask for approval. Do not retry through a
 different tool.

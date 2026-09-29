@@ -15,7 +15,7 @@ From intake `work_item_ref` / `source_kind`:
 | `source_kind` | Resolution |
 | --- | --- |
 | `id` | `wit_work_item[get](id, expand=Relations)` |
-| `url` | Extract id via `../../references/azure-mechanics.md` (URL→id), then same as `id` |
+| `url` | Extract id via `../../../references/azure-mechanics.md` (URL→id), then same as `id` |
 | `path` | Read the markdown file; parse frontmatter + body |
 
 Determine `work_item_type`:
@@ -31,12 +31,13 @@ Determine `work_item_type`:
 
 ### User Story ingest (required reads)
 
-Always load **both** before drafting the plan:
+Load the Story, and its parent Feature when it has one, before drafting the plan:
 
-1. **Parent Feature body**
+1. **Parent Feature body** (only when the Story has a parent)
    - Azure: follow `System.Parent` / parent relation; `wit_work_item[get]` on the Feature id
    - Artifacts: `parent_id_artifacts path`, `parent_id`, or Features/ path from frontmatter / links
-   - If parent Feature cannot be resolved: STOP and ask once for the Feature id or artifacts path
+   - A Story with no parent is valid: set `feature: null` and plan from the Story alone. STOP and
+     ask once only when the Story names a parent that cannot be read.
 2. **User Story body** — title, description/sections, assignee when present
 
 Capture a normalized record:
@@ -52,12 +53,12 @@ Capture a normalized record:
     provider_id: number | null
     source: "artifacts path" | "azure" | "filesystem"
   }
-  feature: {
+  feature: {                       // null when the Story has no parent
     id_or_path: string
     title: string
     body: string
     provider_id: number | null
-  }
+  } | null
   language: "en" | "pt-BR" | "other:<text>"   // from intake
   destination: ...                           // from intake (unused until persist)
 }
@@ -100,8 +101,8 @@ Do not create Azure or artifacts path Task work items in this phase.
 ### Artifacts path and frontmatter
 
 Resolve the artifacts root with `bin/agile-backlog-toolkit config --show`. If unset, ASK the user where
-plans should go and save it with `config --set artifacts_path=<path>`. Never guess a location, and
-never create a directory structure the user did not ask for.
+plans should go; they set it as `artifacts_path` in `.harness/settings.json`. Never guess a location,
+and never create a directory structure the user did not ask for.
 
 **Filename:** `YYYY-MM-DD-<story-slug>.md`
 
@@ -114,7 +115,7 @@ never create a directory structure the user did not ask for.
 ```yaml
 ---
 type: implementation-plan
-feature: <feature id or artifacts path>
+feature: <feature id or artifacts path; null when the Story has no parent>
 story: <story id or artifacts path>
 skill: generate-breakdown-work-items
 language: en   # or pt-BR

@@ -2,7 +2,7 @@
 title: Roadmap
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Roadmap
@@ -21,7 +21,9 @@ each team.
 
 | Milestone | Status | Exit evidence |
 | --- | --- | --- |
-| 0.1.0 — first release: four stages, seven rules, one-shot install | done | CI green; sandboxed Claude Code install |
+| 0.1.0: first release, four stages, seven rules, one-shot install | done | CI green; sandboxed Claude Code install |
+| 0.2.0: trackers are adapters (Azure DevOps, Linear, local), one settings file, sessions, onboarding | done | CI green |
+| Live check of the Linear adapter | next | a read, a create, a transition, and a comment against a real workspace |
 | Live observation in Claude Code | next | a Story taken from idea to draft PR in a governed repository, every gate recorded |
 | Live observation in Cursor | next | the plugin loads; a denied write and an approved write observed |
 | Cost per stage measured | next | token usage recorded per stage on at least three real Stories |

@@ -4,7 +4,7 @@ Blank form for specs written to **`<artifacts>/Specs/`** before the Feature tick
 
 ## Artifacts filename
 
-`<parent-epic-id>-<kebab-slug>-spec.md`
+`<parent-epic-id>-<kebab-slug>-spec.md`, or `draft-<kebab-slug>-spec.md` when the Feature has no Epic
 
 ## Frontmatter
 
@@ -12,7 +12,7 @@ Blank form for specs written to **`<artifacts>/Specs/`** before the Feature tick
 ---
 type: spec
 work_item_type: Feature
-ticket: <parent-epic-id>
+ticket: <parent-epic-id or null>
 area: <kebab-area>
 stack: [<from-context7>]
 tags: [spec, feature]
@@ -55,7 +55,7 @@ source: [context7, <urls>]
 
 - <URL or attachment>
 - Context7: `<libraryId>` — <takeaway>
-- Epic: #<id>
+- Epic: #<id> (omit when the Feature has no Epic)
 
 ## Open questions
 

@@ -56,7 +56,7 @@ def persist_report(
 ) -> Path:
     """Write a validation report under the plugin's own state directory.
 
-    Reports are plugin output, so they live in `.agile-backlog-toolkit/reports/` rather than in
+    Reports are plugin output, so they live in `.harness/backlog/reports/` rather than in
     any user-owned location. Nothing is created outside that directory.
     """
     reports_dir = state_dir / "reports"

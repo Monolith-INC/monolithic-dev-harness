@@ -66,4 +66,4 @@ See [development.md](development.md#definition-of-done).
 - A hook that imports a third-party package fails on a user's machine: keep hooks on the standard
   library.
 - A rule that reads the conversation or model output: impossible and unsafe; rules read tool
-  inputs, git, the policy, and evidence only.
+  inputs, git, the settings, the tracker folders, and evidence only.

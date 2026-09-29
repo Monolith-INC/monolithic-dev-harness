@@ -2,13 +2,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .model import (
-    ActivityBreakdown,
-    CapacityPlan,
-    EstimableItem,
-    IterationCapacity,
-    MemberCapacity,
-)
+from integrations.planning import EstimableItem, IterationCapacity, MemberCapacity
+
+from .model import ActivityBreakdown, CapacityPlan
 
 UNASSIGNED_ACTIVITY = "(unassigned)"
 
@@ -37,7 +33,7 @@ def _normalise(value: str | None) -> str:
 def _identities(member: MemberCapacity) -> set[str]:
     """Every form this person may be referred to by, normalised.
 
-    Azure identifies people by GUID in capacity data and by display or unique name on work
+    A tracker may identify people by id in capacity data and by display or unique name on work
     items, so the two sides routinely disagree. Comparing whole identity sets keeps a person
     recognisable whichever form each payload happened to use.
     """
@@ -121,7 +117,7 @@ def available_hours(iteration: IterationCapacity) -> float:
 
 
 def available_by_activity(iteration: IterationCapacity) -> dict[str, float]:
-    """Available hours split by activity, using Azure's per-activity capacity model."""
+    """Available hours split by activity, from each member's per-activity capacity."""
     totals: dict[str, float] = {}
     for member in iteration.members:
         days = len(iteration.working_days_for(member))

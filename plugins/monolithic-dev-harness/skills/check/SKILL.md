@@ -6,7 +6,7 @@ description: Run the repository's configured compile, lint, type-check, and test
 # Check
 
 Adapted from cursor-team-kit's `check-compiler-errors` (MIT). The commands are not guessed: they
-come from `.harness/policy.json` → `checks`, where each entry has a `name`, the `run` command, and
+come from `.harness/settings.json` → `checks`, where each entry has a `name`, the `run` command, and
 `when` globs that decide which checks apply to the files the branch changes.
 
 ## Run

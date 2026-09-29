@@ -69,7 +69,7 @@ Establish exactly which threads are in scope and what is being asked for on each
 change code, or both. Read back the list and the intended action before doing anything, unless the
 user has already been that specific.
 
-Read `.monolithic-code-review/sources.json` for `scm.provider`, `scm.capabilities`, and the repository
+Read `.harness/review/sources.json` for `scm.provider`, `scm.capabilities`, and the repository
 identity fields. You need the provider's root thread/comment identifier from
 `triage-pr-comments`, or from the configured `list_review_threads` capability. If required
 capabilities are unsupported or authentication fails, stop and name them; never fall back to a
@@ -85,7 +85,7 @@ For each thread the user accepted:
 
 - Make the change the comment asks for, and only that change. A review reply is not an invitation to
   refactor the surrounding code.
-- Match the file's existing conventions. Where `.monolithic-code-review/sources.json` records a
+- Match the file's existing conventions. Where `.harness/review/sources.json` records a
   `knowledge.root`, `4-rules/coding-standards` is the addressed source for what this project
   mandates or prohibits — prefer it over inferring a convention from the surrounding lines, and
   follow the cost ladder rather than reading the store whole.

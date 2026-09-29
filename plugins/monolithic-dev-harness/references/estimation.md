@@ -40,7 +40,7 @@ wherever it appears, so nobody mistakes a shipped default for a fact about their
 
 ## Configuration
 
-Create `.agile-backlog-toolkit/estimation.json` to replace the shipped defaults:
+Create `.harness/backlog/estimation.json` to replace the shipped defaults:
 
 ```json
 {
@@ -100,28 +100,52 @@ total, and saying so is the difference between a useful report and a misleading 
 Capacity is read, never written. Changing capacity settings rewrites other people's sprint
 configuration, which is not this plugin's business.
 
+## Where the sprint comes from
+
+Every tracker plans through the same contract (`TrackerOps` in `scripts/integrations/contracts.py`):
+`read_iteration` gives the sprint's dates and team, `iteration_items` what it already holds, and
+`hour_fields` the fields that record hours. What each tracker reads is declared in its own
+`tracker.json` under `planning.replies` (call `tracker_describe`): fetch each reply through the
+host's tools as its description says, save them together as one JSON object keyed by reply, and
+pass that file as `--replies`. A tracker that lists no replies reads its own files; the local
+tracker then needs the sprint named. Which fields record hours is the adapter's to say, and the
+command prints them.
+
+Capacity is checked only when asked: replies were passed, or a sprint was named. Once asked, a
+check that cannot run stops the run rather than writing hours past an unchecked limit: a reply
+missing, a reply that holds no data (an error text, say), no usable tracker, a sprint or its items
+that cannot be read, or, for the local tracker, a sprint with no capacity file. A tracker that records no team capacity (Linear) or no hours says
+so, and the figures are recorded by hand.
+
+The planning files a person keeps under `artifacts_path` (`--provider filesystem`) and the local
+tracker's records share one format, read in one place (`scripts/integrations/planning_files.py`): the
+capacity file, and the planning fields `story_points`, `effort_hours`, `remaining_hours`,
+`completed_hours`, `activity`, `assigned_to`, `iteration`, and `state`.
+
 ## Commands
 
 ```bash
 bin/agile-backlog-toolkit estimate --file <path>          # suggest hours for a draft
 bin/agile-backlog-toolkit estimate --points 5             # suggest hours for a point value
-bin/agile-backlog-toolkit capacity --provider filesystem  # plan from local drafts
-bin/agile-backlog-toolkit capacity --provider azure-devops --iteration <id> --payloads <json>
+bin/agile-backlog-toolkit capacity --provider filesystem  # plan from local planning files
+bin/agile-backlog-toolkit capacity --provider tracker --iteration <id> --replies <json>
 ```
 
 `capacity` exits non-zero when the sprint is overcommitted, so it works as a gate.
 
 ## Adding another backlog system
 
-The estimation and capacity logic knows nothing about any particular tracker. A new adapter means
-one module under `orchestrator_core/providers/` implementing two reads and one write-planner, plus
-a line in the registry. Nothing in the estimation or capacity code changes.
+The estimation and capacity logic knows nothing about any particular tracker. A new tracker folder
+provides planning as part of its adapter (see [tracker-contract.md](tracker-contract.md)); nothing in
+the estimation or capacity code changes.
 
 ## References
 
 - `orchestrator_core/estimation/` — scales, bands, calibration
 - `orchestrator_core/capacity/` — the sprint model and planner
-- `orchestrator_core/providers/azure_devops/fields.py` — field reference names
+- `trackers/azure-devops/adapter.py` — Azure field reference names and capacity mapping
+- `scripts/integrations/planning.py` — the sprint model, and what the sprint reference `current` means
+- `scripts/integrations/planning_files.py` — the capacity file and planning-item format, and their one reader
 - `azure-mechanics.md` — which field each process actually has
 - Halstead, *Elements of Software Science* (1977) — the `T = E / 18` time formula used only as a
   retrospective cross-check against code that already exists

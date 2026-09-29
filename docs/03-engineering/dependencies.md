@@ -2,7 +2,7 @@
 title: Dependencies
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Dependencies
@@ -32,7 +32,8 @@ None.
 | Python 3.10+ (standard library only) | hooks, orchestrators, gateway, CLI | checked by the installer and `harness doctor` |
 | git | hooks | trees, staged paths, branch diffs |
 | Node.js / `npx` | `@azure-devops/mcp` | downloaded by `npx` on first start |
-| `@azure-devops/mcp` | Azure DevOps access | interactive OAuth; organization from `AZURE_DEVOPS_ORG` |
+| `@azure-devops/mcp` | Azure DevOps access | interactive OAuth; the gateway passes the settings' organization, the host-registered server reads `AZURE_DEVOPS_ORG` |
+| `mcp-remote` | Linear access, when selected | started by `npx`; OAuth in the browser |
 | Claude Code and/or Cursor | host | |
 | `curl` or `gh` | installer | `gh` or a token while the repository is private |
 
@@ -42,7 +43,6 @@ None.
 | --- | --- | --- |
 | pytest | latest | test runner |
 | ruff | 0.16.4 (pinned) | lint and format |
-| jsonschema | latest | validates the example policy against the schema |
 | shellcheck | 0.11 (via `shellcheck-py` locally, preinstalled in CI) | shell lint |
 | Claude Code CLI | latest | `claude plugin validate`, sandboxed install test |
 | GitHub Actions | `actions/checkout`, `actions/setup-python`, `actions/setup-node` | CI; Dependabot keeps them current |

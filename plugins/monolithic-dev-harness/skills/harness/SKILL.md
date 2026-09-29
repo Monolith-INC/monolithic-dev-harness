@@ -28,17 +28,20 @@ Stacked Feature work (several Stories under one Feature) runs stage 3–4 per St
 
 ## Before the first run in a repository
 
-The repository must be opted in: `.harness/policy.json` exists (run `bootstrap`), Azure DevOps
-answers a health check (`azure-devops`), and `review-setup` has run. If any is missing, do that
+The repository must be opted in: `.harness/settings.json` exists (run `bootstrap`), the selected
+tracker answers (`harness doctor`; `azure-devops` for Azure), and `review-setup` has run. If any is missing, do that
 first and say so.
 
 ## Stage 1: Backlog
 
 1. **Top ancestor.** `generate-work-item` drafts the highest item in the tree (usually an Epic) from
    the user's idea or an existing item. The **Descrição Original** section keeps the source text
-   verbatim. When the source is an item that must stay intact (for example, the original of a copied
-   item), create a new item and cite the original by URL in its description. Never link to it:
-   links are two-way and change the original. Protected ids are blocked by rule `protected-items`.
+   verbatim. The top ancestor can be a Feature or a User Story: neither needs a parent, so do not
+   ask for or invent one. When the source is an item that must stay intact (for example, the
+   original of a copied item), create a new item and name the original in plain text (id and
+   title, for example `Idea 4007`). Never link to it, and never write `#4007` or its URL in a
+   description or comment: Azure DevOps turns a mention into a link, and links are two-way. Rule
+   `protected-items` blocks protected ids in id fields and in text.
 2. **Enrich** it (`enrich-work-item`) into the team format.
 3. **Decompose** (`decompose-backlog`, tree mode for an Epic): Features, then Stories with points,
    one outline at GATE 1 and one body batch at GATE 2. Points go into the Azure points field.
@@ -60,31 +63,53 @@ modules, test strategy, UI design notes. Present it for **G2** and stop until th
 
 `review`. The requirements check first, then thermos, fixes, a verdict for HEAD, and the draft PR.
 
+## Talking to the user
+
+The person driving the harness knows the goal, not the harness. Every message and question is for
+them:
+
+- Only raise what blocks the thing they are doing right now. Everything else (leftover files, old
+  tools, follow-ups) waits for one short list at the end of the stage.
+- Plain words. No file names, code, rule names, tool names, or batch ids unless they ask. Describe
+  what a thing does instead ("the setting that hides local files from git").
+- One question at a time, with options that say what happens for them.
+
+Hook `plain-questions` checks every question before it is shown and sends back one that is too long,
+asks several things, or needs the harness's vocabulary to understand.
+
 ## The approval protocol (every tracker or SCM write)
 
-Hook `approval-required` blocks every write to Azure DevOps (work items, links, comments, pull requests, threads,
-branches, `git push`) unless the user has opened an approval window. To open one:
+Hook `approval-required` blocks every write to Azure DevOps (work items, links, comments, pull
+requests, threads, branches, `git push`) unless the user has opened an approval window. To open one:
 
-1. Show the exact batch: each item or field or link, or the push and PR you are about to make.
-2. Give it a batch id: `HB-` plus 4–8 uppercase letters or digits (for example `HB-7Q2K`).
-3. Ask the user to reply `approve HB-7Q2K` (`aprovo HB-7Q2K` also works). Their prompt opens the
-   window for `approvals.window_minutes` (default 20). `harness revoke` closes it early.
+1. Say in plain words what will be written: which items, with their titles, and what changes.
+2. Ask one question with two options, labelled exactly `Approve` and `Not now`. The user's click on
+   `Approve` opens the window for `approvals.window_minutes` (default 20).
+3. Make only the writes you described. Anything new needs a new question.
 
-You cannot open the window yourself: approval records are written only by the prompt hook, and
-hook `human-owned` blocks any agent write to them. Gates G1, G2, and G4 map to these batches.
+In Cursor, where questions cannot be asked, give the batch an id (`HB-` plus 4–8 uppercase letters
+or digits) and ask the user to reply `approve HB-7Q2K`. Typing it works in Claude too.
+`harness revoke` closes a window early.
+
+You cannot open the window yourself: approvals are recorded only from the user's own prompt or
+click, a question that arrives with answers already filled in is refused, and hook `human-owned`
+blocks any agent write to the records. Gates G1, G2, and G4 map to these approvals.
 
 ## Enforced rules (hooks)
 
 | Rule | What it blocks |
 | --- | --- |
-| `human-owned` | agent writes to `.harness/policy.json` and to approval or manual-check records |
+| `human-owned` | agent writes to `.harness/settings.json`, and to approval, manual-check, question, session, tracker-trust, or tracking-mode records |
+| `tracker-invalid` | tracker and SCM writes while the selected tracker is missing, untrusted, or lacks its values |
+| `plain-questions` | questions to the user that are long, ask several things, contain file names, code, or internal names, or come with answers filled in |
 | `approval-required` | tracker/SCM writes and `git push` without an open approval window |
 | `protected-items` | any write, link, or child on a protected work item, even with approval |
 | `tests-with-code` | commits that change source files with no test change in the commit or on the branch |
 | `generated-files` | hand edits to generated files |
 | `guarded-paths` | commits to guarded paths without check or manual evidence for the staged tree |
 | `draft-reviewed-prs` | non-draft pull requests; pull requests without a `ready` verdict and passing checks for HEAD; publishing drafts or voting |
-| workflow | branch naming with exactly one work-item key, in-progress state, spec before code, completion evidence, protected branches, stack merge order |
+| `history-preserved` | rewriting branch history: rebase, squash merges, force-push, `filter-branch`, completing a pull request by squash or rebase |
+| workflow | code changes without an active session for this checkout (`harness session start`), new branches off the convention, the session's work item not in progress, code before an accepted spec, completion without evidence, protected branches |
 
 When a hook blocks you, read its reason and fix the cause. Never retry through another tool or
 route around it.

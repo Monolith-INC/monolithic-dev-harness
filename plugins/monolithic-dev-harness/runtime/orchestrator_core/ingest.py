@@ -5,9 +5,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
+from integrations.payloads import as_float, as_text
+from integrations.planning_files import ESTIMATED_HOURS, POINTS
+
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
-FILENAME_RE = re.compile(r"^(\d+|tech-debt|bug|task|spike)-[a-z0-9-]+$")
+FILENAME_RE = re.compile(r"^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+$")
 LEGACY_FRONTMATTER_KEYS = ("azure_id", "parent_feature", "parent_epic")
 
 
@@ -26,20 +29,6 @@ class ArtifactRecord:
     raw: str = ""
     effort_hours: float | None = None
     """Estimated duration. None means unestimated -- which is honest, not a failure."""
-
-
-def coerce_float(value: Any) -> float | None:
-    """Best-effort numeric coercion for frontmatter values. Never raises."""
-    if isinstance(value, bool) or value is None:
-        return None
-    if isinstance(value, (int, float)):
-        return float(value)
-    if isinstance(value, str):
-        try:
-            return float(value.strip())
-        except ValueError:
-            return None
-    return None
 
 
 def parse_frontmatter(text: str) -> tuple[dict[str, Any], str]:
@@ -97,55 +86,12 @@ def normalize_work_item_type(value: str | None) -> str | None:
     return mapping.get(normalized, value.strip())
 
 
-def _text_or_none(value: Any) -> str | None:
-    if isinstance(value, str):
-        text = value.strip()
-        return text or None
-    if isinstance(value, (int, float)) and not isinstance(value, bool):
-        return str(value)
-    return None
-
-
-def _legacy_frontmatter_keys(frontmatter: dict[str, Any]) -> tuple[str, ...]:
-    return tuple(key for key in LEGACY_FRONTMATTER_KEYS if key in frontmatter)
+def _optional(value: Any) -> str | None:
+    return as_text(value) or None
 
 
 def ingest_from_text(text: str, *, filename: str | None = None) -> ArtifactRecord:
     frontmatter, body = parse_frontmatter(text)
-    artifact_type = normalize_work_item_type(
-        str(
-            frontmatter.get("work_item_type") or frontmatter.get("type") or "User Story"
-        )
-    )
-    if artifact_type == "ticket":
-        artifact_type = normalize_work_item_type(
-            str(frontmatter.get("work_item_type", "User Story"))
-        )
-    title = extract_title(body, frontmatter)
-    story_points = frontmatter.get("story_points")
-    if isinstance(story_points, str) and story_points.replace(".", "", 1).isdigit():
-        story_points = float(story_points)
-    return ArtifactRecord(
-        type=artifact_type or "User Story",
-        title=title,
-        body=body,
-        story_points=float(story_points)
-        if isinstance(story_points, (int, float))
-        else None,
-        parent_id=_text_or_none(frontmatter.get("parent_id")),
-        provider=_text_or_none(frontmatter.get("provider")),
-        provider_id=_text_or_none(frontmatter.get("provider_id")),
-        source="file",
-        filename=filename,
-        frontmatter=frontmatter,
-        raw=text,
-        effort_hours=coerce_float(frontmatter.get("effort_hours")),
-    )
-
-
-def ingest_file(path: Path) -> ArtifactRecord:
-    raw = path.read_text(encoding="utf-8")
-    frontmatter, body = parse_frontmatter(raw)
     artifact_type = normalize_work_item_type(
         str(frontmatter.get("work_item_type") or frontmatter.get("type") or "")
     )
@@ -153,50 +99,21 @@ def ingest_file(path: Path) -> ArtifactRecord:
         artifact_type = normalize_work_item_type(
             str(frontmatter.get("work_item_type", "User Story"))
         )
-    title = extract_title(body, frontmatter)
-    story_points = frontmatter.get("story_points")
-    if isinstance(story_points, str) and story_points.replace(".", "", 1).isdigit():
-        story_points = float(story_points)
     return ArtifactRecord(
         type=artifact_type or "User Story",
-        title=title,
+        title=extract_title(body, frontmatter),
         body=body,
-        story_points=float(story_points)
-        if isinstance(story_points, (int, float))
-        else None,
-        parent_id=_text_or_none(frontmatter.get("parent_id")),
-        provider=_text_or_none(frontmatter.get("provider")),
-        provider_id=_text_or_none(frontmatter.get("provider_id")),
+        story_points=as_float(frontmatter.get(POINTS)),
+        parent_id=_optional(frontmatter.get("parent_id")),
+        provider=_optional(frontmatter.get("provider")),
+        provider_id=_optional(frontmatter.get("provider_id")),
         source="file",
-        filename=path.stem,
+        filename=filename,
         frontmatter=frontmatter,
-        raw=raw,
-        effort_hours=coerce_float(frontmatter.get("effort_hours")),
+        raw=text,
+        effort_hours=as_float(frontmatter.get(ESTIMATED_HOURS)),
     )
 
 
-def ingest_azure_record(
-    *,
-    provider: str = "azure-devops",
-    work_item_type: str,
-    title: str,
-    description: str,
-    story_points: float | None,
-    parent_id: str | None,
-    provider_id: str,
-    effort_hours: float | None = None,
-) -> ArtifactRecord:
-    return ArtifactRecord(
-        type=normalize_work_item_type(work_item_type) or work_item_type,
-        title=title,
-        body=description or "",
-        story_points=story_points,
-        parent_id=parent_id,
-        provider=provider,
-        provider_id=provider_id,
-        source="azure",
-        filename=None,
-        frontmatter={},
-        raw=description or "",
-        effort_hours=effort_hours,
-    )
+def ingest_file(path: Path) -> ArtifactRecord:
+    return ingest_from_text(path.read_text(encoding="utf-8"), filename=path.stem)

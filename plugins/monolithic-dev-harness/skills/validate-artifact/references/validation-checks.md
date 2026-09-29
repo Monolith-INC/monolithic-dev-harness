@@ -11,7 +11,7 @@ Each check emits: `{ name, result: PASS|FAIL|WARN|SKIP, detail }`.
 |---|---|---|
 | `frontmatter-type-present` | `type:` key exists in frontmatter | FAIL if absent |
 | `frontmatter-status-absent` | `status:` key NOT present in frontmatter | FAIL if present |
-| `filename-regex` | Filename matches `^(\d+|tech-debt|bug|task|spike)-[a-z0-9-]+` | FAIL if no match |
+| `filename-regex` | Filename matches `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+` | FAIL if no match |
 
 ### All sources — body sections
 
@@ -43,8 +43,8 @@ Failures are logged and validation continues to the next check.
 
 | Artifact | Assertion | Check name | Result |
 |---|---|---|---|
-| User Story | `System.Parent` exists and its `WorkItemType == "Feature"` | `hierarchy-story-parent-is-feature` | FAIL if parent is Epic or missing |
-| Feature | `System.Parent` exists and its `WorkItemType == "Epic"` | `hierarchy-feature-parent-is-epic` | FAIL if missing or wrong type |
+| User Story | No parent, or a parent whose `WorkItemType == "Feature"` | `hierarchy-story-parent-is-feature` | FAIL if the parent is not a Feature; PASS with no parent |
+| Feature | No parent, or a parent whose `WorkItemType == "Epic"` | `hierarchy-feature-parent-is-epic` | FAIL if the parent is not an Epic; PASS with no parent |
 | Epic | No child items with `WorkItemType == "User Story"` | `hierarchy-epic-no-direct-stories` | FAIL if any direct Story children found |
 
 ## c) CONTENT
@@ -74,4 +74,3 @@ Applied to all artifact types unless noted.
 | `dor-title-clear` | Title non-empty and word count > 5 | FAIL if not met |
 | `dor-description-present` | Body / description field non-empty | FAIL if not met |
 | `dor-story-points-set` *(User Story only)* | Story points > 0 | FAIL if not met |
-| `dor-linked-to-feature` *(User Story only)* | Reuses result of `hierarchy-story-parent-is-feature` — no extra MCP call | FAIL if that check failed or was skipped |
