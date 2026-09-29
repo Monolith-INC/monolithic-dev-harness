@@ -2,7 +2,7 @@
 title: ADR-0009 Trackers are adapters
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-28
 ---
 
 # ADR-0009: Trackers are adapters, settings are one file
@@ -35,7 +35,8 @@ copied into each repository's `integrations.json`; and a repository's settings w
    `common/templates/`, shared references in `references/`.
 3. **One settings file.** `.harness/settings.json` replaces `policy.json`, `integrations.json`, and
    `backlog/config.json`. It is human-owned: people write it, the harness reads it once per process
-   into a value nothing can change, and defaults for omitted sections live in one loader.
+   into a value nothing can change (its one write is the tracker selection, decision 6), and
+   defaults for omitted sections live in one loader.
 4. **Fail closed.** The registry checks each folder on its own and reports a broken one without
    hiding the others. The selected tracker resolves to not configured, active, or invalid; anything
    but active refuses tracker and SCM writes (`tracker-invalid`). When the rules cannot run, every

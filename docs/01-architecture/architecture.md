@@ -2,7 +2,7 @@
 title: Architecture
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-28
 ---
 
 # Architecture
@@ -20,17 +20,18 @@ contracts, evidence), and routes every provider call through a place the runtime
   retrying. They never call a tracker.
 - **Tracker folders** decide what a tracker is and how to talk to it. They cannot relax a rule:
   the rules read their declarations, and an onboarded folder counts only while the user trusts it.
-- **People** own `.harness/settings.json`; the harness only reads it.
+- **People** own `.harness/settings.json`; the harness writes into it only the tracker selection,
+  when the user clicks **Use it**.
 - **The hook runtime** decides whether a tool call may run. It never performs the call.
-- **The developer's prompt** is the only source of approval windows, manual-check records, and
-  tracker trust.
+- **The developer's prompt and clicks** are the only source of approval windows, manual-check
+  records, tracker trust, and tracker selection.
 
 ## Components
 
 ```text
 +--------------------------- plugin -----------------------------+
 |                                                                |
-|  skills/ (45)          agents/            hooks/               |
+|  skills/ (47)          agents/            hooks/               |
 |  backlog, delivery,    thermo-*           hooks.json (Claude)  |
 |  execution, review,    reviewer           cursor.hooks.json    |
 |  conductors            subagents          (Cursor)             |
@@ -127,9 +128,9 @@ spawned -> inputs validated -> running --success--> completed
 
 | State | Location | Written by | Lifetime |
 | --- | --- | --- | --- |
-| Settings | `.harness/settings.json` (committed) | a person (bootstrap copies it once) | until edited |
+| Settings | `.harness/settings.json` (committed) | a person (bootstrap copies it once); the answer hook replaces `tracker` when the user clicks **Use it** | until edited |
 | Onboarded trackers | `.harness/trackers/<name>/` (committed) | `harness tracker stage` | until edited, which drops trust |
-| Tracker trust | `.harness/state/trackers/` | prompt hook | until the folder changes or is untrusted |
+| Tracker trust | `.harness/state/trackers/` | answer hook (Claude click) or prompt hook (Cursor reply) | until the folder changes or is untrusted |
 | Sessions | `.harness/state/sessions/` | `harness session` | until closed |
 | Tracking mode | `.harness/state/tracking.json` | gateway skip/resume (approved) | until changed |
 | Approval windows | `.harness/state/approvals/` | prompt and answer hooks | expires (default 20 min) |

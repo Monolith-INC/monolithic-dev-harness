@@ -2,7 +2,7 @@
 title: Command and Contract Interfaces
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-28
 ---
 
 # Command and Contract Interfaces
@@ -175,7 +175,8 @@ echo '{"tool_name":"Bash","tool_input":{"command":"git push"},"cwd":"."}' \
 ### Schema
 
 `config/settings.schema.json` (JSON Schema 2020-12), checked by `scripts/core/schema.py`.
-`schemaVersion` must be `1`. The file is human-owned; the harness only reads it.
+`schemaVersion` must be `1`. The file is human-owned; the harness writes into it only the `tracker` section, when the user
+clicks **Use it** on an onboarded tracker, and only if the result is still valid settings.
 
 ### Inputs
 
@@ -238,8 +239,8 @@ story tasks; `ids.pattern`, `ids.branch_key` (with a named group `id`), and ever
 (`scripts/integrations/contracts.py`). `TrackerOps` holds `get_work_item`, `search_work_items`,
 `create_work_item`, `transition_work_item`, `list_children`, `list_artifacts`, `add_artifact`,
 `link_development_artifact`, and the planning operations `read_iteration`, `iteration_items`, and
-`hour_fields` (the sprint model is in `scripts/integrations/planning.py`; the sprint reference `current`, or none, means the active sprint). Every tracker provides all
-of them; each returns `Ok` or `Err` and never raises for an expected condition.
+`hour_fields` (the sprint model is in `scripts/integrations/planning.py`; the sprint reference
+`current`, or none, means the active sprint). Every tracker provides all of them; each returns `Ok` or `Err` and never raises for an expected condition.
 
 ## Gateway tools — `workflow-integrations`
 

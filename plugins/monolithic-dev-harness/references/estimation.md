@@ -114,8 +114,8 @@ command prints them.
 Capacity is checked only when asked: replies were passed, or a sprint was named. Once asked, a
 check that cannot run stops the run rather than writing hours past an unchecked limit: a reply
 missing, a reply that holds no data (an error text, say), no usable tracker, a sprint or its items
-that cannot be read, or, for the local tracker, a sprint with no capacity file. A tracker that records no team capacity (Linear) or no hours says
-so, and the figures are recorded by hand.
+that cannot be read, or, for the local tracker, a sprint with no capacity file. A tracker that
+records no team capacity (Linear) or no hours says so, and the figures are recorded by hand.
 
 The planning files a person keeps under `artifacts_path` (`--provider filesystem`) and the local
 tracker's records share one format, read in one place (`scripts/integrations/planning_files.py`): the

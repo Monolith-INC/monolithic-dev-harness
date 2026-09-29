@@ -2,10 +2,22 @@
 title: Documentation Changelog
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-28
 ---
 
 # Changelog
+
+## 2026-09-28: Release review (0.2.0)
+
+- Trust and selection of onboarded trackers by click replace the typed trust line in the glossary,
+  ADR-0009, API, security model, and user guide; the settings file is described everywhere as
+  human-owned with one harness write, the tracker the user chooses.
+- Sprint planning through the tracker contract (`read_iteration`, `iteration_items`,
+  `hour_fields`, `planning.replies`) in ADR-0009 and the API; the user guide explains the capacity
+  check during breakdown.
+- Added the tech-debt register (`06-delivery/tech-debt.md`, TD-1 to TD-3).
+- Corrected the skill count (47) and the number of version sources (five); the dependencies page
+  names the v7 GitHub Actions.
 
 ## 2026-09-26: Trackers, settings, and sessions (0.2.0)
 

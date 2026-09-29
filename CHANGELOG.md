@@ -6,92 +6,53 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-### Changed
+## [0.2.0] - 2026-09-28
 
-- Onboarded trackers are trusted and chosen by click. The agent asks "Trust the <name> tracker as I
-  just described it?" (Trust / Not now), then "Use <name> as this project's tracker now?" (Use it /
-  Keep the current one). The harness pins the tracker folder's exact version when the question is
-  shown, acts only on the user's click, and writes the tracker selection into
-  `.harness/settings.json` itself. "Stop trusting" works the same way. In Cursor, which has no
-  buttons, the user replies `approve HT-XXXXXX`, then `use HT-XXXXXX`, and
-  `stop trusting the <name> tracker` to withdraw trust; each reply counts only as the whole
-  message.
-- `harness tracker stage <folder> --value KEY=VALUE` keeps the values the tracker's settings need
-  (organization, project, ...) in the staged folder, so trusting it covers them. Staging refuses a
-  tracker that is missing a required value.
-- Sprint planning is part of the one tracker contract: every tracker's `TrackerOps` provides
-  `read_iteration`, `iteration_items`, and `hour_fields`, and every `tracker.json` lists the
-  replies its planning reads under `planning.replies` (now required). Azure DevOps, Linear, and the
-  local tracker all implement them; Linear reports cycle dates and point estimates but no team
-  capacity or hours.
-- The backlog runtime reads a tracker's sprints only through that tracker's adapter:
-  `capacity --provider` takes `filesystem` (your planning files) or `tracker`, `--process` is gone
-  (the process comes from the settings), and `--payloads` is now `--replies`.
-- Capacity is checked when asked (replies passed, or a sprint named). Once asked, a missing reply
-  or an unusable tracker stops `estimate-breakdown` instead of skipping the capacity limit, and
-  the error says which replies to fetch and how.
-- A tracker that records no hours, or none usable, gets no write operations and a note to record
-  the figures by hand; there is no neutral `hours` field any more.
-- Azure DevOps: a named sprint is found in the iteration listing (by id, name, or path) instead of
-  taking the current one, and a `work_items` reply that lists only ids is refused with how to read
-  the items (`wit_work_item[get_batch]`), instead of counting as an empty sprint.
-- Linear: `current` takes the active cycle, a named cycle is found by id, name, or number.
-- The local tracker reads a sprint from `.harness/tracker/capacity/<sprint>.json` and needs the
-  sprint named. Its planning fields use the same names as a planning file's front matter
-  (`story_points`, `effort_hours`, `remaining_hours`, ...), read by one function.
-- `bin/agile-backlog-toolkit config` shows the selected tracker and the values its `tracker.json`
-  declares, for any tracker; `--require-team` is gone.
-- Once asked, the capacity check also stops the run when a reply holds no data (an error text, a
-  non-list), when the sprint or its work items cannot be read, or when a local sprint has no
-  capacity file. An Azure sprint with no work items (`{"workItemRelations": []}`) is an empty
-  sprint, not a refusal.
-- `estimate-breakdown` prints every note (what the tracker warned about, why capacity was not
-  checked, hours to record by hand), and lists writes only when there are some.
-- Numbers read from replies and files must be finite: "nan" and "inf" are not numbers.
-- A tracker's sprint reference `current`, or none, means the active sprint; the local tracker,
-  which keeps no active sprint, refuses it.
-
-### Security
-
-- Every onboarded tracker folder counts toward which tools need approval, even when it is
-  untrusted or fails its checks; a folder whose `writes` cannot be read at all fails closed.
-  Before, a broken onboarded folder that was not selected dropped its server's writes from the
-  approval rule.
-
-### Removed
-
-- The typed `harness trust-tracker <name> <digest>` and `harness untrust-tracker <name>` lines.
-- The backlog runtime's own Azure DevOps and Linear providers and settings types, including its
-  HTTP client that used a personal access token; Azure field names and capacity mapping now live
-  only in `trackers/azure-devops/adapter.py`.
-- The personal-access-token and direct REST fallbacks in the enrich skill's Azure reference.
-
-## [0.2.0] - 2026-09-26
+Trackers become adapters, a repository keeps one settings file, work is bound to sessions, and
+sprint planning goes through the tracker contract. Repositories set up with 0.1.x run bootstrap
+again with a settings file; there is no migration.
 
 ### Breaking
 
 - One settings file: `.harness/settings.json` (schema `config/settings.schema.json`) replaces
   `.harness/policy.json`, `.harness/integrations.json`, and `.harness/backlog/config.json`. People
-  write it; the harness only reads it. `harness bootstrap --settings-from <file>` replaces
-  `--policy-from`, `--tracker`, `--scm`, `--discover`, and `--force`. There is no migration: run
-  bootstrap again with a settings file (start from `examples/settings.example.json`).
+  write it; the harness writes into it only the tracker the user chooses by click.
+  `harness bootstrap --settings-from <file>` replaces `--policy-from`, `--tracker`, `--scm`,
+  `--discover`, and `--force`. Start from `examples/settings.example.json`.
 - `protected_work_items` is a top-level list of strings; the Azure-only `azure` block is gone.
 - Governed code changes need an active session for the checkout (`harness session start`), unless
   tracking is skipped.
-- `bin/agile-backlog-toolkit config --set` is removed; the backlog stage reads the settings file.
 - Workflow artifacts on a tracker use the envelope `harness-artifact:v1`.
+- Every `tracker.json` must list the replies its planning reads under `planning.replies`.
+- `bin/agile-backlog-toolkit`: `config --set` and `config --require-team` are gone (the backlog
+  stage reads the settings file); `capacity --provider` takes `filesystem` (your planning files) or
+  `tracker`; `--process` is gone (the process comes from the settings); `--payloads` is now
+  `--replies`.
+- A tracker that records no hours, or none usable, gets no hour writes and a note to record the
+  figures by hand; there is no neutral `hours` field any more.
 
 ### Added
 
 - Trackers are adapters: each tracker is one folder, `trackers/<name>/`, holding `tracker.json`
   (checked against `config/tracker.schema.json`) and `adapter.py` (exporting
   `adapter(context) -> TrackerOps`). Azure DevOps, Linear, and a repository-local tracker ship.
-- `harness tracker list | show | stage` to bring in a tracker the harness does not ship; it counts
-  only once the user types `harness trust-tracker <name> <digest>`, and any edit drops trust.
+- Onboarding: `harness tracker list | show | stage` brings in a tracker the harness does not ship.
+  `tracker stage <folder> --value KEY=VALUE` keeps the values its settings need in the staged
+  folder, and refuses a tracker missing a required value.
+- Trust and selection by click. The agent asks "Trust the <name> tracker as I just described it?"
+  (Trust / Not now), then "Use <name> as this project's tracker now?" (Use it / Keep the current
+  one). The harness pins the folder's exact version when the question is shown, acts only on the
+  user's click, and writes the tracker selection into the settings itself; "Stop trusting" works
+  the same way. Any edit to the folder drops trust. In Cursor, which has no buttons, the user
+  replies `approve HT-XXXXXX`, `use HT-XXXXXX`, or `stop trusting the <name> tracker`; each reply
+  counts only as the whole message.
 - Sessions: `harness session start | status | pause | resume | close` bind one work item to one
   checkout; the workflow checks the session's work item instead of guessing it from the branch.
 - Rule `tracker-invalid`: while the selected tracker is missing, invalid, untrusted, or lacks its
   values, tracker and SCM writes are refused.
+- Sprint planning is part of the tracker contract: every `TrackerOps` provides `read_iteration`,
+  `iteration_items`, and `hour_fields`. Azure DevOps, Linear, and the local tracker implement them;
+  Linear reports cycle dates and point estimates but no team capacity or hours.
 - `harness doctor --tools` checks the tracker's server offers every tool its manifest names;
   `harness doctor --azure` takes its values from the settings.
 - The gateway checks every call's arguments against the tool's input schema.
@@ -109,11 +70,31 @@ All notable changes to this project are documented here. The format follows
 - The hook checks sessions in the checkout the call happens in, not the host's project folder.
 - Each hook call reads the settings and each tracker folder once, and asks git one question for
   the checkout.
+- The backlog runtime reads a tracker's sprints only through that tracker's adapter. A tracker's
+  sprint reference `current`, or none, means the active sprint.
+  - Azure DevOps: a named sprint is found in the iteration listing (by id, name, or path) instead
+    of taking the current one. A `work_items` reply that lists only ids is refused with how to
+    read the items (`wit_work_item[get_batch]`); a sprint with no work items is an empty sprint.
+  - Linear: `current` takes the active cycle; a named cycle is found by id, name, or number.
+  - Local: a sprint is read from `.harness/tracker/capacity/<sprint>.json` and must be named. Its
+    planning fields use the same names as a planning file's front matter (`story_points`,
+    `effort_hours`, `remaining_hours`, ...).
+- Capacity is checked when asked (replies passed, or a sprint named). Once asked, a check that
+  cannot run stops `estimate-breakdown` instead of skipping the limit: a missing reply, a reply
+  that holds no data, an unusable tracker, a sprint or items that cannot be read, or a local sprint
+  with no capacity file. The error says which replies to fetch and how.
+- `estimate-breakdown` prints every note (tracker warnings, why capacity was not checked, hours to
+  record by hand), and lists writes only when there are some.
+- `bin/agile-backlog-toolkit config` shows the selected tracker and the values its `tracker.json`
+  declares, for any tracker.
+- Numbers read from replies and files must be finite: "nan" and "inf" are not numbers.
 - The knowledge store's seed points at the settings file instead of copying it.
 - Schemas are checked with the harness's own standard-library checker; `jsonschema` is no longer
   needed anywhere.
+- CI and release workflows use `actions/checkout`, `actions/setup-python`, and `actions/setup-node`
+  v7, which run on Node 24.
 
-### Fixed (review of this release)
+### Fixed
 
 - Loading an onboarded adapter no longer writes Python cache files into its folder, which changed
   its digest and dropped trust after first use; adapters run from their source as reviewed.
@@ -127,8 +108,18 @@ All notable changes to this project are documented here. The format follows
 - Bootstrap ignores `.harness/state/` first, and writes the settings only after their tracker
   checks out.
 
+### Security
+
+- Every onboarded tracker folder counts toward which tools need approval, even when it is
+  untrusted or fails its checks; a folder whose `writes` cannot be read at all fails closed.
+- The backlog runtime no longer has its own HTTP client with a personal access token; the enrich
+  skill's Azure reference no longer offers personal-access-token or direct REST fallbacks. Every
+  provider call goes through the host's OAuth-signed MCP servers.
+
 ### Removed
 
+- The backlog runtime's own Azure DevOps and Linear providers and settings types; Azure field names
+  and capacity mapping live only in `trackers/azure-devops/adapter.py`.
 - The Azure adapter shim, the discovery presets, the integrations setup writer, the layout
   migration, and the copies of templates, references, and scripts inside tracker folders.
 
@@ -411,7 +402,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.2.0
 [0.1.10]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.10
 [0.1.9]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.9
 [0.1.8]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.8
