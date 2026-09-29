@@ -20,7 +20,8 @@ pretend the work was produced Task by Task.
    and HEAD check evidence counts only when nothing uncommitted or untracked is being carried.
 3. Run
    `harness adoption plan <HA-id> --branch <Story branch> --destination <separate worktree path>`.
-   Present the complete returned plan and ask one chat question containing its `HA-…` id with
+   The branch must follow the settings' branch convention for this Story, so a session can start on
+   it. Present the complete returned plan and ask one chat question containing its `HA-…` id with
    **Approve adoption** and **Not now** buttons. Wait for the click before materialization.
 
 ## 2. Safe materialization
@@ -32,8 +33,11 @@ pretend the work was produced Task by Task.
    removes the worktree and branch it created, so the plan can be retried once the conflict is
    resolved; a repeat run after success returns the recorded result. For a Feature workflow, the
    assessed base is the Feature branch.
-2. The command leaves the inherited implementation staged and uncommitted. Inspect the staged diff
-   and run current-tree checks before creating the explicit adoption commit. Never use direct index
+2. The command leaves the inherited implementation staged and uncommitted. Work in the recovery
+   worktree from here: run `harness session start <Story>` there (add
+   `--workflow feature-implementation --base-ref <Feature branch>` for a Feature Story). The local
+   tracker's records are shared by every worktree of the clone. Inspect the staged diff and run
+   current-tree checks before creating the explicit adoption commit. Never use direct index
    plumbing, temporary half-versions of files, or hook bypasses.
 3. Prefer one clearly labelled adoption commit when the existing diff cannot be separated without
    inventing history. Split commits only when the original commits or independent patches already

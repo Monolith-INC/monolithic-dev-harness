@@ -1,4 +1,4 @@
-"""Read-only git queries the rules need. Every call is bounded by a timeout."""
+"""Git queries the rules need, over one bounded runner. Every call has a timeout."""
 
 from __future__ import annotations
 
@@ -15,20 +15,32 @@ class GitError(RuntimeError):
     pass
 
 
-def git(repo: Path, *args: str, env: dict[str, str] | None = None) -> str:
+def run(
+    repo: Path,
+    *args: str,
+    env: dict[str, str] | None = None,
+    input_bytes: bytes | None = None,
+    timeout: float = TIMEOUT_SECONDS,
+) -> bytes:
+    """Raw stdout of one git command; any failure is a `GitError`."""
     try:
         result = subprocess.run(
             ["git", "-C", str(repo), *args],
+            input=input_bytes,
             capture_output=True,
-            text=True,
-            timeout=TIMEOUT_SECONDS,
+            timeout=timeout,
             env={**os.environ, **(env or {})},
         )
     except (OSError, subprocess.SubprocessError) as exc:
         raise GitError(f"git {' '.join(args)} failed: {exc}") from exc
     if result.returncode != 0:
-        raise GitError(f"git {' '.join(args)} failed: {result.stderr.strip()}")
-    return result.stdout.strip()
+        stderr = result.stderr.decode(errors="replace").strip()
+        raise GitError(f"git {' '.join(args)} failed: {stderr}")
+    return result.stdout
+
+
+def git(repo: Path, *args: str, env: dict[str, str] | None = None) -> str:
+    return run(repo, *args, env=env).decode(errors="replace").strip()
 
 
 def repo_root(start: Path) -> Path | None:

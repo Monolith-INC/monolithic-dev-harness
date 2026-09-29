@@ -12,19 +12,33 @@ import hashlib
 import json
 import re
 import shutil
-import subprocess
+from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from core.result import Ok, Result, attempt, bind, err, fmap, require
+from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
+from integrations import branches, registry
 from integrations.contracts import ArtifactRef, LogicalState, WorkItem
 
-from . import gitstate, rules, settings, state
+from . import gitstate, rules, sessions, settings, state
 
 SCHEMA = "harness-adoption-assessment:v1"
 PLAN_SCHEMA = "harness-adoption-plan:v1"
 ID_PREFIX = "HA-"
+# A patch `git apply` reads back, whatever the user's diff settings (prefixes, color, drivers).
+PATCH_OPTIONS = (
+    "--binary",
+    "--no-ext-diff",
+    "--no-textconv",
+    "--no-color",
+    "--no-renames",
+    "--src-prefix=a/",
+    "--dst-prefix=b/",
+)
+ID_PATTERN = re.compile(r"HA-[A-F0-9]{10}")
+# Worktree creation and patch transfer scale with the repository, unlike the rules' quick queries.
+TRANSFER_TIMEOUT_SECONDS = 300
 # What adoption inventories and carries: everything except this clone's own harness records.
 SCOPE = (
     "--",
@@ -80,7 +94,18 @@ def _changed(repo: Path, *arguments: str) -> tuple[str, ...]:
 
 
 def _patch(repo: Path, *arguments: str) -> bytes:
-    return _run(repo, "diff", "--binary", *arguments, *SCOPE)
+    return _run(repo, "diff", *PATCH_OPTIONS, *arguments, *SCOPE)
+
+
+def _run(repo: Path, *arguments: str, input_bytes: bytes | None = None) -> bytes:
+    return gitstate.run(
+        repo, *arguments, input_bytes=input_bytes, timeout=TRANSFER_TIMEOUT_SECONDS
+    )
+
+
+def _ensure(condition: bool, message: str) -> None:
+    if not condition:
+        raise AdoptionError(message)
 
 
 def _file_digest(path: Path) -> str:
@@ -103,29 +128,17 @@ def _fingerprint(repo: Path) -> dict[str, Any]:
 
 
 def _commits(repo: Path, base_commit: str) -> tuple[dict[str, Any], ...]:
-    output = gitstate.git(repo, "log", "--format=%H%x1f%s", f"{base_commit}..HEAD")
-    return tuple(
-        {
-            "sha": sha,
-            "subject": subject,
-            "paths": tuple(
-                filter(
-                    None,
-                    gitstate.git(
-                        repo,
-                        "diff-tree",
-                        "--no-commit-id",
-                        "--name-only",
-                        "-r",
-                        sha,
-                    ).splitlines(),
-                )
-            ),
-        }
-        for line in output.splitlines()
-        if (parts := line.split("\x1f", 1))
-        for sha, subject in (parts,)
+    """Each commit since the base with its subject and paths, from one `git log`."""
+    output = gitstate.git(
+        repo, "log", "--name-only", "--format=%x1e%H%x1f%s", f"{base_commit}..HEAD"
     )
+    return tuple(_commit(record) for record in output.split("\x1e") if record.strip())
+
+
+def _commit(record: str) -> dict[str, Any]:
+    header, *paths = record.strip().splitlines()
+    sha, _, subject = header.partition("\x1f")
+    return {"sha": sha, "subject": subject, "paths": tuple(filter(None, paths))}
 
 
 def _task_report(
@@ -197,7 +210,6 @@ def assess(
             "adoption_assessment_failed",
             "could not assess the existing implementation",
             OSError,
-            subprocess.SubprocessError,
             gitstate.GitError,
             AdoptionError,
         ),
@@ -214,7 +226,13 @@ def _assessment(
     artifacts: tuple[ArtifactRef, ...],
     base_ref: str,
 ) -> dict[str, Any]:
-    identity = sessions_checkout(repo)
+    match sessions.checkout(repo):
+        case Ok(identity):
+            pass
+        case Err(failure):
+            raise AdoptionError(
+                f"the source checkout must be on a branch: {failure.message}"
+            )
     base_commit = gitstate.git(repo, "rev-parse", "--verify", base_ref)
     merge_base = gitstate.git(repo, "merge-base", base_commit, "HEAD")
     commits = _commits(repo, base_commit)
@@ -222,6 +240,7 @@ def _assessment(
     transfer_patch = _patch(repo, merge_base)
     loaded = settings.load(repo)
     chosen = loaded.value if isinstance(loaded, Ok) else None
+    settings_error = loaded.failure.message if isinstance(loaded, Err) else ""
     required = rules.applicable_checks(repo, chosen) if chosen is not None else set()
     passed = state.passed_checks(repo, gitstate.head_tree(repo))
     staged = _changed(repo, "--cached")
@@ -241,8 +260,8 @@ def _assessment(
     body = {
         "schema": SCHEMA,
         "source": {
-            "worktree": identity[0],
-            "branch": identity[1],
+            "worktree": identity.worktree,
+            "branch": identity.branch,
             "head": fingerprint["head"],
             "base_ref": base_ref,
             "base_commit": base_commit,
@@ -255,6 +274,7 @@ def _assessment(
             "patch_digest": hashlib.sha256(transfer_patch).hexdigest(),
         },
         "work_item": {
+            "id": work_item.id,
             "key": work_item.key,
             "title": work_item.title,
             "state": work_item.state.value,
@@ -265,6 +285,7 @@ def _assessment(
             "required_checks": tuple(sorted(required)),
             "passed_checks": tuple(sorted(passed)),
             "current": evidence_current,
+            "settings_error": settings_error,
         },
         "changes": {
             "commits": commits,
@@ -282,22 +303,6 @@ def _assessment(
     }
     adoption_id = ID_PREFIX + _digest(body)[:10].upper()
     return {**body, "id": adoption_id}
-
-
-def sessions_checkout(repo: Path) -> tuple[str, str]:
-    """Worktree and branch without creating or requiring a harness session."""
-    output = gitstate.git(
-        repo,
-        "rev-parse",
-        "--show-toplevel",
-        "--symbolic-full-name",
-        "HEAD",
-    ).splitlines()
-    match output:
-        case [worktree, ref] if ref.startswith("refs/heads/"):
-            return str(Path(worktree).resolve()), ref.removeprefix("refs/heads/")
-        case _:
-            raise AdoptionError("the source checkout must be on a branch")
 
 
 def _store_assessment(repo: Path, report: dict[str, Any]) -> Result[Path]:
@@ -327,8 +332,22 @@ def _write_once(path: Path, payload: dict[str, Any]) -> Path:
             raise AdoptionError(f"refusing to replace immutable adoption state: {path}")
 
 
+def _known_id(adoption_id: str) -> Result[str]:
+    return bind(
+        require(
+            ID_PATTERN.fullmatch(adoption_id) is not None,
+            "invalid_adoption_id",
+            f"{adoption_id!r} is not an adoption id (HA- and ten hex digits)",
+        ),
+        lambda _: Ok(adoption_id),
+    )
+
+
 def assessment(repo: Path, adoption_id: str) -> Result[dict[str, Any]]:
-    return _read(_folder(repo, adoption_id) / "assessment.json")
+    return bind(
+        _known_id(adoption_id),
+        lambda known: _read(_folder(repo, known) / "assessment.json"),
+    )
 
 
 def create_plan(
@@ -350,11 +369,38 @@ def create_plan(
                     "the adoption plan needs a valid target branch",
                     gitstate.GitError,
                 ),
-                lambda branch: _store_plan(
-                    repo.resolve(),
-                    report,
-                    branch,
-                    target,
+                lambda branch: bind(
+                    _story_branch(repo, report, branch),
+                    lambda story_branch: _store_plan(
+                        repo.resolve(), report, story_branch, target
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+def _story_branch(repo: Path, report: dict[str, Any], branch: str) -> Result[str]:
+    """The target branch, once it follows the settings' convention for this work item, so a
+    session can start on it in the recovery worktree."""
+    loaded = settings.load(repo)
+    item = report["work_item"]
+    return bind(
+        loaded,
+        lambda chosen: bind(
+            registry.selected(repo, loaded),
+            lambda active: bind(
+                branches.work_item_id(
+                    chosen.branch_template, active.manifest.ids.branch_key, branch
+                ),
+                lambda found: bind(
+                    require(
+                        found.upper()
+                        in {str(item.get("id", "")).upper(), str(item["key"]).upper()},
+                        "invalid_adoption_plan",
+                        f"branch {branch!r} is for {found}, not {item['key']}",
+                    ),
+                    lambda _: Ok(branch),
                 ),
             ),
         ),
@@ -440,7 +486,10 @@ def _write_pending_plan(
 
 
 def plan(repo: Path, adoption_id: str) -> Result[dict[str, Any]]:
-    return _read(_folder(repo, adoption_id) / "plan.json")
+    return bind(
+        _known_id(adoption_id),
+        lambda known: _read(_folder(repo, known) / "plan.json"),
+    )
 
 
 def plan_for_question(repo: Path, adoption_id: str) -> Result[dict[str, Any]]:
@@ -530,7 +579,6 @@ def materialize(repo: Path, adoption_id: str) -> Result[dict[str, Any]]:
                     "adoption_materialization_failed",
                     "could not materialize the approved adoption plan",
                     OSError,
-                    subprocess.SubprocessError,
                     gitstate.GitError,
                     AdoptionError,
                 ),
@@ -539,37 +587,12 @@ def materialize(repo: Path, adoption_id: str) -> Result[dict[str, Any]]:
     )
 
 
-def _run(repo: Path, *arguments: str, input_bytes: bytes | None = None) -> bytes:
-    result = subprocess.run(
-        ["git", "-C", str(repo), *arguments],
-        input=input_bytes,
-        capture_output=True,
-        check=False,
-    )
-    match result.returncode:
-        case 0:
-            return result.stdout
-        case _:
-            raise AdoptionError(
-                f"git {' '.join(arguments)} failed: {result.stderr.decode(errors='replace').strip()}"
-            )
-
-
 def _branch_absent(repo: Path, branch: str) -> bool:
-    result = subprocess.run(
-        [
-            "git",
-            "-C",
-            str(repo),
-            "show-ref",
-            "--verify",
-            "--quiet",
-            f"refs/heads/{branch}",
-        ],
-        capture_output=True,
-        check=False,
-    )
-    return result.returncode == 1
+    try:
+        gitstate.git(repo, "show-ref", "--verify", "--quiet", f"refs/heads/{branch}")
+    except gitstate.GitError:
+        return True
+    return False
 
 
 def _materialized(
@@ -585,102 +608,85 @@ def _materialized(
 def _materialize(
     repo: Path, report: dict[str, Any], plan_record: dict[str, Any]
 ) -> dict[str, Any]:
-    current = _fingerprint(repo)
     expected = str(plan_record["source_fingerprint"])
-    match current["digest"] == expected:
-        case False:
-            raise AdoptionError(
-                "the source checkout changed after assessment; assess and approve it again"
-            )
-        case True:
-            pass
+    _ensure(
+        _fingerprint(repo)["digest"] == expected,
+        "the source checkout changed after assessment; assess and approve it again",
+    )
     destination = Path(str(plan_record["destination"]))
     branch = str(plan_record["target_branch"])
     base_ref = str(plan_record["base_ref"])
     base_commit = str(plan_record["base_commit"])
-    match destination.exists(), _branch_absent(repo, branch):
-        case True, _:
-            raise AdoptionError(f"destination now exists: {destination}")
-        case _, False:
-            raise AdoptionError(f"target branch now exists: {branch}")
-        case False, True:
-            pass
-    match gitstate.git(repo, "rev-parse", "--verify", base_ref) == base_commit:
-        case False:
-            raise AdoptionError(
-                f"base {base_ref} moved after assessment; assess and approve it again"
-            )
-        case True:
-            pass
+    _ensure(not destination.exists(), f"destination now exists: {destination}")
+    _ensure(_branch_absent(repo, branch), f"target branch now exists: {branch}")
+    _ensure(
+        gitstate.git(repo, "rev-parse", "--verify", base_ref) == base_commit,
+        f"base {base_ref} moved after assessment; assess and approve it again",
+    )
     patch = _patch(repo, str(report["transfer"]["delta_base"]))
-    match hashlib.sha256(patch).hexdigest() == report["transfer"]["patch_digest"]:
-        case False:
-            raise AdoptionError(
-                "the source transfer patch changed after assessment; assess and approve it again"
-            )
-        case True:
-            pass
+    _ensure(
+        hashlib.sha256(patch).hexdigest() == report["transfer"]["patch_digest"],
+        "the source transfer patch changed after assessment; assess and approve it again",
+    )
     _run(repo, "worktree", "add", "-b", branch, str(destination), base_commit)
     try:
         target_tree = _stage_transfer(repo, destination, report, patch)
-        match _fingerprint(repo)["digest"] == expected:
-            case False:
-                raise AdoptionError(
-                    "the source checkout changed during materialization"
-                )
-            case True:
-                pass
-    except (OSError, subprocess.SubprocessError, gitstate.GitError, AdoptionError):
+        _ensure(
+            _fingerprint(repo)["digest"] == expected,
+            "the source checkout changed during materialization",
+        )
+        result = {
+            "id": report["id"],
+            "destination": str(destination),
+            "branch": branch,
+            "base_commit": base_commit,
+            "staged_tree": target_tree,
+            "source_unchanged": True,
+            "committed": False,
+            "materialized": _now(),
+        }
+        state.write_json(_folder(repo, str(report["id"])) / "materialized.json", result)
+    except BaseException:
         _discard(repo, destination, branch)
         raise
-    result = {
-        "id": report["id"],
-        "destination": str(destination),
-        "branch": branch,
-        "base_commit": base_commit,
-        "staged_tree": target_tree,
-        "source_unchanged": True,
-        "committed": False,
-        "materialized": _now(),
-    }
-    state.write_json(_folder(repo, str(report["id"])) / "materialized.json", result)
     return result
 
 
 def _stage_transfer(
     repo: Path, destination: Path, report: dict[str, Any], patch: bytes
 ) -> str:
-    match patch:
-        case b"":
-            pass
-        case _:
-            _run(destination, "apply", "--binary", "-", input_bytes=patch)
-    tuple(
+    if patch:
+        _run(destination, "apply", "--binary", "-", input_bytes=patch)
+    untracked = tuple(report["source"]["fingerprint"]["untracked"])
+    for path in untracked:
         _copy_untracked(repo, destination, path)
-        for path in report["source"]["fingerprint"]["untracked"]
-    )
     _run(destination, "add", "-A")
+    if untracked:
+        # The base's ignore rules may differ from the source's; every carried file is staged.
+        _run(destination, "add", "--force", "--", *untracked)
     return gitstate.index_tree(destination)
 
 
 def _discard(repo: Path, destination: Path, branch: str) -> None:
     """Remove the worktree and branch this attempt created so the approved plan can be retried."""
-    subprocess.run(
-        ["git", "-C", str(repo), "worktree", "remove", "--force", str(destination)],
-        capture_output=True,
-        check=False,
-    )
-    subprocess.run(
-        ["git", "-C", str(repo), "branch", "-D", branch],
-        capture_output=True,
-        check=False,
-    )
+    with suppress(gitstate.GitError):
+        _run(repo, "worktree", "remove", "--force", str(destination))
+    with suppress(gitstate.GitError):
+        _run(repo, "branch", "-D", branch)
 
 
 def _copy_untracked(repo: Path, destination: Path, relative: str) -> Path:
     source = repo / relative
     target = destination / relative
-    match source.is_file(), source.is_symlink(), target.exists():
+    parents = [
+        destination.joinpath(*Path(relative).parts[:depth])
+        for depth in range(1, len(Path(relative).parts))
+    ]
+    _ensure(
+        not any(parent.is_symlink() for parent in parents),
+        f"untracked path would be written through a symbolic link on the base: {relative}",
+    )
+    match source.is_file(), source.is_symlink(), target.exists() or target.is_symlink():
         case True, False, False:
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(source, target)

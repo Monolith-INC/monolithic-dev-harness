@@ -126,7 +126,7 @@ class AdoptionTest(unittest.TestCase):
     def _approved(self, destination: Path, base_ref: str = "develop") -> dict:
         report = adoption.assess(self.repo, self.story, self.tasks, (), base_ref).value
         plan = adoption.create_plan(
-            self.repo, report["id"], "userstory/STORY-0001-adopted", destination
+            self.repo, report["id"], "feature/STORY-0001-adopted", destination
         ).value
         adoption.approve(self.repo, report["id"], plan["digest"], "approved")
         return report
@@ -166,7 +166,7 @@ class AdoptionTest(unittest.TestCase):
         self.assertIsInstance(failed, Err)
         self.assertFalse(destination.exists())
         self.assertEqual(
-            git(self.repo, "branch", "--list", "userstory/STORY-0001-adopted"), ""
+            git(self.repo, "branch", "--list", "feature/STORY-0001-adopted"), ""
         )
 
     def test_repeated_materialization_returns_the_recorded_result(self) -> None:
@@ -174,6 +174,76 @@ class AdoptionTest(unittest.TestCase):
         report = self._approved(destination)
         first = adoption.materialize(self.repo, report["id"]).value
         self.assertEqual(adoption.materialize(self.repo, report["id"]).value, first)
+
+    def test_plan_refuses_a_branch_for_another_work_item(self) -> None:
+        report = adoption.assess(self.repo, self.story, self.tasks, (), "develop").value
+        refused = adoption.create_plan(
+            self.repo, report["id"], "feature/STORY-0002-other", self.parent / "x"
+        )
+        self.assertIsInstance(refused, Err)
+        self.assertIn("STORY-0002", refused.failure.message)
+
+    def test_malformed_ids_fail_as_results(self) -> None:
+        self.assertIsInstance(adoption.status(self.repo, "../../etc"), Err)
+        self.assertIsInstance(adoption.materialize(self.repo, "foo"), Err)
+
+    def test_untracked_files_are_never_written_through_a_base_symlink(self) -> None:
+        outside = self.parent / "outside"
+        outside.mkdir()
+        git(self.repo, "checkout", "-q", "-b", "feature/STORY-0000", "develop")
+        (self.repo / "cfg").symlink_to(outside)
+        git(self.repo, "add", "cfg")
+        git(self.repo, "commit", "-q", "-m", "link")
+        git(self.repo, "checkout", "-q", "scratch/STORY-0001")
+        (self.repo / "cfg").mkdir()
+        (self.repo / "cfg/planted.txt").write_text("x\n")
+        destination = self.parent / "adopted"
+        report = self._approved(destination, "feature/STORY-0000")
+        failed = adoption.materialize(self.repo, report["id"])
+        self.assertIsInstance(failed, Err)
+        self.assertEqual(list(outside.iterdir()), [])
+        self.assertFalse(destination.exists())
+
+    def test_carried_files_ignored_by_the_base_are_still_staged(self) -> None:
+        git(self.repo, "checkout", "-q", "-b", "feature/STORY-0000", "develop")
+        (self.repo / ".gitignore").write_text(".harness/state/\nnotes.txt\n")
+        git(self.repo, "commit", "-q", "-am", "ignore notes")
+        git(self.repo, "checkout", "-q", "scratch/STORY-0001")
+        destination = self.parent / "adopted"
+        report = self._approved(destination, "feature/STORY-0000")
+        self.assertIsInstance(adoption.materialize(self.repo, report["id"]), Ok)
+        self.assertIn("notes.txt", git(destination, "diff", "--cached", "--name-only"))
+
+    def test_user_diff_settings_do_not_break_the_transfer(self) -> None:
+        git(self.repo, "config", "diff.noprefix", "true")
+        git(self.repo, "config", "color.ui", "always")
+        destination = self.parent / "adopted"
+        report = self._approved(destination)
+        self.assertIsInstance(adoption.materialize(self.repo, report["id"]), Ok)
+
+    def test_the_local_tracker_is_shared_with_the_recovery_worktree(self) -> None:
+        from harness import settings
+        from integrations import registry
+
+        (self.repo / "notes.txt").unlink()
+        folder = self.repo / ".harness/tracker/in_progress"
+        folder.mkdir(parents=True)
+        (folder / "STORY-0001.json").write_text(
+            json.dumps(
+                {
+                    "key": "STORY-0001",
+                    "id": "STORY-0001",
+                    "title": "Story",
+                    "kind": "user_story",
+                    "state": "in_progress",
+                }
+            )
+        )
+        destination = self.parent / "adopted"
+        report = self._approved(destination)
+        adoption.materialize(self.repo, report["id"])
+        ops = registry.open_selected(destination, settings.load(destination)).value
+        self.assertEqual(ops.get_work_item("STORY-0001").value.key, "STORY-0001")
 
     def test_materialization_requires_exact_plan_approval_and_preserves_source(
         self,
@@ -183,7 +253,7 @@ class AdoptionTest(unittest.TestCase):
         plan = adoption.create_plan(
             self.repo,
             report["id"],
-            "userstory/STORY-0001-adopted",
+            "feature/STORY-0001-adopted",
             destination,
         ).value
         self.assertIsInstance(adoption.materialize(self.repo, report["id"]), Err)
@@ -209,7 +279,7 @@ class AdoptionTest(unittest.TestCase):
         plan = adoption.create_plan(
             self.repo,
             report["id"],
-            "userstory/STORY-0001-adopted",
+            "feature/STORY-0001-adopted",
             self.parent / "adopted",
         ).value
         adoption.approve(self.repo, report["id"], plan["digest"], "approved")
@@ -233,7 +303,7 @@ class AdoptionTest(unittest.TestCase):
         plan = adoption.create_plan(
             self.repo,
             report["id"],
-            "userstory/STORY-0001-feature-adopted",
+            "feature/STORY-0001-feature-adopted",
             destination,
         ).value
         adoption.approve(self.repo, report["id"], plan["digest"], "approved")
