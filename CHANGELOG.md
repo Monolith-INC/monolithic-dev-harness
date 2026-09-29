@@ -6,8 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Feature-managed sessions pin and verify the Feature branch ancestry and require Story pull
+  requests to target that branch.
+
 ### Changed
 
+- Session start captures work-item readiness and specification artifacts. Ordinary edit checks use
+  that snapshot; pushes and completion still revalidate against the tracker.
 - Provider-neutral tracker and SCM calls reuse one process-local MCP connection, avoiding a fresh
   interactive OAuth process per gateway call.
 - `check --staged` fails closed unless the working-file tree exactly matches the staged tree.

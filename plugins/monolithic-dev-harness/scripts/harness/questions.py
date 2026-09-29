@@ -36,6 +36,7 @@ _RULE_NAMES = (
     "generated-files",
     "guarded-paths",
     "draft-reviewed-prs",
+    "feature-branch",
     "history-preserved",
     "harness-error",
 )

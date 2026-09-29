@@ -26,7 +26,7 @@ from host_adapters import (
     parse_cursor_payload,
 )
 from integrations import branches, registry
-from integrations.contracts import LogicalState, TrackerOps, WorkItem
+from integrations.contracts import LogicalState, TrackerOps, WorkItem, WorkItemKind
 from policy import CanonicalToolEvent, PolicyDecision
 from policy.commands import git_commands, is_code, writes_code
 from policy.git_branch_guard import evaluate_git_branch_guard
@@ -234,12 +234,42 @@ def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
     root = Path(event.workspace_root or ".")
     if _is_bootstrap_or_repair(event.command) or not _enforced(root):
         return PolicyDecision.allow()
+    boundary = "push" in {
+        command[0] for command in git_commands(event.command or "") if command
+    }
     return _decision(
         bind(
             _session_item(root),
-            lambda found: _ready(root.resolve(), found[1], found[2]),
+            lambda found: (
+                _ready(root.resolve(), found[1], found[2])
+                if boundary or not found[0].readiness_verified_at
+                else _snapshot_ready(root.resolve(), found[0])
+            ),
         )
     )
+
+
+def _snapshot_ready(root: Path, session: sessions.Session) -> Result[None]:
+    """Readiness pinned when the session started; ordinary edits never contact the tracker."""
+    match session.readiness_state:
+        case LogicalState.IN_PROGRESS.value:
+            return _has_spec(
+                root,
+                WorkItem(
+                    session.work_item,
+                    session.work_item,
+                    "",
+                    WorkItemKind.USER_STORY,
+                    LogicalState.IN_PROGRESS,
+                ),
+                {_artifact_kind(kind) for kind in session.readiness_artifacts},
+            )
+        case _:
+            return Err(
+                _failure(
+                    f"Work item {session.work_item} was not in progress when this session started."
+                )
+            )
 
 
 def _ready(root: Path, ops: TrackerOps, item: WorkItem) -> Result[None]:

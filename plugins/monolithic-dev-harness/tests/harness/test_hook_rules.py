@@ -14,6 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from harness import sessions
 from tests.settings_fixture import MINIMAL
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
@@ -1064,6 +1065,19 @@ class TestPullRequest(HookTestCase):
         self.write("lib/a.dart")
         sh(self.repo, "add", "-A")
         sh(self.repo, "commit", "-q", "-m", "feature")
+
+    def test_feature_story_pr_must_target_its_pinned_feature_branch(self) -> None:
+        sessions.start(
+            self.repo,
+            "1",
+            "feature-implementation",
+            expected_base_ref="feature/900-parent",
+            expected_base_commit=sh(self.repo, "rev-parse", "HEAD").strip(),
+        )
+        self.assertDenied(
+            self.pr(isDraft=True, targetRefName="refs/heads/develop"),
+            "feature-branch",
+        )
 
     def test_pr_must_be_draft_reviewed_and_checked(self) -> None:
         self.approve()

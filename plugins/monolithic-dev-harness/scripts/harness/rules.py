@@ -23,7 +23,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
-from . import gitstate, globs, shellscan, state, tracker_policy
+from . import gitstate, globs, sessions, shellscan, state, tracker_policy
 from .settings import Settings
 from .tracker_policy import TrackerPolicy
 
@@ -548,6 +548,35 @@ def rule_draft_reviewed_prs(call: ToolCall, repo: Path, settings: Settings) -> D
     return Decision.allow()
 
 
+def rule_feature_branch(call: ToolCall, repo: Path) -> Decision:
+    """A Feature-managed Story PR targets the Feature branch pinned by its session."""
+    action = call.tool_input.get("action")
+    creating = (
+        call.name == "repo_pull_request_write" and action == "create"
+    ) or call.name == "scm_create_pull_request"
+    match creating, sessions.resolve(repo):
+        case True, sessions.Bound(session) if (
+            session.workflow == "feature-implementation"
+        ):
+            target = str(
+                call.tool_input.get("targetBranch")
+                or call.tool_input.get("targetRefName")
+                or ""
+            ).removeprefix("refs/heads/")
+            expected = session.expected_base_ref.removeprefix("refs/heads/")
+            return (
+                Decision.allow()
+                if expected and target == expected
+                else Decision.deny(
+                    "feature-branch",
+                    f"this Story belongs to Feature branch {session.expected_base_ref!r}; "
+                    "create its pull request into that branch.",
+                )
+            )
+        case _:
+            return Decision.allow()
+
+
 def applicable_checks(
     repo: Path, settings: Settings, paths: list[str] | None = None
 ) -> set[str]:
@@ -784,6 +813,7 @@ def evaluate(
                 lambda: rule_human_owned(call, repo),
                 lambda: rule_tracker_valid(call, policy),
                 lambda: rule_protected_items(call, policy),
+                lambda: rule_feature_branch(call, repo),
                 lambda: rule_draft_reviewed_prs(call, repo, settings),
                 lambda: rule_history_preserved(call),
                 lambda: rule_approval_required(call, repo, policy),
