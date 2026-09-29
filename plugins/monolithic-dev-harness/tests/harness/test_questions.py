@@ -188,5 +188,62 @@ class ApprovalByClickTests(unittest.TestCase):
             )
 
 
+class AdoptionApprovalTests(unittest.TestCase):
+    def setUp(self) -> None:
+        self._tmp = tempfile.TemporaryDirectory()
+        self.repo = Path(self._tmp.name)
+        write_settings(self.repo)
+
+    def tearDown(self) -> None:
+        self._tmp.cleanup()
+
+    def _question(self, adoption_id: str) -> tuple[str, dict]:
+        text = f"Approve adoption plan {adoption_id} as shown?"
+        return text, {
+            "questions": [
+                {
+                    "question": text,
+                    "header": "Adoption",
+                    "multiSelect": False,
+                    "options": [
+                        {
+                            "label": "Approve adoption",
+                            "description": "Create its exact recovery worktree when requested.",
+                        },
+                        {"label": "Not now", "description": "Do not approve it."},
+                    ],
+                }
+            ]
+        }
+
+    def test_adoption_click_pins_the_exact_plan(self) -> None:
+        adoption_id = "HA-0123456789"
+        folder = self.repo / ".harness/state/adoptions" / adoption_id
+        folder.mkdir(parents=True)
+        state.write_json(folder / "plan.json", {"id": adoption_id, "digest": "exact"})
+        text, tool_input = self._question(adoption_id)
+        self.assertIsNone(
+            run(
+                self.repo,
+                "ask",
+                {"tool_use_id": "adopt-1", "tool_input": tool_input},
+            )
+        )
+        response = {**tool_input, "answers": {text: "Approve adoption"}}
+        answered = run(
+            self.repo,
+            "answer",
+            {
+                "tool_use_id": "adopt-1",
+                "tool_input": response,
+                "tool_response": response,
+            },
+        )
+        self.assertIn("approved for its exact content", str(answered))
+        self.assertEqual(
+            state.read_json(folder / "approval.json")["plan_digest"], "exact"
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

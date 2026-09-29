@@ -273,6 +273,28 @@ def handle_feature_implementation(invocation: Invocation) -> HandlerResult:
     )
 
 
+def handle_adopt_existing_implementation(invocation: Invocation) -> HandlerResult:
+    arguments = invocation.arguments
+    work_item = str(arguments.get("work_item_ref", ""))
+    base_ref = str(arguments.get("base_ref", ""))
+    branch = str(arguments.get("target_branch", "<Story branch>"))
+    destination = str(arguments.get("destination", "<separate worktree path>"))
+    return HandlerResult(
+        product={
+            "mode": "instructions",
+            "skill": "adopt-existing-implementation",
+            "commands": [
+                f"harness adoption assess {work_item} --base-ref {base_ref}",
+                f"harness adoption plan <HA-id> --branch {branch} --destination {destination}",
+                "Ask for the tree-bound Approve adoption button with the HA id.",
+                "harness adoption materialize <HA-id>",
+                "Inspect and check the staged adoption tree before committing it.",
+            ],
+            "instructions": invocation.instructions,
+        }
+    )
+
+
 def handle_finish_feature_development(invocation: Invocation) -> HandlerResult:
     plan = _feature_plan(invocation.arguments, mode="finish")
     return HandlerResult(
@@ -326,6 +348,7 @@ _HANDLERS: dict[str, Callable[[Invocation], HandlerResult]] = {
     "resolve-ticket": handle_resolve_ticket,
     "review-pr": handle_review_pr,
     "feature-implementation": handle_feature_implementation,
+    "adopt-existing-implementation": handle_adopt_existing_implementation,
     "finish-feature-development": handle_finish_feature_development,
     "reconcile-feature-stack": handle_reconcile_feature_stack,
     "merge-story-stack-into-feature": handle_merge_story_stack_into_feature,

@@ -60,7 +60,7 @@ output schemas enforced.
 | Integrations gateway | `scripts/integrations/gateway.py` | the `workflow-integrations` MCP server |
 | Backlog orchestrator | `runtime/orchestrator_core/` | backlog skills as MCP tools; validation, estimation, capacity; CLI |
 | Setup | `scripts/harness/bootstrap.py` | checks a settings file and copies it in once |
-| CLI | `bin/harness`, `scripts/harness/cli.py` | version, doctor, bootstrap, session, tracker, knowledge |
+| CLI | `bin/harness`, `scripts/harness/cli.py` | version, doctor, bootstrap, session, tracker, adoption, knowledge |
 | Knowledge store | `scripts/harness/knowledge.py` | agent-owned immutable revisions, evidence, source index, and bounded retrieval |
 | Installer | `install.sh` (repository root) | install, upgrade, uninstall |
 

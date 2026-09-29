@@ -6,6 +6,7 @@ harness doctor [--repo <dir>] [--tools] [--azure]
 harness bootstrap [--repo <dir>] [--settings-from <file>]   (defaults: current repo, example settings)
 harness session start <work item> [--workflow <name>] | status | pause | resume | close
 harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...]
+harness adoption assess | plan | status | materialize ...
 harness knowledge <operation> ...
 """
 
@@ -34,6 +35,7 @@ from core.result import (  # noqa: E402
     require,
 )
 from harness import (  # noqa: E402
+    adoption,
     gitstate,
     knowledge,
     sessions,
@@ -417,6 +419,50 @@ def tracker_command(args: argparse.Namespace) -> int:
     return 2
 
 
+def adoption_command(args: argparse.Namespace) -> int:
+    repo = _repo(args.repo)
+    match args.operation:
+        case "assess":
+            result = _adoption_assessment(repo, args.target or "", args.base_ref or "")
+        case "plan":
+            result = adoption.create_plan(
+                repo,
+                args.target or "",
+                args.branch or "",
+                Path(args.destination or ""),
+            )
+        case "status":
+            result = adoption.status(repo, args.target or "")
+        case "materialize":
+            result = adoption.materialize(repo, args.target or "")
+        case _:
+            return 2
+    return _print(
+        fmap(result, lambda value: json.dumps(value, indent=2, sort_keys=True))
+    )
+
+
+def _adoption_assessment(
+    repo: Path, work_item: str, base_ref: str
+) -> Result[dict[str, object]]:
+    loaded = settings.load(repo)
+    return bind(
+        registry.open_selected(repo, loaded),
+        lambda ops: bind(
+            ops.get_work_item(work_item),
+            lambda item: bind(
+                ops.list_children(item.id),
+                lambda children: bind(
+                    ops.list_artifacts(item.id),
+                    lambda artifacts: adoption.assess(
+                        repo, item, children, artifacts, base_ref
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
 def _pairs(values: list[str] | None) -> tuple[tuple[str, str], ...]:
     return tuple(
         (key.strip(), value.strip())
@@ -502,6 +548,25 @@ def main(argv: list[str] | None = None) -> int:
         metavar="KEY=VALUE",
         help="a value the tracker's settings need (stage only); repeat for each",
     )
+    adoption_parser = sub.add_parser(
+        "adoption",
+        help="assess, approve, and materialize implementation already in progress",
+    )
+    adoption_parser.add_argument(
+        "operation", choices=("assess", "plan", "status", "materialize")
+    )
+    adoption_parser.add_argument(
+        "target",
+        help="work-item reference for assess; adoption id for other operations",
+    )
+    adoption_parser.add_argument(
+        "--base-ref", help="intended base branch or ref (assess)"
+    )
+    adoption_parser.add_argument("--branch", help="new Story branch (plan)")
+    adoption_parser.add_argument(
+        "--destination", help="new recovery worktree path (plan)"
+    )
+    adoption_parser.add_argument("--repo", default=".")
     knowledge_parser = sub.add_parser(
         "knowledge", help="query or refresh a harness-owned immutable knowledge store"
     )
@@ -525,6 +590,8 @@ def main(argv: list[str] | None = None) -> int:
         return session_command(args)
     if args.command == "tracker":
         return tracker_command(args)
+    if args.command == "adoption":
+        return adoption_command(args)
     return bootstrap(extra)
 
 

@@ -8,6 +8,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Deterministic `harness adoption assess | plan | status | materialize` workflow for implementation
+  already in progress: Task classification, scope/evidence reporting, exact-plan approval, source
+  fingerprint checks, and a separate correctly based worktree with a verified staged snapshot.
 - Tree-bound **Approve change** questions for manual guarded-path evidence in button-capable hosts.
 - Feature-managed sessions pin and verify the Feature branch ancestry and require Story pull
   requests to target that branch.

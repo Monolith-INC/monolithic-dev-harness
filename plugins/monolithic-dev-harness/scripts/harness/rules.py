@@ -326,6 +326,7 @@ _OWNED_DIRS = (
     (".harness", "state", "asked"),
     (".harness", "state", "sessions"),
     (".harness", "state", "trackers"),
+    (".harness", "state", "adoptions"),
 )
 
 

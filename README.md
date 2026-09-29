@@ -323,6 +323,19 @@ test changes in the commit or earlier on the branch. So a Task with no practical
 can only be committed once the branch already has test changes; as the first Task on a branch,
 it is blocked.
 
+#### What if implementation already exists?
+
+Use `adopt-existing-implementation` instead of pretending the normal Task-by-Task sequence already
+happened. The harness inventories the Story, Tasks, artifacts, branch ancestry, commits, dirty
+files, and exact-tree evidence with `harness adoption assess`. It classifies each Task without
+treating code or commits alone as proof of completion, then persists a continuation plan.
+
+After the complete plan is shown, the user approves its exact content with an **Approve adoption**
+button. `harness adoption materialize` then verifies that the source and base have not changed,
+creates a separate correctly based worktree, and stages the verified adoption delta there.
+It transfers the source delta from the real merge base, so changes unique to a newer Feature base
+remain intact. The source checkout remains untouched, and no commit or Task transition is fabricated.
+
 #### What if the team has only an idea and no backlog records?
 
 The harness can start from the idea. It drafts a work item from it (any level: an Epic, a Feature,

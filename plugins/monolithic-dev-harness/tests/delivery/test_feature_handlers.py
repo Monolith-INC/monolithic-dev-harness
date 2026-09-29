@@ -2,6 +2,7 @@ import unittest
 
 from scripts.orchestrator.handlers import (
     get_handler,
+    handle_adopt_existing_implementation,
     handle_feature_implementation,
     handle_finish_feature_development,
     handle_merge_story_stack_into_feature,
@@ -51,6 +52,25 @@ class FeatureHandlerTests(unittest.TestCase):
                 result.product["plan"]["ordered_story_keys"], ["US-1", "US-2"]
             )
             self.assertIs(get_handler(skill), handler)
+
+    def test_adoption_handler_emits_the_deterministic_command_sequence(self):
+        result = handle_adopt_existing_implementation(
+            _invocation(
+                "adopt-existing-implementation",
+                {
+                    "work_item_ref": "STORY-1",
+                    "base_ref": "feature/1",
+                    "target_branch": "story/1",
+                    "destination": "/tmp/story-1",
+                },
+            )
+        )
+        self.assertEqual(result.product["mode"], "instructions")
+        self.assertIn("adoption assess STORY-1", result.product["commands"][0])
+        self.assertIs(
+            get_handler("adopt-existing-implementation"),
+            handle_adopt_existing_implementation,
+        )
 
 
 if __name__ == "__main__":

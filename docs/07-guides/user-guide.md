@@ -93,6 +93,8 @@ now. Your clicks do the rest; the harness updates the settings file for you.
 | --- | --- |
 | `harness session status` | which work item this checkout is bound to, and its phase |
 | `harness session pause` / `resume` / `close` | stop, restart, or finish the session |
+| `harness adoption assess …` | inventory and classify implementation that already exists |
+| `harness adoption status <HA-id>` | show its assessment, exact plan approval, and materialization state |
 | `harness doctor` | settings, tracker, and session at a glance |
 
 ## Expected Result

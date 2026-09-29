@@ -71,7 +71,8 @@ bash install.sh --uninstall
 
 ### Purpose
 
-Day-to-day command installed on `PATH`: version, health check, bootstrap, sessions, and trackers.
+Day-to-day command installed on `PATH`: version, health check, bootstrap, sessions, trackers, and
+safe adoption of implementation already in progress.
 
 ### Invocation / Shape
 
@@ -82,6 +83,9 @@ harness bootstrap [--repo <dir>] [--settings-from <file>]
 harness session start <work item> [--workflow <name>] [--repo <dir>]
 harness session status | pause | resume | close [--repo <dir>]
 harness tracker list | show <name> | stage <folder> [--repo <dir>]
+harness adoption assess <work item> --base-ref <ref> [--repo <dir>]
+harness adoption plan <HA-id> --branch <branch> --destination <path> [--repo <dir>]
+harness adoption status | materialize <HA-id> [--repo <dir>]
 harness knowledge init | refresh | catalog | find | resolve | fetch | status [...]
 ```
 
@@ -92,6 +96,10 @@ harness knowledge init | refresh | catalog | find | resolve | fetch | status [..
 names; `doctor --azure` runs the Azure DevOps health check with the settings' organization and
 project. `session start` needs the checkout to be on the work item's branch (the settings'
 `branch_template` with the tracker's `ids.branch_key`) and the tracker to know the item.
+`adoption assess` reads the work item and Tasks through the selected tracker. `adoption plan`
+binds the source fingerprint, intended base, target branch, and separate worktree path. A
+tree-bound **Approve adoption** click is required before `adoption materialize` stages the pinned
+source delta on that base in the new worktree.
 
 ### Outputs
 
@@ -101,6 +109,8 @@ selected tracker, broken tracker folders, the tracking mode, and the checkout's 
 print everything a person needs to review an onboarded tracker, and how to ask the user: a
 **Trust** question, then a **Use it** question, plus the short `HT-` reply id for Cursor.
 `tracker stage` takes `--value KEY=VALUE` for each value the tracker's settings need.
+`adoption` prints JSON containing its immutable `HA-…` id, classifications, scope differences,
+evidence, plan approval, and materialization result.
 
 ### Exit Codes
 

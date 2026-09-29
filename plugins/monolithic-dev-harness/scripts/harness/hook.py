@@ -36,6 +36,7 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
 
 from core.result import Err, Ok  # noqa: E402
 from harness import (  # noqa: E402
+    adoption,
     gitstate,
     globs,
     questions,
@@ -395,7 +396,22 @@ def handle_ask(payload: dict[str, Any]) -> int:
             return 0
         case _:
             pass
-    detail = {**tracker_detail, **manual_detail}
+    adoption_detail = _adoption_question(repo, tool_input)
+    match adoption_detail:
+        case None:
+            _emit_decision(
+                "claude",
+                rules.Decision.deny(
+                    "plain-questions",
+                    "An adoption approval must name exactly one current plan id shown by the "
+                    "adoption plan command. Show that plan, include its HA id in the question, "
+                    "and ask again.",
+                ),
+            )
+            return 0
+        case _:
+            pass
+    detail = {**tracker_detail, **manual_detail, **adoption_detail}
     tool_use_id = str(payload.get("tool_use_id") or "")
     if tool_use_id:
         state.mark_asked(repo, questions.marker_name(tool_use_id), detail)
@@ -456,6 +472,28 @@ def _manual_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] |
                     return None
 
 
+def _adoption_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] | None:
+    """Pin the exact persisted continuation plan before showing its approval button."""
+    asked = questions.adoption_signoff(tool_input)
+    match asked, questions.adoption_requested(tool_input):
+        case None, False:
+            return {}
+        case None, True:
+            return None
+        case (text, adoption_id), True:
+            match adoption.plan_for_question(repo, adoption_id):
+                case Ok(found):
+                    return {
+                        "adoption": {
+                            "id": adoption_id,
+                            "digest": found.get("digest", ""),
+                            "question": text,
+                        }
+                    }
+                case Err():
+                    return None
+
+
 def handle_answer(payload: dict[str, Any]) -> int:
     """After the user answers: an `Approve` click opens an approval window."""
     repo = _governed(payload)
@@ -466,6 +504,45 @@ def handle_answer(payload: dict[str, Any]) -> int:
     if asked is None:
         return 0  # the question never passed the check, so its answer opens nothing
     tool_input = payload.get("tool_input")
+    match asked.get("adoption"):
+        case dict() as plan:
+            chosen = questions.adoption_choice(
+                tool_input if isinstance(tool_input, dict) else {},
+                payload.get("tool_response"),
+            )
+            result = (
+                adoption.approve(
+                    repo,
+                    str(plan.get("id", "")),
+                    str(plan.get("digest", "")),
+                    str(plan.get("question", "")),
+                )
+                if chosen
+                else None
+            )
+            match result:
+                case Ok():
+                    note = (
+                        f"[harness] adoption plan {plan.get('id')} approved for its exact content. "
+                        "The materialize command may now create the recovery worktree."
+                    )
+                case Err(failure):
+                    note = f"[harness] adoption approval was NOT recorded: {failure.message}"
+                case None:
+                    note = "[harness] the adoption plan was not approved."
+            print(
+                json.dumps(
+                    {
+                        "hookSpecificOutput": {
+                            "hookEventName": "PostToolUse",
+                            "additionalContext": note,
+                        }
+                    }
+                )
+            )
+            return 0
+        case _:
+            pass
     match asked.get("manual"):
         case dict() as manual:
             chosen = questions.manual_choice(

@@ -197,6 +197,7 @@ class TestHumanOwned(HookTestCase):
             ".harness/state/sessions/HS-1/events/0002-closed.json",
             ".harness/state/trackers/x.json",
             ".harness/state/tracking.json",
+            ".harness/state/adoptions/HA-0123456789/approval.json",
         ):
             with self.subTest(path=path):
                 self.assertDenied(
