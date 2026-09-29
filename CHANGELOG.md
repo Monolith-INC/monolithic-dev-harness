@@ -8,6 +8,7 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Tree-bound **Approve change** questions for manual guarded-path evidence in button-capable hosts.
 - Feature-managed sessions pin and verify the Feature branch ancestry and require Story pull
   requests to target that branch.
 

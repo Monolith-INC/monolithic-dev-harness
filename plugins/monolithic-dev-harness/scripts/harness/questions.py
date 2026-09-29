@@ -26,6 +26,7 @@ from typing import Any
 MAX_QUESTION_WORDS = 50
 MAX_DESCRIPTION_WORDS = 25
 APPROVE_LABELS = frozenset({"approve", "aprovar", "aprovo"})
+MANUAL_APPROVE_LABELS = frozenset({"approve change", "aprovar mudança"})
 TRACKER_ACTIONS = {"trust": "trust", "use it": "select", "stop trusting": "untrust"}
 
 _RULE_NAMES = (
@@ -147,6 +148,25 @@ def approval(tool_input: dict[str, Any], tool_response: Any) -> tuple[str, str] 
         ):
             return text, answer
     return None
+
+
+def manual_signoff(tool_input: dict[str, Any]) -> str | None:
+    """Question text when it offers the dedicated guarded-change approval action."""
+    question = _first_question(tool_input)
+    labels = {
+        str(option.get("label", "")).strip().lower()
+        for option in question.get("options") or []
+        if isinstance(option, dict)
+    }
+    return str(question.get("question", "")) if labels & MANUAL_APPROVE_LABELS else None
+
+
+def manual_choice(tool_input: dict[str, Any], tool_response: Any) -> bool:
+    """Whether the user clicked the dedicated guarded-change approval action."""
+    answers = tool_response.get("answers") if isinstance(tool_response, dict) else None
+    text = str(_first_question(tool_input).get("question", ""))
+    answer = answers.get(text) if isinstance(answers, dict) else None
+    return isinstance(answer, str) and answer.strip().lower() in MANUAL_APPROVE_LABELS
 
 
 def _first_question(tool_input: dict[str, Any]) -> dict[str, Any]:

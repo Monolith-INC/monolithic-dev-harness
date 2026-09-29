@@ -37,6 +37,7 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
 from core.result import Err, Ok  # noqa: E402
 from harness import (  # noqa: E402
     gitstate,
+    globs,
     questions,
     rules,
     settings,
@@ -368,8 +369,8 @@ def handle_ask(payload: dict[str, Any]) -> int:
             rules.Decision.deny("plain-questions", questions.rewrite_reason(found)),
         )
         return 0
-    detail = _tracker_question(repo, tool_input)
-    if detail is None:
+    tracker_detail = _tracker_question(repo, tool_input)
+    if tracker_detail is None:
         _emit_decision(
             "claude",
             rules.Decision.deny(
@@ -380,6 +381,21 @@ def handle_ask(payload: dict[str, Any]) -> int:
             ),
         )
         return 0
+    manual_detail = _manual_question(repo, tool_input)
+    match manual_detail:
+        case None:
+            _emit_decision(
+                "claude",
+                rules.Decision.deny(
+                    "plain-questions",
+                    "A guarded-change approval must apply to exactly one staged manual check. "
+                    "Stage only that change, describe what the user should validate, and ask again.",
+                ),
+            )
+            return 0
+        case _:
+            pass
+    detail = {**tracker_detail, **manual_detail}
     tool_use_id = str(payload.get("tool_use_id") or "")
     if tool_use_id:
         state.mark_asked(repo, questions.marker_name(tool_use_id), detail)
@@ -409,6 +425,37 @@ def _tracker_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] 
     }
 
 
+def _manual_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] | None:
+    """Pin one unmet manual guard and the exact staged tree before showing its button."""
+    text = questions.manual_signoff(tool_input)
+    match text, settings.load(repo):
+        case None, _:
+            return {}
+        case _, Err():
+            return None
+        case str(), Ok(chosen):
+            staged = gitstate.staged_paths(repo)
+            tree = gitstate.index_tree(repo)
+            guards = tuple(
+                guard
+                for guard in chosen.guarded_paths
+                if guard.kind == "manual"
+                and globs.select(staged, [guard.path])
+                and not state.has_manual(repo, guard.name, tree)
+            )
+            match guards:
+                case (guard,):
+                    return {
+                        "manual": {
+                            "name": guard.name,
+                            "tree": tree,
+                            "question": text,
+                        }
+                    }
+                case _:
+                    return None
+
+
 def handle_answer(payload: dict[str, Any]) -> int:
     """After the user answers: an `Approve` click opens an approval window."""
     repo = _governed(payload)
@@ -419,6 +466,46 @@ def handle_answer(payload: dict[str, Any]) -> int:
     if asked is None:
         return 0  # the question never passed the check, so its answer opens nothing
     tool_input = payload.get("tool_input")
+    match asked.get("manual"):
+        case dict() as manual:
+            chosen = questions.manual_choice(
+                tool_input if isinstance(tool_input, dict) else {},
+                payload.get("tool_response"),
+            )
+            current = gitstate.index_tree(repo)
+            recorded = chosen and current == manual.get("tree")
+            match recorded:
+                case True:
+                    state.record_manual(
+                        repo,
+                        str(manual.get("name", "")),
+                        current,
+                        str(manual.get("question", ""))[:500],
+                    )
+                    note = (
+                        f"[harness] manual check {manual.get('name')} recorded for staged tree "
+                        f"{current[:12]}."
+                    )
+                case False if chosen:
+                    note = (
+                        "[harness] the staged change changed after the question was shown, so the "
+                        "manual check was not recorded. Show the updated change and ask again."
+                    )
+                case False:
+                    note = "[harness] the guarded change was not approved."
+            print(
+                json.dumps(
+                    {
+                        "hookSpecificOutput": {
+                            "hookEventName": "PostToolUse",
+                            "additionalContext": note,
+                        }
+                    }
+                )
+            )
+            return 0
+        case _:
+            pass
     if asked.get("tracker"):
         chosen = questions.tracker_choice(
             tool_input if isinstance(tool_input, dict) else {},

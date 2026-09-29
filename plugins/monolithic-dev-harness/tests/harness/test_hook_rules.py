@@ -1052,6 +1052,51 @@ class TestGuarded(HookTestCase):
         )
         self.assertAllowed(self.commit_call())
 
+    def test_manual_guard_can_be_approved_by_a_tree_bound_button(self) -> None:
+        self.write("infra/main.tf")
+        sh(self.repo, "add", "infra/main.tf")
+        question = "Did you validate the infrastructure change shown above?"
+        tool_input = {
+            "questions": [
+                {
+                    "question": question,
+                    "header": "Validation",
+                    "multiSelect": False,
+                    "options": [
+                        {
+                            "label": "Approve change",
+                            "description": "Record my validation for this exact change.",
+                        },
+                        {"label": "Not now", "description": "Record nothing."},
+                    ],
+                }
+            ]
+        }
+        self.assertIsNone(
+            self.hook(
+                "claude",
+                "ask",
+                {
+                    "tool_name": "AskUserQuestion",
+                    "tool_use_id": "manual-1",
+                    "tool_input": tool_input,
+                },
+            )
+        )
+        response = {**tool_input, "answers": {question: "Approve change"}}
+        answered = self.hook(
+            "claude",
+            "answer",
+            {
+                "tool_name": "AskUserQuestion",
+                "tool_use_id": "manual-1",
+                "tool_input": response,
+                "tool_response": response,
+            },
+        )
+        self.assertIn("manual check infra recorded", str(answered))
+        self.assertAllowed(self.commit_call())
+
 
 class TestPullRequest(HookTestCase):
     def pr(self, **extra: object) -> dict | None:
