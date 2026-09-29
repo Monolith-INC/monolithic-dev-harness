@@ -6,6 +6,11 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Provider-neutral tracker and SCM calls reuse one process-local MCP connection, avoiding a fresh
+  interactive OAuth process per gateway call.
+
 ## [0.2.0] - 2026-09-28
 
 Trackers become adapters, a repository keeps one settings file, work is bound to sessions, and

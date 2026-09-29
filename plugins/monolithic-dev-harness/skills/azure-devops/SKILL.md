@@ -5,9 +5,11 @@ description: Use when a harness stage needs Azure DevOps — reading or writing 
 
 # Azure DevOps
 
-Every harness stage talks to Azure DevOps through one MCP server: `@azure-devops/mcp`, bundled
-with this plugin and started with interactive OAuth. This skill is the single place that knows how
-to find, check, and recover that server.
+The plugin exposes two Azure entry points backed by `@azure-devops/mcp`: the host-registered Azure
+tools and the provider-neutral `workflow-integrations` gateway. Each client owns its own provider
+process and OAuth session. The gateway keeps its child alive across calls; workflow hooks use the
+readiness snapshot captured at session start and do not launch Azure for every edit. This skill is
+the single place that knows how to find, check, and recover those connections.
 
 ## Core rule
 
@@ -43,7 +45,8 @@ disable this plugin's server for that repository.
 
 ## Health check
 
-Prefer one targeted read-only call. It reuses the live connection and costs nothing:
+Prefer one targeted read-only call through the same entry point the workflow is using. It reuses
+that entry point's live connection:
 
 - `core_list_projects` with `projectNameFilter=<project>` and `top=1`: success returns the project.
 - `wit_work_item` with `action=get`, the project, and a known id.
@@ -63,11 +66,11 @@ The script needs only `node` and `npx` on `PATH`. Exit codes: `0` healthy, `1` c
 
 ## Subagents
 
-A subagent granted this server's tools inherits the parent session's authenticated connection. It
-does not start its own server or its own OAuth. The OAuth cache is per server process and held in
-memory, so the one risky case is a **cold start**: a background subagent as the first caller in a
-fresh session, with nobody watching the browser redirect. Warm the connection from the main session
-(one health-check call) before dispatching background workers that need Azure DevOps.
+A subagent granted the host server's tools normally inherits that host connection. Calling the
+workflow gateway instead uses the gateway's separate, long-lived provider child. The OAuth cache is
+per provider process, so the one risky case is a **cold start**: a background subagent as the first
+caller on an entry point, with nobody watching the browser redirect. Warm the same entry point from
+the main session before dispatching background workers that need Azure DevOps.
 
 ## Operating workflow
 

@@ -56,7 +56,7 @@ output schemas enforced.
 | Onboarding | `scripts/integrations/onboarding.py` | stages a tracker folder and shows it for review |
 | Trackers | `trackers/azure-devops/`, `trackers/linear/`, `trackers/local/` | one `tracker.json` and one `adapter.py` each |
 | SCM adapters | `scripts/integrations/scm.py` | GitHub (`gh`) and Azure Repos (MCP) behind `ScmOps` |
-| Transport | `scripts/integrations/transport.py` | starts a provider's MCP server for one call and reads its answer |
+| Transport | `scripts/integrations/transport.py` | keeps one provider MCP process per process-local connection and reads sequential answers |
 | Integrations gateway | `scripts/integrations/gateway.py` | the `workflow-integrations` MCP server |
 | Backlog orchestrator | `runtime/orchestrator_core/` | backlog skills as MCP tools; validation, estimation, capacity; CLI |
 | Setup | `scripts/harness/bootstrap.py` | checks a settings file and copies it in once |
