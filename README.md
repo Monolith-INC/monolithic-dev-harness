@@ -95,7 +95,7 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
   commit per Task; stacked branches for multi-Story Features.
 - **Requirements-first review:** coverage of the Story's acceptance criteria before a deep
   correctness and maintainability audit, ending in a recorded verdict and a **draft** pull request.
-- **Deterministic enforcement:** nine named rules (for example `approval-required`,
+- **Deterministic enforcement:** ten named rules (for example `approval-required`,
   `tests-with-code`, `draft-reviewed-prs`) plus the workflow policy, evaluated before every
   governed tool call, failing closed for writes.
 - **Human approvals that the agent cannot forge:** tracker and SCM writes open only after you click
@@ -452,9 +452,9 @@ See [`docs/04-operations/deployment.md`](./docs/04-operations/deployment.md).
 
 The agent works with your tracker and repository identity, so the harness assumes the model can be
 wrong or misled. Every tracker and SCM write needs an approval window that only your own prompt can
-open; protected work items can never be touched; the settings, approval, manual-check, session, and
-tracker-trust records are human-owned; an onboarded tracker counts only as you trusted it; and the
-runtime fails closed for writes. Report vulnerabilities privately to the maintainers.
+open; protected work items can never be touched; the settings, approval, manual-check, session,
+adoption, and tracker-trust records are human-owned; an onboarded tracker counts only as you
+trusted it; and the runtime fails closed for writes. Report vulnerabilities privately to the maintainers.
 
 See [`docs/05-security/security.md`](./docs/05-security/security.md).
 

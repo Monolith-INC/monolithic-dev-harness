@@ -41,7 +41,9 @@ See [observability.md](observability.md).
 | `approval-required` blocks a write you approved | the window expired or the id differed: approve the new batch id |
 | `protected-items` blocks a write | intended; the item is listed in `protected_work_items`. A person changes the settings only if the item should no longer be protected |
 | `tests-with-code` blocks a commit | add the test, or put the test commit first on the branch |
-| `guarded-paths` blocks a commit | stage, run `scripts/harness/checks.py --staged`, commit; or validate by hand and reply `harness manual-check <name> ok` |
+| `guarded-paths` blocks a commit | stage, run `scripts/harness/checks.py --staged` (the working files must match the index exactly), commit; or validate by hand and click **Approve change** (Cursor: reply `harness manual-check <name> ok`) |
+| `feature-branch` blocks a PR | the Story belongs to a Feature: target the Feature branch its session pinned (`harness session status`) |
+| `harness adoption materialize` refuses | the source checkout, base, or plan changed since approval, or the patch does not apply: assess, plan, and approve again; a failed run removes the worktree and branch it created |
 | `draft-reviewed-prs` blocks a PR | re-run the review stage on HEAD; any new commit needs a new verdict and new check evidence |
 | `history-preserved` blocks a git command | intended; bring changes in with `git merge` (the `reconcile-feature-stack` skill) and land Stories with merge commits |
 | Azure DevOps tools missing | search for the bare tool name (deferred tools load on search); run `harness doctor --azure` |

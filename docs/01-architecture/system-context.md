@@ -39,7 +39,7 @@ with the developer's own identity. It has no server of its own.
 | Actor | May | May not |
 | --- | --- | --- |
 | Developer | approve batches, record manual checks, trust onboarded trackers, edit the settings, publish and merge pull requests | — |
-| Agent | read anything; edit the working tree; run checks; start and change sessions through `harness session`; stage trackers for review; commit within the rules; write to the tracker inside an approval window | open approval windows, write approval, manual-check, session, or trust records directly, trust a tracker, edit the settings, touch protected items, publish or vote on pull requests |
+| Agent | read anything; edit the working tree; run checks; start and change sessions through `harness session`; stage trackers for review; commit within the rules; write to the tracker inside an approval window | open approval windows, write approval, manual-check, session, adoption, or trust records directly, trust a tracker, edit the settings, touch protected items, publish or vote on pull requests |
 | Hook runtime | allow or deny a tool call | perform the call itself |
 | Orchestrators | validate and critique skill inputs and outputs | call a provider |
 

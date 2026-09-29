@@ -80,7 +80,7 @@ safe adoption of implementation already in progress.
 harness version
 harness doctor [--repo <dir>] [--tools] [--azure]
 harness bootstrap [--repo <dir>] [--settings-from <file>]
-harness session start <work item> [--workflow <name>] [--repo <dir>]
+harness session start <work item> [--workflow <name>] [--base-ref <Feature branch>] [--repo <dir>]
 harness session status | pause | resume | close [--repo <dir>]
 harness tracker list | show <name> | stage <folder> [--repo <dir>]
 harness adoption assess <work item> --base-ref <ref> [--repo <dir>]
@@ -94,7 +94,10 @@ harness knowledge init | refresh | catalog | find | resolve | fetch | status [..
 `bootstrap` defaults to the current git repository and `examples/settings.example.json`.
 `doctor --tools` starts the selected tracker's server and checks it offers every tool the manifest
 names; `doctor --azure` runs the Azure DevOps health check with the settings' organization and
-project. `session start` needs the checkout to be on the work item's branch (the settings'
+project. `session start` records the work item's readiness and specification artifacts; with
+`--workflow feature-implementation` it also needs `--base-ref`, the Feature branch the Story
+branch descends from, and pins that branch and its commit. `session start` needs the checkout to be
+on the work item's branch (the settings'
 `branch_template` with the tracker's `ids.branch_key`) and the tracker to know the item.
 `adoption assess` reads the work item and Tasks through the selected tracker. `adoption plan`
 binds the source fingerprint, intended base, target branch, and separate worktree path. A
@@ -154,8 +157,8 @@ Always `0`; the decision is in stdout.
 ### Cross-field Invariants
 
 A deny reason always starts with `[harness <rule>]` (`human-owned`, `tracker-invalid`,
-`approval-required`, `protected-items`, `tests-with-code`, `generated-files`, `guarded-paths`, `draft-reviewed-prs`,
-`history-preserved`, `harness-error`) or comes from the workflow policy.
+`approval-required`, `protected-items`, `tests-with-code`, `generated-files`, `guarded-paths`, `feature-branch`,
+`draft-reviewed-prs`, `history-preserved`, `harness-error`) or comes from the workflow policy.
 
 ### Failure Behavior
 
@@ -174,7 +177,7 @@ echo '{"tool_name":"Bash","tool_input":{"command":"git push"},"cwd":"."}' \
 
 | Command | Writes | Exit codes |
 | --- | --- | --- |
-| `scripts/harness/checks.py [--head \| --staged] [--only <name>…]` | `.harness/state/checks/<tree>.json` | `0` all passed or none applied; `1` a check failed; `2` `--head` with uncommitted tracked changes |
+| `scripts/harness/checks.py [--head \| --staged] [--only <name>…]` | `.harness/state/checks/<tree>.json` | `0` all passed or none applied; `1` a check failed; `2` `--head` with uncommitted tracked changes, or `--staged` when the working files differ from the index |
 | `scripts/harness/review_verdict.py --verdict ready\|blocked --summary <text>` | `.harness/state/review/<commit>.json` | `0` recorded; `2` `ready` with uncommitted tracked changes |
 | `scripts/harness/bootstrap.py --repo <dir> --settings-from <file>` | `.harness/settings.json` (once), `.git/info/exclude`, the knowledge store | `0`; `2` not a repository root, invalid settings, or an unusable selected tracker |
 | `skills/azure-devops/scripts/health-check.mjs --project <p> [--org <o>]` | nothing | `0` healthy; `1` call failed; `2` bad arguments; `124` timeout |
@@ -275,7 +278,7 @@ not offered.
 | --- | --- |
 | `approve HB-XXXX` / `aprovo HB-XXXX` | opens an approval window (`approvals.window_minutes`) |
 | `harness revoke` | closes every open window |
-| `harness manual-check <name> ok` | records manual evidence for the currently staged tree |
+| `harness manual-check <name> ok` | records manual evidence for the currently staged tree (in Claude, click **Approve change**) |
 | `approve HT-XXXXXX` | Cursor: trusts the onboarded tracker whose current version has that short id |
 | `use HT-XXXXXX` | Cursor: selects that trusted tracker, writing it into the settings file |
 | `stop trusting <tracker>` | Cursor: withdraws trust from the tracker named by label or name |
