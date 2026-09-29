@@ -22,6 +22,9 @@ Human-owned, so the `human-owned` rule blocks the agent from writing them direct
 - `.harness/state/approvals/`, `manual/`, `asked/`, `trackers/`: written only by the prompt and
   answer hooks, from what the user typed or clicked.
 - `.harness/state/sessions/`: written only through `harness session`, which checks every step.
+- `.harness/state/adoptions/`: assessments and plans are written only through `harness adoption`;
+  approvals only by the answer hook from an **Approve adoption** click; materialization records only
+  after the pinned source delta is applied and staged on the approved base in a separate worktree.
 - `.harness/state/tracking.json`: written only by the gateway's skip and resume tools, each behind
   an approval.
 
@@ -58,7 +61,7 @@ A Story never attaches to an Epic. Points go into the process's points field
 .harness/
 |-- settings.json                    committed; schema: config/settings.schema.json
 |-- trackers/<name>/                 committed; onboarded trackers (tracker.json, adapter.py)
-|-- tracker/                         committed; local tracker records, when it is selected
+|-- tracker/                         this clone only (ignored); local tracker records, when selected
 |   |-- <state>/<KEY>.json           {key, id, title, kind, state, description, parentId, links[]}
 |   `-- artifacts/<KEY>/*.md         artifacts in the shared envelope format
 |-- review/sources.json              requirement sources, PR host, knowledge store
@@ -137,11 +140,13 @@ None: both hosts read and write the same files.
 
 ## Security Invariants
 
-Approval, manual-check, and tracker-trust records are created only by the prompt and answer hooks.
+Approval, manual-check, adoption-approval, and tracker-trust records are created only by the prompt
+and answer hooks.
 Sessions change only through `harness session`. The settings change only by a person.
 
 ## Validation Gates
 
 `tests/harness/test_hook_rules.py` covers every rule through the hook; `tests/harness/test_sessions.py`
-and `tests/delivery/contract/test_hook_runtime.py` cover sessions; `tests/integrations/` covers the
+and `tests/delivery/contract/test_hook_runtime.py` cover sessions; `tests/harness/test_adoption.py`
+covers immutable assessment, approval, and worktree materialization; `tests/integrations/` covers the
 registry, adapters, gateway, trust, and onboarding; `tests/backlog/` covers draft validation.

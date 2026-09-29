@@ -1,7 +1,7 @@
 # monolithic-dev-harness
 
 [![CI](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.2.0-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
+[![Version](https://img.shields.io/badge/version-0.3.0-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![Cursor](https://img.shields.io/badge/Cursor-supported-black.svg)](https://cursor.com)
@@ -95,7 +95,7 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
   commit per Task; stacked branches for multi-Story Features.
 - **Requirements-first review:** coverage of the Story's acceptance criteria before a deep
   correctness and maintainability audit, ending in a recorded verdict and a **draft** pull request.
-- **Deterministic enforcement:** nine named rules (for example `approval-required`,
+- **Deterministic enforcement:** ten named rules (for example `approval-required`,
   `tests-with-code`, `draft-reviewed-prs`) plus the workflow policy, evaluated before every
   governed tool call, failing closed for writes.
 - **Human approvals that the agent cannot forge:** tracker and SCM writes open only after you click
@@ -323,6 +323,19 @@ test changes in the commit or earlier on the branch. So a Task with no practical
 can only be committed once the branch already has test changes; as the first Task on a branch,
 it is blocked.
 
+#### What if implementation already exists?
+
+Use `adopt-existing-implementation` instead of pretending the normal Task-by-Task sequence already
+happened. The harness inventories the Story, Tasks, artifacts, branch ancestry, commits, dirty
+files, and exact-tree evidence with `harness adoption assess`. It classifies each Task without
+treating code or commits alone as proof of completion, then persists a continuation plan.
+
+After the complete plan is shown, the user approves its exact content with an **Approve adoption**
+button. `harness adoption materialize` then verifies that the source and base have not changed,
+creates a separate correctly based worktree, and stages the verified adoption delta there.
+It transfers the source delta from the real merge base, so changes unique to a newer Feature base
+remain intact. The source checkout remains untouched, and no commit or Task transition is fabricated.
+
 #### What if the team has only an idea and no backlog records?
 
 The harness can start from the idea. It drafts a work item from it (any level: an Epic, a Feature,
@@ -439,15 +452,15 @@ See [`docs/04-operations/deployment.md`](./docs/04-operations/deployment.md).
 
 The agent works with your tracker and repository identity, so the harness assumes the model can be
 wrong or misled. Every tracker and SCM write needs an approval window that only your own prompt can
-open; protected work items can never be touched; the settings, approval, manual-check, session, and
-tracker-trust records are human-owned; an onboarded tracker counts only as you trusted it; and the
-runtime fails closed for writes. Report vulnerabilities privately to the maintainers.
+open; protected work items can never be touched; the settings, approval, manual-check, session,
+adoption, and tracker-trust records are human-owned; an onboarded tracker counts only as you
+trusted it; and the runtime fails closed for writes. Report vulnerabilities privately to the maintainers.
 
 See [`docs/05-security/security.md`](./docs/05-security/security.md).
 
 ## Project status
 
-`0.2.0`. The rules, adapters, installer, and test suites are verified in CI. Loading in Cursor, a
+`0.3.0`. The rules, adapters, installer, and test suites are verified in CI. Loading in Cursor, a
 full end-to-end run against a live Azure DevOps project, and a live check of the Linear adapter are
 pending observation.
 

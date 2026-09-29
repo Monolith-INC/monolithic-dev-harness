@@ -14,6 +14,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from harness import sessions
 from tests.settings_fixture import MINIMAL
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
@@ -196,6 +197,7 @@ class TestHumanOwned(HookTestCase):
             ".harness/state/sessions/HS-1/events/0002-closed.json",
             ".harness/state/trackers/x.json",
             ".harness/state/tracking.json",
+            ".harness/state/adoptions/HA-0123456789/approval.json",
         ):
             with self.subTest(path=path):
                 self.assertDenied(
@@ -1019,6 +1021,27 @@ class TestGuarded(HookTestCase):
         sh(self.repo, "add", "security.rules")
         self.assertDenied(self.commit_call(), "guarded-paths")
 
+    def test_staged_checks_refuse_different_working_files(self) -> None:
+        self.write("security.rules", "staged\n")
+        sh(self.repo, "add", "security.rules")
+        self.write("security.rules", "unstaged\n")
+        checked = subprocess.run(
+            [
+                sys.executable,
+                str(CHECKS),
+                "--repo",
+                str(self.repo),
+                "--staged",
+                "--only",
+                "rules",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(checked.returncode, 2)
+        self.assertIn("staged and working files differ", checked.stderr)
+        self.assertDenied(self.commit_call(), "guarded-paths")
+
     def test_manual_guard_needs_the_users_record(self) -> None:
         self.write("infra/main.tf")
         sh(self.repo, "add", "infra/main.tf")
@@ -1028,6 +1051,51 @@ class TestGuarded(HookTestCase):
             "prompt",
             {"prompt": "validated by hand: harness manual-check infra ok"},
         )
+        self.assertAllowed(self.commit_call())
+
+    def test_manual_guard_can_be_approved_by_a_tree_bound_button(self) -> None:
+        self.write("infra/main.tf")
+        sh(self.repo, "add", "infra/main.tf")
+        question = "Did you validate the infrastructure change shown above?"
+        tool_input = {
+            "questions": [
+                {
+                    "question": question,
+                    "header": "Validation",
+                    "multiSelect": False,
+                    "options": [
+                        {
+                            "label": "Approve change",
+                            "description": "Record my validation for this exact change.",
+                        },
+                        {"label": "Not now", "description": "Record nothing."},
+                    ],
+                }
+            ]
+        }
+        self.assertIsNone(
+            self.hook(
+                "claude",
+                "ask",
+                {
+                    "tool_name": "AskUserQuestion",
+                    "tool_use_id": "manual-1",
+                    "tool_input": tool_input,
+                },
+            )
+        )
+        response = {**tool_input, "answers": {question: "Approve change"}}
+        answered = self.hook(
+            "claude",
+            "answer",
+            {
+                "tool_name": "AskUserQuestion",
+                "tool_use_id": "manual-1",
+                "tool_input": response,
+                "tool_response": response,
+            },
+        )
+        self.assertIn("manual check infra recorded", str(answered))
         self.assertAllowed(self.commit_call())
 
 
@@ -1043,6 +1111,40 @@ class TestPullRequest(HookTestCase):
         self.write("lib/a.dart")
         sh(self.repo, "add", "-A")
         sh(self.repo, "commit", "-q", "-m", "feature")
+
+    def test_feature_story_pr_must_target_its_pinned_feature_branch(self) -> None:
+        sessions.start(
+            self.repo,
+            "1",
+            "feature-implementation",
+            expected_base_ref="feature/900-parent",
+            expected_base_commit=sh(self.repo, "rev-parse", "HEAD").strip(),
+        )
+        self.assertDenied(
+            self.pr(isDraft=True, targetRefName="refs/heads/develop"),
+            "feature-branch",
+        )
+
+    def test_feature_rule_accepts_a_remote_base_and_skips_unpinned_sessions(
+        self,
+    ) -> None:
+        from harness import rules
+
+        sh(self.repo, "remote", "add", "origin", "https://example.invalid/r.git")
+        call = rules.make_call(
+            "mcp__azure-devops__repo_pull_request_write",
+            {"action": "create", "targetRefName": "refs/heads/feature/900-parent"},
+        )
+        sessions.start(self.repo, "1", "feature-implementation")
+        self.assertTrue(rules.rule_feature_branch(call, self.repo).allowed)
+        sessions.transition(self.repo, "close")
+        sessions.start(
+            self.repo,
+            "1",
+            "feature-implementation",
+            expected_base_ref="origin/feature/900-parent",
+        )
+        self.assertTrue(rules.rule_feature_branch(call, self.repo).allowed)
 
     def test_pr_must_be_draft_reviewed_and_checked(self) -> None:
         self.approve()

@@ -98,11 +98,17 @@ Read `./references/plan-generation.md` § PHASE 2.
 1. Draft a plan that **addresses every** acceptance-criteria entry.
 2. Write it to `<artifacts>/Implementation_Plans/YYYY-MM-DD-<story-slug>.md` with the frontmatter
    contract in `plan-generation.md`.
-3. Re-read the file; record `plan_path` on the run context; present path + summary.
-4. **Do not create Tasks** in this phase. If PHASE 3 is invoked without a saved `plan_path` on
+3. Re-read the file and record `plan_path` on the run context.
+4. Present the actual plan before asking for acceptance. In a host with an artifact/document pane,
+   open the complete file there; otherwise include the complete plan inline when practical, or a
+   faithful section-by-section preview plus the path when it is too long. A path alone is not a
+   presentation.
+5. Ask for acceptance in chat after the plan is visible. Keep the approval button in chat: a
+   document-pane control does not record harness approval.
+6. **Do not create Tasks** in this phase. If PHASE 3 is invoked without a saved `plan_path` on
    disk → STOP: "Implementation Plan not saved; refusing Task creation."
 
-Optional: WAIT for user accept/edit of the plan before PHASE 3.
+WAIT for user accept/edit of the plan before PHASE 3.
 
 ---
 

@@ -2,10 +2,19 @@
 title: Documentation Changelog
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-28
+last_reviewed: 2026-09-29
 ---
 
 # Changelog
+
+## 2026-09-29: Adoption, Feature pinning, and click approvals (0.3.0)
+
+- Documented `harness adoption` (assess, plan, status, materialize), the **Approve adoption** and
+  **Approve change** buttons, and the human-owned `.harness/state/adoptions/` records in the data
+  model, API, glossary, security controls, runbook, and user guide.
+- Added the `feature-branch` rule to every rule list, and `session start --base-ref` to the API.
+- `.harness/tracker/` is now local to the clone and shared by its worktrees (data model,
+  environments, architecture).
 
 ## 2026-09-28: Release review (0.2.0)
 

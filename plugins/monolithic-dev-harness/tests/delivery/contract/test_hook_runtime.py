@@ -189,6 +189,43 @@ class TestSessionScope(TrackedRepo):
         sessions.start(self.root, "STORY-0001", "implement-story")
         self.assertIn("must be in progress", self.evaluate().reason)
 
+    def test_ordinary_edits_use_the_start_snapshot_but_push_revalidates(self):
+        sessions.start(
+            self.root,
+            "STORY-0001",
+            "implement-story",
+            readiness_state="in_progress",
+            readiness_artifacts=("tech_spec",),
+        )
+        self.ops.transition_work_item("STORY-0001", LogicalState.READY)
+        with mock.patch.object(
+            hook_runtime.registry,
+            "open_selected",
+            side_effect=AssertionError("tracker"),
+        ):
+            self.assertFalse(self.evaluate().is_denied())
+        pushed = CanonicalToolEvent(
+            client="claude",
+            tool_name="Bash",
+            command="git push origin HEAD",
+            workspace_root=str(self.root),
+            branch="userstory/STORY-0001-example",
+        )
+        self.assertIn(
+            "must be in progress",
+            hook_runtime._evaluate_work_context(pushed).reason,
+        )
+
+    def test_a_spec_published_after_session_start_is_found_live(self):
+        sessions.start(
+            self.root,
+            "STORY-0001",
+            "implement-story",
+            readiness_state="ready",
+            readiness_artifacts=(),
+        )
+        self.assertFalse(self.evaluate().is_denied())
+
     def test_a_detached_head_cannot_hold_a_session(self):
         sessions.start(self.root, "STORY-0001", "implement-story")
         git(self.root, "checkout", "-q", "--detach")

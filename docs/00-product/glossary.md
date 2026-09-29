@@ -24,12 +24,13 @@ last_reviewed: 2026-09-28
 | Governed repository | A repository with `.harness/settings.json`; only these are subject to the rules. |
 | Guarded path | A path whose commits need specific evidence (`check:<name>` or `manual:<name>`). |
 | Hook runtime | `scripts/harness/hook.py` plus the workflow policy runtime; runs before every governed tool call. |
-| Manual check | Evidence that a person validated a guarded change by hand, recorded from their own prompt. |
+| Manual check | Evidence that a person validated a guarded change by hand, recorded from their own prompt or their click on **Approve change** for the exact staged tree. |
 | Onboarded tracker | A tracker folder under `.harness/trackers/<name>/` that the repository brought in; it counts only while the user trusts it as it reads now. |
+| Adoption | Taking over implementation that predates a session: `harness adoption` assesses it, the user approves one exact plan with **Approve adoption**, and the verified delta is staged on the approved base in a separate worktree. |
 | Orchestrator | An MCP server that validates a skill's inputs and outputs and runs its Actor-Critic loop. |
 | Protected work item | A work item id listed in `protected_work_items` that the agent may never write, link, parent, or mention in text the tracker turns into a link, not even with approval. |
 | Review verdict | `ready` or `blocked`, recorded for one HEAD commit by the review stage. |
-| Rule | One named deterministic check: `human-owned`, `tracker-invalid`, `approval-required`, `protected-items`, `tests-with-code`, `generated-files`, `guarded-paths`, `draft-reviewed-prs`, `history-preserved`. |
+| Rule | One named deterministic check: `human-owned`, `tracker-invalid`, `approval-required`, `protected-items`, `tests-with-code`, `generated-files`, `guarded-paths`, `feature-branch`, `draft-reviewed-prs`, `history-preserved`. |
 | Session | A binding of one work item to one checkout (`harness session start`); governed code changes need an active one, and the workflow checks its work item. Phases: active, paused, closed. |
 | Settings | `.harness/settings.json`, the repository's only settings file: tracker, SCM, branch template, rules. Human-owned: the harness changes only its `tracker` section, when the user chooses a tracker. |
 | Stacked branches | Story branches based on a Feature branch, landed into it in order. |

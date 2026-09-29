@@ -19,6 +19,10 @@ also blocks governed writes without the spec.
 
 ## 0. Start
 
+0. Inspect the branch, index, working tree, untracked files, and commits since the intended base. If
+   implementation already exists, stop this fresh-build routine and use
+   `adopt-existing-implementation`; do not manufacture TDD history or reconstruct commits by swapping
+   partial file versions through the working tree.
 1. `start-ticket` on the Story: it confirms the tracker item, moves it to in progress (a tracker write:
    ask for the approval batch), and returns the spec plan.
 2. `branch-and-pr` → *Branch* section: create the Story branch from the fresh base.

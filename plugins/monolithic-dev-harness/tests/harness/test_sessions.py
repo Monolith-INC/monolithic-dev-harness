@@ -45,13 +45,23 @@ class SessionTest(unittest.TestCase):
         git(self.repo, "checkout", "-q", "-b", "feature/STORY-0001-x")
 
     def test_start_records_the_checkout_and_resolves_it(self) -> None:
-        session = sessions.start(self.repo, "STORY-0001", "implement-story").value
+        session = sessions.start(
+            self.repo,
+            "STORY-0001",
+            "implement-story",
+            readiness_state="in_progress",
+            readiness_artifacts=("tech_spec",),
+        ).value
         self.assertEqual(
             (session.phase, session.checkout.branch),
             (sessions.Phase.ACTIVE, "feature/STORY-0001-x"),
         )
         self.assertEqual(
             session.base_commit, git(self.repo, "rev-parse", "HEAD").strip()
+        )
+        self.assertEqual(
+            (session.readiness_state, session.readiness_artifacts),
+            ("in_progress", ("tech_spec",)),
         )
         self.assertEqual(sessions.resolve(self.repo), sessions.Bound(session))
 
@@ -166,3 +176,52 @@ class SessionCommandTest(SessionTest):
         self.assertEqual(self.run_cli("session", "resume").returncode, 0)
         self.assertIsInstance(sessions.start(self.repo, "STORY-0001", "x"), Err)
         self.assertIsInstance(sessions.transition(self.repo, "close"), Ok)
+
+    def test_feature_session_requires_and_verifies_the_feature_base(self) -> None:
+        write_settings(self.repo)
+        tracker = self.repo / ".harness" / "tracker" / "in_progress"
+        tracker.mkdir(parents=True)
+        (tracker / "STORY-0001.json").write_text(
+            json.dumps(
+                {
+                    "key": "STORY-0001",
+                    "id": "STORY-0001",
+                    "title": "t",
+                    "kind": "user_story",
+                    "state": "in_progress",
+                }
+            )
+        )
+        missing = self.run_cli(
+            "session", "start", "STORY-0001", "--workflow", "feature-implementation"
+        )
+        self.assertEqual(missing.returncode, 2)
+        self.assertIn("require --base-ref", missing.stderr)
+        git(self.repo, "branch", "feature/STORY-0009-parent", "develop")
+        git(self.repo, "checkout", "-q", "feature/STORY-0009-parent")
+        git(self.repo, "commit", "-q", "--allow-empty", "-m", "feature setup")
+        git(self.repo, "checkout", "-q", "feature/STORY-0001-x")
+        wrong = self.run_cli(
+            "session",
+            "start",
+            "STORY-0001",
+            "--workflow",
+            "feature-implementation",
+            "--base-ref",
+            "feature/STORY-0009-parent",
+        )
+        self.assertEqual(wrong.returncode, 2)
+        self.assertIn("was not cut from", wrong.stderr)
+        git(self.repo, "branch", "feature/STORY-0008-parent", "HEAD")
+        started = self.run_cli(
+            "session",
+            "start",
+            "STORY-0001",
+            "--workflow",
+            "feature-implementation",
+            "--base-ref",
+            "feature/STORY-0008-parent",
+        )
+        self.assertEqual(started.returncode, 0, started.stderr)
+        bound = sessions.resolve(self.repo).session
+        self.assertEqual(bound.expected_base_ref, "feature/STORY-0008-parent")

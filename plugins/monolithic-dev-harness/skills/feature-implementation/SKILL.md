@@ -32,6 +32,9 @@ skill is unavailable until `/resume-tracker`.
    `implement-story` on a Story branch cut from the Feature branch → `review`. Review ends with a
    **draft** pull request from the Story branch **into the Feature branch**, linked to the Story.
    Pull requests are not opened earlier: the harness only allows one after a `ready` verdict.
+   Start its session with
+   `harness session start <story> --workflow feature-implementation --base-ref <Feature branch>`.
+   The command refuses a Story branch that does not contain the recorded Feature-branch tip.
 5. **Keep the stack current.** When an earlier branch changes after a later Story branched from it,
    run `reconcile-feature-stack` before adding commits to the later Story.
 6. **Land the stack** with `merge-story-stack-into-feature` once the Stories are ready.

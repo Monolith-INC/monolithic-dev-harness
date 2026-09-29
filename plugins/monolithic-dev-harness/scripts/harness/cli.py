@@ -6,6 +6,7 @@ harness doctor [--repo <dir>] [--tools] [--azure]
 harness bootstrap [--repo <dir>] [--settings-from <file>]   (defaults: current repo, example settings)
 harness session start <work item> [--workflow <name>] | status | pause | resume | close
 harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...]
+harness adoption assess | plan | status | materialize ...
 harness knowledge <operation> ...
 """
 
@@ -17,14 +18,32 @@ import os
 import shutil
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
 
-from core.result import Err, Failure, Ok, Result, bind, fmap  # noqa: E402
-from harness import gitstate, knowledge, sessions, settings, state  # noqa: E402
+from core.result import (  # noqa: E402
+    Err,
+    Failure,
+    Ok,
+    Result,
+    attempt,
+    bind,
+    fmap,
+    require,
+)
+from harness import (  # noqa: E402
+    adoption,
+    gitstate,
+    knowledge,
+    sessions,
+    settings,
+    state,
+)
 from integrations import branches, onboarding, registry, transport  # noqa: E402
+from integrations.contracts import TrackerOps, WorkItem  # noqa: E402
 
 PLUGIN_ID = "monolithic-dev-harness@monolithic-dev-harness"
 
@@ -233,8 +252,21 @@ def session_command(args: argparse.Namespace) -> int:
             return _print(
                 fmap(
                     bind(
-                        _startable(repo, args.work_item or ""),
-                        lambda ref: sessions.start(repo, ref, args.workflow),
+                        _startable(
+                            repo,
+                            args.work_item or "",
+                            args.workflow,
+                            args.base_ref or "",
+                        ),
+                        lambda context: sessions.start(
+                            repo,
+                            context.work_item,
+                            args.workflow,
+                            expected_base_ref=context.base_ref,
+                            expected_base_commit=context.base_commit,
+                            readiness_state=context.state,
+                            readiness_artifacts=context.artifacts,
+                        ),
                     ),
                     _started,
                 )
@@ -254,7 +286,18 @@ def _started(session: sessions.Session) -> str:
     )
 
 
-def _startable(repo: Path, work_item: str) -> Result[str]:
+@dataclass(frozen=True)
+class _SessionStart:
+    work_item: str
+    state: str
+    artifacts: tuple[str, ...]
+    base_ref: str
+    base_commit: str
+
+
+def _startable(
+    repo: Path, work_item: str, workflow: str, base_ref: str
+) -> Result[_SessionStart]:
     """The work item, once the branch carries its key and the tracker knows it."""
     loaded = settings.load(repo)
     return bind(
@@ -269,7 +312,22 @@ def _startable(repo: Path, work_item: str) -> Result[str]:
                         active.manifest.ids.branch_key,
                         checkout.branch,
                     ),
-                    lambda branch_id: _matching(repo, loaded, work_item, branch_id),
+                    lambda branch_id: bind(
+                        _matching(repo, loaded, work_item, branch_id),
+                        lambda found: bind(
+                            _feature_base(repo, workflow, base_ref),
+                            lambda base: fmap(
+                                found[1].list_artifacts(found[0].id),
+                                lambda artifacts: _SessionStart(
+                                    found[0].key,
+                                    found[0].state.value,
+                                    tuple(str(artifact.kind) for artifact in artifacts),
+                                    base[0],
+                                    base[1],
+                                ),
+                            ),
+                        ),
+                    ),
                 ),
             ),
         ),
@@ -278,16 +336,56 @@ def _startable(repo: Path, work_item: str) -> Result[str]:
 
 def _matching(
     repo: Path, loaded: Result[settings.Settings], work_item: str, branch_id: str
-) -> Result[str]:
-    if work_item.strip().upper() != branch_id.upper():
-        return Err(
-            _failure(
-                f"this branch is for {branch_id}, not {work_item}; check out the work item's branch first"
+) -> Result[tuple[WorkItem, TrackerOps]]:
+    match work_item.strip().upper() == branch_id.upper():
+        case False:
+            return Err(
+                _failure(
+                    f"this branch is for {branch_id}, not {work_item}; check out the work item's branch first"
+                )
             )
-        )
+        case True:
+            return bind(
+                registry.open_selected(repo, loaded),
+                lambda ops: fmap(
+                    ops.get_work_item(branch_id), lambda item: (item, ops)
+                ),
+            )
+
+
+def _feature_base(repo: Path, workflow: str, base_ref: str) -> Result[tuple[str, str]]:
+    required = workflow == "feature-implementation"
     return bind(
-        registry.open_selected(repo, loaded),
-        lambda ops: fmap(ops.get_work_item(branch_id), lambda item: item.key),
+        require(
+            not required or bool(base_ref.strip()),
+            "invalid_request",
+            "feature-implementation sessions require --base-ref naming the Feature branch",
+        ),
+        lambda _: (
+            Ok(("", ""))
+            if not base_ref.strip()
+            else bind(
+                attempt(
+                    lambda: gitstate.git(
+                        repo, "rev-parse", "--verify", base_ref.strip()
+                    ),
+                    "invalid_request",
+                    f"cannot resolve Feature branch {base_ref!r}",
+                    gitstate.GitError,
+                ),
+                lambda commit: bind(
+                    attempt(
+                        lambda: gitstate.git(
+                            repo, "merge-base", "--is-ancestor", commit, "HEAD"
+                        ),
+                        "invalid_request",
+                        f"this Story branch was not cut from Feature branch {base_ref!r}",
+                        gitstate.GitError,
+                    ),
+                    lambda _: Ok((base_ref.strip(), commit)),
+                ),
+            )
+        ),
     )
 
 
@@ -319,6 +417,50 @@ def tracker_command(args: argparse.Namespace) -> int:
                 )
             )
     return 2
+
+
+def adoption_command(args: argparse.Namespace) -> int:
+    repo = _repo(args.repo)
+    match args.operation:
+        case "assess":
+            result = _adoption_assessment(repo, args.target or "", args.base_ref or "")
+        case "plan":
+            result = adoption.create_plan(
+                repo,
+                args.target or "",
+                args.branch or "",
+                Path(args.destination or ""),
+            )
+        case "status":
+            result = adoption.status(repo, args.target or "")
+        case "materialize":
+            result = adoption.materialize(repo, args.target or "")
+        case _:
+            return 2
+    return _print(
+        fmap(result, lambda value: json.dumps(value, indent=2, sort_keys=True))
+    )
+
+
+def _adoption_assessment(
+    repo: Path, work_item: str, base_ref: str
+) -> Result[dict[str, object]]:
+    loaded = settings.load(repo)
+    return bind(
+        registry.open_selected(repo, loaded),
+        lambda ops: bind(
+            ops.get_work_item(work_item),
+            lambda item: bind(
+                ops.list_children(item.id),
+                lambda children: bind(
+                    ops.list_artifacts(item.id),
+                    lambda artifacts: adoption.assess(
+                        repo, item, children, artifacts, base_ref
+                    ),
+                ),
+            ),
+        ),
+    )
 
 
 def _pairs(values: list[str] | None) -> tuple[tuple[str, str], ...]:
@@ -387,6 +529,10 @@ def main(argv: list[str] | None = None) -> int:
     )
     session_parser.add_argument("work_item", nargs="?")
     session_parser.add_argument("--workflow", default="implement-story")
+    session_parser.add_argument(
+        "--base-ref",
+        help="required for feature-implementation: Feature branch this Story branch descends from",
+    )
     session_parser.add_argument("--repo", default=".")
     tracker_parser = sub.add_parser(
         "tracker", help="list trackers, stage a new one, or show one for review"
@@ -402,6 +548,25 @@ def main(argv: list[str] | None = None) -> int:
         metavar="KEY=VALUE",
         help="a value the tracker's settings need (stage only); repeat for each",
     )
+    adoption_parser = sub.add_parser(
+        "adoption",
+        help="assess, approve, and materialize implementation already in progress",
+    )
+    adoption_parser.add_argument(
+        "operation", choices=("assess", "plan", "status", "materialize")
+    )
+    adoption_parser.add_argument(
+        "target",
+        help="work-item reference for assess; adoption id for other operations",
+    )
+    adoption_parser.add_argument(
+        "--base-ref", help="intended base branch or ref (assess)"
+    )
+    adoption_parser.add_argument("--branch", help="new Story branch (plan)")
+    adoption_parser.add_argument(
+        "--destination", help="new recovery worktree path (plan)"
+    )
+    adoption_parser.add_argument("--repo", default=".")
     knowledge_parser = sub.add_parser(
         "knowledge", help="query or refresh a harness-owned immutable knowledge store"
     )
@@ -425,6 +590,8 @@ def main(argv: list[str] | None = None) -> int:
         return session_command(args)
     if args.command == "tracker":
         return tracker_command(args)
+    if args.command == "adoption":
+        return adoption_command(args)
     return bootstrap(extra)
 
 

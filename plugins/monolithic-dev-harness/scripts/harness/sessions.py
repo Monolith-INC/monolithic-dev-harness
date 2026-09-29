@@ -77,6 +77,11 @@ class Session:
     workflow: str
     checkout: Checkout
     base_commit: str
+    expected_base_ref: str
+    expected_base_commit: str
+    readiness_state: str
+    readiness_artifacts: tuple[str, ...]
+    readiness_verified_at: str
     phase: Phase
     folder: Path
 
@@ -209,6 +214,13 @@ def _session(folder: Path) -> Result[Session]:
                 workflow=str(record.get("workflow", "")),
                 checkout=_checkout_of(record),
                 base_commit=str(record.get("base_commit", "")),
+                expected_base_ref=str(record.get("expected_base_ref", "")),
+                expected_base_commit=str(record.get("expected_base_commit", "")),
+                readiness_state=str(record.get("readiness_state", "")),
+                readiness_artifacts=tuple(
+                    map(str, record.get("readiness_artifacts", ()))
+                ),
+                readiness_verified_at=str(record.get("readiness_verified_at", "")),
                 phase=phase,
                 folder=folder,
             ),
@@ -320,7 +332,16 @@ def _append(folder: Path, event: str, attempts: int = ATTEMPTS) -> Result[Path]:
             return written
 
 
-def start(repo: Path, work_item: str, workflow: str) -> Result[Session]:
+def start(
+    repo: Path,
+    work_item: str,
+    workflow: str,
+    *,
+    expected_base_ref: str = "",
+    expected_base_commit: str = "",
+    readiness_state: str = "",
+    readiness_artifacts: tuple[str, ...] = (),
+) -> Result[Session]:
     """Bind `work_item` to this checkout. The checkout must be on a branch and not already bound."""
     return bind(
         checkout(repo),
@@ -331,14 +352,28 @@ def start(repo: Path, work_item: str, workflow: str) -> Result[Session]:
                 f"branch {identity.branch!r} in this checkout already has a session ({describe(resolve(repo))}); close it first",
             ),
             lambda _: _begin(
-                Path(identity.worktree), identity, work_item.strip(), workflow
+                Path(identity.worktree),
+                identity,
+                work_item.strip(),
+                workflow,
+                expected_base_ref,
+                expected_base_commit,
+                readiness_state,
+                readiness_artifacts,
             ),
         ),
     )
 
 
 def _begin(
-    repo: Path, identity: Checkout, work_item: str, workflow: str
+    repo: Path,
+    identity: Checkout,
+    work_item: str,
+    workflow: str,
+    expected_base_ref: str,
+    expected_base_commit: str,
+    readiness_state: str,
+    readiness_artifacts: tuple[str, ...],
 ) -> Result[Session]:
     identifier = "HS-" + secrets.token_hex(5).upper()
     folder = _root(repo) / identifier
@@ -350,6 +385,11 @@ def _begin(
         "git_dir": identity.git_dir,
         "branch": identity.branch,
         "base_commit": _head(repo),
+        "expected_base_ref": expected_base_ref,
+        "expected_base_commit": expected_base_commit,
+        "readiness_state": readiness_state,
+        "readiness_artifacts": list(readiness_artifacts),
+        "readiness_verified_at": _now() if readiness_state else "",
         "started": _now(),
     }
     staging = state.state_dir(repo) / "sessions-staging" / identifier

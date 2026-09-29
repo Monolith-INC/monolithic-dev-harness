@@ -16,7 +16,7 @@ if _SCRIPTS_DIR not in sys.path:
 
 from spec_runtime import SPEC_KINDS
 
-from core.result import Err, Failure, Ok, Result, bind, fmap
+from core.result import Err, Failure, Ok, Result, bind, fmap, recover
 from harness import sessions, settings, state
 from harness.local_artifacts import approved_kinds_for, artifacts_dir
 from host_adapters import (
@@ -202,15 +202,22 @@ def _enforced(root: Path) -> bool:
 
 def _session_item(root: Path) -> Result[tuple[sessions.Session, TrackerOps, WorkItem]]:
     """This checkout's active session, the tracker, and the session's work item as the tracker has it."""
+    return bind(
+        _active_session(root),
+        lambda session: bind(
+            registry.open_selected(root, settings.load(root)),
+            lambda ops: fmap(
+                ops.get_work_item(session.work_item),
+                lambda item: (session, ops, item),
+            ),
+        ),
+    )
+
+
+def _active_session(root: Path) -> Result[sessions.Session]:
     match sessions.resolve(root):
         case sessions.Bound(session) if session.phase == sessions.Phase.ACTIVE:
-            return bind(
-                registry.open_selected(root, settings.load(root)),
-                lambda ops: fmap(
-                    ops.get_work_item(session.work_item),
-                    lambda item: (session, ops, item),
-                ),
-            )
+            return Ok(session)
         case sessions.Bound(session):
             return Err(
                 _failure(
@@ -234,12 +241,47 @@ def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
     root = Path(event.workspace_root or ".")
     if _is_bootstrap_or_repair(event.command) or not _enforced(root):
         return PolicyDecision.allow()
+    boundary = "push" in {
+        command[0] for command in git_commands(event.command or "") if command
+    }
     return _decision(
         bind(
-            _session_item(root),
-            lambda found: _ready(root.resolve(), found[1], found[2]),
+            _active_session(root),
+            lambda session: (
+                recover(
+                    _snapshot_ready(root.resolve(), session),
+                    lambda _: _live_ready(root),
+                )
+                if session.readiness_verified_at and not boundary
+                else _live_ready(root)
+            ),
         )
     )
+
+
+def _live_ready(root: Path) -> Result[None]:
+    return bind(
+        _session_item(root),
+        lambda found: _ready(root.resolve(), found[1], found[2]),
+    )
+
+
+def _snapshot_ready(root: Path, session: sessions.Session) -> Result[None]:
+    """Readiness pinned when the session started. Ordinary edits it covers never contact the
+    tracker; anything it does not cover (a spec published later) is checked live."""
+    match session.readiness_state:
+        case LogicalState.IN_PROGRESS.value:
+            return _has_spec(
+                root,
+                session.work_item,
+                {_artifact_kind(kind) for kind in session.readiness_artifacts},
+            )
+        case _:
+            return Err(
+                _failure(
+                    f"Work item {session.work_item} was not in progress when this session started."
+                )
+            )
 
 
 def _ready(root: Path, ops: TrackerOps, item: WorkItem) -> Result[None]:
@@ -252,13 +294,13 @@ def _ready(root: Path, ops: TrackerOps, item: WorkItem) -> Result[None]:
     return bind(
         ops.list_artifacts(item.id),
         lambda found: _has_spec(
-            root, item, {_artifact_kind(artifact.kind) for artifact in found}
+            root, item.key, {_artifact_kind(artifact.kind) for artifact in found}
         ),
     )
 
 
-def _has_spec(root: Path, item: WorkItem, kinds: set[str]) -> Result[None]:
-    local = set(map(_artifact_kind, approved_kinds_for(root, str(item.key))))
+def _has_spec(root: Path, key: str, kinds: set[str]) -> Result[None]:
+    local = set(map(_artifact_kind, approved_kinds_for(root, key)))
     if SPEC_ARTIFACT_KINDS & (kinds | local):
         return Ok(None)
     folder = artifacts_dir(root)
@@ -269,9 +311,7 @@ def _has_spec(root: Path, item: WorkItem, kinds: set[str]) -> Result[None]:
         "`status: approved` and the user then approves it)"
     )
     return Err(
-        _failure(
-            f"Work item {item.key} has no accepted specification artifact in {where}."
-        )
+        _failure(f"Work item {key} has no accepted specification artifact in {where}.")
     )
 
 

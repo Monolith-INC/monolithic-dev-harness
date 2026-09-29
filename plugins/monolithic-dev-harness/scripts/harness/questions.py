@@ -26,7 +26,10 @@ from typing import Any
 MAX_QUESTION_WORDS = 50
 MAX_DESCRIPTION_WORDS = 25
 APPROVE_LABELS = frozenset({"approve", "aprovar", "aprovo"})
+MANUAL_APPROVE_LABELS = frozenset({"approve change", "aprovar mudança"})
+ADOPTION_APPROVE_LABELS = frozenset({"approve adoption", "aprovar adoção"})
 TRACKER_ACTIONS = {"trust": "trust", "use it": "select", "stop trusting": "untrust"}
+_ADOPTION_ID = re.compile(r"\bHA-[A-F0-9]{10}\b", re.IGNORECASE)
 
 _RULE_NAMES = (
     "human-owned",
@@ -36,6 +39,7 @@ _RULE_NAMES = (
     "generated-files",
     "guarded-paths",
     "draft-reviewed-prs",
+    "feature-branch",
     "history-preserved",
     "harness-error",
 )
@@ -146,6 +150,58 @@ def approval(tool_input: dict[str, Any], tool_response: Any) -> tuple[str, str] 
         ):
             return text, answer
     return None
+
+
+def manual_signoff(tool_input: dict[str, Any]) -> str | None:
+    """Question text when it offers the dedicated guarded-change approval action."""
+    question = _first_question(tool_input)
+    labels = {
+        str(option.get("label", "")).strip().lower()
+        for option in question.get("options") or []
+        if isinstance(option, dict)
+    }
+    return str(question.get("question", "")) if labels & MANUAL_APPROVE_LABELS else None
+
+
+def manual_choice(tool_input: dict[str, Any], tool_response: Any) -> bool:
+    """Whether the user clicked the dedicated guarded-change approval action."""
+    answers = tool_response.get("answers") if isinstance(tool_response, dict) else None
+    text = str(_first_question(tool_input).get("question", ""))
+    answer = answers.get(text) if isinstance(answers, dict) else None
+    return isinstance(answer, str) and answer.strip().lower() in MANUAL_APPROVE_LABELS
+
+
+def adoption_signoff(tool_input: dict[str, Any]) -> tuple[str, str] | None:
+    """Question text and adoption id for the dedicated continuation-plan approval."""
+    question = _first_question(tool_input)
+    labels = {
+        str(option.get("label", "")).strip().lower()
+        for option in question.get("options") or []
+        if isinstance(option, dict)
+    }
+    text = str(question.get("question", ""))
+    found = tuple(dict.fromkeys(match.upper() for match in _ADOPTION_ID.findall(text)))
+    match bool(labels & ADOPTION_APPROVE_LABELS), found:
+        case True, (adoption_id,):
+            return text, adoption_id
+        case _:
+            return None
+
+
+def adoption_requested(tool_input: dict[str, Any]) -> bool:
+    return any(
+        isinstance(option, dict)
+        and str(option.get("label", "")).strip().lower() in ADOPTION_APPROVE_LABELS
+        for option in _first_question(tool_input).get("options") or []
+    )
+
+
+def adoption_choice(tool_input: dict[str, Any], tool_response: Any) -> bool:
+    """Whether the user clicked the dedicated adoption-plan approval action."""
+    answers = tool_response.get("answers") if isinstance(tool_response, dict) else None
+    text = str(_first_question(tool_input).get("question", ""))
+    answer = answers.get(text) if isinstance(answers, dict) else None
+    return isinstance(answer, str) and answer.strip().lower() in ADOPTION_APPROVE_LABELS
 
 
 def _first_question(tool_input: dict[str, Any]) -> dict[str, Any]:

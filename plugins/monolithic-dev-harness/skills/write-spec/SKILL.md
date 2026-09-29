@@ -24,8 +24,12 @@ re-decide them. The spec decides the *how*: architecture and affected modules (f
 and risks. When the *how* would change a Task or a criterion, stop and send it back to the backlog
 instead of changing it silently.
 
-Present the accepted spec to the user for **gate G2** (the Tech Lead's approval). Publishing it to the
-tracker is a write, so include it in the approval batch. `implement-story` starts only after G2.
+Present the complete accepted spec to the user for **gate G2** (the Tech Lead's approval). When the
+host provides an artifact/document pane, open the spec there; otherwise show it inline, or provide a
+faithful section-by-section preview plus its path when the complete document is too long. A bare path
+does not count as presentation. Ask for approval in chat after the document is visible; pane controls
+do not record harness approval. Publishing it to the tracker is a write, so include it in the approval
+batch. `implement-story` starts only after G2.
 
 When the spec lives only in the artifacts path, set its frontmatter to `status: approved` before you ask
 for G2. The user's approval pins that exact content, and only then does the spec gate let code edits

@@ -6,6 +6,46 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-09-29
+
+Implementation that predates a session can be adopted safely, Feature Stories are pinned to their
+Feature branch, manual guarded changes are approved by a click, and gateway calls reuse one MCP
+connection. Local tracker records stay in the clone: re-run bootstrap to ignore them, and if they
+were committed, stop sharing them with `git rm -r --cached --ignore-unmatch .harness/tracker/`.
+
+### Added
+
+- Deterministic `harness adoption assess | plan | status | materialize` workflow for implementation
+  already in progress: Task classification, scope/evidence reporting, exact-plan approval, source
+  fingerprint checks, and a separate correctly based worktree with a verified staged snapshot.
+- Tree-bound **Approve change** questions for manual guarded-path evidence in button-capable hosts.
+- Feature-managed sessions pin and verify the Feature branch ancestry and require Story pull
+  requests to target that branch.
+
+### Changed
+
+- Session start captures work-item readiness and specification artifacts. Ordinary edit checks use
+  that snapshot; pushes and completion still revalidate against the tracker.
+- Provider-neutral tracker and SCM calls reuse one process-local MCP connection, avoiding a fresh
+  interactive OAuth process per gateway call.
+- Plans and specifications must be shown in a host document pane or in chat before approval; a
+  path alone is no longer sufficient.
+- `check --staged` fails closed unless the working-file tree exactly matches the staged tree.
+- Local tracker records (`.harness/tracker/`) are local to the clone: bootstrap ignores them through
+  `.git/info/exclude` alongside `.harness/state/` and warns when they are still committed; every
+  worktree of the clone reads the same records; adoption never inventories or carries either.
+
+### Fixed
+
+- Ordinary edits covered by the session's readiness snapshot no longer open the tracker, and a
+  specification published after session start is checked live instead of denied.
+- The `feature-branch` rule accepts a remote Feature base (`origin/feature/x`) and skips sessions
+  started without a pinned base.
+- Adoption never writes through a symbolic link on the base. It stages carried files the base
+  ignores, builds patches independent of the user's diff settings, and removes the worktree and
+  branch on any failure.
+- `check --staged` reports a git failure instead of a traceback.
+
 ## [0.2.0] - 2026-09-28
 
 Trackers become adapters, a repository keeps one settings file, work is bound to sessions, and
@@ -396,7 +436,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.2.0
 [0.1.10]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.10
 [0.1.9]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.9

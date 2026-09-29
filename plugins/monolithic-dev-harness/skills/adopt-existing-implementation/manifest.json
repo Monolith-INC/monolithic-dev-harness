@@ -1,0 +1,26 @@
+{
+  "name": "adopt-existing-implementation",
+  "version": "1.0.0",
+  "description": "Assess implementation already in progress, bind a continuation plan to approval, and materialize it safely in a separate worktree.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "work_item_ref": {"type": "string"},
+      "base_ref": {"type": "string"},
+      "target_branch": {"type": "string"},
+      "destination": {"type": "string"}
+    },
+    "required": ["work_item_ref", "base_ref"]
+  },
+  "output_signature": {
+    "type": "object",
+    "properties": {
+      "mode": {"type": "string"},
+      "skill": {"type": "string"},
+      "commands": {"type": "array", "items": {"type": "string"}},
+      "instructions": {"type": "string"}
+    },
+    "required": ["mode", "skill", "commands", "instructions"]
+  },
+  "tools": []
+}

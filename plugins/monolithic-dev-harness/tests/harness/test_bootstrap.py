@@ -51,9 +51,9 @@ class BootstrapTest(unittest.TestCase):
         self.assertEqual(
             (self.repo / ".harness" / "settings.json").read_text(), EXAMPLE.read_text()
         )
-        self.assertIn(
-            ".harness/state/", (self.repo / ".git" / "info" / "exclude").read_text()
-        )
+        exclude = (self.repo / ".git" / "info" / "exclude").read_text()
+        self.assertIn(".harness/state/", exclude)
+        self.assertIn(".harness/tracker/", exclude)
         self.assertEqual((self.repo / ".gitignore").read_text(), "node_modules/\n")
         self.assertTrue((self.repo / ".harness" / "knowledge").is_dir())
         again = self.bootstrap(self.candidate(MINIMAL))
@@ -61,6 +61,26 @@ class BootstrapTest(unittest.TestCase):
         self.assertEqual(
             (self.repo / ".harness" / "settings.json").read_text(), EXAMPLE.read_text()
         )
+        self.assertEqual((self.repo / ".git" / "info" / "exclude").read_text(), exclude)
+
+    def test_an_existing_state_ignore_gains_the_local_tracker(self) -> None:
+        exclude = self.repo / ".git" / "info" / "exclude"
+        exclude.parent.mkdir(parents=True, exist_ok=True)
+        exclude.write_text("*.log\n.harness/state/\n")
+        done = self.bootstrap(EXAMPLE)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(
+            exclude.read_text(), "*.log\n.harness/state/\n.harness/tracker/\n"
+        )
+
+    def test_committed_tracker_records_get_a_warning(self) -> None:
+        folder = self.repo / ".harness" / "tracker" / "backlog"
+        folder.mkdir(parents=True)
+        (folder / "STORY-0001.json").write_text("{}")
+        subprocess.run(["git", "-C", str(self.repo), "add", "-A"], check=True)
+        done = self.bootstrap(EXAMPLE)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("git rm -r --cached --ignore-unmatch", done.stderr)
 
     def test_invalid_settings_or_an_unusable_tracker_stop_it(self) -> None:
         broken = self.bootstrap(

@@ -53,6 +53,8 @@ See [threat-model.md](threat-model.md).
 | The agent cannot approve itself, trust a tracker, fake a session, or weaken the settings | `human-owned`, trust and tracker selection only on the user's click |
 | Protected items are never modified, even indirectly by links | `protected-items` |
 | Nothing unreviewed reaches a pull request; people publish and approve | `draft-reviewed-prs` |
+| A Feature's Story pull request targets the Feature branch its session pinned | `feature-branch` |
+| Existing implementation is adopted only as the user approved it | `human-owned` protects `.harness/state/adoptions/`; approval only on the **Approve adoption** click, pinned to the plan digest |
 | Code ships with tests; generated files are not hand-edited | `tests-with-code`, `generated-files` |
 | Sensitive paths need evidence for the exact change | `guarded-paths` |
 | Stacked branches keep their history: no rebase, squash merge, or force-push | `history-preserved` |

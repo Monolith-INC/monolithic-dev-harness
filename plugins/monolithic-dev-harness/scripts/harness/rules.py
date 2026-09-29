@@ -23,7 +23,7 @@ from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
 
-from . import gitstate, globs, shellscan, state, tracker_policy
+from . import gitstate, globs, sessions, shellscan, state, tracker_policy
 from .settings import Settings
 from .tracker_policy import TrackerPolicy
 
@@ -326,6 +326,7 @@ _OWNED_DIRS = (
     (".harness", "state", "asked"),
     (".harness", "state", "sessions"),
     (".harness", "state", "trackers"),
+    (".harness", "state", "adoptions"),
 )
 
 
@@ -513,10 +514,7 @@ def rule_draft_reviewed_prs(call: ToolCall, repo: Path, settings: Settings) -> D
             "draft-reviewed-prs",
             "publishing a draft pull request is a human decision (gate G4). Do it in Azure Repos.",
         )
-    creating = (
-        call.name == "repo_pull_request_write" and action == "create"
-    ) or call.name == "scm_create_pull_request"
-    if not creating:
+    if not _creates_pull_request(call):
         return Decision.allow()
     draft = call.tool_input.get("isDraft", call.tool_input.get("draft"))
     if settings.require_draft and draft is not True:
@@ -546,6 +544,56 @@ def rule_draft_reviewed_prs(call: ToolCall, repo: Path, settings: Settings) -> D
             "Run scripts/harness/checks.py on the committed code.",
         )
     return Decision.allow()
+
+
+def _creates_pull_request(call: ToolCall) -> bool:
+    return (
+        call.name == "repo_pull_request_write"
+        and call.tool_input.get("action") == "create"
+    ) or call.name == "scm_create_pull_request"
+
+
+def _pull_request_target(call: ToolCall) -> str:
+    """The target branch of a PR creation, in either provider's shape."""
+    return str(
+        call.tool_input.get("targetBranch")
+        or call.tool_input.get("targetRefName")
+        or ""
+    ).removeprefix("refs/heads/")
+
+
+def _branch_name(repo: Path, ref: str) -> str:
+    """`feature/x` for `refs/heads/feature/x`, `origin/feature/x`, or `refs/remotes/origin/feature/x`."""
+    name = ref.removeprefix("refs/heads/").removeprefix("refs/remotes/")
+    remote, _, rest = name.partition("/")
+    try:
+        remotes = set(gitstate.git(repo, "remote").split())
+    except gitstate.GitError:
+        remotes = set()
+    return rest if rest and remote in remotes else name
+
+
+def rule_feature_branch(call: ToolCall, repo: Path) -> Decision:
+    """A Feature-managed Story PR targets the Feature branch pinned by its session."""
+    if not _creates_pull_request(call):
+        return Decision.allow()
+    match sessions.resolve(repo):
+        case sessions.Bound(session) if (
+            session.workflow == "feature-implementation" and session.expected_base_ref
+        ):
+            target = _branch_name(repo, _pull_request_target(call))
+            expected = _branch_name(repo, session.expected_base_ref)
+            return (
+                Decision.allow()
+                if target == expected
+                else Decision.deny(
+                    "feature-branch",
+                    f"this Story belongs to Feature branch {session.expected_base_ref!r}; "
+                    "create its pull request into that branch.",
+                )
+            )
+        case _:
+            return Decision.allow()
 
 
 def applicable_checks(
@@ -784,6 +832,7 @@ def evaluate(
                 lambda: rule_human_owned(call, repo),
                 lambda: rule_tracker_valid(call, policy),
                 lambda: rule_protected_items(call, policy),
+                lambda: rule_feature_branch(call, repo),
                 lambda: rule_draft_reviewed_prs(call, repo, settings),
                 lambda: rule_history_preserved(call),
                 lambda: rule_approval_required(call, repo, policy),

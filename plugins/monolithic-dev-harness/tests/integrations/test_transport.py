@@ -10,7 +10,7 @@ from integrations import transport
 
 SERVER = textwrap.dedent(
     """
-    import json, sys
+    import json, os, sys
     for line in sys.stdin:
         message = json.loads(line)
         if "id" not in message:
@@ -21,6 +21,8 @@ SERVER = textwrap.dedent(
             reply = {"tools": [{"name": "echo"}]}
         elif message["params"]["name"] == "fail":
             reply = {"isError": True, "content": [{"type": "text", "text": json.dumps({"code": "nope", "message": "no"})}]}
+        elif message["params"]["name"] == "pid":
+            reply = {"content": [{"type": "text", "text": json.dumps({"pid": os.getpid()})}]}
         else:
             text = "<<n>> [UNTRUSTED] <<n>>\\n" + json.dumps(message["params"]["arguments"]) + "\\n<</n>>"
             reply = {"content": [{"type": "text", "text": text}]}
@@ -44,6 +46,7 @@ class TransportTest(unittest.TestCase):
         self.assertEqual(call("echo", {"a": 1}).value, {"a": 1})
         failed = call("fail", {})
         self.assertEqual((failed.failure.code, failed.failure.message), ("nope", "no"))
+        self.assertEqual(call("pid", {}).value, call("pid", {}).value)
         exchange = transport.process_exchange(sys.executable, (str(self.server),), 10)
         self.assertEqual(transport.list_tools(exchange).value, ({"name": "echo"},))
 

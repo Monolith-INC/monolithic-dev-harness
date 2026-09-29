@@ -78,7 +78,7 @@ Validate in staging (G3); a person publishes and approves the pull request (G4).
 | --- | --- |
 | `approve HB-XXXX` | opens a 20-minute window for the batch's writes (Cursor; in Claude, click **Approve**) |
 | `harness revoke` | closes open windows |
-| `harness manual-check <name> ok` | records that you validated a guarded change by hand |
+| `harness manual-check <name> ok` | records that you validated a guarded change by hand (in Claude, click **Approve change**) |
 | `approve HT-XXXXXX` | trusts an onboarded tracker as it was shown to you (Cursor; in Claude, click **Trust**) |
 | `use HT-XXXXXX` | makes that trusted tracker the project's tracker (Cursor; in Claude, click **Use it**) |
 | `stop trusting the <name> tracker` | withdraws that trust (Cursor; in Claude, click **Stop trusting**) |
@@ -93,6 +93,8 @@ now. Your clicks do the rest; the harness updates the settings file for you.
 | --- | --- |
 | `harness session status` | which work item this checkout is bound to, and its phase |
 | `harness session pause` / `resume` / `close` | stop, restart, or finish the session |
+| `harness adoption assess …` | inventory and classify implementation that already exists |
+| `harness adoption status <HA-id>` | show its assessment, exact plan approval, and materialization state |
 | `harness doctor` | settings, tracker, and session at a glance |
 
 ## Expected Result
