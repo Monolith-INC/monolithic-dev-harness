@@ -65,7 +65,7 @@ tracker is one folder (`trackers/<name>/`: a checked `tracker.json` and an `adap
 ```text
   Claude Code / Cursor
   +----------------------------------------------------------------+
-  |  agent session --follows--> 45 skills --delegates--> thermos   |
+  |  agent session --follows--> skills --delegates--> thermos      |
   |       |                                              reviewers |
   |       | every governed tool call                               |
   |       v                                                        |
@@ -102,8 +102,8 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
   **Approve** on the agent's question (or, in Cursor, reply `approve HB-…`).
 - **Plain questions:** a hook sends back any question to you that is long, asks several things, or
   uses file names, code, or internal names.
-- **One settings file** per repository, `.harness/settings.json`, written by people and only read
-  by the harness.
+- **One settings file** per repository, `.harness/settings.json`, written by people; the harness
+  changes only its `tracker` section, when you choose a tracker.
 - **One-shot install** for Claude Code and Cursor, with a `harness` command for bootstrap, health
   checks, sessions, and trackers.
 
@@ -384,7 +384,7 @@ Implementation
 ## Configuration
 
 A repository opts in with `.harness/settings.json`, its only settings file (people write it; the
-harness only reads it). Schema:
+harness changes only its `tracker` section, when you choose a tracker). Schema:
 [`config/settings.schema.json`](./plugins/monolithic-dev-harness/config/settings.schema.json);
 example:
 [`examples/settings.example.json`](./plugins/monolithic-dev-harness/examples/settings.example.json).
@@ -457,7 +457,7 @@ See [`docs/06-delivery/roadmap.md`](./docs/06-delivery/roadmap.md).
 
 Edit the sources under `plugins/monolithic-dev-harness/`, never an installed copy. Every rule
 change ships with a deny test and an allow test; `ruff check`, `ruff format --check`, and the test
-suites must pass; the four version sources must agree before a release.
+suites must pass; every version source (`scripts/check_versions.py`) must agree before a release.
 
 See [`docs/07-guides/onboarding.md`](./docs/07-guides/onboarding.md).
 

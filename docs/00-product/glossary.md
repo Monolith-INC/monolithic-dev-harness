@@ -2,7 +2,7 @@
 title: Glossary
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-28
 ---
 
 # Glossary
@@ -31,7 +31,7 @@ last_reviewed: 2026-09-26
 | Review verdict | `ready` or `blocked`, recorded for one HEAD commit by the review stage. |
 | Rule | One named deterministic check: `human-owned`, `tracker-invalid`, `approval-required`, `protected-items`, `tests-with-code`, `generated-files`, `guarded-paths`, `draft-reviewed-prs`, `history-preserved`. |
 | Session | A binding of one work item to one checkout (`harness session start`); governed code changes need an active one, and the workflow checks its work item. Phases: active, paused, closed. |
-| Settings | `.harness/settings.json`, the repository's only settings file: tracker, SCM, branch template, rules. Human-owned; the harness only reads it. |
+| Settings | `.harness/settings.json`, the repository's only settings file: tracker, SCM, branch template, rules. Human-owned: the harness changes only its `tracker` section, when the user chooses a tracker. |
 | Stacked branches | Story branches based on a Feature branch, landed into it in order. |
 | Tracker contract | What every tracker meets: `tracker.json` checked against `config/tracker.schema.json`, and an adapter returning `TrackerOps`. |
 | Tracker manifest | A tracker folder's `tracker.json`: kinds, states, hierarchy, id formats, which tools write, how to connect, which settings it needs. |

@@ -2,7 +2,7 @@
 title: User Guide
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-28
 ---
 
 # User Guide
@@ -46,6 +46,14 @@ Create these in Azure: 1 Epic, 2 Features, 4 Stories (5, 3, 3, 3 points)?
 
 Click **Approve**. Nothing reaches Azure DevOps before that. In Cursor, which has no question
 picker, the agent gives the batch an id and you reply `approve HB-4F9A`.
+
+When the agent breaks a Story into Tasks, it can check the hours against the sprint: name the
+sprint, or let it read the active one from Azure DevOps or Linear (the local tracker needs the
+sprint named). If the Tasks do not fit what the assignee has left, the agent stops before writing
+and asks you to split the Story, move it to a later sprint, reassign it, or cut scope. If the check
+cannot run (the tracker's sprint cannot be read, for example), the agent stops and says what it
+needs instead of skipping the limit. Linear records no team capacity or hours, so there you enter
+the figures by hand.
 
 ### 3. Plan (gate G2)
 

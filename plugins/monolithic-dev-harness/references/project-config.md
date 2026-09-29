@@ -5,7 +5,8 @@ Where the backlog stage finds its settings, and how a skill fills in a value tha
 ## One settings file, two locations to keep apart
 
 Every setting lives in the repository's `.harness/settings.json`, the harness's only settings
-file (schema: `config/settings.schema.json`). People edit it; the harness only reads it.
+file (schema: `config/settings.schema.json`). People edit it; the harness changes
+only its `tracker` section, when the user chooses a tracker.
 
 ```text
 <project>/.harness/settings.json    the settings (human-owned)
@@ -53,7 +54,7 @@ cannot be used, a required value missing for example, so it works as a precondit
 
 ## Filling in a missing value
 
-The harness never writes the settings file, and neither may the agent. When a value is missing:
+The agent never writes the settings file. When a value is missing:
 
 **For `artifacts_path`: ask the user** where their work should go, and ask them to add it to
 `.harness/settings.json`.

@@ -2,7 +2,7 @@
 title: Dependencies
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-28
 ---
 
 # Dependencies
@@ -45,7 +45,7 @@ None.
 | ruff | 0.16.4 (pinned) | lint and format |
 | shellcheck | 0.11 (via `shellcheck-py` locally, preinstalled in CI) | shell lint |
 | Claude Code CLI | latest | `claude plugin validate`, sandboxed install test |
-| GitHub Actions | `actions/checkout`, `actions/setup-python`, `actions/setup-node` | CI; Dependabot keeps them current |
+| GitHub Actions | `actions/checkout`, `actions/setup-python`, `actions/setup-node` | CI and release; Dependabot keeps them current |
 
 ### Vendored sources
 

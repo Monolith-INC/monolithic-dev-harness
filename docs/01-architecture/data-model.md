@@ -2,7 +2,7 @@
 title: Data Model
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-28
 ---
 
 # Data Model
@@ -16,7 +16,9 @@ tracker, one settings file, the tracker folders, and a handful of JSON records i
 
 Human-owned, so the `human-owned` rule blocks the agent from writing them directly:
 
-- `.harness/settings.json`: people write it; the harness only reads it.
+- `.harness/settings.json`: only people change it. They edit it, or they choose an onboarded
+  tracker (click **Use it**, or reply `use HT-XXXXXX`); the harness then replaces the `tracker`
+  section, and only if the result is still valid settings. Bootstrap copies the file in once.
 - `.harness/state/approvals/`, `manual/`, `asked/`, `trackers/`: written only by the prompt and
   answer hooks, from what the user typed or clicked.
 - `.harness/state/sessions/`: written only through `harness session`, which checks every step.
