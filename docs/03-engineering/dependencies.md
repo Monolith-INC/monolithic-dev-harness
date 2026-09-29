@@ -45,7 +45,7 @@ None.
 | ruff | 0.16.4 (pinned) | lint and format |
 | shellcheck | 0.11 (via `shellcheck-py` locally, preinstalled in CI) | shell lint |
 | Claude Code CLI | latest | `claude plugin validate`, sandboxed install test |
-| GitHub Actions | `actions/checkout@v7`, `actions/setup-python@v7`, `actions/setup-node@v7` | CI and release (Node 24 runtime); Dependabot keeps them current |
+| GitHub Actions | `actions/checkout`, `actions/setup-python`, `actions/setup-node` | CI and release; Dependabot keeps them current |
 
 ### Vendored sources
 

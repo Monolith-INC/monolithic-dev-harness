@@ -16,20 +16,18 @@ again with a settings file; there is no migration.
 
 - One settings file: `.harness/settings.json` (schema `config/settings.schema.json`) replaces
   `.harness/policy.json`, `.harness/integrations.json`, and `.harness/backlog/config.json`. People
-  write it; the harness writes into it only the tracker the user chooses by click.
+  write it; the harness changes only its `tracker` section, when the user chooses a tracker.
   `harness bootstrap --settings-from <file>` replaces `--policy-from`, `--tracker`, `--scm`,
   `--discover`, and `--force`. Start from `examples/settings.example.json`.
 - `protected_work_items` is a top-level list of strings; the Azure-only `azure` block is gone.
 - Governed code changes need an active session for the checkout (`harness session start`), unless
   tracking is skipped.
 - Workflow artifacts on a tracker use the envelope `harness-artifact:v1`.
-- Every `tracker.json` must list the replies its planning reads under `planning.replies`.
-- `bin/agile-backlog-toolkit`: `config --set` and `config --require-team` are gone (the backlog
-  stage reads the settings file); `capacity --provider` takes `filesystem` (your planning files) or
-  `tracker`; `--process` is gone (the process comes from the settings); `--payloads` is now
-  `--replies`.
-- A tracker that records no hours, or none usable, gets no hour writes and a note to record the
-  figures by hand; there is no neutral `hours` field any more.
+- `bin/agile-backlog-toolkit` and the backlog-orchestrator tools: `config --set` and
+  `config --require-team` are gone (the backlog stage reads the settings file);
+  `capacity --provider azure-devops` is now `--provider tracker` (beside `filesystem`, your
+  planning files); `--process` is gone (the process comes from the tracker's settings); and
+  `--payloads` is now `--replies`, on `capacity` and `estimate-breakdown` alike.
 
 ### Added
 
@@ -38,7 +36,8 @@ again with a settings file; there is no migration.
   `adapter(context) -> TrackerOps`). Azure DevOps, Linear, and a repository-local tracker ship.
 - Onboarding: `harness tracker list | show | stage` brings in a tracker the harness does not ship.
   `tracker stage <folder> --value KEY=VALUE` keeps the values its settings need in the staged
-  folder, and refuses a tracker missing a required value.
+  folder, and refuses a tracker missing a required value. Every onboarded folder, trusted or not,
+  counts toward which tools need approval; one whose `writes` cannot be read fails closed.
 - Trust and selection by click. The agent asks "Trust the <name> tracker as I just described it?"
   (Trust / Not now), then "Use <name> as this project's tracker now?" (Use it / Keep the current
   one). The harness pins the folder's exact version when the question is shown, acts only on the
@@ -51,7 +50,8 @@ again with a settings file; there is no migration.
 - Rule `tracker-invalid`: while the selected tracker is missing, invalid, untrusted, or lacks its
   values, tracker and SCM writes are refused.
 - Sprint planning is part of the tracker contract: every `TrackerOps` provides `read_iteration`,
-  `iteration_items`, and `hour_fields`. Azure DevOps, Linear, and the local tracker implement them;
+  `iteration_items`, and `hour_fields`, and every `tracker.json` lists the replies its planning
+  reads under `planning.replies`. Azure DevOps, Linear, and the local tracker implement them;
   Linear reports cycle dates and point estimates but no team capacity or hours.
 - `harness doctor --tools` checks the tracker's server offers every tool its manifest names;
   `harness doctor --azure` takes its values from the settings.
@@ -62,7 +62,7 @@ again with a settings file; there is no migration.
 
 - Which calls write, how ids look, and which text links a protected item come from every usable
   tracker folder: Linear writes need approval, Linear and Azure protected ids are both caught, and
-  Azure's full set of link forms is restored.
+  every Azure link form is caught.
 - Branch keys come from each tracker's `ids.branch_key` (Azure accepts `AB-123`; Linear and local
   keys are matched without regard to case).
 - When the rules cannot run, every MCP call counts as a write and is refused. While the selected
@@ -83,6 +83,8 @@ again with a settings file; there is no migration.
   cannot run stops `estimate-breakdown` instead of skipping the limit: a missing reply, a reply
   that holds no data, an unusable tracker, a sprint or items that cannot be read, or a local sprint
   with no capacity file. The error says which replies to fetch and how.
+- Hour writes come from the selected tracker's `hour_fields`. A tracker that records no hours, or
+  none usable, gets no hour writes and a note to record the figures by hand.
 - `estimate-breakdown` prints every note (tracker warnings, why capacity was not checked, hours to
   record by hand), and lists writes only when there are some.
 - `bin/agile-backlog-toolkit config` shows the selected tracker and the values its `tracker.json`
@@ -91,30 +93,8 @@ again with a settings file; there is no migration.
 - The knowledge store's seed points at the settings file instead of copying it.
 - Schemas are checked with the harness's own standard-library checker; `jsonschema` is no longer
   needed anywhere.
-- CI and release workflows use `actions/checkout`, `actions/setup-python`, and `actions/setup-node`
-  v7, which run on Node 24.
-
-### Fixed
-
-- Loading an onboarded adapter no longer writes Python cache files into its folder, which changed
-  its digest and dropped trust after first use; adapters run from their source as reviewed.
-- `scm_link_work_item`'s `workItemRef` (and `issueId`) are checked against protected items.
-- A command merely containing `workflow-integrations` no longer skips the session and spec checks;
-  only a lone bootstrap command does.
-- A defect in one gateway call answers with an error instead of stopping the server.
-- Sessions are created in one rename, and an unreadable session record blocks only its own
-  checkout when its owner can be read.
-- Large provider replies and chatty servers are read without deep recursion.
-- Bootstrap ignores `.harness/state/` first, and writes the settings only after their tracker
-  checks out.
-
-### Security
-
-- Every onboarded tracker folder counts toward which tools need approval, even when it is
-  untrusted or fails its checks; a folder whose `writes` cannot be read at all fails closed.
-- The backlog runtime no longer has its own HTTP client with a personal access token; the enrich
-  skill's Azure reference no longer offers personal-access-token or direct REST fallbacks. Every
-  provider call goes through the host's OAuth-signed MCP servers.
+- CI and release run on `actions/checkout` and `actions/setup-python` v7, and CI on
+  `actions/setup-node` v7 (Node 24).
 
 ### Removed
 
@@ -122,6 +102,20 @@ again with a settings file; there is no migration.
   and capacity mapping live only in `trackers/azure-devops/adapter.py`.
 - The Azure adapter shim, the discovery presets, the integrations setup writer, the layout
   migration, and the copies of templates, references, and scripts inside tracker folders.
+
+### Fixed
+
+- `scm_link_work_item`'s `workItemRef` (and `issueId`) are checked against protected items.
+- A command merely containing `workflow-integrations` no longer skips the session and spec checks;
+  only a lone bootstrap command does.
+- A defect in one gateway call answers with an error instead of stopping the server.
+- Large provider replies and chatty servers are read without deep recursion.
+
+### Security
+
+- The backlog runtime no longer has its own HTTP client with a personal access token, and the
+  enrich skill's Azure reference no longer offers personal-access-token or direct REST fallbacks.
+  Every provider call goes through the host's OAuth-signed MCP servers.
 
 ## [0.1.10] - 2026-09-24
 

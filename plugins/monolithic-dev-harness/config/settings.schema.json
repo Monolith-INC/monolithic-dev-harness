@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://monolith.inc/schemas/settings.schema.json",
   "title": "monolithic-dev-harness repository settings (.harness/settings.json)",
-  "description": "The only settings file in a governed repository. People edit it; the harness writes into it only the tracker the user chooses by click.",
+  "description": "The only settings file in a governed repository. People edit it; the harness changes only its tracker section, when the user chooses a tracker.",
   "type": "object",
   "additionalProperties": false,
   "required": ["schemaVersion", "tracker", "scm", "branch_template"],
