@@ -18,6 +18,8 @@ All notable changes to this project are documented here. The format follows
   that snapshot; pushes and completion still revalidate against the tracker.
 - Provider-neutral tracker and SCM calls reuse one process-local MCP connection, avoiding a fresh
   interactive OAuth process per gateway call.
+- Plans and specifications must be shown in a host document pane or in chat before approval; a
+  path alone is no longer sufficient.
 - `check --staged` fails closed unless the working-file tree exactly matches the staged tree.
 
 ## [0.2.0] - 2026-09-28
