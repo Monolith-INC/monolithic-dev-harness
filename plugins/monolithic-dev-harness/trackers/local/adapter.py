@@ -1,6 +1,7 @@
 """A tracker kept in this clone: one JSON file per work item, one Markdown file per artifact.
 
-Bootstrap ignores `.harness/tracker/` through `.git/info/exclude`, so its records stay local.
+Bootstrap ignores `.harness/tracker/` through `.git/info/exclude`, so its records stay local. Every
+worktree of the clone reads the main worktree's records, so a linked worktree sees the same items.
 
     .harness/tracker/<state>/<KEY>.json          a work item, in the folder of its state
     .harness/tracker/artifacts/<KEY>/<file>.md   its artifacts, in the shared artifact format
@@ -22,6 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from core.result import Ok, Result, attempt, bind, err, fmap, oks, require, sequence
+from harness import gitstate
 from harness.state import write_json
 from integrations import artifacts
 from integrations.contracts import (
@@ -55,8 +57,19 @@ PREFIXES = {
 Record = tuple[Path, Mapping[str, Any]]
 
 
+def _clone_root(repo: Path) -> Path:
+    """The clone's main worktree, shared by every linked worktree; `repo` outside git."""
+    try:
+        common = gitstate.git(
+            repo, "rev-parse", "--path-format=absolute", "--git-common-dir"
+        )
+    except gitstate.GitError:
+        return repo
+    return Path(common).parent if Path(common).name == ".git" else repo
+
+
 def adapter(context: AdapterContext) -> TrackerOps:
-    root = context.repo / ROOT
+    root = _clone_root(context.repo) / ROOT
     return TrackerOps(
         get_work_item=lambda ref: fmap(
             _find(context, root, ref), lambda found: _item(found[1])

@@ -121,6 +121,19 @@ def main(argv: list[str] | None = None) -> int:
     added = _ensure_local_exclude(repo)
     if added:
         print(f"ignored {', '.join(added)} in .git/info/exclude (this clone only)")
+    committed = subprocess.run(
+        ["git", "-C", str(repo), "ls-files", "--", *state.LOCAL_ONLY_PATHS],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    ).stdout.split()
+    if committed:
+        print(
+            "warning: local-only harness records are committed; stop sharing them with "
+            f"`git rm -r --cached --ignore-unmatch {' '.join(state.LOCAL_ONLY_PATHS)}`",
+            file=sys.stderr,
+        )
     match _install(repo, Path(args.settings_from)):
         case Err(failure):
             print(

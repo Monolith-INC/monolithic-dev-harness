@@ -73,6 +73,15 @@ class BootstrapTest(unittest.TestCase):
             exclude.read_text(), "*.log\n.harness/state/\n.harness/tracker/\n"
         )
 
+    def test_committed_tracker_records_get_a_warning(self) -> None:
+        folder = self.repo / ".harness" / "tracker" / "backlog"
+        folder.mkdir(parents=True)
+        (folder / "STORY-0001.json").write_text("{}")
+        subprocess.run(["git", "-C", str(self.repo), "add", "-A"], check=True)
+        done = self.bootstrap(EXAMPLE)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("git rm -r --cached --ignore-unmatch", done.stderr)
+
     def test_invalid_settings_or_an_unusable_tracker_stop_it(self) -> None:
         broken = self.bootstrap(
             self.candidate({**MINIMAL, "branch_template": "no-key"})

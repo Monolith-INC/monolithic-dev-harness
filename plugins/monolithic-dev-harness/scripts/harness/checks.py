@@ -45,18 +45,19 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     chosen = loaded.value
     if args.staged:
-        tree = gitstate.index_tree(repo)
-        worktree = gitstate.worktree_tree(repo)
-        match tree == worktree:
-            case False:
-                print(
-                    "staged and working files differ; checks would not prove the staged tree. "
-                    "Use a clean worktree whose files exactly match the index.",
-                    file=sys.stderr,
-                )
-                return 2
-            case True:
-                pass
+        try:
+            tree = gitstate.index_tree(repo)
+            worktree = gitstate.worktree_tree(repo)
+        except gitstate.GitError as exc:
+            print(f"cannot compare staged and working files: {exc}", file=sys.stderr)
+            return 2
+        if tree != worktree:
+            print(
+                "staged and working files differ; checks would not prove the staged tree. "
+                "Use a clean worktree whose files exactly match the index.",
+                file=sys.stderr,
+            )
+            return 2
         changed = gitstate.staged_paths(repo)
     else:
         if gitstate.git(repo, "status", "--porcelain", "--untracked-files=no"):
