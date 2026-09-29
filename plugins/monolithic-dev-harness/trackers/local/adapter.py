@@ -1,4 +1,6 @@
-"""A tracker kept in the repository: one JSON file per work item, one Markdown file per artifact.
+"""A tracker kept in this clone: one JSON file per work item, one Markdown file per artifact.
+
+Bootstrap ignores `.harness/tracker/` through `.git/info/exclude`, so its records stay local.
 
     .harness/tracker/<state>/<KEY>.json          a work item, in the folder of its state
     .harness/tracker/artifacts/<KEY>/<file>.md   its artifacts, in the shared artifact format

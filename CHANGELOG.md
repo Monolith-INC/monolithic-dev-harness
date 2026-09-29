@@ -21,6 +21,8 @@ All notable changes to this project are documented here. The format follows
 - Plans and specifications must be shown in a host document pane or in chat before approval; a
   path alone is no longer sufficient.
 - `check --staged` fails closed unless the working-file tree exactly matches the staged tree.
+- Local tracker records (`.harness/tracker/`) are local to the clone: bootstrap ignores them through
+  `.git/info/exclude` alongside `.harness/state/`, and adoption never inventories or carries either.
 
 ## [0.2.0] - 2026-09-28
 

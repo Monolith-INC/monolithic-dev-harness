@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "name": "local",
   "label": "Local tracker",
-  "docs": "Work items are JSON files under .harness/tracker/<state>/, committed with the repository.",
+  "docs": "Work items are JSON files under .harness/tracker/<state>/, kept in this clone only (ignored through .git/info/exclude).",
   "connection": {"kind": "local"},
   "settings": [],
   "kinds": {"epic": "epic", "feature": "feature", "user_story": "user_story", "task": "task", "bug": "bug"},

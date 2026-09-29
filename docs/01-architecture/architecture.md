@@ -130,6 +130,7 @@ spawned -> inputs validated -> running --success--> completed
 | --- | --- | --- | --- |
 | Settings | `.harness/settings.json` (committed) | a person (bootstrap copies it once); the answer hook (click) or prompt hook (typed `use HT-…`) replaces `tracker` when the user chooses a tracker | until edited |
 | Onboarded trackers | `.harness/trackers/<name>/` (committed) | `harness tracker stage` | until edited, which drops trust |
+| Local tracker records | `.harness/tracker/` (this clone only, ignored) | the local tracker adapter | until edited |
 | Tracker trust | `.harness/state/trackers/` | answer hook (click) or prompt hook (typed reply) | until the folder changes or is untrusted |
 | Sessions | `.harness/state/sessions/` | `harness session` | until closed |
 | Tracking mode | `.harness/state/tracking.json` | gateway skip/resume (approved) | until changed |

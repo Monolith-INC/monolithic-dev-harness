@@ -58,7 +58,7 @@ A Story never attaches to an Epic. Points go into the process's points field
 .harness/
 |-- settings.json                    committed; schema: config/settings.schema.json
 |-- trackers/<name>/                 committed; onboarded trackers (tracker.json, adapter.py)
-|-- tracker/                         committed; local tracker records, when it is selected
+|-- tracker/                         this clone only (ignored); local tracker records, when selected
 |   |-- <state>/<KEY>.json           {key, id, title, kind, state, description, parentId, links[]}
 |   `-- artifacts/<KEY>/*.md         artifacts in the shared envelope format
 |-- review/sources.json              requirement sources, PR host, knowledge store

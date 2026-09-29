@@ -6,8 +6,8 @@
 Writes, once:
   .harness/settings.json   the repository's only settings file, copied from --settings-from after
                            it is checked; an existing one is never replaced (people own it)
-  .git/info/exclude        ignores .harness/state/ in this clone only (the shared .gitignore is
-                           never edited)
+  .git/info/exclude        ignores .harness/state/ and the local tracker's .harness/tracker/ in
+                           this clone only (the shared .gitignore is never edited)
   .harness/knowledge/      the harness knowledge store, seeded with a pointer to the settings
 
 Then checks that the selected tracker exists and has the values it needs. Review configuration
@@ -28,12 +28,12 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
 
 from core.result import Err, Ok, Result, attempt, bind, fmap  # noqa: E402
-from harness import settings  # noqa: E402
+from harness import settings, state  # noqa: E402
 from integrations import registry  # noqa: E402
 
 
-def _ensure_local_exclude(repo: Path) -> bool:
-    """Ignore `.harness/state/` in this clone only: git's own exclude file, not the tracked `.gitignore`."""
+def _ensure_local_exclude(repo: Path) -> tuple[str, ...]:
+    """Ignore local-only harness paths in this clone: git's own exclude file, not the tracked `.gitignore`."""
     result = subprocess.run(
         ["git", "-C", str(repo), "rev-parse", "--git-path", "info/exclude"],
         capture_output=True,
@@ -42,15 +42,15 @@ def _ensure_local_exclude(repo: Path) -> bool:
         timeout=10,
     )
     if result.returncode != 0 or not result.stdout.strip():
-        return False
+        return ()
     path = Path(result.stdout.strip())
     path = path if path.is_absolute() else repo / path
     lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    if ".harness/state/" in lines:
-        return False
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join([*lines, ".harness/state/"]) + "\n", encoding="utf-8")
-    return True
+    added = tuple(entry for entry in state.LOCAL_ONLY_PATHS if entry not in lines)
+    if added:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("\n".join([*lines, *added]) + "\n", encoding="utf-8")
+    return added
 
 
 def _candidate(source: Path) -> Result[settings.Settings]:
@@ -118,8 +118,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"{repo} is not a git repository root", file=sys.stderr)
         return 2
     # State stays out of git before anything can write it: the settings opt the repository in.
-    if _ensure_local_exclude(repo):
-        print("ignored .harness/state/ in .git/info/exclude (this clone only)")
+    added = _ensure_local_exclude(repo)
+    if added:
+        print(f"ignored {', '.join(added)} in .git/info/exclude (this clone only)")
     match _install(repo, Path(args.settings_from)):
         case Err(failure):
             print(
