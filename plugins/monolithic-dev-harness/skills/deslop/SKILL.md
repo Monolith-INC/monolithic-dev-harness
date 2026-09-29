@@ -5,7 +5,7 @@ description: Remove AI-generated code slop and clean up code style
 
 # Remove AI code slop
 
-Check the diff against the base branch (`git.base_branch` in `.harness/policy.json`, default `develop`) and remove AI-generated slop introduced in the branch.
+Check the diff against the base branch (`git.base_branch` in `.harness/settings.json`, default `develop`) and remove AI-generated slop introduced in the branch.
 
 ## Focus Areas
 

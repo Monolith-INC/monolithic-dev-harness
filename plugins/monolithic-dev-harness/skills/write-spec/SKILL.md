@@ -26,3 +26,7 @@ instead of changing it silently.
 
 Present the accepted spec to the user for **gate G2** (the Tech Lead's approval). Publishing it to the
 tracker is a write, so include it in the approval batch. `implement-story` starts only after G2.
+
+When the spec lives only in the artifacts path, set its frontmatter to `status: approved` before you ask
+for G2. The user's approval pins that exact content, and only then does the spec gate let code edits
+through. Any later edit to the note needs a new approval.

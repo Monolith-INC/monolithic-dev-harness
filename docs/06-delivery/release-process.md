@@ -2,7 +2,7 @@
 title: Release Process
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Release Process
@@ -45,7 +45,7 @@ Manual (after publishing, before announcing):
 - install on a real machine with the one-line installer;
 - restart Claude Code, open a governed repository, and confirm one denied write
   (`approval-required`) and one approved write;
-- `harness doctor --azure --project <project>`.
+- `harness doctor --azure` in a governed repository whose settings select Azure DevOps.
 
 ## Owner Approval Requirements
 

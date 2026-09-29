@@ -46,4 +46,4 @@ See `./integration-notes.md` for invocation contract (sub-skill mode skips stand
 
 ## Shared plugin references
 
-- `../../references/ticket-structure.md` — when output feeds ticket drafts
+- `../../../references/ticket-structure.md` — when output feeds ticket drafts

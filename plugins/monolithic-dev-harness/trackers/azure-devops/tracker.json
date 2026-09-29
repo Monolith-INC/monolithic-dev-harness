@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "name": "azure-devops",
+  "label": "Azure DevOps Boards",
+  "docs": "https://learn.microsoft.com/azure/devops/boards/",
+  "connection": {
+    "kind": "mcp",
+    "command": "npx",
+    "args": ["-y", "@azure-devops/mcp", "{organization}", "-d", "core", "work-items", "repositories"],
+    "timeout": 60
+  },
+  "settings": [
+    {"key": "organization", "required": true, "description": "The Azure DevOps organization name (dev.azure.com/<organization>)."},
+    {"key": "project", "required": true, "description": "The project that holds the work items."},
+    {"key": "team", "required": false, "description": "The team whose backlog and capacity the backlog stage reads."},
+    {"key": "process", "required": false, "description": "agile, scrum, or cmmi: decides whether Original Estimate exists."}
+  ],
+  "kinds": {"epic": "Epic", "feature": "Feature", "user_story": "User Story", "task": "Task", "bug": "Bug"},
+  "states": {"backlog": "New", "ready": "Approved", "in_progress": "Active", "done": "Closed", "canceled": "Removed"},
+  "artifacts": [
+    {"name": "Epic", "children": ["Feature"]},
+    {"name": "Feature", "children": ["User Story", "Bug"]},
+    {"name": "User Story", "children": ["Task"], "estimate": "Microsoft.VSTS.Scheduling.StoryPoints"},
+    {"name": "Task", "children": []},
+    {"name": "Bug", "children": ["Task"]}
+  ],
+  "tools": {
+    "read": "wit_work_item",
+    "query": "wit_query",
+    "write": "wit_work_item_write",
+    "comment": "wit_work_item_comment_write",
+    "link": "wit_work_item_link_write"
+  },
+  "ids": {
+    "pattern": "[1-9][0-9]*",
+    "branch_key": "(?:(?i:AB)-)?(?P<id>[1-9][0-9]*)",
+    "mention": [
+      "(?<![&\\w])(?:AB|US)?#{id}\\b",
+      "_workitems/edit/{id}\\b",
+      "_workitems[^\\s]*[?&]id={id}\\b",
+      "/_apis/wit/workItems/{id}\\b",
+      "vstfs:///WorkItemTracking/WorkItem/{id}\\b"
+    ],
+    "mentions_link": true
+  },
+  "writes": {
+    "server": "azure-devops",
+    "tools": ["*_write", "repo_create_branch", "pipelines_run", "wiki_upsert_page"]
+  },
+  "attachments": {"spec": "comment", "report": "comment", "pull_request": "artifact-link"},
+  "planning": {
+    "replies": [
+      {"key": "iteration", "description": "work[list_team_iterations] with project, team, timeframe \"current\" (or the named sprint)"},
+      {"key": "capacities", "description": "work[get_team_capacity] with project, team, and that iteration's id"},
+      {"key": "team_settings", "description": "work[get_team_settings] with project and team"},
+      {"key": "work_items", "description": "wit_work_item[list_for_iteration] for that iteration, then wit_work_item[get_batch] for the ids it lists (no fields list); pass the batch reply, so existing commitments count"}
+    ]
+  },
+  "text_format": "markdown"
+}

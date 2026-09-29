@@ -4,7 +4,7 @@ Blank form for specs written to **`<artifacts>/Specs/`** before the User Story t
 
 ## Artifacts filename
 
-`<parent-feature-id>-<kebab-slug>-spec.md`
+`<parent-feature-id>-<kebab-slug>-spec.md`, or `draft-<kebab-slug>-spec.md` when the Story has no Feature
 
 ## Frontmatter
 
@@ -12,7 +12,7 @@ Blank form for specs written to **`<artifacts>/Specs/`** before the User Story t
 ---
 type: spec
 work_item_type: User Story
-ticket: <parent-feature-id>
+ticket: <parent-feature-id or null>
 area: <kebab-area>
 stack: [<from-context7>]
 tags: [spec, user-story]

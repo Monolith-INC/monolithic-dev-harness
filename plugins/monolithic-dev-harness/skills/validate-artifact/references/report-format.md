@@ -25,10 +25,9 @@ DoR
   [PASS]  dor-title-clear
   [PASS]  dor-description-present
   [FAIL]  dor-story-points-set — story points not set
-  [FAIL]  dor-linked-to-feature — hierarchy-story-parent-is-feature failed
 
 ------------------------------------------------------------
-Summary: 5 passed · 4 failed · 2 warnings
+Summary: 6 passed · 3 failed · 2 warnings
 Outcome: FAIL
 ```
 

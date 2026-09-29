@@ -19,17 +19,19 @@
   "output_signature": {
     "type": "object",
     "properties": {
-      "feature_branch": { "type": "string" },
-      "reconciled_branches": { "type": "array", "items": { "type": "string" } },
-      "conflicts_resolved": { "type": "boolean" }
+      "feature_branch": {
+        "type": "string"
+      },
+      "reconciled_branches": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "conflicts_resolved": {
+        "type": "boolean"
+      }
     }
   },
-  "tools": [],
-  "stage": {
-    "name": "reconcile-feature-stack",
-    "workflow": "skills/codex_workflows/resources/workflows-reconcile-feature-stack.md",
-    "rules": "skills/codex_workflows/rules/rules-reconcile-feature-stack.ts",
-    "installed_workflow": ".agent/workflows/workflows-reconcile-feature-stack.md",
-    "installed_rules": ".agent/rules/rules-reconcile-feature-stack.ts"
-  }
+  "tools": []
 }

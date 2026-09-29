@@ -2,7 +2,7 @@
 title: Requirements
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Requirements
@@ -23,7 +23,7 @@ Feature Owner / PO, Tech Lead, developers; owned by the monolithic-dev-harness m
 ## Goals
 
 Cover backlog management, technical planning, implementation, and verification; answer how the
-process uses Azure DevOps, where people decide, and which models run each stage.
+process uses the team's tracker, where people decide, and which models run each stage.
 
 ## Non-Goals
 
@@ -46,15 +46,21 @@ See [vision.md](vision.md#non-goals).
   never write, link, or parent protected work items; block commits of source changes without
   tests; block hand edits to generated files; require evidence for guarded paths; create pull
   requests only as drafts with a `ready` verdict and passing checks for HEAD.
-- **Safety:** fail closed for writes when the rules cannot run; govern only repositories that opt in.
+- **Safety:** fail closed for writes when the rules cannot run or the settings or selected tracker
+  cannot be used; govern only repositories that opt in.
+- **Trackers:** every tracker meets one contract (a checked `tracker.json` and an adapter); Azure
+  DevOps, Linear, and a repository-local tracker ship; others can be onboarded, and count only once
+  a person trusts them as they read.
+- **Scope:** governed code changes happen inside a session that binds one work item to one
+  checkout.
 - **Hosts:** Claude Code and Cursor.
 - **Install:** one command, no cloning, checksum-verified, idempotent; uninstall supported.
 
 ### Should
 
 - Report every block with the rule's name and the fix.
-- Keep project-specific values (paths, commands, ids) in the repository's policy file, not in the
-  plugin.
+- Keep project-specific values (paths, commands, ids) in the repository's one settings file, and
+  tracker-specific ones in tracker folders, not in the plugin's code.
 - Provide a `harness doctor` health check.
 
 ### Could
@@ -65,17 +71,19 @@ See [vision.md](vision.md#non-goals).
 ### Won't
 
 - Merge pull requests or vote on them.
-- Store credentials; the Azure DevOps server uses interactive OAuth.
+- Store credentials; the providers' MCP servers use interactive OAuth.
 
 ## Success Evidence
 
-Each Must has tests: `tests/harness/test_hook_rules.py` for enforcement,
+Each Must has tests: `tests/harness/test_hook_rules.py` for enforcement, `tests/integrations/` for
+the tracker contract and adapters, `tests/harness/test_sessions.py` for sessions,
 `tests/backlog/` for validation, estimation, and capacity, `tests/delivery/` for the workflow
 policy runtime, and the CI installer job for installation.
 
 ## Constraints
 
-- Python 3.10+ on the developer's machine; Node.js for the Azure DevOps MCP server.
+- Python 3.10+ on the developer's machine (standard library only in hooks); Node.js for the Azure
+  DevOps and Linear MCP servers.
 - Hooks must answer within the host's hook timeout (15 s for pre-tool calls).
 
 ## Open Questions

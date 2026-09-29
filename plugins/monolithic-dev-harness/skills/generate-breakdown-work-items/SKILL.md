@@ -24,11 +24,16 @@ Shared references (in `../../references/`):
 - `decomposition-rules.md` — hierarchy (Epic → Feature → Story → Task)
 
 Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which reads
-`.agile-backlog-toolkit/config.json` and falls back to older locations. See
+`artifacts_path` from `.harness/settings.json`. See
 `../../references/project-config.md`.
 
 **Not in scope:** inventing or rewriting acceptance criteria; Feature-level story-point estimation;
 implementing the product under breakdown — only plan + work-item persistence.
+
+## Active tracker
+
+Call `tracker_describe` before choosing a hierarchy, destination, provider call, or id format, and
+follow [the tracker contract](../../references/tracker-contract.md).
 
 ---
 
@@ -78,8 +83,9 @@ Read `./references/plan-generation.md` § PHASE 1.
 
 1. Resolve `work_item_ref` to a work item (Azure id/url or artifacts path/filesystem path).
 2. If type is **Feature** or **Epic**: go to PHASE 5 (fan-out). Do not draft a parent-level plan.
-3. If type is **User Story**: read the **parent Feature body** and the **Story body** before any
-   plan drafting. STOP if the Feature cannot be resolved or if acceptance criteria are missing.
+3. If type is **User Story**: read the **Story body**, and the **parent Feature body** when the Story
+   has a parent, before any plan drafting. A Story with no parent is valid. STOP if a named parent
+   cannot be read or if acceptance criteria are missing.
 4. Extract `acceptance_criteria` **verbatim** (en/pt-BR section labels per
    `../../references/ticket-structure.md`). Never invent or rewrite ACs.
 

@@ -16,7 +16,7 @@ context for a changed-line finding.
 
 ## Project knowledge
 
-When `.monolithic-code-review/sources.json` records a `knowledge.root`, read the documented
+When `.harness/review/sources.json` records a `knowledge.root`, read the documented
 structure before judging the changed structure. Follow the cost ladder — routing table, then search,
 then one unit — and never read the whole store.
 

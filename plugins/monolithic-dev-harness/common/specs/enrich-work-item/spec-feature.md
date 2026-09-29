@@ -6,7 +6,7 @@ Source enricher: `../../workflows/enrichers/feature-enricher.prompt.md`
 
 ## Artifacts filename
 
-`<parent-epic-id>-<kebab-slug>-spec.md`
+`<parent-epic-id>-<kebab-slug>-spec.md`, or `draft-<kebab-slug>-spec.md` when the Feature has no Epic
 
 ## Frontmatter
 
@@ -14,7 +14,7 @@ Source enricher: `../../workflows/enrichers/feature-enricher.prompt.md`
 ---
 type: spec
 work_item_type: Feature
-ticket: <parent-epic-id>
+ticket: <parent-epic-id or null>
 area: <kebab-area>
 stack: [<from-context7-or-inferred-projects>]
 tags: [spec, feature]
@@ -32,7 +32,7 @@ feature_type: <funcional|organizacional|refatoracao>
 ## Classificação
 
 - **Tipo de Feature:** Funcional | Organizacional | Refatoração
-- **Epic pai:** #<epic-id> — <título>
+- **Epic pai:** #<epic-id> — <título> (omitir quando a Feature não tiver Epic)
 - **Justificativa:** <uma linha>
 
 ## Objetivo (rascunho)

@@ -18,8 +18,8 @@ References (shared, in `../../references/`):
 References (from `validate-artifact` skill, in `../validate-artifact/references/`):
 - `validation-checks.md` — full check catalog per artifact type + category.
 - `report-format.md` — terminal output template + report template.
-- `canonical/canonical-validation-report.md` — **read-only shape contract** for validation reports
-  (shared with `validate-artifact`). Do not edit; conform output to this template.
+- `../../common/contracts/validate-artifact/canonical-validation-report.md`: **read-only shape
+  contract** for validation reports (shared with `validate-artifact`). Do not edit; conform output to this template.
 
 ---
 
@@ -68,12 +68,13 @@ Systematically address each FAIL and WARN result:
 
 ### a) STRUCTURAL Fixes
 - **Frontmatter:** Add missing `type:` keys, remove invalid `status:` keys.
-- **Filename:** Suggest/apply filename renames to match `^(\d+|tech-debt|bug|task|spike)-[a-z0-9-]+`.
+- **Filename:** Suggest/apply filename renames to match `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+`.
 - **Body Sections:** Add missing required sections (e.g., `Contexto`, `Critérios de Aceite`, `Tarefas Técnicas`, etc.) with placeholder or derived content. 
 
 ### b) HIERARCHY Fixes
-- If parent is missing or wrong type, ask the user to provide a valid parent ID or search Azure DevOps to find a suitable parent feature/epic.
-- Create parent links if the artifact is in Azure.
+- A missing parent is not a defect for an Epic, Feature, or User Story; leave it alone. Only a Task needs a parent.
+- If a parent has the wrong type (for example a Story under an Epic), or a Task has none, ask the user for a valid parent ID or search Azure DevOps for one.
+- Create parent links in Azure only for the parent the user confirms.
 
 ### c) CONTENT Fixes
 - **Complexidade:** Add the `📊 Complexidade` section with default/inferred values for Escopo, Incerteza, etc.
@@ -94,7 +95,7 @@ Systematically address each FAIL and WARN result:
    - "Save to Azure DevOps" (if source was Azure, uses `wit_work_item_write[update]`)
    - "Save to Artifacts/Artifacts" (if source was file/text, uses `write_to_file`/`replace_file_content`)
    - "Discard"
-3. **Persist Report:** Save the final validation report with `bin/agile-backlog-toolkit validate --file <path> --persist`, which writes to `.agile-backlog-toolkit/reports/`.
+3. **Persist Report:** Save the final validation report with `bin/agile-backlog-toolkit validate --file <path> --persist`, which writes to `.harness/backlog/reports/`.
 
 ---
 

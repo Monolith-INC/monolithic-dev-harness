@@ -1,7 +1,6 @@
 import unittest
 
 from scripts.orchestrator.evaluator import collect_critiques, evaluate_output
-
 from tests.delivery.manifest_fixtures import capability
 
 

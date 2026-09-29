@@ -10,7 +10,7 @@ The gate between "the work is done" and "the work becomes a pull request". This 
 definition of done. Nothing is pushed and nothing is posted — findings go to the user, who decides
 what to fix before the PR exists.
 
-Requires `.monolithic-code-review/sources.json`. If it is missing, run `review-setup` first.
+Requires `.harness/review/sources.json`. If it is missing, run `review-setup` first.
 ## Review flags and quality lenses
 
 User-invoked lifecycle reviews accept optional flags in the request:
@@ -25,7 +25,7 @@ Parse these flags from the user's message. Maintainability never runs without an
 TypeScript runs when mandatory by configuration, when the changed scope includes `.ts` or `.tsx`
 files, or when forced by flag.
 
-Read `quality_lenses` from `.monolithic-code-review/sources.json` when present. After
+Read `quality_lenses` from `.harness/review/sources.json` when present. After
 `review-setup`, TypeScript repositories record `quality_lenses.typescript: "mandatory"`.
 
 | Lens | Runs when |
@@ -49,7 +49,7 @@ already requires of any change — its architecture and dependency rules, its co
 build and test commands, which paths are generated. Read it, and a divergence from how this codebase
 works becomes a citable finding instead of an opinion.
 
-Read `knowledge.root` from `.monolithic-code-review/sources.json`. When it is absent or `null`, say
+Read `knowledge.root` from `.harness/review/sources.json`. When it is absent or `null`, say
 so once and review without it. A missing store is never a reason to substitute your own idea of what
 this project's standards are — that is the same failure as inventing a requirement.
 
@@ -95,9 +95,10 @@ A story is complete in a way individual tasks are not. Three checks only make se
 
 ### 1. Establish what the story asked for
 
-Resolve the story through `fetch_work_item`. Also call `fetch_parent` to get the feature it belongs
-to — a story can satisfy its own text while contradicting its parent's intent, and that is worth
-knowing before a human reviewer finds it.
+Resolve the story through `fetch_work_item`. When the story has a parent, also call `fetch_parent`
+to get the feature it belongs to — a story can satisfy its own text while contradicting its
+parent's intent, and that is worth knowing before a human reviewer finds it. A story with no parent
+is valid; skip the parent checks for it.
 
 Extract goal, requirements, DoD, and out-of-scope statements. If `fetch_work_item` is unsupported,
 ask the user for the story text rather than inferring it.
@@ -135,7 +136,8 @@ Severities are **critical**, **high**, **medium**, **low**, as in `review-task`.
 Then run the pre-flight checks that are specific to this gate:
 
 - **Cross-task contradictions** — a later commit reverting or bypassing an earlier one.
-- **Parent-feature agreement** — does this story move its feature toward its stated goal?
+- **Parent-feature agreement** — does this story move its feature toward its stated goal? (Only
+  when it has a parent feature.)
 - **Leftovers** — debug logging, commented-out blocks, `TODO`/`FIXME` added by this branch,
   temporary fixtures, credentials or endpoints pointing at development environments.
 - **Commit legibility** — commits a reviewer can follow. Say so if the history would be materially

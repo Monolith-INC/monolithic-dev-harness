@@ -23,17 +23,16 @@
   "output_signature": {
     "type": "object",
     "properties": {
-      "feature_branch": { "type": "string" },
-      "main_work_branch": { "type": "string" },
-      "feature_pr_url": { "type": "string" }
+      "feature_branch": {
+        "type": "string"
+      },
+      "main_work_branch": {
+        "type": "string"
+      },
+      "feature_pr_url": {
+        "type": "string"
+      }
     }
   },
-  "tools": [],
-  "stage": {
-    "name": "finish-feature-development",
-    "workflow": "skills/codex_workflows/resources/workflows-finish-feature-development.md",
-    "rules": "skills/codex_workflows/rules/rules-finish-feature-development.ts",
-    "installed_workflow": ".agent/workflows/workflows-finish-feature-development.md",
-    "installed_rules": ".agent/rules/rules-finish-feature-development.ts"
-  }
+  "tools": []
 }

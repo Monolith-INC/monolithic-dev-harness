@@ -14,7 +14,8 @@ Epic
 
 - A **Story** is executable work that fits one sprint and yields exactly **1 Pull Request**.
   "Story" covers User Story, Bug, Tech Debt, Spike — same backlog rules.
-- A Story's parent is its **Feature**, never the Epic directly.
+- A parent is optional for a Feature and for a Story: either can stand alone. When a Story has a
+  parent, it is a **Feature**, never the Epic directly. A Task always has a Story parent.
 
 ## The sizing rule (the core judgment)
 
@@ -51,7 +52,7 @@ Points size a Story; they are not a duration. For turning points into hours, see
 - [ ] Title states a clear objective (describe the need, not the solution; for Bugs, the defect).
 - [ ] Detailed description (behaviors, scenarios, technical specs, affected areas).
 - [ ] Story points set.
-- [ ] Linked to a Feature.
+- [ ] If it has a parent, the parent is a Feature (a standalone Story is ready too).
 
 ## Feature sizing rule (Epic → Feature)
 

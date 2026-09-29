@@ -1,67 +1,45 @@
 # Project Configuration
 
-Where the plugin keeps per-project settings, and how a skill fills in a value that is missing.
+Where the backlog stage finds its settings, and how a skill fills in a value that is missing.
 
-## The plugin owns nothing but `.agile-backlog-toolkit/`
+## One settings file, two locations to keep apart
 
-Two locations, and they must not be confused:
+Every setting lives in the repository's `.harness/settings.json`, the harness's only settings
+file (schema: `config/settings.schema.json`). People edit it; the harness only reads it.
 
+```text
+<project>/.harness/settings.json    the settings (human-owned)
+<project>/.harness/backlog/         plugin-owned. Created by the plugin.
+|-- estimation.json                  optional: the team's points-to-hours bands
+|-- mistakes.json                    retry-loop memory
+`-- reports/                         validation reports
+
+<artifacts_path>                     user-owned. NEVER created by the plugin:
+                                     wherever the user says their drafts go
 ```
-<project>/.agile-backlog-toolkit/          plugin-owned. Created by the plugin.
-├── config.json                       settings
-├── estimation.json                   optional: team's points→hours bands
-├── mistakes.json                     retry-loop memory
-└── reports/                          validation reports
 
-<artifacts_path>                    user-owned. NEVER created by the plugin.
-                                       wherever the user says their drafts go
-```
+**The plugin never creates a directory structure in a project.** It does not look for one and
+has no default location for a user's work products. If `artifacts_path` is unset, local output is
+unavailable and the correct behaviour is to **ask**, never to invent a path.
 
-**The plugin never creates a directory structure in a project.** It does not look for one, does not
-glob for one, and has no default location for a user's work products. If `artifacts_path` is unset,
-local output is unavailable and the correct behaviour is to **ask** — never to invent a path.
-
-What lives at `artifacts_path` is not the plugin's concern. A knowledge base, a docs folder, a
-shared drive: it reads markdown frontmatter from it and nothing more.
-
-## The file
-
-`.agile-backlog-toolkit/config.json`:
+## What the backlog stage reads
 
 ```json
 {
-  "artifacts_path": "docs/backlog",
-  "azure": {
-    "org": "contoso",
-    "project": "my-product",
-    "team": "Developers",
-    "process": "agile"
-  }
+  "tracker": {
+    "name": "azure-devops",
+    "values": {"organization": "contoso", "project": "my-product", "team": "Developers", "process": "agile"}
+  },
+  "artifacts_path": "docs/backlog"
 }
 ```
 
-`artifacts_path` may be relative to the project root or absolute. It has no default.
+- `artifacts_path`: relative to the project root or absolute; `~` expands. No default.
+- `tracker.values`: the values the selected tracker's `tracker.json` declares under `settings`,
+  each with what it is for and whether it is required. `config --show` lists them.
 
-`org` and `project` are needed for most Azure work. `team` is required for sprint capacity, which is
-team-scoped. `process` decides which fields exist — on Scrum, Original Estimate is absent and
-writing it fails silently.
-
-No secrets live here. Authentication comes from the Azure DevOps MCP server, which uses the
-signed-in browser session. Commit the file so the team shares one configuration.
-
-## Where values come from
-
-Earlier sources win. Projects configured by earlier versions still resolve:
-
-```
-1. environment variables
-     AGILE_WORKFLOW_ARTIFACTS_PATH
-     AGILE_WORKFLOW_AZURE_ORG / AZURE_DEVOPS_ORG / ADO_ORG
-     ...PROJECT, ...TEAM, ...PROCESS
-2. .agile-backlog-toolkit/config.json          <- canonical
-3. .agile-backlog-toolkit.install.json         <- install receipt
-4. .mcp.json / .cursor/mcp.json         <- org, from the MCP command arguments
-```
+No secrets live here: authentication comes from the provider's MCP server and its sign-in.
+Commit the file so the team shares one configuration.
 
 ## Reading it
 
@@ -69,48 +47,34 @@ Earlier sources win. Projects configured by earlier versions still resolve:
 bin/agile-backlog-toolkit config --show
 ```
 
-Prints every resolved value, where it came from, and whether the artifacts directory exists yet.
-Exits non-zero when a required Azure value is missing, so it works as a precondition check.
+Prints the artifacts path (and whether that directory exists yet), the file it came from, the
+selected tracker, and each value its `tracker.json` declares. Exits non-zero when the tracker
+cannot be used, a required value missing for example, so it works as a precondition check.
 
 ## Filling in a missing value
 
-Anything not captured at install time is filled the first time a skill needs it.
+The harness never writes the settings file, and neither may the agent. When a value is missing:
 
-**For `artifacts_path`: ask the user.** There is nothing to discover — only they know where their
-work should go. Ask once, then persist:
+**For `artifacts_path`: ask the user** where their work should go, and ask them to add it to
+`.harness/settings.json`.
 
-```bash
-bin/agile-backlog-toolkit config --set artifacts_path=<path>
-```
+**For Azure values: discover, then propose.** These are lookups, so nobody should type a slug:
 
-**For Azure values: discover, then confirm.** These are lookups, so nobody should type a slug:
+| Missing | Discover with |
+|---|---|
+| project | `core_list_projects` |
+| team | `core_list_project_teams` |
+| process | `wit_backlog[list]`: the Stories backlog column names it (`StoryPoints` agile, `Effort` scrum, `Size` cmmi) |
 
-| Missing | Discover with | Then |
-|---|---|---|
-| project | `core_list_projects` | `config --set azure.project=<name>` |
-| team | `core_list_project_teams` | `config --set azure.team=<name>` |
-| process | `wit_backlog[list]` — the Stories backlog column names it: `StoryPoints` → agile, `Effort` → scrum, `Size` → cmmi | `config --set azure.process=<name>` |
-
-Present the options and let the user pick when there is more than one. Saving merges: filling in a
-team does not disturb the org, and unknown keys already in the file are preserved.
+Present the options, let the user pick, and give them the exact `tracker.values` entry to add.
 
 ## Setting it up
 
-The harness `bootstrap` writes this file from the repository's `.harness/policy.json` (`azure` and
-`backlog.artifacts_path`), with the organization taken from `AZURE_DEVOPS_ORG` when the policy leaves it
-empty. Bootstrap **does not create the artifacts directory**; it only records where it should be.
-
-## How the MCP server is launched
-
-The installer prefers a pinned invocation — `node` against an entrypoint installed once under
-`~/.local/share/azure-devops-mcp` — and falls back to `npx` when unavailable.
-
-Pinning is better for two reasons: `npx` re-resolves the package on every start, and it is the piece
-that fails when a host leaks a truncated `PATH` into stdio subprocesses. Cursor is known to do this,
-so the installer also writes a wrapper that sanitises the environment first.
+`harness bootstrap --settings-from <file>` checks a settings file and copies it into the
+repository once. It does not create the artifacts directory; it only records where it should be.
 
 ## References
 
-- `orchestrator_core/project_config.py` — the resolver
-- `scripts/install.py` — `write_project_config`, `azure_mcp_launch`, `scaffold_project`
-- `azure-mechanics.md` — which field each process actually has
+- `runtime/orchestrator_core/project_config.py`: the backlog view of the settings
+- `scripts/harness/settings.py`: the loader, and the defaults for omitted sections
+- `azure-mechanics.md`: which field each process actually has

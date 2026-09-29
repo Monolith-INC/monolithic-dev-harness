@@ -72,18 +72,17 @@ chart — it is invisible to the tooling that shows whether their sprint fits.
 Once the Task list is settled, **compute the estimates — do not reason them out.** The arithmetic
 is deterministic and lives in the orchestrator, so the same Story always yields the same hours.
 
-1. **Fetch the sprint context** through MCP and save it as one JSON file:
-   - `work[list_team_iterations]` with `timeframe: "current"` → `iteration`
-   - `work[get_team_capacity]` for that iteration → `capacities`
-   - `work[get_team_settings]` → `team_settings`
-   - `wit_work_item[list_for_iteration]` → `work_items` (so existing commitments count)
+1. **Fetch the sprint context** and save it as one JSON object: one entry per reply the selected
+   tracker lists under `planning.replies` in its `tracker.json` (`tracker_describe`), fetched
+   through the host's tools as each entry describes. A tracker that lists none (local) reads its
+   own files; pass `iteration_ref` so it knows which sprint. See `references/estimation.md`.
 2. **Write the Task list** as JSON: `story_id`, `story_points`, `assignee`, `iteration_ref`, and
    `tasks[]` of `{id, title, current_hours}`. Pass a `weight` per Task only when the Implementation
    Plan says one is materially larger; otherwise the role default applies.
 3. **Run it:**
 
 ```bash
-bin/agile-backlog-toolkit estimate-breakdown --input <tasks>.json --payloads <sprint>.json
+bin/agile-backlog-toolkit estimate-breakdown --input <tasks>.json --replies <sprint>.json
 ```
 
 Exit codes: `0` estimated and fits, `2` **blocked** (see below), `1` could not run.
@@ -146,10 +145,10 @@ Write only the selected Tasks to intake `destination`.
 When `destination` is `filesystem` or `both`:
 
 1. Write one markdown draft per Task under the artifacts path (prefer `Tickets/Ready/` or a host Task folder).
-2. Filename pattern per `../../references/ticket-structure.md`:
+2. Filename pattern per `../../../references/ticket-structure.md`:
    `task-<kebab-title>` is invalid as a bare prefix — use `task-<slug>` only if the host regex
    allows `task-`; otherwise `<story-id-or-0000>-task-<slug>.md` matching
-   `^(\d+|tech-debt|bug|task|spike)-[a-z0-9-]+`.
+   `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+`.
 3. Frontmatter: `type: ticket`, `work_item_type: Task`, parent Story ref, `language`, no `status:`
    key in Tickets/ (lifecycle note for Breakdown Done can live in the body: `State: Done`).
 4. Body: title heading + short description (WHAT for this atomic unit) + link/ref to `plan_path`
@@ -186,7 +185,7 @@ When `destination` is `azure` or `both`:
 
 ### Shared Azure notes
 
-Extend behavior from `../../references/azure-mechanics.md`. Parent of a Task is the **User Story**,
+Extend behavior from `../../../references/azure-mechanics.md`. Parent of a Task is the **User Story**,
 not the Feature. Description format: Markdown.
 
 ---

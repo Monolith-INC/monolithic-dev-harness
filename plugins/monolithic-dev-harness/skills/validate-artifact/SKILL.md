@@ -76,7 +76,7 @@ bin/agile-backlog-toolkit evaluate --skill validate-artifact --file <path>
 ```
 
 The Python critic implements every check in `./references/validation-checks.md`. On failure,
-`evaluate` writes `.agentic/workflow_prompts/validate-artifact.error.log` for `correcao` resume.
+`evaluate` writes `.harness/state/prompts/validate-artifact.error.log` for `correcao` resume.
 
 Read `./references/validation-checks.md` for the complete check definitions, conditions, and
 FAIL/WARN thresholds before running checks manually.
@@ -89,7 +89,7 @@ No check halts sibling or subsequent checks on failure. Collect all findings.
 **Local draft only:**
 - `frontmatter-type-present` — FAIL if `type:` key absent from frontmatter.
 - `frontmatter-status-absent` — FAIL if `status:` key present in frontmatter.
-- `filename-regex` — FAIL if filename does not match `^(\d+|tech-debt|bug|task|spike)-[a-z0-9-]+`.
+- `filename-regex` — FAIL if filename does not match `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+`.
   If source is Azure (no filename): emit SKIP.
 
 **All sources:**
@@ -99,23 +99,28 @@ No check halts sibling or subsequent checks on failure. Collect all findings.
 
 ### b) HIERARCHY
 
-If `parent_id` is null where a parent is required: emit `WARN hierarchy-skipped-no-parent-id` and skip
-this entire category.
+A Feature or a User Story with no parent is valid: its parent check passes with `no parent`. Pass
+`hierarchy_parent_is_feature: false` only when the Story **has** a parent and it is not a Feature.
 
 **User Story:**
-1. `wit_work_item[get](id=artifact.parent_id)`. Assert `System.WorkItemType == "Feature"`.
-2. Check `hierarchy-story-parent-is-feature` — FAIL if parent is Epic or missing.
+1. If `parent_id` is set: `wit_work_item[get](id=artifact.parent_id)`. Assert
+   `System.WorkItemType == "Feature"`.
+2. Check `hierarchy-story-parent-is-feature` — FAIL if the parent is not a Feature (for example an
+   Epic). PASS when there is no parent.
 
 **Feature:**
-1. `wit_work_item[get](id=artifact.parent_id)`. Assert `System.WorkItemType == "Epic"`.
-2. Check `hierarchy-feature-parent-is-epic` — FAIL if missing or wrong type.
+1. If `parent_id` is set: `wit_work_item[get](id=artifact.parent_id)`. Assert
+   `System.WorkItemType == "Epic"`.
+2. Check `hierarchy-feature-parent-is-epic` — FAIL if the parent is not an Epic. PASS when there is
+   no parent.
 
 **Epic:**
 1. Fetch children via `search_workitem` or relations from the ingested item.
    Assert no child has `System.WorkItemType == "User Story"`.
 2. Check `hierarchy-epic-no-direct-stories` — FAIL if direct Story children found.
 
-**Task:** assert its immediate parent is a User Story.
+**Task:** assert its immediate parent is a User Story. A Task is the only type that must have a
+parent.
 
 If an MCP call fails (network / permission): emit `SKIP <check> — MCP unavailable: <error>` and
 continue. Do not abort the run.
@@ -140,8 +145,6 @@ continue. Do not abort the run.
 - `dor-title-clear` — assert title non-empty and word count > 5. FAIL if not met.
 - `dor-description-present` — assert body / description non-empty. FAIL if not met.
 - `dor-story-points-set` *(User Story only)* — assert `story_points > 0`. FAIL if not met.
-- `dor-linked-to-feature` *(User Story only)* — reuse result of `hierarchy-story-parent-is-feature`;
-  no extra MCP call. FAIL if that check failed or was skipped.
 
 ---
 
@@ -164,7 +167,7 @@ Print to terminal:
 
 Read `./references/report-format.md` for the report frontmatter template.
 
-Path: `.agile-backlog-toolkit/reports/` (plugin-owned; written by `--persist`)
+Path: `.harness/backlog/reports/` (plugin-owned; written by `--persist`)
 
 Filename: `<YYYY-MM-DD>-validate-<id-or-slug>.md`
 - Use `provider_id` if available.

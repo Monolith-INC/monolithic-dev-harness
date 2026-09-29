@@ -2,7 +2,7 @@
 title: User Guide
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # User Guide
@@ -13,7 +13,8 @@ Take a piece of work from an idea to a reviewed draft pull request with the harn
 
 ## Audience
 
-Developers, Feature Owners, and Tech Leads on a team using Azure DevOps with Claude Code or Cursor.
+Developers, Feature Owners, and Tech Leads on a team using Claude Code or Cursor with Azure DevOps,
+Linear, the repository-local tracker, or an onboarded one. The examples below use Azure DevOps.
 
 ## Prerequisites
 
@@ -35,18 +36,22 @@ Take "students can add a profile photo" through the harness. Start with the back
 
 The agent drafts the top item, enriches it, and proposes Features and Stories as one outline. Edit
 the outline in plain language until it is right. The agent then shows every body with Story
-Points as one batch with an id:
+Points, then asks one question:
 
 ```text
-Batch HB-4F9A: 1 Epic, 2 Features, 4 Stories (5, 3, 3, 3 points), 7 parent links. Approve?
+Create these in Azure: 1 Epic, 2 Features, 4 Stories (5, 3, 3, 3 points)?
+  Approve    I create them now.
+  Not now    Nothing is written.
 ```
 
-Reply `approve HB-4F9A`. Nothing reaches Azure DevOps before that.
+Click **Approve**. Nothing reaches Azure DevOps before that. In Cursor, which has no question
+picker, the agent gives the batch an id and you reply `approve HB-4F9A`.
 
 ### 3. Plan (gate G2)
 
-For the Story you build next, the agent moves it to in progress and writes a technical spec from
-its acceptance criteria and Tasks. The Tech Lead reviews it; approve the batch that publishes it.
+For the Story you build next, the agent checks out its branch, moves it to in progress, binds it to
+your checkout with `harness session start <story>`, and writes a technical spec from its acceptance
+criteria and Tasks. The Tech Lead reviews it; approve the batch that publishes it.
 
 ### 4. Build
 
@@ -63,9 +68,24 @@ Validate in staging (G3); a person publishes and approves the pull request (G4).
 
 | Reply | Effect |
 | --- | --- |
-| `approve HB-XXXX` | opens a 20-minute window for the batch's writes |
+| `approve HB-XXXX` | opens a 20-minute window for the batch's writes (Cursor; in Claude, click **Approve**) |
 | `harness revoke` | closes open windows |
 | `harness manual-check <name> ok` | records that you validated a guarded change by hand |
+| `approve HT-XXXXXX` | trusts an onboarded tracker as it was shown to you (Cursor; in Claude, click **Trust**) |
+| `use HT-XXXXXX` | makes that trusted tracker the project's tracker (Cursor; in Claude, click **Use it**) |
+| `stop trusting the <name> tracker` | withdraws that trust (Cursor; in Claude, click **Stop trusting**) |
+
+To add a tracker the harness does not ship, ask the agent. It prepares the tracker, explains what
+it does and what it writes, then asks you two questions: whether to trust it, and whether to use it
+now. Your clicks do the rest; the harness updates the settings file for you.
+
+### Useful commands
+
+| Command | Effect |
+| --- | --- |
+| `harness session status` | which work item this checkout is bound to, and its phase |
+| `harness session pause` / `resume` / `close` | stop, restart, or finish the session |
+| `harness doctor` | settings, tracker, and session at a glance |
 
 ## Expected Result
 

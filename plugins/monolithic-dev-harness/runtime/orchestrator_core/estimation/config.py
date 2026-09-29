@@ -15,7 +15,7 @@ CONFIG_RELPATH = Path("estimation.json")
 # deliberately unitless and team-relative. These bands exist only so a team has
 # something to react to on day one. Every estimate derived from them is stamped
 # provenance="seed-default" so a reader can tell it apart from a calibrated figure.
-# Replace them by editing .agile-backlog-toolkit/estimation.json, or let calibration take over
+# Replace them by editing .harness/backlog/estimation.json, or let calibration take over
 # once enough completed work exists.
 SEED_BANDS: dict[float, tuple[float, float]] = {
     1.0: (1.0, 2.0),
@@ -152,7 +152,7 @@ def parse_config(data: dict[str, Any], *, source: str = "config") -> EstimationC
 
 
 def load_config(state_dir: Path) -> EstimationConfig:
-    """Read .agile-backlog-toolkit/estimation.json, degrading to seed defaults when absent or malformed."""
+    """Read .harness/backlog/estimation.json, degrading to seed defaults when absent or malformed."""
     path = config_path(state_dir)
     try:
         data = json.loads(path.read_text(encoding="utf-8"))

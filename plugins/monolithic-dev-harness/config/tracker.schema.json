@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://monolith.inc/schemas/tracker.schema.json",
+  "title": "monolithic-dev-harness tracker manifest (trackers/<name>/tracker.json)",
+  "description": "What a tracker is. Its folder also holds adapter.py, which exports adapter(context) -> TrackerOps.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "name", "label", "docs", "connection", "settings", "kinds", "states", "artifacts", "ids", "writes", "planning", "text_format"],
+  "$defs": {
+    "text": {"type": "string", "minLength": 1},
+    "texts": {"type": "array", "items": {"$ref": "#/$defs/text"}},
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "command", "args"],
+      "properties": {
+        "kind": {"const": "mcp"},
+        "command": {"$ref": "#/$defs/text"},
+        "args": {"type": "array", "items": {"type": "string"}},
+        "timeout": {"type": "integer", "minimum": 1, "maximum": 300}
+      }
+    },
+    "local": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {"kind": {"const": "local"}}
+    }
+  },
+  "properties": {
+    "schemaVersion": {"const": 1},
+    "name": {"type": "string", "pattern": "^[a-z][a-z0-9-]{0,63}$"},
+    "label": {"$ref": "#/$defs/text"},
+    "docs": {"$ref": "#/$defs/text", "description": "Where the provider documents the behaviour this manifest relies on."},
+    "connection": {
+      "description": "How the gateway reaches the provider. In args, {<setting>} is a value from settings.json, {plugin_root} and {repo} are paths.",
+      "oneOf": [{"$ref": "#/$defs/mcp"}, {"$ref": "#/$defs/local"}]
+    },
+    "settings": {
+      "type": "array",
+      "description": "Values the repository gives in settings.json tracker.values.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["key", "required", "description"],
+        "properties": {
+          "key": {"type": "string", "pattern": "^[A-Za-z][A-Za-z0-9_]*$"},
+          "required": {"type": "boolean"},
+          "description": {"$ref": "#/$defs/text"}
+        }
+      }
+    },
+    "kinds": {
+      "type": "object",
+      "description": "The provider type for each harness work kind; each names an artifact.",
+      "additionalProperties": false,
+      "required": ["epic", "feature", "user_story", "task", "bug"],
+      "properties": {
+        "epic": {"$ref": "#/$defs/text"},
+        "feature": {"$ref": "#/$defs/text"},
+        "user_story": {"$ref": "#/$defs/text"},
+        "task": {"$ref": "#/$defs/text"},
+        "bug": {"$ref": "#/$defs/text"}
+      }
+    },
+    "states": {
+      "type": "object",
+      "description": "The provider state for each harness state.",
+      "additionalProperties": false,
+      "required": ["backlog", "ready", "in_progress", "done", "canceled"],
+      "properties": {
+        "backlog": {"$ref": "#/$defs/text"},
+        "ready": {"$ref": "#/$defs/text"},
+        "in_progress": {"$ref": "#/$defs/text"},
+        "done": {"$ref": "#/$defs/text"},
+        "canceled": {"$ref": "#/$defs/text"}
+      }
+    },
+    "artifacts": {
+      "type": "array",
+      "minItems": 1,
+      "description": "The provider's work item types and which types each may contain.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "children"],
+        "properties": {
+          "name": {"$ref": "#/$defs/text"},
+          "children": {"$ref": "#/$defs/texts"},
+          "estimate": {"$ref": "#/$defs/text"}
+        }
+      }
+    },
+    "tools": {
+      "type": "object",
+      "description": "Provider tool names the adapter calls, by harness operation.",
+      "additionalProperties": {"$ref": "#/$defs/text"}
+    },
+    "ids": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pattern", "branch_key", "mention", "mentions_link"],
+      "properties": {
+        "pattern": {"$ref": "#/$defs/text", "description": "A regular expression for one id, as the provider accepts it."},
+        "branch_key": {"$ref": "#/$defs/text", "description": "A regular expression for {key} in a branch name, with a named group 'id' holding the id."},
+        "mention": {"$ref": "#/$defs/texts", "description": "Regular expressions for text the provider turns into a link; {id} stands for one id."},
+        "mentions_link": {"type": "boolean", "description": "Whether a mention in text or a commit message links the item."}
+      }
+    },
+    "writes": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["server", "tools"],
+      "description": "Host-visible MCP tools that change the tracker; they need an open approval.",
+      "properties": {
+        "server": {"type": "string", "description": "Text the MCP server name contains; empty when the tracker has no host-visible server."},
+        "tools": {"$ref": "#/$defs/texts", "description": "Tool names; * matches any run of characters."}
+      }
+    },
+    "planning": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["replies"],
+      "description": "What the tracker's planning operations (read_iteration, iteration_items) read. A skill fetches each reply through the host's tools and hands them over by key; a tracker that reads its own files lists none.",
+      "properties": {
+        "replies": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["key", "description"],
+            "properties": {
+              "key": {"type": "string", "pattern": "^[a-z][a-z0-9_]*$"},
+              "description": {"$ref": "#/$defs/text", "description": "Which provider tool to call and with what, in words a skill can follow."}
+            }
+          }
+        }
+      }
+    },
+    "attachments": {"type": "object", "additionalProperties": {"$ref": "#/$defs/text"}},
+    "text_format": {"enum": ["markdown", "html", "plain"]}
+  }
+}

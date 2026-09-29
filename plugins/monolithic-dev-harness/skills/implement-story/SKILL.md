@@ -12,7 +12,7 @@ The execution half of the harness. Inputs come from earlier stages and are never
 | Story, acceptance criteria, points | `decompose-backlog` (backlog stage, gate G1) |
 | Tasks in order, plus Staging / Review / Breakdown | `generate-breakdown-work-items` |
 | Technical specification (*how*) | `write-spec`, approved at gate G2 |
-| Repository rules and commands | `AGENTS.md` routing, `.harness/policy.json` |
+| Repository rules and commands | `AGENTS.md` routing, `.harness/settings.json` |
 
 If the spec is missing or unapproved, stop and run `write-spec` first. The workflow policy hook
 also blocks governed writes without the spec.

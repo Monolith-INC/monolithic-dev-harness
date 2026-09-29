@@ -3,15 +3,19 @@
 
     hook.py --host claude --event pre-tool   (Claude PreToolUse)
     hook.py --host claude --event prompt     (Claude UserPromptSubmit)
+    hook.py --host claude --event ask        (Claude PreToolUse on AskUserQuestion)
+    hook.py --host claude --event answer     (Claude PostToolUse on AskUserQuestion)
     hook.py --host cursor --event pre-tool   (Cursor preToolUse)
     hook.py --host cursor --event shell      (Cursor beforeShellExecution)
     hook.py --host cursor --event mcp        (Cursor beforeMCPExecution)
     hook.py --host cursor --event prompt     (Cursor beforeSubmitPrompt)
 
 Pre-tool events run the harness rules first. If they allow the call, Claude and Cursor
-`preToolUse` payloads continue to the codex-workflows policy runtime (branch template, work-item
-key, state, spec prerequisites, completion evidence, protected branches, stack merge order).
-Prompt events are the only place approvals and manual-check evidence are recorded.
+`preToolUse` payloads continue to the workflow policy runtime (branch template, work-item
+key, state, spec prerequisites, completion evidence, protected branches).
+Prompt events record approvals, manual-check evidence, and tracker trust from what the user typed; answer events
+record an approval from the user clicking `Approve` on a question. Ask events send a question back
+to be rewritten when it is not plain enough to show a person.
 """
 
 from __future__ import annotations
@@ -20,6 +24,7 @@ import argparse
 import json
 import os
 import re
+import signal
 import sys
 from pathlib import Path
 from typing import Any
@@ -29,8 +34,28 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
     if str(entry) not in sys.path:
         sys.path.insert(0, str(entry))
 
-from harness import gitstate, rules, state  # noqa: E402
-from harness.config import POLICY_RELATIVE_PATH, PolicyError, load_policy  # noqa: E402
+from core.result import Err, Ok  # noqa: E402
+from harness import (  # noqa: E402
+    gitstate,
+    questions,
+    rules,
+    settings,
+    state,
+    tracker_policy,
+)
+
+# The hosts give the hook 15 seconds and treat a timeout as "no decision", which lets the call
+# through. The rules get less than that, and running out counts as a failure.
+RULES_BUDGET_SECONDS = 10
+
+
+class _OutOfTime(Exception):
+    pass
+
+
+def _out_of_time(_signum: int, _frame: Any) -> None:
+    raise _OutOfTime(f"the rules took longer than {RULES_BUDGET_SECONDS}s")
+
 
 APPROVE_RE = re.compile(
     r"\b(?:approve|aprovo|aprovado|aprovar)\s+(HB-[A-Z0-9]{4,12})\b", re.IGNORECASE
@@ -39,6 +64,14 @@ REVOKE_RE = re.compile(r"\bharness\s+revoke\b", re.IGNORECASE)
 MANUAL_RE = re.compile(
     r"\bharness\s+manual-check\s+([A-Za-z0-9._-]{1,60})\s+ok\b", re.IGNORECASE
 )
+# Cursor has no question buttons: the user's whole message is the reply, so a quoted or negated
+# mention ("don't use HT-1A2B3C yet") never counts.
+TRACKER_REPLY_RE = re.compile(
+    r"\s*(approve|aprovo|aprovado|aprovar|use|usar)\s+(HT-[A-Z0-9]{6})\s*[.!]?\s*",
+    re.IGNORECASE,
+)
+STOP_TRUSTING_RE = re.compile(r"\s*stop\s+trusting\s+(.+?)\s*[.!]?\s*", re.IGNORECASE)
+DEFAULT_WINDOW_MINUTES = 20
 
 
 def _workspace(payload: dict[str, Any]) -> Path:
@@ -57,8 +90,11 @@ def _workspace(payload: dict[str, Any]) -> Path:
 
 
 def _tool_call(host: str, event: str, payload: dict[str, Any]) -> rules.ToolCall:
+    cwd = str(payload.get("cwd") or "")
     if host == "cursor" and event == "shell":
-        return rules.make_call("Shell", {"command": payload.get("command", "")})
+        return rules.make_call(
+            "Shell", {"command": payload.get("command", "")}, cwd=cwd
+        )
     tool_input = (
         payload.get("tool_input")
         or payload.get("toolInput")
@@ -75,7 +111,10 @@ def _tool_call(host: str, event: str, payload: dict[str, Any]) -> rules.ToolCall
     )
     server = payload.get("server") or payload.get("server_name") or ""
     return rules.make_call(
-        str(name), tool_input if isinstance(tool_input, dict) else {}, str(server)
+        str(name),
+        tool_input if isinstance(tool_input, dict) else {},
+        str(server),
+        cwd=cwd,
     )
 
 
@@ -103,7 +142,7 @@ def _emit_decision(host: str, decision: rules.Decision) -> None:
 
 
 def _delegate_to_workflow_policy(
-    host: str, payload: dict[str, Any], call: rules.ToolCall
+    host: str, payload: dict[str, Any], call: rules.ToolCall, repo: Path
 ) -> int:
     os.environ["WORKFLOW_HOOK_CLIENT"] = host
     try:
@@ -113,14 +152,19 @@ def _delegate_to_workflow_policy(
     ) as exc:  # the runtime is part of this plugin; failing to import is a defect
         return _fail(host, call, f"workflow policy runtime unavailable: {exc}")
     try:
-        return run(host, payload)
+        return run(host, payload, str(repo))
     except Exception as exc:
         return _fail(host, call, f"workflow policy runtime failed: {exc}")
 
 
 def _fail(host: str, call: rules.ToolCall, message: str) -> int:
     """Fail closed for writes, open for reads, so a broken rule never silently permits a write."""
-    if rules.is_write_class(call):
+    try:
+        write_class = rules.is_write_class(call)
+    except Exception:
+        # The classifier broke too: only calls that plainly cannot write go through.
+        write_class = call.name not in rules.READ_ONLY_TOOLS
+    if write_class:
         _emit_decision(
             host,
             rules.Decision.deny(
@@ -136,36 +180,148 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     call = _tool_call(host, event, payload)
     repo = _workspace(payload)
-    if not (repo / POLICY_RELATIVE_PATH).is_file():
-        # Not a governed repository: the harness is opt-in per repo (bootstrap writes the policy).
+    if not settings.governed(repo):
+        # Not a governed repository: the harness is opt-in per repo (bootstrap writes the settings).
         _emit_decision(host, rules.Decision.allow())
         return 0
+    timed = hasattr(signal, "SIGALRM")
+    if timed:
+        signal.signal(signal.SIGALRM, _out_of_time)
+        signal.setitimer(signal.ITIMER_REAL, RULES_BUDGET_SECONDS)
     try:
-        policy = load_policy(repo)
-        decision = rules.evaluate(call, repo, policy)
-    except (PolicyError, gitstate.GitError, OSError, ValueError, KeyError) as exc:
-        return _fail(host, call, f"harness rules could not run: {exc}")
+        loaded = settings.load(repo)
+        match loaded:
+            case Err(failure):
+                return _fail(
+                    host, call, f"the settings cannot be used: {failure.message}"
+                )
+            case Ok(chosen):
+                decision = rules.evaluate(
+                    call, repo, chosen, tracker_policy.build(repo, loaded)
+                )
+    except (Exception, _OutOfTime) as exc:
+        # Any failure of the rules, including a crash or running out of time, blocks writes.
+        # A hook that exits with an error or times out is not a block: the host lets the call run.
+        return _fail(
+            host, call, f"harness rules could not run: {type(exc).__name__}: {exc}"
+        )
+    finally:
+        if timed:
+            signal.setitimer(signal.ITIMER_REAL, 0)
     if not decision.allowed:
         _emit_decision(host, decision)
         return 0
     if host == "claude" or event == "pre-tool":
-        return _delegate_to_workflow_policy(host, payload, call)
+        return _delegate_to_workflow_policy(host, payload, call, repo)
     _emit_decision(host, decision)
     return 0
+
+
+def _pin_approved_notes(repo: Path, approval_id: str) -> str:
+    """Pin the notes marked approved in the artifacts path to this approval; a note for the user."""
+    # Imported here so only approvals pay for loading the artifacts-path reader.
+    from harness import local_artifacts
+
+    try:
+        notes = local_artifacts.approved_notes(repo)
+        state.pin_notes(repo, approval_id, notes)
+    except (OSError, ValueError) as exc:
+        return f" Approved plan and spec notes were NOT pinned: {exc}"
+    if not notes:
+        return ""
+    return (
+        f" It also covers {len(notes)} plan or spec note(s) marked approved, as they read now;"
+        " editing one needs a new approval."
+    )
+
+
+def _window(repo: Path) -> int:
+    match settings.load(repo):
+        case Ok(chosen):
+            return chosen.approval_minutes
+        case Err():
+            return DEFAULT_WINDOW_MINUTES
+
+
+def _tracker_act(
+    repo: Path, action: str, name: str, pinned: str, current: str | None = None
+) -> str:
+    """Trust, select, or stop trusting one onboarded tracker, as the user just chose.
+
+    `pinned` is the folder's version when the user was asked; if it changed since, nothing happens.
+    `current` is the folder's version now, when the caller already hashed it.
+    """
+    from integrations import onboarding, registry, trust
+
+    folder = repo / registry.ONBOARDED_RELATIVE_PATH / name
+    manifest = registry.read_manifest(folder, "onboarded")
+    label = manifest.value.label if isinstance(manifest, Ok) else name
+    if current is None:
+        current = trust.digest(folder) if folder.is_dir() else ""
+    if action != "untrust" and current != pinned:
+        return (
+            f"[harness] the {label} tracker changed after the user was asked, so nothing was done. "
+            "Show them what changed and ask again."
+        )
+    match action:
+        case "trust":
+            result = trust.trust(repo, name, folder, pinned)
+            return (
+                f"[harness] the user trusts the {label} tracker as it read when they were asked."
+                if isinstance(result, Ok)
+                else f"[harness] the {label} tracker was NOT trusted: {result.failure.message}"
+            )
+        case "select":
+            chosen = onboarding.select(repo, name)
+            return (
+                f"[harness] the project now uses the {label} tracker; the settings were updated."
+                if isinstance(chosen, Ok)
+                else f"[harness] the {label} tracker was NOT selected: {chosen.failure.message}"
+            )
+        case _:
+            removed = trust.untrust(repo, name)
+            return (
+                f"[harness] the {label} tracker is no longer trusted."
+                if isinstance(removed, Ok)
+                else f"[harness] the {label} tracker is STILL trusted: {removed.failure.message}"
+            )
+
+
+def _tracker_reply_notes(repo: Path, prompt: str) -> list[str]:
+    """Cursor's typed replies, each the whole message.
+
+    `approve HT-…` trusts and `use HT-…` selects the version whose short id the user was shown;
+    `stop trusting <tracker>` withdraws trust by name.
+    """
+    from integrations import onboarding
+
+    reply = TRACKER_REPLY_RE.fullmatch(prompt)
+    if reply is not None:
+        verb, short = reply.groups()
+        found = onboarding.by_short_id(repo, short)
+        if found is None:
+            return [
+                f"[harness] no staged tracker matches {short.upper()}; it may have changed since "
+                "it was shown. Show the tracker again and ask."
+            ]
+        manifest, digest = found
+        action = "select" if verb.lower() in ("use", "usar") else "trust"
+        return [_tracker_act(repo, action, manifest.name, digest, current=digest)]
+    stop = STOP_TRUSTING_RE.fullmatch(prompt)
+    name = onboarding.named_in(repo, stop.group(1)) if stop is not None else None
+    return [_tracker_act(repo, "untrust", name, "")] if name is not None else []
 
 
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     prompt = payload.get("prompt") or payload.get("user_prompt") or ""
     repo = _workspace(payload)
     notes: list[str] = []
-    if not (repo / POLICY_RELATIVE_PATH).is_file():
+    if not settings.governed(repo):
         if host == "cursor":
             print(json.dumps({"continue": True}))
         return 0
-    try:
-        window = int(load_policy(repo).get("approvals", {}).get("window_minutes", 20))
-    except (PolicyError, ValueError):
-        window = 20
+    window = _window(repo)
+    notes.extend(_tracker_reply_notes(repo, prompt))
     if REVOKE_RE.search(prompt):
         notes.append(
             f"[harness] revoked {state.revoke_approvals(repo)} open approval window(s)."
@@ -174,6 +330,7 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         state.open_approval(repo, approval_id, window)
         notes.append(
             f"[harness] approval {approval_id} recorded; tracker/SCM writes are open for {window} minutes."
+            + _pin_approved_notes(repo, approval_id)
         )
     for name in MANUAL_RE.findall(prompt):
         try:
@@ -192,11 +349,128 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     return 0
 
 
+def _governed(payload: dict[str, Any]) -> Path | None:
+    repo = _workspace(payload)
+    return repo if settings.governed(repo) else None
+
+
+def handle_ask(payload: dict[str, Any]) -> int:
+    """Before a question is shown: send it back if a person would have to decode it."""
+    repo = _governed(payload)
+    if repo is None:
+        return 0
+    tool_input = payload.get("tool_input")
+    tool_input = tool_input if isinstance(tool_input, dict) else {}
+    found = questions.problems(tool_input)
+    if found:
+        _emit_decision(
+            "claude",
+            rules.Decision.deny("plain-questions", questions.rewrite_reason(found)),
+        )
+        return 0
+    detail = _tracker_question(repo, tool_input)
+    if detail is None:
+        _emit_decision(
+            "claude",
+            rules.Decision.deny(
+                "plain-questions",
+                "This question offers a tracker choice but does not name exactly one staged "
+                'tracker: name the tracker by its label, for example "Trust the Acme Boards '
+                'tracker as I just described it?", so the click applies to that one.',
+            ),
+        )
+        return 0
+    tool_use_id = str(payload.get("tool_use_id") or "")
+    if tool_use_id:
+        state.mark_asked(repo, questions.marker_name(tool_use_id), detail)
+    return 0
+
+
+def _tracker_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] | None:
+    """What a tracker question is about, pinned now: {} for other questions, None if unclear.
+
+    A Trust or Stop trusting question must name one onboarded tracker. "Use it" alone may be about
+    anything, a shipped tracker included, so an unmatched one is an ordinary question.
+    """
+    from integrations import onboarding, registry, trust
+
+    asked = questions.tracker_action(tool_input)
+    if asked is None:
+        return {}
+    actions, text = asked
+    name = onboarding.named_in(repo, text)
+    if name is None:
+        return None if {"trust", "untrust"} & set(actions) else {}
+    folder = repo / registry.ONBOARDED_RELATIVE_PATH / name
+    return {
+        "tracker": name,
+        "actions": list(actions),
+        "digest": trust.digest(folder) if folder.is_dir() else "",
+    }
+
+
+def handle_answer(payload: dict[str, Any]) -> int:
+    """After the user answers: an `Approve` click opens an approval window."""
+    repo = _governed(payload)
+    tool_use_id = str(payload.get("tool_use_id") or "")
+    if repo is None or not tool_use_id:
+        return 0
+    asked = state.take_asked(repo, questions.marker_name(tool_use_id))
+    if asked is None:
+        return 0  # the question never passed the check, so its answer opens nothing
+    tool_input = payload.get("tool_input")
+    if asked.get("tracker"):
+        chosen = questions.tracker_choice(
+            tool_input if isinstance(tool_input, dict) else {},
+            payload.get("tool_response"),
+        )
+        note = (
+            _tracker_act(repo, chosen, asked["tracker"], asked.get("digest", ""))
+            if chosen is not None and chosen in asked.get("actions", ())
+            else f"[harness] nothing changed for the {asked['tracker']} tracker."
+        )
+        print(
+            json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "PostToolUse",
+                        "additionalContext": note,
+                    }
+                }
+            )
+        )
+        return 0
+    approved = questions.approval(
+        tool_input if isinstance(tool_input, dict) else {}, payload.get("tool_response")
+    )
+    if approved is None:
+        return 0
+    window = _window(repo)
+    approval_id = questions.approval_id(tool_use_id)
+    state.open_approval(repo, approval_id, window, question=approved[0])
+    pinned = _pin_approved_notes(repo, approval_id)
+    print(
+        json.dumps(
+            {
+                "hookSpecificOutput": {
+                    "hookEventName": "PostToolUse",
+                    "additionalContext": f"[harness] the user approved; approval {approval_id} is open "
+                    f"for {window} minutes. Make only the writes the question described."
+                    + pinned,
+                }
+            }
+        )
+    )
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", choices=("claude", "cursor"), required=True)
     parser.add_argument(
-        "--event", choices=("pre-tool", "prompt", "shell", "mcp"), required=True
+        "--event",
+        choices=("pre-tool", "prompt", "shell", "mcp", "ask", "answer"),
+        required=True,
     )
     args = parser.parse_args(argv)
     try:
@@ -207,7 +481,25 @@ def main(argv: list[str] | None = None) -> int:
         payload = {}
     if args.event == "prompt":
         return handle_prompt(args.host, payload)
-    return handle_pre_tool(args.host, args.event, payload)
+    if args.event in ("ask", "answer"):
+        try:
+            return (
+                handle_ask(payload) if args.event == "ask" else handle_answer(payload)
+            )
+        except Exception:
+            # A question is not a write: a broken check shows it as asked. Its answer then opens
+            # nothing, because only a question the check let through is honoured.
+            return 0
+    try:
+        return handle_pre_tool(args.host, args.event, payload)
+    except Exception as exc:
+        # Last resort: anything that escaped the rules still fails closed.
+        call = rules.make_call(
+            str(payload.get("tool_name") or payload.get("toolName") or "Bash"), {}
+        )
+        return _fail(
+            args.host, call, f"harness hook failed: {type(exc).__name__}: {exc}"
+        )
 
 
 if __name__ == "__main__":

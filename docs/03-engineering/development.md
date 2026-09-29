@@ -2,7 +2,7 @@
 title: Development
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # Development
@@ -19,7 +19,7 @@ must pass before a change is done.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install pytest ruff==0.16.4 jsonschema shellcheck-py
+.venv/bin/pip install pytest ruff==0.16.4 shellcheck-py
 ```
 
 ## Authoritative Source Files
@@ -28,7 +28,9 @@ python3 -m venv .venv
 | --- | --- |
 | Skills | `plugins/monolithic-dev-harness/skills/*/SKILL.md` (+ `manifest.json` for orchestrated skills) |
 | Rules and hook entry point | `plugins/monolithic-dev-harness/scripts/harness/` |
-| Workflow policy, orchestrator, gateway | `plugins/monolithic-dev-harness/scripts/` |
+| Workflow policy, orchestrator, gateway, registry | `plugins/monolithic-dev-harness/scripts/` |
+| Tracker folders (manifests and adapters) | `plugins/monolithic-dev-harness/trackers/` |
+| Settings and tracker schemas | `plugins/monolithic-dev-harness/config/` |
 | Backlog orchestrator | `plugins/monolithic-dev-harness/runtime/orchestrator_core/` |
 | Hook wiring | `plugins/monolithic-dev-harness/hooks/hooks.json`, `hooks/cursor.hooks.json` |
 | MCP wiring | `plugins/monolithic-dev-harness/.mcp.json`, `cursor.mcp.json` |
@@ -66,7 +68,7 @@ See [testing.md](testing.md).
 ## Full Outcome Gate
 
 ```bash
-.venv/bin/ruff check . && .venv/bin/ruff format --check .
+.venv/bin/ruff check --no-cache . && .venv/bin/ruff format --no-cache --check .
 .venv/bin/shellcheck install.sh scripts/build_release.sh plugins/monolithic-dev-harness/bin/* plugins/monolithic-dev-harness/tests/run.sh
 PYTHON=.venv/bin/python plugins/monolithic-dev-harness/tests/run.sh
 python3 scripts/check_versions.py
@@ -79,7 +81,7 @@ claude plugin validate plugins/monolithic-dev-harness && claude plugin validate 
 - A new or changed rule has a deny test and an allow test through `hook.py`.
 - User-visible behavior is reflected in `docs/` and, for releases, `CHANGELOG.md`.
 - No client- or organization-specific names, ids, or paths in the plugin; those belong in a
-  repository's `.harness/policy.json`.
+  repository's `.harness/settings.json`.
 
 ## Common Failure Modes
 

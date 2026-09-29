@@ -2,7 +2,7 @@
 
 Before analysis, create a timestamped backup outside the mutation path. Use
 `<artifacts>/_backups/amend-workitems/<UTC timestamp>/` for a Artifacts-backed run, or
-`.agentic/backups/amend-workitems/<UTC timestamp>/` for an Azure-only run. Prefer a Artifacts
+`.harness/state/backups/amend-workitems/<UTC timestamp>/` for an Azure-only run. Prefer a Artifacts
 snapshot when the source is Azure-backed: save raw work-item JSON, revisions, relations,
 attachments, and all descendant bodies. Also copy the local tree and related
 `Implementation_Plans/` notes when available. If only a filesystem/Artifacts source exists, copy

@@ -2,7 +2,7 @@
 title: ADR-0002 Per-repository opt-in
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-26
 ---
 
 # ADR-0002: Govern only repositories that opt in
@@ -19,21 +19,21 @@ configuration.
 
 ## Decision
 
-A repository is governed only when it contains `.harness/policy.json`, written by
+A repository is governed only when it contains `.harness/settings.json`, written by
 `harness bootstrap`. Everywhere else the hook runtime allows every call and does not consult the
 workflow policy.
 
 ## Options Considered
 
 - **Govern everything, fail closed without configuration:** safe but blocks unrelated work.
-- **Per-repository opt-in (chosen):** the policy file is both the switch and the configuration.
+- **Per-repository opt-in (chosen):** the settings file is both the switch and the configuration.
 
 ## Consequences
 
 ### Positive
 
 - Installing the plugin never breaks work in other repositories.
-- The policy that enables governance is reviewed and committed like code.
+- The settings that enable governance are reviewed and committed like code.
 
 ### Trade-offs
 
@@ -45,7 +45,7 @@ None.
 
 ## Validation
 
-`TestOptIn.test_repo_without_policy_is_not_governed` in `tests/harness/test_hook_rules.py`.
+`TestOptIn.test_repo_without_settings_is_not_governed` in `tests/harness/test_hook_rules.py`.
 
 ## References
 
