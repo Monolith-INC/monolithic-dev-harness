@@ -198,7 +198,12 @@ class TestSessionScope(TrackedRepo):
             readiness_artifacts=("tech_spec",),
         )
         self.ops.transition_work_item("STORY-0001", LogicalState.READY)
-        self.assertFalse(self.evaluate().is_denied())
+        with mock.patch.object(
+            hook_runtime.registry,
+            "open_selected",
+            side_effect=AssertionError("tracker"),
+        ):
+            self.assertFalse(self.evaluate().is_denied())
         pushed = CanonicalToolEvent(
             client="claude",
             tool_name="Bash",
@@ -210,6 +215,16 @@ class TestSessionScope(TrackedRepo):
             "must be in progress",
             hook_runtime._evaluate_work_context(pushed).reason,
         )
+
+    def test_a_spec_published_after_session_start_is_found_live(self):
+        sessions.start(
+            self.root,
+            "STORY-0001",
+            "implement-story",
+            readiness_state="ready",
+            readiness_artifacts=(),
+        )
+        self.assertFalse(self.evaluate().is_denied())
 
     def test_a_detached_head_cannot_hold_a_session(self):
         sessions.start(self.root, "STORY-0001", "implement-story")

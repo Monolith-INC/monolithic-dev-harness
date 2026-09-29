@@ -444,9 +444,9 @@ def _tracker_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] 
 def _manual_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] | None:
     """Pin one unmet manual guard and the exact staged tree before showing its button."""
     text = questions.manual_signoff(tool_input)
+    if text is None:
+        return {}
     match text, settings.load(repo):
-        case None, _:
-            return {}
         case _, Err():
             return None
         case str(), Ok(chosen):

@@ -1125,6 +1125,27 @@ class TestPullRequest(HookTestCase):
             "feature-branch",
         )
 
+    def test_feature_rule_accepts_a_remote_base_and_skips_unpinned_sessions(
+        self,
+    ) -> None:
+        from harness import rules
+
+        sh(self.repo, "remote", "add", "origin", "https://example.invalid/r.git")
+        call = rules.make_call(
+            "mcp__azure-devops__repo_pull_request_write",
+            {"action": "create", "targetRefName": "refs/heads/feature/900-parent"},
+        )
+        sessions.start(self.repo, "1", "feature-implementation")
+        self.assertTrue(rules.rule_feature_branch(call, self.repo).allowed)
+        sessions.transition(self.repo, "close")
+        sessions.start(
+            self.repo,
+            "1",
+            "feature-implementation",
+            expected_base_ref="origin/feature/900-parent",
+        )
+        self.assertTrue(rules.rule_feature_branch(call, self.repo).allowed)
+
     def test_pr_must_be_draft_reviewed_and_checked(self) -> None:
         self.approve()
         self.ship_ready_commit()
