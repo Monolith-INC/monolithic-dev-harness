@@ -54,16 +54,24 @@ mode (decomposition-rules.md → Parent-type branch):
 
 Stories never attach to an Epic, in either mode.
 
+If the parent references a `product-spec`, read `SPEC.md` and all `companions:` before decomposing.
+Treat `CAP-N` intent and success conditions, product constraints, non-goals, UX contracts, and
+`AD-N` rules as binding. Existing work-item prose does not override them silently.
+
 ### 2. DECOMPOSE
 
 Apply the sizing rules and story-point heuristic from `decomposition-rules.md`.
 
 - *Story mode:* an ordered list of Story stubs (title + one-line scope + dependencies + provisional
-  points), each tracing to a verbatim slice of the Feature.
+  points), each tracing to a verbatim slice of the Feature and the `CAP-N` values it covers.
 - *Tree mode:* first the Features (Feature sizing rule): for each, title + one-line objective + the
   verbatim Epic slice it covers + `existing #<id>` or `new`. Then, under each Feature, its Story stubs
   as in story mode, each tracing to a slice of that Feature's slice. Every Epic slice must land in
   exactly one Feature.
+
+Every relevant capability must land in at least one Story, and every Story must cite at least one
+capability when a product spec exists. A new constraint or architectural choice discovered while
+slicing goes back to the owning planning artifact; do not bury it in a Story.
 
 **── GATE 1 —** present the whole split (the tree, in tree mode) as one outline and WAIT for explicit
 approval before drafting anything. Edits the user asks for re-run DECOMPOSE; do not draft a partial

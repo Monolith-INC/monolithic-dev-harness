@@ -12,6 +12,7 @@ revision (not a working tree) and adapted in place. License texts are in
 | `thermos`, `thermo-nuclear-review`, `thermo-nuclear-code-quality-review`, `agents/thermo-*` | thermos-claude (Claude adaptation of cursor/plugins `thermos`) | HEAD at copy time | MIT (`thermos.LICENSE`) |
 | `deslop`, `verify-this`; adapted: `check`, `branch-and-pr` | cursor/plugins `cursor-team-kit` | `46756f8` | MIT (`cursor-team-kit.LICENSE`) |
 | `prove-it-works`, `sequence-verifiable-units`, `architect/references/*`; adapted: `architect`, `tdd` | cursor/plugins `pstack` (Lauren Tan) | `46756f8` | MIT (`pstack.LICENSE`) |
+| `plan-initiative`, `brainstorm-ideas`, `forge-idea`, `research-decision`, `product-brief`, `product-requirements`, `experience-design`, `architecture-spine`, `product-spec`; `references/planning-artifacts.md` | BMad Method (BMad Code, LLC) | `1cbcfa2` | MIT (`bmad-method.LICENSE`) |
 | `azure-devops` skill | workstation `azure-devops-mcp` skill (Claude and Codex ports) | 2026-08-27 | internal |
 
 Written for the harness: `harness`, `implement-story`, `review`, `bootstrap` (rewritten),

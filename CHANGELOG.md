@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Added an optional BMAD-inspired Stage 0 workflow for shaping an initial idea through
+  brainstorming, research, product definition, experience design, architecture, and a canonical
+  product specification before backlog or implementation artifacts are created.
+- Added a structured **Plan the idea** or **Draft work items** starting-point choice to the harness
+  UI when a user brings an idea without selecting a workflow.
+
+### Changed
+
+- Backlog decomposition, Story specifications, and Task architecture now inherit and trace Stage 0
+  product capabilities, functional requirements, experience decisions, and architecture decisions.
+
 ## [0.3.0] - 2026-09-29
 
 Implementation that predates a session can be adopted safely, Feature Stories are pinned to their

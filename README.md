@@ -7,9 +7,10 @@
 [![Cursor](https://img.shields.io/badge/Cursor-supported-black.svg)](https://cursor.com)
 [![Documentation](https://img.shields.io/badge/docs-project_documentation-informational.svg)](./docs/README.md)
 
-An AI delivery harness for teams on Azure DevOps, Linear, a repository-local tracker, or a tracker
-they onboard: one plugin for Claude Code and Cursor that takes an idea from the backlog to a
-reviewed draft pull request, with people deciding at four gates and
+An AI product-and-delivery harness for teams on Azure DevOps, Linear, a repository-local tracker,
+or a tracker they onboard: one plugin for Claude Code and Cursor that can shape an early idea,
+distill it into a product contract, and take it through the backlog to a reviewed draft pull
+request, with people deciding at four delivery gates and
 hooks enforcing every rule that must not depend on the model remembering it.
 
 > **Core principle:** skills tell the agent what to do; deterministic hooks decide what it may do.
@@ -30,8 +31,8 @@ rules forbid.
                    v
    +-------------------------------+        +---------------------------+
    | Skills (model-driven)         |        | Hooks (deterministic)     |
-   | backlog -> spec -> build ->   | -----> | every Bash / edit / MCP   |
-   | review                        |  tool  | call checked against the  |
+   | define -> backlog -> spec ->  | -----> | every Bash / edit / MCP   |
+   | build -> review               |  tool  | call checked against the  |
    +-------------------------------+  call  | repo settings + evidence  |
                    ^                        +-------------+-------------+
                    |                                      |
@@ -85,8 +86,11 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
 
 ## Features / capabilities
 
+- **Idea-to-contract planning:** optional brainstorming, idea pressure-testing, decision research,
+  product brief, PRD, UX contracts, and architecture spine, routed by the uncertainty that remains
+  and distilled into one compact product spec per epic or coherent outcome.
 - **Linear backlog:** Epic → Features → Stories (with Story Points) → Tasks, in one run with two
-  approval gates, audited for coverage against the source text.
+  approval gates, audited against the source text and stable product capability IDs when present.
 - **Trackers are adapters:** Azure DevOps, Linear, and a repository-local tracker ship; any other
   can be onboarded as a folder, and counts only once a person trusts it as it reads.
 - **Sessions:** a work item is bound to one checkout; code changes need an active session, and the
@@ -148,22 +152,26 @@ harness doctor                                       # tools, hosts, settings, t
 Restart Claude Code (or reload Cursor), then ask the agent:
 
 ```text
-Take "students can add a profile photo" through the harness, starting with the backlog.
+Help me pressure-test and plan "students can add a profile photo", then stop before creating backlog items.
 ```
 
-The agent drafts the Epic, proposes Features and Stories, and stops at gate G1 for your approval.
-Nothing reaches the tracker until you click **Approve** on the batch it shows you. Start from
+The agent uses only the planning tools the idea needs, ends with a compact product contract, and
+first offers **Plan the idea** or **Draft work items** in the normal question UI. Nothing reaches the
+tracker until you explicitly continue and later click **Approve** on the batch it shows you. Start from
 [`examples/settings.example.json`](./plugins/monolithic-dev-harness/examples/settings.example.json).
 
 ## How it works
 
 ```text
+ 0 DEFINE    plan-initiative: optional discovery -> product-spec
+             (+ DESIGN.md / EXPERIENCE.md / ARCHITECTURE-SPINE.md when needed)
+                 |
  1 BACKLOG   generate-work-item -> enrich-work-item -> decompose-backlog -> breakdown
              Epic -> Features -> Stories (points) -> Tasks
                  |
                  +-- G1  Feature Owner / PO approve the split and the bodies
                  v
- 2 PLAN      start-ticket -> write-spec (Actor-Critic)
+ 2 TECH PLAN start-ticket -> write-spec (Actor-Critic)
                  |
                  +-- G2  Tech Lead approves the spec
                  v

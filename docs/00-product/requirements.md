@@ -2,7 +2,7 @@
 title: Requirements
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-30
 ---
 
 # Requirements
@@ -13,8 +13,8 @@ State what the harness must do, in order of priority, so changes can be judged a
 
 ## Problem
 
-See [vision.md](vision.md). The requirements below turn the four delivery stages and the team's
-rules into testable obligations.
+See [vision.md](vision.md). The requirements below turn the optional definition stage, four delivery
+stages, and the team's rules into testable obligations.
 
 ## Users / Owner
 
@@ -22,8 +22,9 @@ Feature Owner / PO, Tech Lead, developers; owned by the monolithic-dev-harness m
 
 ## Goals
 
-Cover backlog management, technical planning, implementation, and verification; answer how the
-process uses the team's tracker, where people decide, and which models run each stage.
+Cover idea definition, backlog management, technical planning, implementation, and verification;
+answer how the process uses the team's tracker, where people decide, and which models run each
+stage.
 
 ## Non-Goals
 
@@ -33,12 +34,15 @@ See [vision.md](vision.md#non-goals).
 
 ### Must
 
+- **Definition:** route an early idea through only the discovery, research, requirements, UX, and
+  architecture work its uncertainty requires; distill the result into a compact product spec with
+  stable capability IDs, explicit constraints, non-goals, success conditions, and companions.
 - **Backlog:** decompose an Epic into Features and Stories in one run with two approval gates;
   write Story Points into the process's Azure points field and read them back; break Stories into
   atomic Tasks plus Staging, Review, and a done Breakdown Task; audit coverage against the source
-  text.
+  text and product capability IDs when present.
 - **Planning:** produce a technical spec per Story from the backlog output, reviewed by a critic,
-  approved by a person before implementation.
+  inheriting product, UX, and architecture decisions, and approved by a person before implementation.
 - **Implementation:** one verified commit per Task, test first where practical.
 - **Verification:** check requirements coverage against the Story's acceptance criteria, then run a
   deep correctness and maintainability audit, then record a verdict tied to the exact commit.

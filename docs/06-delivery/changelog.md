@@ -7,6 +7,16 @@ last_reviewed: 2026-09-29
 
 # Changelog
 
+## 2026-09-30: Optional Stage 0 product planning
+
+- Added a BMAD-inspired planning path that can turn an initial idea into a product brief, product
+  requirements, experience decisions, an architecture spine, and a canonical product specification.
+- The harness now offers **Plan the idea** or **Draft work items** through the same structured UI
+  used for its other choices; selecting planning routes into Stage 0 without creating an approval
+  window.
+- Backlog, Story-specification, and Task-architecture skills now preserve traceability to Stage 0
+  capability, requirement, experience, and architecture decisions.
+
 ## 2026-09-29: Adoption, Feature pinning, and click approvals (0.3.0)
 
 - Documented `harness adoption` (assess, plan, status, materialize), the **Approve adoption** and

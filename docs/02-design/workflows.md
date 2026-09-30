@@ -2,7 +2,7 @@
 title: Runtime Workflows
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-30
 ---
 
 # Runtime Workflows
@@ -11,10 +11,13 @@ last_reviewed: 2026-09-26
 
 ```text
 idea / work item
+  -> 0 DEFINE    plan-initiative: use only the needed discovery / requirements / UX /
+                 architecture skills -> product-spec with stable CAP-N ids and companions
+                 stop and ask before starting tracker-backed work
   -> 1 BACKLOG   generate-work-item -> enrich-work-item -> decompose-backlog
                  -> generate-breakdown-work-items
                  G1: Feature Owner / PO approve the outline, then the bodies (one batch each)
-  -> 2 PLAN      start-ticket -> write-spec (Actor-Critic)
+  -> 2 TECH PLAN start-ticket -> write-spec (Actor-Critic)
                  G2: Tech Lead approves the spec
   -> 3 BUILD     implement-story: one verified commit per Task
   -> 4 VERIFY    review -> branch-and-pr (draft)
@@ -22,13 +25,41 @@ idea / work item
                  G4: a person publishes and approves the pull request
 ```
 
-The `harness` skill conducts this flow. Stacked Features run stages 2–4 once per Story inside
+The `harness` skill conducts this flow. Stage 0 is optional when the input is already a defined
+intent or an existing work item. Stacked Features run stages 2–4 once per Story inside
 `feature-implementation`, on Story branches based on the Feature branch.
+
+## Definition stage
+
+```text
+unclear idea
+  |
+  +--> brainstorm-ideas       missing options
+  +--> forge-idea             untested central claim
+  +--> research-decision      missing current evidence
+  +--> product-brief          concise product narrative needed
+  +--> product-requirements   multi-person or multi-epic agreement needed
+  +--> experience-design      shared UX decisions can diverge
+  +--> architecture-spine     cross-unit technical choices can diverge
+  |
+  `--> product-spec           canonical Why / CAP-N / constraints / non-goals / success signal
+           |
+           `--> ask whether to begin backlog drafting
+```
+
+These are independent tools, not a fixed waterfall. The product spec adopts load-bearing UX and
+architecture artifacts as companions. Planning creates no tracker item, branch, commit, or pull
+request. The existing approval protocol begins when the user chooses to enter the backlog stage.
+
+When a whole-harness request starts from an idea and the user has not selected a starting point,
+the agent asks one structured question: **Plan the idea** or **Draft work items**. The first enters
+Stage 0; the second enters Stage 1. The existing question hook validates that prompt before it is
+shown. This routing choice is not an approval and opens no write window.
 
 ## Backlog stage
 
 ```text
-source text (idea or existing item)
+source text (product spec, idea, or existing item)
   |
   v
 generate-work-item    top ancestor draft (usually an Epic); Descrição Original kept verbatim
@@ -38,7 +69,8 @@ enrich-work-item      team format: O quê, Por quê, Comportamento, Critérios, 
   |
   v
 decompose-backlog     tree mode for an Epic:
-  |                     DECOMPOSE  Features (existing reused), Stories under each
+  |                     DECOMPOSE  Features (existing reused), Stories under each;
+  |                                preserve CAP-N coverage when a product spec exists
   |                     GATE 1     one outline for the whole tree
   |                     DRAFT      Feature + Story drafts; Stories under new Features use
   |                                parent_id "pending:<feature draft>"

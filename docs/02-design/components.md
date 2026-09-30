@@ -2,7 +2,7 @@
 title: Components
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-30
 ---
 
 # Components
@@ -24,10 +24,11 @@ cannot reach the rules or the settings. Reviewer agents have no file-edit tools 
 
 | Stage | Skills |
 | --- | --- |
-| Conductors | `harness` (whole flow), `implement-story` (build stage), `review` (verify stage) |
+| Conductors | `harness` (whole flow), `plan-initiative` (definition stage), `implement-story` (build stage), `review` (verify stage) |
 | Setup | `bootstrap`, `azure-devops`, `onboard-tracker`, `review-setup`, `tracking-status`, `skip-tracker`, `resume-tracker` |
+| 0 · Define | `brainstorm-ideas`, `forge-idea`, `research-decision`, `product-brief`, `product-requirements`, `experience-design`, `architecture-spine`, `product-spec` |
 | 1 · Backlog | `generate-work-item`, `enrich-work-item`, `decompose-backlog`, `split-story`, `generate-breakdown-work-items`, `validate-artifact`, `auto-fix-artifact`, `amend-workitems`, `generate-plain-language-documentation` |
-| 2 · Plan | `start-ticket`, `write-spec`, `feature-implementation` |
+| 2 · Technical plan | `start-ticket`, `write-spec`, `feature-implementation` |
 | 3 · Build | `architect`, `tdd`, `check`, `deslop`, `prove-it-works`, `verify-this`, `sequence-verifiable-units`, `commit-prep`, `automated-tests`, `repository-sync` |
 | 4 · Verify | `review-story-preflight`, `review-typescript`, `review-maintainability`, `thermos`, `thermo-nuclear-review`, `thermo-nuclear-code-quality-review`, `branch-and-pr`, `review-pr`, `triage-pr-comments`, `respond-pr-comments`, `resolve-ticket` |
 | Stacked Features | `reconcile-feature-stack`, `merge-story-stack-into-feature`, `finish-feature-development` |

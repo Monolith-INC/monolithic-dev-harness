@@ -19,6 +19,7 @@ from tests.settings_fixture import write_settings
 HOOK = Path(__file__).resolve().parents[2] / "scripts" / "harness" / "hook.py"
 
 PLAIN = "Create these 3 work items in Azure under the photo storage story?"
+PLANNING = "Would you like to plan the idea before I draft the work items?"
 
 
 def ask(text: str = PLAIN, *more: dict, **extra: object) -> dict:
@@ -36,6 +37,28 @@ def ask(text: str = PLAIN, *more: dict, **extra: object) -> dict:
             *more,
         ],
         **extra,
+    }
+
+
+def planning_offer() -> dict:
+    return {
+        "questions": [
+            {
+                "question": PLANNING,
+                "header": "Starting point",
+                "multiSelect": False,
+                "options": [
+                    {
+                        "label": "Plan the idea",
+                        "description": "Explore it first and produce a clear product plan.",
+                    },
+                    {
+                        "label": "Draft work items",
+                        "description": "Use what you provided and draft the work items now.",
+                    },
+                ],
+            }
+        ]
     }
 
 
@@ -81,6 +104,9 @@ class ProblemsTests(unittest.TestCase):
     def test_answers_filled_in_by_the_agent_are_refused(self) -> None:
         found = questions.problems(ask(answers={PLAIN: "Approve"}))
         self.assertTrue(any("only the user answers" in item for item in found))
+
+    def test_stage_zero_offer_uses_the_plain_question_contract(self) -> None:
+        self.assertEqual(questions.problems(planning_offer()), [])
 
 
 class ApprovalByClickTests(unittest.TestCase):
@@ -133,6 +159,29 @@ class ApprovalByClickTests(unittest.TestCase):
     def test_not_now_opens_nothing(self) -> None:
         run(self.repo, "ask", {"tool_use_id": "toolu_1", "tool_input": ask()})
         self.assertIsNone(self._answer("Not now"))
+        self.assertIsNone(state.active_approval(self.repo))
+
+    def test_stage_zero_choice_opens_no_approval_window(self) -> None:
+        tool_input = planning_offer()
+        self.assertIsNone(
+            run(
+                self.repo,
+                "ask",
+                {"tool_use_id": "stage-zero", "tool_input": tool_input},
+            )
+        )
+        response = {**tool_input, "answers": {PLANNING: "Plan the idea"}}
+        self.assertIsNone(
+            run(
+                self.repo,
+                "answer",
+                {
+                    "tool_use_id": "stage-zero",
+                    "tool_input": response,
+                    "tool_response": response,
+                },
+            )
+        )
         self.assertIsNone(state.active_approval(self.repo))
 
     def test_typing_approve_as_other_opens_nothing(self) -> None:

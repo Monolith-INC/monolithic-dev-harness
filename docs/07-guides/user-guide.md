@@ -2,7 +2,7 @@
 title: User Guide
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-28
+last_reviewed: 2026-09-30
 ---
 
 # User Guide
@@ -26,11 +26,26 @@ Linear, the repository-local tracker, or an onboarded one. The examples below us
 
 ### 1. Start
 
-Ask the agent to run the harness on your idea or on an existing work item:
+For an early idea, ask the agent to define it before creating work items:
 
 ```text
-Take "students can add a profile photo" through the harness. Start with the backlog. pt-BR.
+Help me pressure-test and plan "students can add a profile photo". Stop before creating backlog items.
 ```
+
+The agent uses only the planning work the idea needs: brainstorming, pressure testing, research,
+brief, PRD, UX, and architecture are optional. It finishes with a compact product spec whose
+capabilities have stable IDs, then asks whether to begin the backlog. You can skip this stage for a
+well-defined work item by saying `start with the backlog`.
+
+When you have not chosen, the agent shows one starting-point question:
+
+```text
+Would you like to plan the idea before I draft the work items?
+  Plan the idea       Explore it first and produce a clear product plan.
+  Draft work items    Use what you provided and draft the work items now.
+```
+
+This is only a routing choice. It does not approve any tracker write.
 
 ### 2. Backlog (gate G1)
 
@@ -55,11 +70,13 @@ cannot run (the tracker's sprint cannot be read, for example), the agent stops a
 needs instead of skipping the limit. Linear records no team capacity or hours, so there you enter
 the figures by hand.
 
-### 3. Plan (gate G2)
+### 3. Technical plan (gate G2)
 
 For the Story you build next, the agent checks out its branch, moves it to in progress, binds it to
 your checkout with `harness session start <story>`, and writes a technical spec from its acceptance
 criteria and Tasks. The Tech Lead reviews it; approve the batch that publishes it.
+When product planning exists, the technical spec traces back to its capabilities and inherits its
+UX and architecture decisions rather than re-deciding them.
 
 ### 4. Build
 

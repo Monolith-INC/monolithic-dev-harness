@@ -1,6 +1,6 @@
 ---
 name: harness
-description: The end-to-end AI delivery flow for an Azure DevOps team — backlog (Epic → Features → Stories with points → Tasks), technical spec, spec-driven implementation, requirements-first review, and a draft pull request — with human gates G1–G4 and hook-enforced rules. Use when the user wants to take an idea or work item through the whole process, asks "what's next" in a harness run, or asks how the process works.
+description: The end-to-end AI product and delivery flow — optional idea discovery and product planning, backlog (Epic → Features → Stories with points → Tasks), technical spec, spec-driven implementation, requirements-first review, and a draft pull request — with human gates G1–G4 and hook-enforced rules. Use when the user wants to take an idea or work item through the whole process, asks "what's next" in a harness run, or asks how the process works.
 ---
 
 # Harness
@@ -11,11 +11,13 @@ at four gates. Hooks enforce the rules that must never depend on the model remem
 ```
  idea / work item
       │
+ 0 DEFINE ────── plan-initiative: optional discovery → product-spec (+ UX / architecture companions)
+      │
  1 BACKLOG ───── generate-work-item → enrich-work-item → decompose-backlog → generate-breakdown-work-items
       │           (top ancestor draft)  (team format)     (Epic→Features→Stories,  (Tasks + Staging/
       │                                                     points)                  Review/Breakdown)
       ├── G1  Feature Owner / PO approve the split and the bodies before any Azure write
- 2 PLAN ──────── start-ticket → write-spec (Actor-Critic)
+ 2 TECH PLAN ─── start-ticket → write-spec (Actor-Critic)
       ├── G2  Tech Lead approves the spec
  3 BUILD ─────── implement-story: per Task architect → tdd → implement → check → deslop → commit
  4 VERIFY ────── review: review-story-preflight → thermos → fixes → verdict → branch-and-pr (draft)
@@ -32,10 +34,42 @@ The repository must be opted in: `.harness/settings.json` exists (run `bootstrap
 tracker answers (`harness doctor`; `azure-devops` for Azure), and `review-setup` has run. If any is missing, do that
 first and say so.
 
+## Stage 0: Define the intent
+
+When the input is an early idea rather than an already-defined work item, run `plan-initiative`.
+It follows a smallest-useful-path rule: brainstorm, forge, research, brief, PRD, UX, and architecture
+are independent tools, not required stages. The endpoint is a compact `product-spec` with stable
+`CAP-N` capabilities and any load-bearing UX or architecture artifacts referenced as companions.
+
+If the intent already says what should be true, what must not change, what is out of scope, and how
+success is observed, start at `product-spec`. If a supplied work item already carries that contract,
+skip Stage 0. Finishing planning never implies permission to create tracker items; ask before
+starting Stage 1.
+
+### Offer the starting point
+
+When the user asks to take an idea through the harness but has not said whether to plan it first or
+start drafting work items, ask this **one structured UI question before doing either**:
+
+- Header: `Starting point`
+- Question: `Would you like to plan the idea before I draft the work items?`
+- Option `Plan the idea`: `Explore it first and produce a clear product plan.`
+- Option `Draft work items`: `Use what you provided and draft the work items now.`
+
+Use the host's normal question UI (`AskUserQuestion` in Claude). The existing `plain-questions` hook
+validates it before display. In Cursor, which has no question buttons, show the same two choices in
+plain text and wait for the reply.
+
+The choice is routing, not approval: it never opens an approval window. `Plan the idea` invokes
+`plan-initiative`; `Draft work items` enters Stage 1. Do not ask when the user already chose a
+starting point, directly invoked a planning skill, or explicitly asked to create or modify a work
+item.
+
 ## Stage 1: Backlog
 
 1. **Top ancestor.** `generate-work-item` drafts the highest item in the tree (usually an Epic) from
-   the user's idea or an existing item. The **Descrição Original** section keeps the source text
+   the product spec, user's idea, or an existing item. When a product spec exists, preserve its
+   `CAP-N` identifiers and companions rather than re-inventing the intent. The **Descrição Original** section keeps the source text
    verbatim. The top ancestor can be a Feature or a User Story: neither needs a parent, so do not
    ask for or invent one. When the source is an item that must stay intact (for example, the
    original of a copied item), create a new item and name the original in plain text (id and
@@ -49,11 +83,13 @@ first and say so.
    aligned to the acceptance criteria, plus Staging, Review, and a done Breakdown Task.
 5. `validate-artifact` on anything the user edited by hand.
 
-## Stage 2: Plan
+## Stage 2: Technical plan
 
 `start-ticket` on the Story (moves it to in progress), then `write-spec`. The spec takes the
-Story, its acceptance criteria, and its Tasks as input and decides the *how*: architecture, affected
-modules, test strategy, UI design notes. Present it for **G2** and stop until the user approves.
+Story, its acceptance criteria, its covered `CAP-N` values, its Tasks, and any adopted UX and
+architecture companions as input. It decides the Story-local *how*: affected modules, contracts,
+test strategy, and implementation details. It cannot override an upstream `AD-N` or product
+constraint silently. Present it for **G2** and stop until the user approves.
 
 ## Stage 3: Build
 

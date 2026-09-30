@@ -2,17 +2,17 @@
 title: Vision
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-30
 ---
 
 # Vision
 
 ## Purpose
 
-Give a team an AI delivery process it can trust, on the tracker it already uses (Azure DevOps,
-Linear, a repository-local tracker, or one it onboards): the agent does the backlog,
-planning, implementation, and review work, and the team's rules hold even when the model forgets
-them, misreads them, or is steered by content it reads.
+Give a team an AI product-and-delivery process it can trust, on the tracker it already uses (Azure
+DevOps, Linear, a repository-local tracker, or one it onboards): the agent can help clarify and plan
+an early idea, then perform backlog, technical planning, implementation, and review work, while the
+team's rules hold even when the model forgets them, misreads them, or is steered by content it reads.
 
 ## Problem
 
@@ -33,6 +33,8 @@ the pull request is one confident mistake away from writing somewhere it should 
 
 - One linear flow from an idea to a reviewed draft pull request, with each stage consuming the
   previous stage's output.
+- Planning effort follows uncertainty: optional discovery tools establish a defined intent, then a
+  compact product spec carries stable capabilities into backlog decomposition.
 - People decide at four named gates; everything else is automated.
 - Every rule that must always hold is enforced by a hook with tests, not by prose.
 - One command installs it; re-running the command upgrades it.

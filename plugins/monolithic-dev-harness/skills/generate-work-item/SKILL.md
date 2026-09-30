@@ -78,6 +78,10 @@ Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which
 2. If `parent` is provided, read it through the selected provider connector. Capture title,
    description, type, and chain. Verify parent type matches the common hierarchy.
 3. If `attachment` is a path: read it. If URL: fetch or summarize. Note failures in spec References.
+4. If the source is a `product-spec` folder or `SPEC.md`, read the kernel and every path in
+   `companions:`. Capture the relevant `CAP-N` values and treat their intent, success conditions,
+   constraints, non-goals, UX contracts, and `AD-N` rules as authoritative. Do not silently broaden
+   or reinterpret them.
 
 ---
 
@@ -90,6 +94,10 @@ Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which
 3. If Context7 unavailable: proceed with `source: [manual]` and supplied refs only.
 
 Output: research bundle for the spec blueprint.
+
+Research may clarify current implementation facts, but it cannot overwrite a supplied product
+contract. A contradiction becomes an explicit question back to `product-spec` or its owning
+companion skill.
 
 ---
 
@@ -106,6 +114,10 @@ Pick blueprint from `../../common/specs/generate-work-item/`:
 
 Write to `<artifacts>/Specs/<prefix>-<kebab-slug>-spec.md`. Populate all sections from inputs + research.
 **Do not skip** — spec is the analysis artifacts path.
+
+When a product spec exists, this file is work-item analysis and traceability rather than a second
+product contract: cite the source `SPEC.md`, list the `CAP-N` values covered, and record only the
+work-item-specific interpretation and research. Never duplicate or renumber capabilities.
 
 ---
 

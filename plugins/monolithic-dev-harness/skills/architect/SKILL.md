@@ -18,6 +18,9 @@ design subagents on the same host.
 - The Task (or Story) and its acceptance criteria from the backlog stage.
 - The technical specification from `write-spec`. The spec owns the *how*; this skill turns it into
   code shapes and never contradicts it silently. A needed contradiction goes back to the spec.
+- Any `ARCHITECTURE-SPINE.md`, `DESIGN.md`, and `EXPERIENCE.md` adopted by the product spec. Their
+  `AD-N`, token, journey, and interaction decisions are binding. This Task-level skill fills in code
+  shape inside them; it never reopens or overrides them.
 
 ## Phase A: Ground
 
@@ -25,6 +28,9 @@ Build a real mental model of every system the new code touches. Follow the repos
 (`AGENTS.md` → the subproject router → the documents it names) instead of exploring at random. Read
 the existing code the change will sit next to, and name the conventions it must follow (state
 management, layer boundaries, error types, naming, localization, design tokens).
+
+Map each inherited `AD-N` that applies to the Task. If the existing code contradicts the spine,
+surface the conflict before sketching; do not silently choose one source of truth.
 
 Skip grounding only for genuinely greenfield code with nothing around it.
 

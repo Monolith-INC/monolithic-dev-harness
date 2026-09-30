@@ -2,7 +2,7 @@
 title: Data Model
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-28
+last_reviewed: 2026-09-30
 ---
 
 # Data Model
@@ -56,6 +56,25 @@ A Story never attaches to an Epic. Points go into the process's points field
 (`Microsoft.VSTS.Scheduling.StoryPoints` on Agile, `Effort` on Scrum, `Size` on CMMI).
 
 ### Repository files
+
+The configured `artifacts_path` is user-owned. When pre-backlog planning is persisted there, the
+skills use this logical shape; no folder is assumed when the setting is absent:
+
+```text
+<artifacts_path>/Planning/<initiative>/
+|-- idea/                            brainstorm and forged-idea decisions
+|-- research/<topic>/RESEARCH.md     cited decision evidence
+|-- brief/PRODUCT-BRIEF.md
+|-- requirements/PRD.md
+|-- ux/DESIGN.md
+|-- ux/EXPERIENCE.md
+|-- architecture/ARCHITECTURE-SPINE.md
+`-- specs/<outcome>/SPEC.md           canonical product contract
+```
+
+Each planning folder may contain an append-only `.decision-log.md`. Stable `FR-N`, `CAP-N`, and
+`AD-N` identifiers are never renumbered or reused. These are user work products, not deterministic
+runtime evidence under `.harness/state/`.
 
 ```text
 .harness/

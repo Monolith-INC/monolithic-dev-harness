@@ -18,11 +18,21 @@ The result identifies artifact scope, required and missing kinds, source hints, 
 
 In a harness run, the backlog stage has already produced the *what*: the Story, its acceptance
 criteria, points, and its atomic Tasks from `generate-breakdown-work-items` (with that skill's
-implementation plan in the artifacts path). Read them as the spec's input. Do not restate or
-re-decide them. The spec decides the *how*: architecture and affected modules (from the repository's
-`AGENTS.md` routing), the data and contract changes, the test strategy per Task, UI and design notes,
-and risks. When the *how* would change a Task or a criterion, stop and send it back to the backlog
-instead of changing it silently.
+implementation plan in the artifacts path). Read them as the spec's input. Also resolve any
+`product-spec` referenced by the Story and read every file listed under its `companions:` field.
+Trace the Story to its covered `CAP-N` values. Do not restate or re-decide that intent.
+
+The spec decides the Story-local *how*: affected modules (from the repository's `AGENTS.md`
+routing), data and contract changes, test strategy per Task, implementation-level UI details, and
+risks. Upstream `AD-N` rules and UX contracts are binding inputs. When the proposed *how* would
+change a capability, Task, acceptance criterion, UX contract, or architecture invariant, stop and
+send the change to its owning skill instead of changing it silently.
+
+The accepted technical spec includes a compact traceability section:
+
+- `CAP-N` → Story acceptance criteria;
+- acceptance criteria → Tasks and verification;
+- applicable `AD-N` / UX decisions → affected modules.
 
 Present the complete accepted spec to the user for **gate G2** (the Tech Lead's approval). When the
 host provides an artifact/document pane, open the spec there; otherwise show it inline, or provide a

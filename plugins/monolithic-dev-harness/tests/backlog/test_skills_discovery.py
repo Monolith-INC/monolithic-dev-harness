@@ -4,6 +4,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 SKILLS_ROOT = ROOT / "skills"
 EXPECTED = (
+    "plan-initiative",
+    "brainstorm-ideas",
+    "forge-idea",
+    "research-decision",
+    "product-brief",
+    "product-requirements",
+    "experience-design",
+    "architecture-spine",
+    "product-spec",
     "decompose-backlog",
     "validate-artifact",
     "auto-fix-artifact",

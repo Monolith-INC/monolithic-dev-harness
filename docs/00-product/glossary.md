@@ -2,7 +2,7 @@
 title: Glossary
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-28
+last_reviewed: 2026-09-30
 ---
 
 # Glossary
@@ -15,7 +15,9 @@ last_reviewed: 2026-09-28
 | Artifacts path | The repository folder where backlog drafts, plans, and reports are written (`artifacts_path` in the settings). The plugin never creates it. |
 | Check evidence | The recorded result of the repository's configured checks for one git tree. |
 | Checkout | One working copy on one branch: its worktree folder, its git directory, and its branch. A session binds to exactly one. |
-| Conductor | A skill that sequences other skills (`harness`, `implement-story`, `review`). |
+| Architecture spine | The lean set of stable `AD-N` invariants that prevents separately built Features, Epics, or Stories from making incompatible technical choices. |
+| Capability | A stable `CAP-N` entry in a product spec: one outcome intent plus one observable success condition. |
+| Conductor | A skill that sequences other skills (`harness`, `plan-initiative`, `implement-story`, `review`). |
 | Draft pull request | A pull request created with `isDraft: true`; publishing it is a human step. |
 | Evidence | A file under `.harness/state/` keyed to a git tree or commit id, written by a script and read by a hook. |
 | Feature Owner | The person who owns a Feature end to end: backlog split, staging validation. |
@@ -29,6 +31,7 @@ last_reviewed: 2026-09-28
 | Adoption | Taking over implementation that predates a session: `harness adoption` assesses it, the user approves one exact plan with **Approve adoption**, and the verified delta is staged on the approved base in a separate worktree. |
 | Orchestrator | An MCP server that validates a skill's inputs and outputs and runs its Actor-Critic loop. |
 | Protected work item | A work item id listed in `protected_work_items` that the agent may never write, link, parent, or mention in text the tracker turns into a link, not even with approval. |
+| Product spec | The compact pre-backlog contract for one epic or coherent outcome: Why, capabilities, constraints, non-goals, success signal, and load-bearing companions. |
 | Review verdict | `ready` or `blocked`, recorded for one HEAD commit by the review stage. |
 | Rule | One named deterministic check: `human-owned`, `tracker-invalid`, `approval-required`, `protected-items`, `tests-with-code`, `generated-files`, `guarded-paths`, `feature-branch`, `draft-reviewed-prs`, `history-preserved`. |
 | Session | A binding of one work item to one checkout (`harness session start`); governed code changes need an active one, and the workflow checks its work item. Phases: active, paused, closed. |
