@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-shot installer for monolithic-dev-harness (Claude Code and Cursor).
+# One-shot installer for monolithic-dev-harness (Claude Code, Cursor, and Codex).
 #
 #   curl -fsSL https://github.com/Monolith-INC/monolithic-dev-harness/releases/latest/download/install.sh | bash
 #
@@ -8,7 +8,7 @@
 #   gh release download --repo Monolith-INC/monolithic-dev-harness --pattern install.sh --output - | bash
 #
 # Flags (after `bash -s --` when piping):
-#   --host auto|claude|cursor|all   hosts to install into (default: auto = every host found)
+#   --host auto|claude|cursor|codex|all   hosts to install into (default: every host found)
 #   --org <name>                    Azure DevOps organization (default: $AZURE_DEVOPS_ORG, else asked)
 #   --version <x.y.z>               release to install (default: latest)
 #   --source <dir|archive.tar.gz>   install from a local build instead of downloading
@@ -30,6 +30,8 @@ readonly HARNESS_HOME="${HARNESS_HOME:-${HOME}/.local/share/${PLUGIN}}"
 readonly MARKETPLACE_DIR="${HARNESS_HOME}/marketplace"
 readonly BIN_DIR="${HARNESS_BIN_DIR:-${HOME}/.local/bin}"
 readonly CURSOR_DIR="${CURSOR_PLUGIN_DIR:-${HOME}/.cursor/plugins/local/${PLUGIN}}"
+readonly CODEX_MARKETPLACE="${MARKETPLACE_DIR}/codex-marketplace"
+readonly CODEX_AGENTS_DIR="${CODEX_HOME:-${HOME}/.codex}/agents"
 readonly CLAUDE_SETTINGS="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}/settings.json"
 
 HOSTS="auto"
@@ -51,7 +53,7 @@ usage() {
   cat <<'EOF'
 monolithic-dev-harness installer
 
-  --host auto|claude|cursor|all   hosts to install into (default: every host found)
+  --host auto|claude|cursor|codex|all   hosts to install into (default: every host found)
   --org <name>                    Azure DevOps organization (default: $AZURE_DEVOPS_ORG, else asked)
   --version <x.y.z>               release to install (default: latest)
   --source <dir|archive.tar.gz>   install from a local build instead of downloading
@@ -74,7 +76,7 @@ parse_args() {
     esac
   done
   VERSION="${VERSION#v}"
-  case "$HOSTS" in auto|claude|cursor|all) ;; *) die "--host must be auto, claude, cursor, or all" ;; esac
+  case "$HOSTS" in auto|claude|cursor|codex|all) ;; *) die "--host must be auto, claude, cursor, codex, or all" ;; esac
 }
 
 # --- preflight ---------------------------------------------------------------------------------
@@ -94,22 +96,28 @@ preflight() {
 }
 
 select_hosts() {
-  local want_claude=0 want_cursor=0
+  local want_claude=0 want_cursor=0 want_codex=0
   case "$HOSTS" in
     claude) want_claude=1 ;;
     cursor) want_cursor=1 ;;
-    all) want_claude=1; want_cursor=1 ;;
+    codex) want_codex=1 ;;
+    all) want_claude=1; want_cursor=1; want_codex=1 ;;
     auto)
       have claude && want_claude=1
       { [[ -d "${HOME}/.cursor" ]] || have cursor; } && want_cursor=1
+      have codex && want_codex=1
       ;;
   esac
   if [[ $want_claude -eq 1 ]] && ! have claude; then
     die "Claude Code (the \`claude\` CLI) is not on PATH; install it or use --host cursor"
   fi
-  [[ $want_claude -eq 1 || $want_cursor -eq 1 ]] || die "neither Claude Code nor Cursor was found; pass --host claude|cursor|all"
+  if [[ $want_codex -eq 1 ]] && ! have codex; then
+    die "Codex (the \`codex\` CLI) is not on PATH; install it or select another host"
+  fi
+  [[ $want_claude -eq 1 || $want_cursor -eq 1 || $want_codex -eq 1 ]] || die "no supported host was found; pass --host claude|cursor|codex|all"
   INSTALL_CLAUDE=$want_claude
   INSTALL_CURSOR=$want_cursor
+  INSTALL_CODEX=$want_codex
 }
 
 # --- download ----------------------------------------------------------------------------------
@@ -230,6 +238,28 @@ install_marketplace_copy() {
   mkdir -p "${MARKETPLACE_DIR}.new/plugins"
   cp -R "${PAYLOAD}/.claude-plugin" "${PAYLOAD}/.cursor-plugin" "${MARKETPLACE_DIR}.new/"
   cp -R "${PAYLOAD}/plugins/${PLUGIN}" "${MARKETPLACE_DIR}.new/plugins/"
+  cp -R "${PAYLOAD}/codex-marketplace" "${MARKETPLACE_DIR}.new/"
+  mkdir -p "${MARKETPLACE_DIR}.new/codex-marketplace/.agents/plugins"
+  cp "${PAYLOAD}/codex-marketplace/marketplace.json" \
+    "${MARKETPLACE_DIR}.new/codex-marketplace/.agents/plugins/marketplace.json"
+  mkdir -p "${MARKETPLACE_DIR}.new/codex-marketplace/plugins"
+  cp -R "${PAYLOAD}/plugins/${PLUGIN}" "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/"
+  rm -rf "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/tests"
+  cp "${PAYLOAD}/plugins/${PLUGIN}/codex.mcp.json" \
+    "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/.mcp.json"
+  python3 - "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/.mcp.json" \
+    "${MARKETPLACE_DIR}/codex-marketplace/plugins/${PLUGIN}" "$ORG" <<'PY'
+import json, sys
+from pathlib import Path
+path, root, org = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+data = json.loads(path.read_text())
+path.write_text(
+    json.dumps(data)
+    .replace("${PLUGIN_ROOT}", json.dumps(root)[1:-1])
+    .replace("${AZURE_DEVOPS_ORG}", json.dumps(org or "${AZURE_DEVOPS_ORG}")[1:-1])
+    + "\n"
+)
+PY
   rm -rf "${MARKETPLACE_DIR}.new/plugins/${PLUGIN}/tests"
   find "${MARKETPLACE_DIR}.new" -name __pycache__ -type d -prune -exec rm -rf {} +
   for doc in README.md CHANGELOG.md THIRD_PARTY_NOTICES.md; do
@@ -282,6 +312,26 @@ PY
   [[ -f "${CURSOR_DIR}/.cursor-plugin/plugin.json" ]] || die "Cursor plugin manifest missing after install"
 }
 
+install_codex() {
+  say "Codex: registering the plugin marketplace"
+  for agent in mdh_thermo_review mdh_thermo_quality; do
+    if [[ -e "${CODEX_AGENTS_DIR}/${agent}.toml" ]] \
+      && ! grep -qx '# managed by monolithic-dev-harness' "${CODEX_AGENTS_DIR}/${agent}.toml"; then
+      die "${CODEX_AGENTS_DIR}/${agent}.toml already exists and is not harness-managed"
+    fi
+  done
+  codex plugin remove "$PLUGIN_ID" >/dev/null 2>&1 || true
+  codex plugin marketplace remove "$PLUGIN" >/dev/null 2>&1 || true
+  codex plugin marketplace add "$CODEX_MARKETPLACE" >/dev/null
+  codex plugin add "$PLUGIN_ID" >/dev/null
+  codex plugin list --json | grep -q "\"${PLUGIN_ID}\"" \
+    || die "Codex did not report the plugin as installed"
+  mkdir -p "$CODEX_AGENTS_DIR"
+  for agent in mdh_thermo_review mdh_thermo_quality; do
+    cp "${CODEX_MARKETPLACE}/agents/${agent}.toml" "${CODEX_AGENTS_DIR}/${agent}.toml"
+  done
+}
+
 install_cli() {
   mkdir -p "$BIN_DIR"
   ln -sfn "${MARKETPLACE_DIR}/plugins/${PLUGIN}/bin/harness" "${BIN_DIR}/harness"
@@ -293,6 +343,16 @@ install_cli() {
 
 uninstall() {
   say "Removing ${PLUGIN}"
+  if have codex; then
+    codex plugin remove "$PLUGIN_ID" >/dev/null 2>&1 || true
+    codex plugin marketplace remove "$PLUGIN" >/dev/null 2>&1 || true
+  fi
+  for agent in mdh_thermo_review mdh_thermo_quality; do
+    if [[ -f "${CODEX_AGENTS_DIR}/${agent}.toml" ]] \
+      && grep -qx '# managed by monolithic-dev-harness' "${CODEX_AGENTS_DIR}/${agent}.toml"; then
+      rm -f "${CODEX_AGENTS_DIR}/${agent}.toml"
+    fi
+  done
   if have claude; then
     claude plugin uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
     claude plugin marketplace remove "$PLUGIN" >/dev/null 2>&1 || true
@@ -313,14 +373,15 @@ main() {
   install_marketplace_copy
   if [[ $INSTALL_CLAUDE -eq 1 ]]; then install_claude; fi
   if [[ $INSTALL_CURSOR -eq 1 ]]; then install_cursor; fi
+  if [[ $INSTALL_CODEX -eq 1 ]]; then install_codex; fi
   install_cli
 
   cat <<EOF
 
-✓ ${PLUGIN} ${VERSION} installed ($( [[ $INSTALL_CLAUDE -eq 1 ]] && printf 'Claude Code ' )$( [[ $INSTALL_CURSOR -eq 1 ]] && printf 'Cursor' ))
+✓ ${PLUGIN} ${VERSION} installed ($( [[ $INSTALL_CLAUDE -eq 1 ]] && printf 'Claude Code ' )$( [[ $INSTALL_CURSOR -eq 1 ]] && printf 'Cursor ' )$( [[ $INSTALL_CODEX -eq 1 ]] && printf 'Codex' ))
 
 Next:
-  1. Restart Claude Code / reload Cursor so the hooks and MCP servers load.
+  1. Restart your host so the hooks and MCP servers load; trust Codex plugin hooks when prompted.
   2. In a repository you want governed:   harness bootstrap
   3. Check everything:                    harness doctor
 EOF

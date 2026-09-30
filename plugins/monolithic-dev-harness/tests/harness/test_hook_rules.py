@@ -117,6 +117,11 @@ class HookTestCase(unittest.TestCase):
             "claude", "pre-tool", {"tool_name": tool, "tool_input": tool_input}
         )
 
+    def codex(self, tool: str, tool_input: dict) -> dict | None:
+        return self.hook(
+            "codex", "pre-tool", {"tool_name": tool, "tool_input": tool_input}
+        )
+
     def assertDenied(self, result: dict | None, rule: str) -> None:
         self.assertIsNotNone(result, "expected a deny decision")
         if "hookSpecificOutput" in result:
@@ -170,6 +175,60 @@ class TestOptIn(HookTestCase):
         self.assertAllowed(
             self.claude(AZ + "wit_work_item", {"action": "get", "id": 1001})
         )
+
+
+class TestCodexAdapter(HookTestCase):
+    def test_patch_targets_are_checked_before_editing(self) -> None:
+        self.assertDenied(
+            self.codex(
+                "apply_patch",
+                {
+                    "command": "*** Begin Patch\n*** Update File: .harness/settings.json\n@@\n-old\n+new\n*** End Patch"
+                },
+            ),
+            "human-owned",
+        )
+        self.assertAllowed(
+            self.codex(
+                "apply_patch",
+                {
+                    "command": "*** Begin Patch\n*** Update File: lib/a.dart\n@@\n-old\n+new\n*** End Patch"
+                },
+            )
+        )
+        self.assertDenied(
+            self.codex(
+                "apply_patch",
+                {
+                    "command": "*** Begin Patch\n*** Add File: lib/a.g.dart\n+generated\n*** End Patch"
+                },
+            ),
+            "generated-files",
+        )
+
+    def test_patch_paths_resolve_from_codex_working_directory(self) -> None:
+        self.assertDenied(
+            self.hook(
+                "codex",
+                "pre-tool",
+                {
+                    "cwd": str(self.repo / "lib"),
+                    "tool_name": "apply_patch",
+                    "tool_input": {
+                        "command": "*** Begin Patch\n*** Update File: ../.harness/settings.json\n@@\n-old\n+new\n*** End Patch"
+                    },
+                },
+            ),
+            "human-owned",
+        )
+
+    def test_codex_prompt_records_approval_for_remote_write(self) -> None:
+        self.assertDenied(
+            self.codex(AZ + "wit_work_item_write", {"action": "create"}),
+            "approval-required",
+        )
+        self.hook("codex", "prompt", {"prompt": "approve HB-TEST1"})
+        self.assertAllowed(self.codex(AZ + "wit_work_item_write", {"action": "create"}))
 
 
 class TestHumanOwned(HookTestCase):
@@ -1132,8 +1191,10 @@ class TestPullRequest(HookTestCase):
 
         sh(self.repo, "remote", "add", "origin", "https://example.invalid/r.git")
         call = rules.make_call(
-            "mcp__azure-devops__repo_pull_request_write",
+            "repo_pull_request_write",
             {"action": "create", "targetRefName": "refs/heads/feature/900-parent"},
+            server="azure-devops",
+            kind="mcp",
         )
         sessions.start(self.repo, "1", "feature-implementation")
         self.assertTrue(rules.rule_feature_branch(call, self.repo).allowed)

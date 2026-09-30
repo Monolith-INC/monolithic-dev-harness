@@ -118,6 +118,21 @@ def doctor(args: argparse.Namespace) -> int:
         "Cursor",
         str(cursor_dir) if cursor_dir.exists() else "plugin not installed",
     )
+    match shutil.which("codex"):
+        case None:
+            report.line("skip", "Codex", "codex CLI not on PATH")
+        case _:
+            codex_plugins = _run(["codex", "plugin", "list", "--json"])
+            codex_installed = bool(
+                codex_plugins
+                and codex_plugins.returncode == 0
+                and PLUGIN_ID in codex_plugins.stdout
+            )
+            report.line(
+                "ok" if codex_installed else "warn",
+                "Codex",
+                "plugin installed" if codex_installed else "plugin not installed",
+            )
 
     print("Repository")
     repo = gitstate.repo_root(Path(args.repo))

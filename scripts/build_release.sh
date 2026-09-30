@@ -24,7 +24,7 @@ rm -rf "$DIST"
 mkdir -p "$DIST"
 # Ship what the hosts load; leave the test suites and repository tooling out of the archive.
 git archive --format=tar --prefix="${NAME}/" HEAD \
-  .claude-plugin .cursor-plugin plugins README.md CHANGELOG.md THIRD_PARTY_NOTICES.md \
+  .claude-plugin .cursor-plugin codex-marketplace plugins README.md CHANGELOG.md THIRD_PARTY_NOTICES.md \
   ':(exclude)plugins/monolithic-dev-harness/tests' \
   | gzip -9 > "${DIST}/${NAME}.tar.gz"
 cp install.sh "${DIST}/install.sh"
@@ -32,10 +32,16 @@ cp install.sh "${DIST}/install.sh"
 # Refuse to publish an archive the hosts cannot load.
 contents="$(tar -tzf "${DIST}/${NAME}.tar.gz")"
 for required in .claude-plugin/marketplace.json .cursor-plugin/marketplace.json \
+    codex-marketplace/marketplace.json codex-marketplace/agents/mdh_thermo_review.toml \
+    codex-marketplace/agents/mdh_thermo_quality.toml \
     plugins/monolithic-dev-harness/.claude-plugin/plugin.json \
     plugins/monolithic-dev-harness/.cursor-plugin/plugin.json \
+    plugins/monolithic-dev-harness/.codex-plugin/plugin.json \
     plugins/monolithic-dev-harness/.mcp.json plugins/monolithic-dev-harness/cursor.mcp.json \
+    plugins/monolithic-dev-harness/codex.mcp.json \
     plugins/monolithic-dev-harness/hooks/hooks.json plugins/monolithic-dev-harness/hooks/cursor.hooks.json \
+    plugins/monolithic-dev-harness/hooks/codex.hooks.json \
+    plugins/monolithic-dev-harness/scripts/host_adapters/hook_bridge.py \
     plugins/monolithic-dev-harness/bin/harness; do
   grep -qx "${NAME}/${required}" <<<"$contents" || { echo "archive is missing ${required}" >&2; exit 1; }
 done

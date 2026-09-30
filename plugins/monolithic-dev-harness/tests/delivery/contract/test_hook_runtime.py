@@ -54,7 +54,10 @@ class TestHookRuntime(unittest.TestCase):
             write_settings(root)
             state.set_tracking_mode(root, "skipped")
             event = CanonicalToolEvent(
-                client="claude", tool_name="Write", workspace_root=str(root)
+                client="claude",
+                tool_name="Write",
+                kind="edit",
+                workspace_root=str(root),
             )
             self.assertFalse(hook_runtime.evaluate_event(event).is_denied())
             with mock.patch(
@@ -65,6 +68,7 @@ class TestHookRuntime(unittest.TestCase):
                         CanonicalToolEvent(
                             client="claude",
                             tool_name="Bash",
+                            kind="shell",
                             command="git commit -m test",
                             workspace_root=str(root),
                         )

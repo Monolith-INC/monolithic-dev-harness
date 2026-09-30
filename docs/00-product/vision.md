@@ -43,7 +43,7 @@ the pull request is one confident mistake away from writing somewhere it should 
 
 - Replacing the team's tracker or repository host, or adding columns and states to its board.
 - Merging pull requests, voting, or publishing drafts: those stay human.
-- Supporting hosts other than Claude Code and Cursor.
+- Supporting hosts other than Claude Code, Cursor, and Codex.
 - Judging things no script can decide deterministically (for example whether personal data is
   masked in a UI); those stay in the review stage.
 

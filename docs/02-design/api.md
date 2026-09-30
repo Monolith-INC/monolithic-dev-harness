@@ -14,7 +14,7 @@ Every interface the harness exposes to people, hosts, and CI. Paths are relative
 
 ### Purpose
 
-Install, upgrade, or remove the plugin for Claude Code and/or Cursor in one command.
+Install, upgrade, or remove the plugin for Claude Code, Cursor, or Codex in one command.
 
 ### Producer / Consumer
 
@@ -31,7 +31,7 @@ bash install.sh [options]
 
 | Option / variable | Default | Meaning |
 | --- | --- | --- |
-| `--host auto\|claude\|cursor\|all` | `auto` | hosts to install into; `auto` = every host found |
+| `--host auto\|claude\|cursor\|codex\|all` | `auto` | hosts to install into; `auto` = every host found |
 | `--org <name>` / `AZURE_DEVOPS_ORG` | asked on a TTY | Azure DevOps organization for the host-registered `azure-devops` server (repositories name theirs in `.harness/settings.json`) |
 | `--version <x.y.z>` / `HARNESS_VERSION` | latest release | version to install |
 | `--source <dir\|archive>` | download | install from a local build |
@@ -129,12 +129,13 @@ what the user typed or clicked.
 
 ### Producer / Consumer
 
-Invoked by the host for every governed event (`hooks/hooks.json`, `hooks/cursor.hooks.json`).
+Invoked by the host for every governed event (`hooks/hooks.json`, `hooks/cursor.hooks.json`,
+`hooks/codex.hooks.json`).
 
 ### Invocation / Shape
 
 ```bash
-python3 scripts/harness/hook.py --host claude|cursor --event pre-tool|prompt|shell|mcp|ask|answer < payload.json
+python3 scripts/harness/hook.py --host claude|cursor|codex --event pre-tool|prompt|shell|mcp|ask|answer < payload.json
 ```
 
 ### Inputs
@@ -146,6 +147,7 @@ The host's hook payload on stdin (`tool_name`, `tool_input`, `cwd`, or `prompt`)
 | Host / event | Allow | Deny |
 | --- | --- | --- |
 | Claude pre-tool | no output | `{"hookSpecificOutput": {"hookEventName": "PreToolUse", "permissionDecision": "deny", "permissionDecisionReason": "[harness <rule>] …"}}` |
+| Codex pre-tool | no output | same `hookSpecificOutput` deny contract as Claude |
 | Cursor pre-tool / shell / mcp | `{"permission": "allow"}` | `{"permission": "deny", "agent_message": …, "user_message": …}` |
 | Claude prompt | notes such as `[harness] approval HB-7Q2K recorded …` | — |
 | Cursor prompt | `{"continue": true}` | — |

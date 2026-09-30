@@ -2,10 +2,19 @@
 title: Documentation Changelog
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-29
+last_reviewed: 2026-09-30
 ---
 
 # Changelog
+
+## 2026-09-30: Codex host adapter (0.4.0)
+
+- Documented the Codex marketplace, compatibility manifest, hook trust, MCP configuration, and
+  read-only custom reviewers.
+- Made the host-adapter boundary explicit: host payloads and response envelopes are translated
+  outside the harness rules and workflow policy.
+- Updated testing and release gates to cover Codex installation while keeping live hook trust and
+  invocation as manual observations.
 
 ## 2026-09-30: Optional Stage 0 product planning
 

@@ -1,17 +1,18 @@
 # monolithic-dev-harness
 
 [![CI](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.3.0-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
+[![Version](https://img.shields.io/badge/version-0.4.0-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![Cursor](https://img.shields.io/badge/Cursor-supported-black.svg)](https://cursor.com)
+[![Codex](https://img.shields.io/badge/Codex-supported-black.svg)](https://developers.openai.com/codex)
 [![Documentation](https://img.shields.io/badge/docs-project_documentation-informational.svg)](./docs/README.md)
 
 An AI product-and-delivery harness for teams on Azure DevOps, Linear, a repository-local tracker,
-or a tracker they onboard: one plugin for Claude Code and Cursor that can shape an early idea,
+or a tracker they onboard: one plugin for Claude Code, Cursor, and Codex that can shape an early idea,
 distill it into a product contract, and take it through the backlog to a reviewed draft pull
 request, with people deciding at four delivery gates and
-hooks enforcing every rule that must not depend on the model remembering it.
+hooks enforcing supported tool-call rules without relying on the model remembering them.
 
 > **Core principle:** skills tell the agent what to do; deterministic hooks decide what it may do.
 
@@ -22,8 +23,9 @@ only from prompts is advice, not a process. The agent can skip the approval, wri
 work item, commit without tests, or open a pull request nobody reviewed, and nothing stops it.
 
 The harness splits the work in two. Model-driven skills do the thinking. A deterministic runtime,
-fed by evidence tied to git ids, sits in front of every tool call and refuses the ones the team's
-rules forbid.
+fed by evidence tied to git ids, checks supported tool calls and refuses the ones the team's
+rules forbid. Codex does not invoke hooks for every specialized tool, so its hooks are not a
+complete security boundary.
 
 ```text
             Idea / work item
@@ -31,8 +33,8 @@ rules forbid.
                    v
    +-------------------------------+        +---------------------------+
    | Skills (model-driven)         |        | Hooks (deterministic)     |
-   | define -> backlog -> spec ->  | -----> | every Bash / edit / MCP   |
-   | build -> review               |  tool  | call checked against the  |
+   | define -> backlog -> spec ->  | -----> | supported Bash / edit /  |
+   | build -> review               |  tool  | MCP calls checked against |
    +-------------------------------+  call  | repo settings + evidence  |
                    ^                        +-------------+-------------+
                    |                                      |
@@ -58,19 +60,22 @@ The complete project documentation is available under [`docs/`](./docs/README.md
 ## Architecture at a glance
 
 The plugin ships skills (what the agent follows), reviewer subagents, four MCP servers, and one
-hook runtime shared by both hosts. The two orchestrator servers validate skill inputs and outputs
-and run bounded Actor-Critic loops; they never call a provider. Every provider call goes through
-the integrations gateway or a tracker's own server, where the hook runtime sees it first. Each
+hook runtime shared by all three hosts. The two orchestrator servers validate skill inputs and outputs
+and run bounded Actor-Critic loops; they never call a provider. Provider calls go through
+the integrations gateway or a tracker's own server; supported calls are checked by host hooks. Each
 tracker is one folder (`trackers/<name>/`: a checked `tracker.json` and an `adapter.py`).
 
+The host adapter translates native payloads and decisions. Harness rules receive only a generic
+tool kind, command, paths, and arguments; they do not parse Codex, Claude, or Cursor hook syntax.
+
 ```text
-  Claude Code / Cursor
+  Claude Code / Cursor / Codex
   +----------------------------------------------------------------+
   |  agent session --follows--> skills --delegates--> thermos      |
   |       |                                              reviewers |
-  |       | every governed tool call                               |
+  |       | supported governed tool calls                          |
   |       v                                                        |
-  |  hook runtime (scripts/harness/hook.py)                        |
+  |  host adapter -> generic hook runtime -> host adapter          |
   |       reads .harness/settings.json, tracker folders, evidence  |
   +-------|--------------------------------------------------------+
           | allowed calls
@@ -103,19 +108,19 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
   `tests-with-code`, `draft-reviewed-prs`) plus the workflow policy, evaluated before every
   governed tool call, failing closed for writes.
 - **Human approvals that the agent cannot forge:** tracker and SCM writes open only after you click
-  **Approve** on the agent's question (or, in Cursor, reply `approve HB-…`).
-- **Plain questions:** a hook sends back any question to you that is long, asks several things, or
-  uses file names, code, or internal names.
+  **Approve** on the agent's question in Claude Code, or reply `approve HB-…` in Cursor or Codex.
+- **Plain questions:** Claude Code's question hook sends back any question that is long, asks
+  several things, or uses file names, code, or internal names.
 - **One settings file** per repository, `.harness/settings.json`, written by people; the harness
   changes only its `tracker` section, when you choose a tracker.
-- **One-shot install** for Claude Code and Cursor, with a `harness` command for bootstrap, health
+- **One-shot install** for Claude Code, Cursor, and Codex, with a `harness` command for bootstrap, health
   checks, sessions, and trackers.
 
 ## Requirements
 
 | Requirement               | Version / Notes                                                        |
 | ------------------------- | ---------------------------------------------------------------------- |
-| Claude Code and/or Cursor | current releases                                                       |
+| Claude Code, Cursor, or Codex | current releases                                                    |
 | Python                    | 3.10 or newer (hooks, orchestrators, CLI)                              |
 | git                       | any recent version (the hooks read git state)                          |
 | Node.js                   | provides `npx`, which starts the Azure DevOps and Linear MCP servers   |
@@ -137,7 +142,7 @@ gh release download --repo Monolith-INC/monolithic-dev-harness --pattern install
 The installer finds your hosts, downloads the release archive (no cloning), verifies its SHA-256,
 installs the plugin into each host, records `AZURE_DEVOPS_ORG` for the host's Azure DevOps server,
 and links `harness` into
-`~/.local/bin`. Options go after `bash -s --`: `--host claude|cursor|all`, `--org <name>`,
+`~/.local/bin`. Options go after `bash -s --`: `--host claude|cursor|codex|all`, `--org <name>`,
 `--version <x.y.z>`, `--uninstall`. See
 [`docs/04-operations/deployment.md`](./docs/04-operations/deployment.md).
 
@@ -149,7 +154,7 @@ harness bootstrap --settings-from my-settings.json   # checks it, then writes .h
 harness doctor                                       # tools, hosts, settings, tracker, session
 ```
 
-Restart Claude Code (or reload Cursor), then ask the agent:
+Restart Claude Code or Codex (or reload Cursor), then ask the agent:
 
 ```text
 Help me pressure-test and plan "students can add a profile photo", then stop before creating backlog items.
@@ -442,8 +447,8 @@ PYTHON=.venv/bin/python plugins/monolithic-dev-harness/tests/run.sh
 The suites prove the backlog orchestrator's validation, estimation, and capacity logic, the tracker
 contract and each shipped adapter against its provider's reply shapes, sessions, the workflow
 policy runtime, and every harness rule (a deny case and an allow case, through the real
-hook entry point, for both hosts). CI also installs the built release into a sandboxed Claude Code
-profile. They do not prove behavior inside a live host session or against live Azure DevOps or
+hook entry point, for Claude Code, Cursor, and Codex). CI also installs the built release into
+sandboxed host profiles. They do not prove behavior inside a live host session or against live Azure DevOps or
 Linear projects: those are the release gates in
 [`docs/06-delivery/release-process.md`](./docs/06-delivery/release-process.md).
 
@@ -468,9 +473,10 @@ See [`docs/05-security/security.md`](./docs/05-security/security.md).
 
 ## Project status
 
-`0.3.0`. The rules, adapters, installer, and test suites are verified in CI. Loading in Cursor, a
-full end-to-end run against a live Azure DevOps project, and a live check of the Linear adapter are
-pending observation.
+`0.4.0`. The host adapter boundary, rules, installer, and test suites are verified locally;
+release CI and live host smoke tests remain release gates. In Codex, hooks require explicit trust
+and do not cover every specialized tool, so they are a guardrail rather than a complete security
+boundary.
 
 See [`docs/06-delivery/roadmap.md`](./docs/06-delivery/roadmap.md).
 

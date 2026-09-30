@@ -30,12 +30,16 @@ FRONTMATTER_KEYS = ("title", "status", "owner", "last_reviewed")
 REQUIRED_PLUGIN_FILES = (
     ".claude-plugin/plugin.json",
     ".cursor-plugin/plugin.json",
+    ".codex-plugin/plugin.json",
     ".mcp.json",
     "cursor.mcp.json",
+    "codex.mcp.json",
     "hooks/hooks.json",
     "hooks/cursor.hooks.json",
+    "hooks/codex.hooks.json",
     "bin/harness",
     "scripts/harness/hook.py",
+    "scripts/host_adapters/hook_bridge.py",
 )
 
 

@@ -1,6 +1,6 @@
 ---
 title: ADR-0005 Claude Code and Cursor only
-status: active
+status: superseded
 owner: monolithic-dev-harness maintainers
 last_reviewed: 2026-09-22
 ---
@@ -9,7 +9,7 @@ last_reviewed: 2026-09-22
 
 ## Status
 
-Accepted
+Superseded by [ADR-0010](ADR-0010-codex-host-adapter.md).
 
 ## Context
 

@@ -2,7 +2,7 @@
 title: Roadmap
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-29
+last_reviewed: 2026-09-30
 ---
 
 # Roadmap
@@ -24,6 +24,7 @@ each team.
 | 0.1.0: first release, four stages, seven rules, one-shot install | done | CI green; sandboxed Claude Code install |
 | 0.2.0: trackers are adapters (Azure DevOps, Linear, local), one settings file, sessions, onboarding with trust by click, sprint planning through the tracker contract | done | CI green; release published |
 | 0.3.0: adoption of existing implementation, Feature branch pinning, click approval for manual checks, one MCP connection per gateway | done | CI green; release published |
+| 0.4.0: optional Stage 0 planning and Codex host adapter with a generic policy boundary | in release | local contract tests pass; CI and live host smoke tests pending |
 | Live check of the Linear adapter | next | a read, a create, a transition, and a comment against a real workspace |
 | Live observation in Claude Code | next | a Story taken from idea to draft PR in a governed repository, every gate recorded |
 | Live observation in Cursor | next | the plugin loads; a denied write and an approved write observed |
