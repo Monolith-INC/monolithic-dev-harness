@@ -20,7 +20,6 @@ DIST="${ROOT}/dist"
 
 python3 scripts/check_versions.py --tag "v${VERSION}"
 
-rm -rf "$DIST"
 mkdir -p "$DIST"
 # Ship what the hosts load; leave the test suites and repository tooling out of the archive.
 git archive --format=tar --prefix="${NAME}/" HEAD \
