@@ -56,12 +56,37 @@ class BootstrapTest(unittest.TestCase):
         self.assertIn(".harness/tracker/", exclude)
         self.assertEqual((self.repo / ".gitignore").read_text(), "node_modules/\n")
         self.assertTrue((self.repo / ".harness" / "knowledge").is_dir())
+        codex_config = self.repo / ".codex" / "config.toml"
+        self.assertIn("[features]", codex_config.read_text())
+        self.assertIn("default_mode_request_user_input = true", codex_config.read_text())
         again = self.bootstrap(self.candidate(MINIMAL))
         self.assertIn("kept existing", again.stdout)
         self.assertEqual(
             (self.repo / ".harness" / "settings.json").read_text(), EXAMPLE.read_text()
         )
         self.assertEqual((self.repo / ".git" / "info" / "exclude").read_text(), exclude)
+
+    def test_existing_codex_config_is_extended_without_losing_other_settings(self) -> None:
+        config = self.repo / ".codex" / "config.toml"
+        config.parent.mkdir()
+        config.write_text("[features]\nother_feature = true\n\n[projects]\nname = 'app'\n")
+        done = self.bootstrap(EXAMPLE)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        content = config.read_text()
+        self.assertIn("other_feature = true", content)
+        self.assertIn("default_mode_request_user_input = true", content)
+        self.assertIn("[projects]\nname = 'app'", content)
+        self.assertLess(content.index("default_mode_request_user_input"), content.index("[projects]"))
+
+    def test_disabled_codex_picker_is_not_overwritten(self) -> None:
+        config = self.repo / ".codex" / "config.toml"
+        config.parent.mkdir()
+        original = "[features]\ndefault_mode_request_user_input = false\n"
+        config.write_text(original)
+        done = self.bootstrap(EXAMPLE)
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIn("explicitly disables default_mode_request_user_input", done.stderr)
+        self.assertEqual(config.read_text(), original)
 
     def test_an_existing_state_ignore_gains_the_local_tracker(self) -> None:
         exclude = self.repo / ".git" / "info" / "exclude"

@@ -1,4 +1,4 @@
-"""Questions the agent asks the user (Claude's AskUserQuestion): plain language, and approval by click.
+"""Questions the agent asks the user (Claude/Codex native pickers): plain language and approval by click.
 
 Two hooks use this module:
 
@@ -142,13 +142,10 @@ def approval(tool_input: dict[str, Any], tool_response: Any) -> tuple[str, str] 
             for option in question.get("options") or []
             if isinstance(option, dict)
         }
-        answer = answers.get(text)
-        if (
-            isinstance(answer, str)
-            and answer in labels
-            and answer.strip().lower() in APPROVE_LABELS
-        ):
-            return text, answer
+        answer = _answer_for(question, answers)
+        match answer:
+            case str() if answer in labels and answer.strip().lower() in APPROVE_LABELS:
+                return text, answer
     return None
 
 
@@ -166,8 +163,7 @@ def manual_signoff(tool_input: dict[str, Any]) -> str | None:
 def manual_choice(tool_input: dict[str, Any], tool_response: Any) -> bool:
     """Whether the user clicked the dedicated guarded-change approval action."""
     answers = tool_response.get("answers") if isinstance(tool_response, dict) else None
-    text = str(_first_question(tool_input).get("question", ""))
-    answer = answers.get(text) if isinstance(answers, dict) else None
+    answer = _answer_for(_first_question(tool_input), answers)
     return isinstance(answer, str) and answer.strip().lower() in MANUAL_APPROVE_LABELS
 
 
@@ -199,8 +195,7 @@ def adoption_requested(tool_input: dict[str, Any]) -> bool:
 def adoption_choice(tool_input: dict[str, Any], tool_response: Any) -> bool:
     """Whether the user clicked the dedicated adoption-plan approval action."""
     answers = tool_response.get("answers") if isinstance(tool_response, dict) else None
-    text = str(_first_question(tool_input).get("question", ""))
-    answer = answers.get(text) if isinstance(answers, dict) else None
+    answer = _answer_for(_first_question(tool_input), answers)
     return isinstance(answer, str) and answer.strip().lower() in ADOPTION_APPROVE_LABELS
 
 
@@ -208,6 +203,23 @@ def _first_question(tool_input: dict[str, Any]) -> dict[str, Any]:
     questions = tool_input.get("questions") or []
     first = questions[0] if questions else {}
     return first if isinstance(first, dict) else {}
+
+
+def _answer_for(question: dict[str, Any], answers: Any) -> str | None:
+    """Read Claude's text-keyed answer or Codex's id-keyed answer."""
+    match answers:
+        case dict() as answer_map:
+            candidate = answer_map.get(str(question.get("question", "")))
+            selected = answer_map.get(str(question.get("id", "")), candidate)
+            match selected:
+                case str():
+                    return selected
+                case {"answers": [str(answer), *_]}:
+                    return answer
+                case _:
+                    return None
+        case _:
+            return None
 
 
 def tracker_action(tool_input: dict[str, Any]) -> tuple[tuple[str, ...], str] | None:
@@ -234,11 +246,8 @@ def tracker_action(tool_input: dict[str, Any]) -> tuple[tuple[str, ...], str] | 
 def tracker_choice(tool_input: dict[str, Any], tool_response: Any) -> str | None:
     """The tracker action the user clicked, or None when they picked anything else."""
     answers = tool_response.get("answers") if isinstance(tool_response, dict) else None
-    text = str(_first_question(tool_input).get("question", ""))
-    answer = answers.get(text) if isinstance(answers, dict) else None
-    return (
-        TRACKER_ACTIONS.get(answer.strip().lower()) if isinstance(answer, str) else None
-    )
+    answer = _answer_for(_first_question(tool_input), answers)
+    return TRACKER_ACTIONS.get(answer.strip().lower()) if isinstance(answer, str) else None
 
 
 def approval_id(tool_use_id: str) -> str:

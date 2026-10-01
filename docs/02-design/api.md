@@ -150,6 +150,7 @@ The host's hook payload on stdin (`tool_name`, `tool_input`, `cwd`, or `prompt`)
 | Codex pre-tool | no output | same `hookSpecificOutput` deny contract as Claude |
 | Cursor pre-tool / shell / mcp | `{"permission": "allow"}` | `{"permission": "deny", "agent_message": …, "user_message": …}` |
 | Claude prompt | notes such as `[harness] approval HB-7Q2K recorded …` | — |
+| Claude/Codex question answer | `hookSpecificOutput.additionalContext` | — |
 | Cursor prompt | `{"continue": true}` | — |
 
 ### Exit Codes

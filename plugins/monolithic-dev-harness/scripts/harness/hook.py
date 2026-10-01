@@ -3,8 +3,8 @@
 
     hook.py --host claude --event pre-tool   (Claude PreToolUse)
     hook.py --host claude --event prompt     (Claude UserPromptSubmit)
-    hook.py --host claude --event ask        (Claude PreToolUse on AskUserQuestion)
-    hook.py --host claude --event answer     (Claude PostToolUse on AskUserQuestion)
+    hook.py --host claude|codex --event ask    (question-tool PreToolUse)
+    hook.py --host claude|codex --event answer (question-tool PostToolUse)
     hook.py --host cursor --event pre-tool   (Cursor preToolUse)
     hook.py --host cursor --event shell      (Cursor beforeShellExecution)
     hook.py --host cursor --event mcp        (Cursor beforeMCPExecution)
@@ -303,21 +303,21 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     return 0
 
 
-def _governed(payload: dict[str, Any]) -> Path | None:
-    repo = _workspace(payload)
+def _governed(payload: dict[str, Any], host: str = "claude") -> Path | None:
+    repo = _workspace(payload, host)
     return repo if settings.governed(repo) else None
 
 
-def handle_ask(payload: dict[str, Any]) -> int:
+def handle_ask(host: str, payload: dict[str, Any]) -> int:
     """Before a question is shown: send it back if a person would have to decode it."""
-    repo = _governed(payload)
+    repo = _governed(payload, host)
     if repo is None:
         return 0
     tool_input = hook_bridge.question_input(payload)
     found = questions.problems(tool_input)
     if found:
         _emit_decision(
-            "claude",
+            host,
             rules.Decision.deny("plain-questions", questions.rewrite_reason(found)),
         )
         return 0
@@ -445,9 +445,9 @@ def _adoption_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any]
                     return None
 
 
-def handle_answer(payload: dict[str, Any]) -> int:
+def handle_answer(host: str, payload: dict[str, Any]) -> int:
     """After the user answers: an `Approve` click opens an approval window."""
-    repo = _governed(payload)
+    repo = _governed(payload, host)
     tool_use_id = hook_bridge.question_id(payload)
     if repo is None or not tool_use_id:
         return 0
@@ -565,7 +565,9 @@ def main(argv: list[str] | None = None) -> int:
     if args.event in ("ask", "answer"):
         try:
             return (
-                handle_ask(payload) if args.event == "ask" else handle_answer(payload)
+                handle_ask(args.host, payload)
+                if args.event == "ask"
+                else handle_answer(args.host, payload)
             )
         except Exception:
             # A question is not a write: a broken check shows it as asked. Its answer then opens

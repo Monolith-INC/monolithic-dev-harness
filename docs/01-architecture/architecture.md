@@ -165,7 +165,7 @@ Details: [data-model.md](data-model.md).
 
 | Aspect | Claude Code | Cursor | Codex |
 | --- | --- | --- | --- |
-| Hook events | `PreToolUse`, `UserPromptSubmit`, question hooks | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `beforeSubmitPrompt` | `PreToolUse`, `UserPromptSubmit` |
+| Hook events | `PreToolUse`, `UserPromptSubmit`, question hooks | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `beforeSubmitPrompt` | `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, question-tool hooks |
 | Deny output | `hookSpecificOutput.permissionDecision: deny` | `{"permission": "deny", "agent_message", "user_message"}` | `hookSpecificOutput.permissionDecision: deny` |
 | MCP tool names | `mcp__plugin_monolithic-dev-harness_<server>__<tool>` | bare tool names under the server | `mcp__<server>__<tool>` |
 | Azure organization | environment set in Claude settings | pinned in `cursor.mcp.json` | pinned in the installed `.mcp.json` |

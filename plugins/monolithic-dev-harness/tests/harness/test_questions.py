@@ -62,10 +62,18 @@ def planning_offer() -> dict:
     }
 
 
-def run(repo: Path, event: str, payload: dict) -> dict | None:
+def run(repo: Path, event: str, payload: dict, host: str = "claude") -> dict | None:
     proc = subprocess.run(
-        [sys.executable, str(HOOK), "--host", "claude", "--event", event],
-        input=json.dumps({"cwd": str(repo), "tool_name": "AskUserQuestion", **payload}),
+        [sys.executable, str(HOOK), "--host", host, "--event", event],
+        input=json.dumps(
+            {
+                "cwd": str(repo),
+                "tool_name": "request_user_input"
+                if host == "codex"
+                else "AskUserQuestion",
+                **payload,
+            }
+        ),
         capture_output=True,
         text=True,
         check=True,
@@ -139,6 +147,43 @@ class ApprovalByClickTests(unittest.TestCase):
         active = state.active_approval(self.repo)
         self.assertIsNotNone(active)
         self.assertEqual(active[1]["question"], PLAIN)
+
+    def test_codex_picker_answer_opens_a_window(self) -> None:
+        tool_input = {
+            "questions": [
+                {
+                    "id": "approval",
+                    "question": PLAIN,
+                    "header": "Azure",
+                    "options": [
+                        {"label": "Approve", "description": "I create them now."},
+                        {"label": "Not now", "description": "Nothing is written."},
+                    ],
+                }
+            ],
+            "isBlocking": True,
+        }
+        self.assertIsNone(
+            run(
+                self.repo,
+                "ask",
+                {"tool_use_id": "codex-tool-1", "tool_input": tool_input},
+                host="codex",
+            )
+        )
+        response = {"answers": {"approval": {"answers": ["Approve"]}}}
+        out = run(
+            self.repo,
+            "answer",
+            {
+                "tool_use_id": "codex-tool-1",
+                "tool_input": tool_input,
+                "tool_response": response,
+            },
+            host="codex",
+        )
+        self.assertIn("approved", out["hookSpecificOutput"]["additionalContext"])
+        self.assertIsNotNone(state.active_approval(self.repo))
 
     def test_clicking_approve_pins_the_notes_marked_approved(self) -> None:
         write_settings(self.repo, artifacts_path="Vault")

@@ -56,9 +56,10 @@ start drafting work items, ask this **one structured UI question before doing ei
 - Option `Plan the idea`: `Explore it first and produce a clear product plan.`
 - Option `Draft work items`: `Use what you provided and draft the work items now.`
 
-Use the host's normal question UI (`AskUserQuestion` in Claude). The existing `plain-questions` hook
-validates it before display. In Cursor, which has no question buttons, show the same two choices in
-plain text and wait for the reply.
+Use the host's normal question UI (`AskUserQuestion` in Claude and `request_user_input` in Codex
+when that tool is available). The existing `plain-questions` hook validates it before display. In
+Cursor, which has no question buttons, show the same two choices in plain text and wait for the
+reply. If Codex does not expose `request_user_input`, use the typed approval fallback.
 
 The choice is routing, not approval: it never opens an approval window. `Plan the idea` invokes
 `plan-initiative`; `Draft work items` enters Stage 1. Do not ask when the user already chose a

@@ -7,8 +7,8 @@ description: Use when the user asks to set up, opt in, reconfigure, or check the
 
 The harness is **opt-in per repository**. Installing the plugin loads skills, agents, hooks, and MCP
 servers everywhere, but its rules only govern a repository that has `.harness/settings.json`.
-Bootstrap writes that file once. It never wires hooks or MCP servers into the repository's own host
-settings; the plugin provides those.
+Bootstrap writes that file once and adds the Codex project default needed for option-based
+questions. It does not copy hooks or MCP servers into the repository.
 
 ## 1. Choose the settings
 
@@ -53,7 +53,9 @@ replaces an existing settings file. Check the result with `harness doctor`.
    (`.harness/review/sources.json`).
 2. For Azure DevOps, health-check with `harness doctor --azure`.
 3. Restart the agent session so hooks and MCP servers reload.
-4. If the repository still has other copies of these workflows wired in (project-level hooks,
+4. If using Codex, trust the repository so `.codex/config.toml` is loaded. If it explicitly disables
+   the picker, bootstrap reports the conflict and typed approvals remain available.
+5. If the repository still has other copies of these workflows wired in (project-level hooks,
    `.claude/skills` copies of the same skill names, a project `.mcp.json` `azure-devops` entry),
    list them for the user. Two enforcers or two Azure servers on one repository cause double
    prompts and duplicate OAuth. Removing them is the user's decision.

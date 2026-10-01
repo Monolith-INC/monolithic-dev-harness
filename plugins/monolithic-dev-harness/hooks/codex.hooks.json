@@ -12,6 +12,28 @@
             "statusMessage": "Checking harness policy"
           }
         ]
+      },
+      {
+        "matcher": "^request_user_input$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event ask",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "^request_user_input$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event answer",
+            "timeout": 10
+          }
+        ]
       }
     ],
     "UserPromptSubmit": [

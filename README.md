@@ -108,7 +108,8 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
   `tests-with-code`, `draft-reviewed-prs`) plus the workflow policy, evaluated before every
   governed tool call, failing closed for writes.
 - **Human approvals that the agent cannot forge:** tracker and SCM writes open only after you click
-  **Approve** on the agent's question in Claude Code, or reply `approve HB-…` in Cursor or Codex.
+  **Approve** on the agent's question in Claude Code or Codex, or reply `approve HB-…` where the
+  native question picker is unavailable.
 - **Plain questions:** Claude Code's question hook sends back any question that is long, asks
   several things, or uses file names, code, or internal names.
 - **One settings file** per repository, `.harness/settings.json`, written by people; the harness
@@ -164,6 +165,10 @@ The agent uses only the planning tools the idea needs, ends with a compact produ
 first offers **Plan the idea** or **Draft work items** in the normal question UI. Nothing reaches the
 tracker until you explicitly continue and later click **Approve** on the batch it shows you. Start from
 [`examples/settings.example.json`](./plugins/monolithic-dev-harness/examples/settings.example.json).
+
+When `harness bootstrap` runs, it adds the repository-level Codex question-picker default
+automatically; no manual configuration editing is required. Codex still requires the user to trust
+the repository before loading `.codex/config.toml`.
 
 ## How it works
 

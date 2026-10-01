@@ -15,11 +15,12 @@ registers the marketplace through the Codex CLI and creates a separate plugin co
 MCP paths. It installs two read-only Codex custom-agent TOMLs in the Codex agents directory.
 Codex must trust the installed hooks before they enforce policy.
 
-The Codex `PreToolUse` hook is registered for Bash, `apply_patch`, and MCP calls. The host adapter
-parses `apply_patch` file headers and passes every target as a generic file path; neither the
-harness rules nor workflow policy parses Codex syntax or emits Codex JSON. `UserPromptSubmit` records
-typed approvals. Codex does not use the Claude question-click hooks; approval follows the typed
-`approve HB-…` contract.
+The Codex `PreToolUse` hook is registered for Bash, `apply_patch`, `request_user_input`, and MCP
+calls, with a `PostToolUse` hook for `request_user_input`. The host adapter parses `apply_patch`
+file headers and passes every target as a generic file path; neither the harness rules nor workflow
+policy parses Codex syntax or emits Codex JSON. Codex question requests use the native
+`request_user_input` picker when enabled, and the answer hook records only the matching user answer.
+`UserPromptSubmit` remains the typed-approval fallback (`approve HB-…`).
 
 ## Consequences
 
