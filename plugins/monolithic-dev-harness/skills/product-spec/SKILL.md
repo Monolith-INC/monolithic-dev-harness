@@ -19,11 +19,12 @@ Write one folder per epic or coherent outcome:
 ```text
 specs/<epic-or-outcome>/
 |-- SPEC.md
+|-- CRITIQUE.md
 |-- .decision-log.md
 `-- <content-named companions>.md
 ```
 
-`product-spec` is the only writer of `SPEC.md` and its spec-authored companions. Updates append to
+`product-spec` is the only writer of `SPEC.md`, `CRITIQUE.md`, and its spec-authored companions. Updates append to
 the decision log and re-derive the files. Preserve stable `CAP-N` identifiers; never renumber or
 reuse retired IDs.
 
@@ -66,9 +67,16 @@ Before presenting, run two passes:
 
 Append both verdicts to `.decision-log.md`. Resolve blocking open questions before backlog handoff.
 
+Before handoff, write `CRITIQUE.md` with the strongest counterargument to the idea, unsupported
+assumptions, likely failure cases, and a simpler alternative. Cite the source or repository evidence
+behind each claim; label inference. Ask the user to defend, revise, or abandon the idea at one
+material review point, then record the response in `.decision-log.md` and update `SPEC.md` where
+needed. Include `CRITIQUE.md` in `companions:` so downstream work can see unresolved risks.
+
 ## Handoff
 
-Present the complete contract and companions, then ask whether to start backlog drafting. On
+Present the complete contract, critique, and load-bearing companions through the host's best
+available review surface, then ask whether to start backlog drafting. On
 approval to proceed, `generate-work-item` creates the top ancestor and `decompose-backlog` maps each
 Story to the `CAP-N` values it covers. Do not create tracker artifacts from this skill.
 

@@ -1,61 +1,64 @@
 ---
 name: bootstrap
-description: Use when the user asks to set up, opt in, reconfigure, or check the harness for a repository: writing its `.harness/settings.json`, the one settings file every stage reads.
+description: Use on first harness activation or when repository setup is absent, incomplete, or being changed. Guide the user through language, tracker, and missing project choices; propose and apply reviewed settings without manual JSON editing.
 ---
 
-# Bootstrap
+# Guided bootstrap
 
-The harness is **opt-in per repository**. Installing the plugin loads skills, agents, hooks, and MCP
-servers everywhere, but its rules only govern a repository that has `.harness/settings.json`.
-Bootstrap writes that file once and adds the Codex project default needed for option-based
-questions. It does not copy hooks or MCP servers into the repository.
+The harness is opt-in per repository. Before any planning or backlog stage, inspect setup. Preserve
+the user's original request and return to it as soon as setup is usable. Use the host's structured
+question UI when available; use numbered choices with the same meaning otherwise. The user never
+needs to edit settings JSON by hand.
 
-## 1. Choose the settings
+## 1. Inspect the user and repository
 
-Start from `<plugin root>/examples/settings.example.json` or build one with the user. Schema:
-`<plugin root>/config/settings.schema.json`. Omitted sections take the defaults in
-`scripts/harness/settings.py`.
+Run `harness preference show` and `harness bootstrap --inspect`. The latter reports whether the
+repository is missing settings, incomplete, or ready; it lists shipped trackers, required values,
+and safe Git inferences. An absent preference is a first activation: ask **English** or
+**Português (Brasil)** as one two-option choice, then set it with `harness preference language en`
+or `harness preference language pt-br`. This preference lives outside the repository and applies to
+future harness requests by this user. Do not ask again when it is already set.
 
-| Field | Drives |
-| --- | --- |
-| `tracker` | `name` (a folder under `<plugin root>/trackers/`, or an onboarded one with `source: onboarded`) and `values`, the settings that tracker's `tracker.json` declares (Azure DevOps: `organization`, `project`, optional `team`, `process`; Linear: `team`) |
-| `scm` | `github` (`owner`, `repo`) or `azure-repos` (`organization`, `project`, `repository`) |
-| `branch_template` | ticket branch names; must contain `{key}` (for example `{category}/{key}-{slug}`) |
-| `protected_work_items` | ids never written, linked, parented, or mentioned in linking text (`protected-items`) |
-| `artifacts_path` | where backlog drafts, plans, and reports are written |
-| `git.base_branch` | branch base, branch diffs, deslop scope |
-| `approvals.window_minutes` | how long an approval keeps tracker and SCM writes open (`approval-required`) |
-| `checks` | the commands `check` runs, selected by `when` globs (`guarded-paths`, `draft-reviewed-prs`) |
-| `tests_required` | source and test globs for the commit gate (`tests-with-code`) |
-| `generated` | files never edited by hand (`generated-files`) |
-| `guarded_paths` | paths whose commits need `check:<name>` or `manual:<name>` evidence (`guarded-paths`) |
-| `pull_requests` | draft-only creation and the review-verdict requirement (`draft-reviewed-prs`) |
+When settings are ready, check the selected tracker and proceed with the original request. When
+missing or incomplete, ask which listed tracker to use. Do not select Azure from the bundled example
+or assume the tracker from a placeholder setting. The shipped choices include Azure DevOps, Linear,
+and the local tracker; explain where work will appear. Ask for the tracker's required values one at
+a time, then ask only for source-control values, base branch, and artifact destination that cannot be
+inferred. Explain any host trust or sign-in action the user actually must take.
 
-The file is human-owned: hook `human-owned` blocks the agent from editing it after bootstrap. Show
-the user the file and get a clear yes before running step 2.
+## 2. Prepare one reviewable proposal
 
-## 2. Run
-
-From the repository root:
+Use `harness bootstrap --propose` with the chosen values. Example:
 
 ```bash
-harness bootstrap --settings-from <settings file>     # omit it to use the bundled example
+harness bootstrap --propose --tracker linear --tracker-value team=ENG \
+  --scm github --scm-value owner=team --scm-value repo=project \
+  --artifacts-path docs/backlog --base-branch main
 ```
 
-If the `harness` command is not on `PATH`, run
-`python3 "<plugin root>/scripts/harness/bootstrap.py" --repo <repo root> --settings-from <file>`.
-Bootstrap checks the file and the selected tracker's values before writing anything, and never
-replaces an existing settings file. Check the result with `harness doctor`.
+The command prints the complete candidate, a `digest`, and a `source_digest`. Existing unrelated
+settings are preserved. Show the proposed changes and destination in the selected language. Ask a
+single choice, **Apply setup** or **Change choices**, through the available host UI. For a text-only
+host, show those same options as numbered choices. A reply to apply authorizes only this exact
+local setup proposal; it does not authorize tracker or source-control writes.
 
-## 3. Finish
+After the user chooses Apply, repeat the proposal arguments with `--apply-digest <digest>
+--source-digest <source_digest>`. A change to the candidate or existing settings makes application
+fail and requires a new review. The controlled command adds the local Git ignore, writes settings
+atomically, preserves an explicit disabled Codex picker, and initializes knowledge. Never tell the
+user to paste or modify JSON manually.
 
-1. Run `review-setup` once to record where requirements and pull requests live
-   (`.harness/review/sources.json`).
-2. For Azure DevOps, health-check with `harness doctor --azure`.
-3. Restart the agent session so hooks and MCP servers reload.
-4. If using Codex, trust the repository so `.codex/config.toml` is loaded. If it explicitly disables
-   the picker, bootstrap reports the conflict and typed approvals remain available.
-5. If the repository still has other copies of these workflows wired in (project-level hooks,
-   `.claude/skills` copies of the same skill names, a project `.mcp.json` `azure-devops` entry),
-   list them for the user. Two enforcers or two Azure servers on one repository cause double
-   prompts and duplicate OAuth. Removing them is the user's decision.
+The older `--settings-from <file>` import remains for a user who supplies an already reviewed file.
+Bare `harness bootstrap` now inspects the repository; it never writes the Azure example.
+
+## 3. Verify and return
+
+Run `harness doctor`; use `--tools` for the selected tracker when authentication/tool readiness
+needs checking. Run `review-setup` if its sources are missing. Tell the user precisely about any
+sign-in, project trust, or session restart the host requires. Save a workflow checkpoint before a
+required interruption and resume the original request after it. Do not ask the user to start the
+harness again.
+
+Repository settings are human-owned. Existing custom checks, paths, and host configuration survive
+setup. The user-level language preference and clone-local workflow checkpoints are separate from
+shared repository settings.

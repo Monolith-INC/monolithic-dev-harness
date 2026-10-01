@@ -25,6 +25,9 @@
     "get": "get_issue",
     "list": "list_issues",
     "save": "save_issue",
+    "labels": "list_issue_labels",
+    "label_create": "create_issue_label",
+    "teams": "list_teams",
     "comments": "list_comments",
     "comment": "save_comment"
   },

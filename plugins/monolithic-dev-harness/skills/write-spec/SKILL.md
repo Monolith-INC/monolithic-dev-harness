@@ -34,12 +34,14 @@ The accepted technical spec includes a compact traceability section:
 - acceptance criteria → Tasks and verification;
 - applicable `AD-N` / UX decisions → affected modules.
 
-Present the complete accepted spec to the user for **gate G2** (the Tech Lead's approval). When the
-host provides an artifact/document pane, open the spec there; otherwise show it inline, or provide a
-faithful section-by-section preview plus its path when the complete document is too long. A bare path
-does not count as presentation. Ask for approval in chat after the document is visible; pane controls
-do not record harness approval. Publishing it to the tracker is a write, so include it in the approval
-batch. `implement-story` starts only after G2.
+Present the exact accepted spec revision to the user for **gate G2** (the Tech Lead's approval).
+Use the best surface the host actually provides: interactive canvas/document/editor, native
+rendered preview, an opened file with structured summary, then faithful inline review. A bare path,
+unopened file link, or short summary does not count. Record the content digest and surface used in
+the workflow checkpoint. Ask for approval in chat only after the material needed to decide is
+visible; pane controls do not record harness approval. Publishing it to the tracker is a write, so
+include it in the approval batch. An edited digest requires a new review. `implement-story` starts
+only after G2.
 
 When the spec lives only in the artifacts path, set its frontmatter to `status: approved` before you ask
 for G2. The user's approval pins that exact content, and only then does the spec gate let code edits

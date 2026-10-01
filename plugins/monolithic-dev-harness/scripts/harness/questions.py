@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from dataclasses import dataclass
 from typing import Any
 
 MAX_QUESTION_WORDS = 50
@@ -30,6 +31,106 @@ MANUAL_APPROVE_LABELS = frozenset({"approve change", "aprovar mudança"})
 ADOPTION_APPROVE_LABELS = frozenset({"approve adoption", "aprovar adoção"})
 TRACKER_ACTIONS = {"trust": "trust", "use it": "select", "stop trusting": "untrust"}
 _ADOPTION_ID = re.compile(r"\bHA-[A-F0-9]{10}\b", re.IGNORECASE)
+
+
+@dataclass(frozen=True)
+class ChoiceOption:
+    id: str
+    en: str
+    pt_br: str
+    consequence_en: str
+    consequence_pt_br: str
+
+
+@dataclass(frozen=True)
+class Choice:
+    id: str
+    header_en: str
+    header_pt_br: str
+    question_en: str
+    question_pt_br: str
+    options: tuple[ChoiceOption, ...]
+    approval: bool = False
+
+
+def render_choice(
+    choice: Choice,
+    language: str,
+    host: str,
+    native_available: bool,
+    approval_token: str = "",
+) -> dict[str, Any]:
+    """One decision contract, shown natively or with an equivalent text fallback."""
+    portuguese = language == "pt-br"
+    options = tuple(
+        {
+            "id": option.id,
+            "label": option.pt_br if portuguese else option.en,
+            "description": option.consequence_pt_br
+            if portuguese
+            else option.consequence_en,
+        }
+        for option in choice.options
+    )
+    question = choice.question_pt_br if portuguese else choice.question_en
+    header = choice.header_pt_br if portuguese else choice.header_en
+    match native_available, len(options) <= 3, choice.approval, approval_token:
+        case True, True, _, _ if not choice.approval or any(
+            item["label"].strip().lower() in APPROVE_LABELS for item in options
+        ):
+            return {
+                "host": host,
+                **({"isBlocking": True} if host == "codex" else {}),
+                "questions": [
+                    {
+                        **(
+                            {"id": choice.id}
+                            if host == "codex"
+                            else {"multiSelect": False}
+                        ),
+                        "header": header,
+                        "question": question,
+                        "options": [
+                            {"label": item["label"], "description": item["description"]}
+                            for item in options
+                        ],
+                    }
+                ],
+            }
+        case _, _, True, str() as token if token:
+            return {
+                "host": host,
+                "text": f"{question}\n"
+                + (
+                    f"Reply exactly: approve {token}"
+                    if not portuguese
+                    else f"Responda exatamente: approve {token}"
+                ),
+                "options": options,
+            }
+        case _, _, True, _:
+            return {
+                "host": host,
+                "error": "approval needs a working native control or an exact typed token",
+            }
+        case _:
+            return {
+                "host": host,
+                "text": "\n".join(
+                    (
+                        question,
+                        *(
+                            f"{index}. {item['label']} — {item['description']}"
+                            for index, item in enumerate(options, 1)
+                        ),
+                        "Reply with the number."
+                        if not portuguese
+                        else "Responda com o número.",
+                    )
+                ),
+                "options": options,
+            }
+
 
 _RULE_NAMES = (
     "human-owned",
@@ -247,7 +348,9 @@ def tracker_choice(tool_input: dict[str, Any], tool_response: Any) -> str | None
     """The tracker action the user clicked, or None when they picked anything else."""
     answers = tool_response.get("answers") if isinstance(tool_response, dict) else None
     answer = _answer_for(_first_question(tool_input), answers)
-    return TRACKER_ACTIONS.get(answer.strip().lower()) if isinstance(answer, str) else None
+    return (
+        TRACKER_ACTIONS.get(answer.strip().lower()) if isinstance(answer, str) else None
+    )
 
 
 def approval_id(tool_use_id: str) -> str:

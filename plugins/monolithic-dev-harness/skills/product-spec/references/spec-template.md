@@ -4,7 +4,7 @@
 ---
 id: SPEC-<slug>
 status: draft | final
-companions: []
+companions: [CRITIQUE.md]
 sources: []
 ---
 
@@ -44,6 +44,10 @@ sources: []
 - <answerable load-bearing gap; omit section when empty>
 ```
 
-Companions are named for their content (`glossary.md`, `failure-modes.md`,
+`CRITIQUE.md` records the strongest counterargument, unsupported assumptions, likely failure
+cases, a simpler alternative, and the user's response. It is presented with this contract before
+backlog handoff.
+
+Other companions are named for their content (`glossary.md`, `failure-modes.md`,
 `architecture-diagrams.md`) or retain the upstream owner's name (`DESIGN.md`, `EXPERIENCE.md`,
 `ARCHITECTURE-SPINE.md`). Diagrams always live in companions, never in the compact kernel.

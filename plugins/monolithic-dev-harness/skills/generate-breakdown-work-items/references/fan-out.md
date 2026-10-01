@@ -1,11 +1,11 @@
 # Feature and Epic Fan-out
 
-Reference for `generate-breakdown-work-items` PHASE 5. Reuses intake `destination` and
-`language`. Invokes the per–User Story workflow (PHASE 1–4) once per child Story.
+Reference for `generate-breakdown-work-items` fan-out. Reuses the selected tracker destination and
+effective language. Invokes the per–User Story workflow once per child Story.
 
 ## When to fan out
 
-After intake confirmation, PHASE 1 resolves the work item type:
+After reference resolution, inspect the work item type:
 
 | Type | Action |
 | --- | --- |
@@ -19,15 +19,14 @@ After intake confirmation, PHASE 1 resolves the work item type:
 **Identify every child User Story before processing any of them.** Build the full list, present
 a short inventory to the user, then start the loop.
 
-### Azure
+### Selected tracker
 
-1. `wit_work_item[get](id, expand=Relations)` on the Feature or Epic.
-2. Collect child relations / hierarchy children.
-3. **Feature:** keep items with `System.WorkItemType == "User Story"` (and equivalent Story types
-   if the process template uses them).
+1. Load the Feature or Epic through the selected tracker adapter.
+2. Collect normalized child relationships.
+3. **Feature:** keep items whose normalized kind is User Story.
 4. **Epic:** for each child Feature, load children and collect User Stories. Never attach Tasks to
    the Epic. Never treat Features as Stories.
-5. Batch-read with `wit_work_item[get_batch]` when listing many ids.
+5. Use the provider's batch-read operation when it has one.
 
 ### Artifacts / filesystem
 
@@ -40,9 +39,8 @@ If **zero** child Stories → STOP with a clear message (nothing to break down).
 
 ## Selection UX (optional)
 
-When more than one Story is found, present a **variant multi-select** of Story titles/ids
-(`all` Recommended when processing everything is the default judgment; `other…` last). Process
-only the selected set. Default to `all` if the user confirms without narrowing.
+When more than one Story is found, process the full discovered set unless the user requested a
+narrower scope. Show that scope with the final review batch; ask only if the intended set is unclear.
 
 ## Per-Story loop
 
@@ -50,8 +48,8 @@ For each selected User Story, **in order**:
 
 1. Run PHASE 1 ingest for that Story (Feature body + Story body + verbatim ACs).
 2. Run PHASE 2 — save Implementation Plan (must succeed before Tasks).
-3. Run PHASE 3–4 — decompose and persist Tasks using the **same** intake `destination` and
-   `language` (do not re-prompt).
+3. Draft Tasks and add them to the combined review batch, using the same selected tracker and
+   language. Publish after preflight and approval; do not re-prompt per Story.
 4. Record a per-Story result: `success` | `failed` + error message + `plan_path` / Task ids.
 
 ### Failure isolation
@@ -59,7 +57,7 @@ For each selected User Story, **in order**:
 - One Story's failure **must not** silently skip the remaining Stories.
 - On failure: log the error, mark that Story `failed`, **continue** with the next Story.
 - Do not abort the entire fan-out unless the user asks to stop, or a fatal shared fault occurs
-  (artifacts path unwritable, Azure auth lost).
+  (artifacts path unwritable, selected tracker authentication lost).
 
 ## Final report
 

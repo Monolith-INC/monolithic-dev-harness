@@ -1,8 +1,9 @@
 """The repository's settings: `.harness/settings.json`, the only settings file.
 
-People write it; the harness reads it once per process and passes the value along. The one thing
-the harness writes into it is the tracker selection, when the user clicks to use a tracker. Defaults
-for omitted sections live here and nowhere else. The file's presence is what opts a repository in.
+People own this file. The harness may create it from an exact setup proposal the user reviewed, or
+change the tracker after the user chooses one. It preserves other settings and reads the result once
+per process. Defaults for omitted sections live here and nowhere else. The file's presence opts a
+repository in.
 """
 
 from __future__ import annotations
@@ -160,6 +161,11 @@ def _write(file: Path, raw: Mapping[str, Any]) -> Path:
     )
     tmp.replace(file)
     return file
+
+
+def write_reviewed_setup(file: Path, raw: Mapping[str, Any]) -> Path:
+    """Atomic write boundary for a bootstrap proposal whose exact digest was approved."""
+    return _write(file, raw)
 
 
 def _conforming(raw: Any) -> Result[Mapping[str, Any]]:

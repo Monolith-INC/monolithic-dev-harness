@@ -9,7 +9,10 @@ Before using a tracker operation, call `workflow_tracking_status`. If tracking i
 that this skill is unavailable until `/resume-tracker` restores it.
 
 1. Fetch the work item with `tracker_get_work_item` and read the tracker's rules with
-   `tracker_describe` (see [the tracker contract](../../references/tracker-contract.md)).
+   `tracker_describe` (see [the tracker contract](../../references/tracker-contract.md)). Before any
+   branch or status change, verify that its Implementation Plan is saved, required atomic Tasks are
+   present in the selected tracker, and their parent is this Story. If a Task is intentionally
+   local-only, verify the user explicitly chose that consequence. Complete missing breakdown first.
 2. Check out the work item's branch, named by `branch_template` in `.harness/settings.json` with the
    id in the form the tracker's `ids.branch_key` accepts (`branch-and-pr` → *Branch*).
 3. Move the item to `in_progress` with `tracker_transition_work_item` (a tracker write: it needs an

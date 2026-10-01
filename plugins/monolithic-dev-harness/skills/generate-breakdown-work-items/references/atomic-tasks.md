@@ -8,8 +8,8 @@ Requires a saved Implementation Plan from `./plan-generation.md` (`plan_path` on
 1. Assert `plan_path` exists and is non-empty. If not → STOP:
    `Implementation Plan not saved; refusing Task creation.`
 2. Re-read the plan and the Story's verbatim `acceptance_criteria`.
-3. Reuse intake `destination` and `language`. Do not re-prompt unless a value is incomplete
-   `other:…`.
+3. Use the selected tracker for Task publication and the user-level language. A local-only
+   destination is valid only after its consequence has been shown and chosen.
 
 ## Atomic-commit definition
 
@@ -51,23 +51,17 @@ proper names, or host-preferred equivalents — stay consistent within a run). D
   artifacts path: mark status Done in the draft body/frontmatter convention used for Tasks)
 - Always the **last** Task in the list
 
-### Variant selection UX
+### Task review
 
-Before persisting, present the proposed Task titles as a **variant multi-select** list
-(see `./intake-ux.md`):
-
-- Include `all` (Recommended when the full set is the default judgment)
-- Include every proposed Task title
-- End with `other (inform or describe)`
-
-Wait for selection. If the user deselects Staging, Review, or Breakdown → WARN and re-add them
-unless they explicitly confirm omission (defaults are mandatory per Feature ACs; prefer STOP and
-re-prompt over silently dropping them).
+Create the full proposed Task list locally, then show it with the Implementation Plan at one
+material review point before tracker publication. Ask about a specific Task only when its scope is
+unclear. Do not create a separate multi-select confirmation for the routine complete list.
 
 ### Effort hours per Task
 
-A Task with no `RemainingWork` contributes nothing to the assignee's capacity bar or the burndown
-chart — it is invisible to the tooling that shows whether their sprint fits.
+For trackers with task-hour fields, a Task with no remaining work contributes nothing to the
+capacity bar or burndown chart. Linear does not provide those hour fields; report that limit and
+retain the Task hierarchy without inventing hours.
 
 Once the Task list is settled, **compute the estimates — do not reason them out.** The arithmetic
 is deterministic and lives in the orchestrator, so the same Story always yields the same hours.
@@ -90,9 +84,9 @@ Exit codes: `0` estimated and fits, `2` **blocked** (see below), `1` could not r
 The command prints the per-Task figures, the assignee's remaining capacity, and the exact field
 writes to apply — it writes nothing itself. Apply the printed `write_ops` in PHASE 4.
 
-Estimates are **applied, not negotiated** — they derive from the Story's points, so there is
-nothing for a person to approve item by item. What is not optional is telling them: relay the
-command's change report verbatim, naming every Task whose hours were set or changed.
+Where the tracker supports hour fields, estimates are **applied, not negotiated** — they derive
+from the Story's points, so there is nothing to approve item by item. Relay the command's change
+report, naming every Task whose hours were set or changed.
 
 **Task weights.** `Breakdown` is a completion marker and carries **no hours**; `Staging` and
 `Review` take a lighter share than implementation work. That is handled automatically from the
@@ -138,11 +132,12 @@ the assignee's remaining hours, STOP and ask as above.
 
 ## Persist (PHASE 4)
 
-Write only the selected Tasks to intake `destination`.
+Publish the reviewed Tasks through the active tracker after read-only preflight and one scoped
+write approval. The local Implementation Plan remains in the configured artifacts path.
 
 ### Filesystem / artifacts path
 
-When `destination` is `filesystem` or `both`:
+When the user chose local Task drafts, or the workflow also keeps local copies:
 
 1. Write one markdown draft per Task under the artifacts path (prefer `Tickets/Ready/` or a host Task folder).
 2. Filename pattern per `../../../references/ticket-structure.md`:
@@ -154,9 +149,18 @@ When `destination` is `filesystem` or `both`:
 4. Body: title heading + short description (WHAT for this atomic unit) + link/ref to `plan_path`
    and parent Story.
 
-### Azure Task board
+### Linear
 
-When `destination` is `azure` or `both`:
+Before the first issue is created, run `harness tracker preflight` and verify the team and required
+kind labels. Missing labels are prerequisites in the same reviewed publication batch; create them
+before dependent issues. Use the selected tracker adapter's `create_work_item(Task, ..., parent)`
+operation, where `parent` is the Story id. Read back each created Task and assert its parent is the
+Story. Read back the completed Breakdown Task's state. Linear has points but no native remaining
+hours; report that difference plainly.
+
+### Azure Task board (only when Azure DevOps is selected)
+
+When Azure DevOps is the selected Task destination:
 
 1. Parent must be the **User Story** id (never Feature/Epic).
 2. Prefer `wit_work_item_write[add_child]` with `workItemType: "Task"`, `parentId: <storyId>`,
@@ -183,7 +187,7 @@ When `destination` is `azure` or `both`:
    assignee match; for any Task given hours assert `RemainingWork` matches what was computed.
    Failed assertion → STOP.
 
-### Shared Azure notes
+### Shared Azure notes (Azure only)
 
 Extend behavior from `../../../references/azure-mechanics.md`. Parent of a Task is the **User Story**,
 not the Feature. Description format: Markdown.
@@ -195,7 +199,7 @@ not the Feature. Description format: Markdown.
 After persist, report:
 
 - `plan_path`
-- Task titles + destinations (artifacts paths and/or Azure ids)
+- Task titles + destinations (local paths and/or selected-tracker ids)
 - Breakdown assignee + state
 - Hours written per Task, with provenance, and **every figure that changed** (old → new) — nothing
   was asked for approval, so nothing may move silently

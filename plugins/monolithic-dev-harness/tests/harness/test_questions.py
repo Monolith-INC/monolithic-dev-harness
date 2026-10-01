@@ -117,6 +117,69 @@ class ProblemsTests(unittest.TestCase):
         self.assertEqual(questions.problems(planning_offer()), [])
 
 
+class ChoiceContractTests(unittest.TestCase):
+    def test_same_choice_has_native_and_numbered_presentations(self) -> None:
+        choice = questions.Choice(
+            "language",
+            "Language",
+            "Idioma",
+            "Which language would you prefer?",
+            "Qual idioma você prefere?",
+            (
+                questions.ChoiceOption(
+                    "en", "English", "Inglês", "Use English.", "Usar inglês."
+                ),
+                questions.ChoiceOption(
+                    "pt-br",
+                    "Português (Brasil)",
+                    "Português (Brasil)",
+                    "Use Brazilian Portuguese.",
+                    "Usar português do Brasil.",
+                ),
+            ),
+        )
+        codex = questions.render_choice(choice, "pt-br", "codex", True)
+        fallback = questions.render_choice(choice, "pt-br", "text", False)
+        self.assertEqual(codex["questions"][0]["id"], "language")
+        self.assertEqual(codex["questions"][0]["options"][0]["label"], "Inglês")
+        self.assertEqual(
+            tuple(item["id"] for item in fallback["options"]), ("en", "pt-br")
+        )
+        self.assertIn("1. Inglês", fallback["text"])
+        self.assertEqual(questions.problems(codex), [])
+
+    def test_approval_fallback_shows_exact_token_in_first_prompt(self) -> None:
+        choice = questions.Choice(
+            "publish",
+            "Publish",
+            "Publicar",
+            "Create these two work items?",
+            "Criar estes dois itens de trabalho?",
+            (
+                questions.ChoiceOption(
+                    "approve",
+                    "Approve",
+                    "Aprovar",
+                    "Create them now.",
+                    "Criá-los agora.",
+                ),
+                questions.ChoiceOption(
+                    "later",
+                    "Not now",
+                    "Agora não",
+                    "No items are created.",
+                    "Nenhum item será criado.",
+                ),
+            ),
+            approval=True,
+        )
+        fallback = questions.render_choice(choice, "en", "text", False, "HB-7Q2K")
+        self.assertIn("approve HB-7Q2K", fallback["text"])
+        self.assertNotIn("questions", fallback)
+        self.assertIn("questions", questions.render_choice(choice, "en", "codex", True))
+        self.assertIn("error", questions.render_choice(choice, "en", "text", False))
+
+
 class ApprovalByClickTests(unittest.TestCase):
     def setUp(self) -> None:
         self._tmp = tempfile.TemporaryDirectory()

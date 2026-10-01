@@ -112,8 +112,12 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
   native question picker is unavailable.
 - **Plain questions:** Claude Code's question hook sends back any question that is long, asks
   several things, or uses file names, code, or internal names.
-- **One settings file** per repository, `.harness/settings.json`, written by people; the harness
-  changes only its `tracker` section, when you choose a tracker.
+- **Guided first run:** the agent asks for English or Português (Brasil), helps choose a tracker,
+  fills in values it can discover, and shows the full setup before saving it.
+- **Workflow checkpoints:** Back, Pause, Resume, and Cancel work across planning and delivery; saved
+  checkpoints make it possible to return to the latest or an earlier review.
+- **One settings file** per repository, `.harness/settings.json`. The harness creates it only after
+  you review a setup proposal and preserves other settings when you change the tracker.
 - **One-shot install** for Claude Code, Cursor, and Codex, with a `harness` command for bootstrap, health
   checks, sessions, and trackers.
 
@@ -151,24 +155,33 @@ and links `harness` into
 
 ```bash
 cd your-repository
-harness bootstrap --settings-from my-settings.json   # checks it, then writes .harness/settings.json
-harness doctor                                       # tools, hosts, settings, tracker, session
 ```
 
-Restart Claude Code or Codex (or reload Cursor), then ask the agent:
+Ask the agent for the work you want done. On first activation it asks for English or Português
+(Brasil), then the tracker and any repository values it cannot discover. It shows the proposed
+settings before applying them, checks the result, and returns to your original request. You do not
+need to prepare a settings file or edit JSON. If your host needs a repository trust or sign-in step,
+the agent explains it and saves a checkpoint so the work can resume.
+
+For an existing reviewed settings file, `harness bootstrap --settings-from my-settings.json` is
+still available. Run `harness bootstrap` if you want to inspect setup without starting a workflow;
+run `harness doctor` to inspect tools, hosts, settings, tracker, and session.
+
+For example, ask:
 
 ```text
 Help me pressure-test and plan "students can add a profile photo", then stop before creating backlog items.
 ```
 
-The agent uses only the planning tools the idea needs, ends with a compact product contract, and
-first offers **Plan the idea** or **Draft work items** in the normal question UI. Nothing reaches the
-tracker until you explicitly continue and later click **Approve** on the batch it shows you. Start from
-[`examples/settings.example.json`](./plugins/monolithic-dev-harness/examples/settings.example.json).
+The agent uses the planning tools the idea needs, challenges its assumptions, and presents the
+complete product contract before backlog work. Nothing reaches the tracker until the final batch
+has been shown and you approve the write. Native choice controls are used when the host supports
+them; numbered text choices preserve the same options otherwise. Back, Pause, Resume, Cancel, and
+Complete control the wider workflow.
 
-When `harness bootstrap` runs, it adds the repository-level Codex question-picker default
-automatically; no manual configuration editing is required. Codex still requires the user to trust
-the repository before loading `.codex/config.toml`.
+When the reviewed setup is applied, bootstrap adds the repository-level Codex question-picker
+default automatically; no manual configuration editing is required. Codex still requires the user
+to trust the repository before loading `.codex/config.toml`.
 
 ## How it works
 

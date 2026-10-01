@@ -37,8 +37,9 @@ distills intent; it does not invent product strategy.
 ## Workspace
 
 Resolve `artifacts_path` from `.harness/settings.json` as described in `project-config.md`. If it is
-unset, ask where planning artifacts should live and ask the user to add that value; never invent a
-repository folder or edit settings on their behalf.
+unset, enter guided bootstrap, ask where planning artifacts should live, show the complete settings
+proposal, and apply that reviewed choice through the controlled setup command. Do not ask the user
+to edit JSON.
 
 When the user wants persistent output, use:
 
@@ -70,6 +71,15 @@ conflict. Stable identifiers (`FR-N`, `CAP-N`, `AD-N`) are never renumbered or r
 
 The owning skill is the only writer of its artifact. Other skills may cite or adopt it as a
 companion, but must not edit it.
+
+## Final idea challenge
+
+Before a product contract is accepted, `product-spec` owns a short `CRITIQUE.md` companion in the
+same spec folder. It names the strongest counterargument, unsupported assumptions, plausible
+failure cases, and a simpler alternative. `forge-idea` can provide the analysis, but its separate
+artifact is optional. Record the user's defense, revision, or decision to abandon in the spec's
+decision log; update the product contract when the challenge changes it. Show the contract and
+critique together at one review point, not as a new chain of confirmations.
 
 ## Create, update, validate
 

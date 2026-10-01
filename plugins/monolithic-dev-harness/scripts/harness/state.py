@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import subprocess
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,38 @@ def _now() -> datetime:
 
 def state_dir(repo: Path) -> Path:
     return repo / STATE_RELATIVE_PATH
+
+
+def ensure_local_exclude(repo: Path) -> tuple[str, ...]:
+    """Keep clone-local records out of Git, including before repository bootstrap."""
+    result = subprocess.run(
+        ["git", "-C", str(repo), "rev-parse", "--git-path", "info/exclude"],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=10,
+    )
+    match result.returncode, result.stdout.strip():
+        case 0, str() as location if location:
+            path = Path(location)
+            resolved = path if path.is_absolute() else repo / path
+            lines = (
+                resolved.read_text(encoding="utf-8").splitlines()
+                if resolved.exists()
+                else []
+            )
+            added = tuple(entry for entry in LOCAL_ONLY_PATHS if entry not in lines)
+            match added:
+                case ():
+                    return ()
+                case _:
+                    resolved.parent.mkdir(parents=True, exist_ok=True)
+                    resolved.write_text(
+                        "\n".join([*lines, *added]) + "\n", encoding="utf-8"
+                    )
+                    return added
+        case _:
+            return ()
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
