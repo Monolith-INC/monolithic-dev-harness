@@ -206,6 +206,34 @@ class TestCodexAdapter(HookTestCase):
             "generated-files",
         )
 
+    def test_patch_headers_are_read_the_way_codex_applies_them(self) -> None:
+        for header in (
+            "  *** Update File: .harness/settings.json",
+            "*** Update File: .harness/settings.json\r",
+            "*** Update File: .harness/settings.json ",
+        ):
+            with self.subTest(header=header):
+                self.assertDenied(
+                    self.codex(
+                        "apply_patch",
+                        {"command": f"*** Begin Patch\n{header}\n@@\n-old\n+new\n*** End Patch"},
+                    ),
+                    "human-owned",
+                )
+        self.assertDenied(
+            self.codex(
+                "apply_patch",
+                {"command": "*** Begin Patch\n*** Add File: lib/a.g.dart \n+generated\n*** End Patch"},
+            ),
+            "generated-files",
+        )
+
+    def test_patch_without_readable_targets_is_denied(self) -> None:
+        self.assertDenied(
+            self.codex("apply_patch", {"command": "*** Begin Patch\n@@\n-old\n+new\n*** End Patch"}),
+            "human-owned",
+        )
+
     def test_patch_paths_resolve_from_codex_working_directory(self) -> None:
         self.assertDenied(
             self.hook(

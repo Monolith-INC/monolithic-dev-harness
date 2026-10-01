@@ -57,7 +57,7 @@ _PATH_KEYS = (
     "AbsolutePath",
     "file",
 )
-_PATCH_PATH = re.compile(r"^\*\*\* (?:(?:Add|Update|Delete) File|Move to): (.+)$", re.M)
+_PATCH_PATH = re.compile(r"\*\*\* (?:(?:Add|Update|Delete) File|Move to): (.+)")
 _PROJECT_ENV = {
     "claude": "CLAUDE_PROJECT_DIR",
     "cursor": "CURSOR_PROJECT_DIR",
@@ -166,6 +166,16 @@ def _kind(raw_name: str, server: str) -> str:
     )
 
 
+def _patch_targets(patch: str) -> list[str]:
+    # Codex trims each patch line before reading a header, so indented, CRLF, and
+    # trailing-space headers still apply; read them the same way.
+    return [
+        match.group(1).strip()
+        for line in patch.splitlines()
+        if (match := _PATCH_PATH.match(line.strip()))
+    ]
+
+
 def _paths(raw_name: str, arguments: dict[str, Any], cwd: str) -> tuple[str, ...]:
     named = tuple(
         value
@@ -175,7 +185,7 @@ def _paths(raw_name: str, arguments: dict[str, Any], cwd: str) -> tuple[str, ...
     patch = (
         tuple(
             str(Path(cwd) / path) if cwd and not Path(path).is_absolute() else path
-            for path in _PATCH_PATH.findall(str(arguments.get("command") or ""))
+            for path in _patch_targets(str(arguments.get("command") or ""))
         )
         if raw_name == "apply_patch"
         else ()

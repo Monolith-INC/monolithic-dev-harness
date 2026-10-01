@@ -338,6 +338,12 @@ def shell_writes_matching(
 def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
     """The settings, approvals, manual checks, sessions, and tracker trust are written by people or the harness."""
     if call.kind == "edit":
+        if call.command and not call.file_paths:
+            return Decision.deny(
+                "human-owned",
+                "The harness could not read which files this patch changes, so it cannot rule out "
+                "human-owned files. Write each file header as `*** Update File: <path>`.",
+            )
         for path in call.file_paths:
             if is_human_owned(_relative(repo, path)):
                 return Decision.deny(
