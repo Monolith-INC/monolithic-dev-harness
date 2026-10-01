@@ -66,12 +66,17 @@ jobs:
     env:
       DISABLE_AUTOUPDATER: "1"
       CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: "1"
-      HARNESS_HOME: ${{ runner.temp }}/harness-home
-      HARNESS_BIN_DIR: ${{ runner.temp }}/harness-bin
-      CURSOR_PLUGIN_DIR: ${{ runner.temp }}/cursor-plugin
-      CLAUDE_CONFIG_DIR: ${{ runner.temp }}/claude-config
-      CODEX_HOME: ${{ runner.temp }}/codex-home
     steps:
+      # The runner context is not available in job-level env, so the sandbox paths are set here.
+      - name: Sandbox install paths
+        run: |
+          {
+            echo "HARNESS_HOME=$RUNNER_TEMP/harness-home"
+            echo "HARNESS_BIN_DIR=$RUNNER_TEMP/harness-bin"
+            echo "CURSOR_PLUGIN_DIR=$RUNNER_TEMP/cursor-plugin"
+            echo "CLAUDE_CONFIG_DIR=$RUNNER_TEMP/claude-config"
+            echo "CODEX_HOME=$RUNNER_TEMP/codex-home"
+          } >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
