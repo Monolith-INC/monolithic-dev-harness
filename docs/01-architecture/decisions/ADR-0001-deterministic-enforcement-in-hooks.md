@@ -2,7 +2,7 @@
 title: ADR-0001 Deterministic enforcement in hooks
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-30
 ---
 
 # ADR-0001: Enforce required behavior in hooks, not in skill text
@@ -28,7 +28,8 @@ script can judge stays in the review stage and is documented as review-only.
 - **Skill prose only:** cheap, unenforceable.
 - **Post-hoc CI checks:** catches problems after the write to Azure DevOps or the push; too late
   for board writes.
-- **Pre-tool hooks (chosen):** see every governed call before it runs, on both hosts.
+- **Pre-tool hooks (chosen):** check supported governed calls before they run; host hook coverage
+  varies and is not a complete security boundary.
 
 ## Consequences
 
@@ -39,17 +40,17 @@ script can judge stays in the review stage and is documented as review-only.
 
 ### Trade-offs
 
-- A hook runs on every governed call (a Python process start per call).
+- A hook runs on each supported governed call (a Python process start per call).
 - Rules must be generic; repository specifics move into `.harness/settings.json`, and tracker specifics into tracker folders.
 
 ## Host-specific Impact
 
-Claude Code and Cursor emit different hook events and payloads; one entry point
-(`scripts/harness/hook.py --host …`) normalizes both.
+Claude Code, Cursor, and Codex emit different hook events and payloads. Host adapters translate
+them to the generic contract before the shared rules evaluate them.
 
 ## Validation
 
-`tests/harness/test_hook_rules.py` drives the real entry point with both hosts' payload shapes.
+`tests/harness/test_hook_rules.py` drives the real entry point with all three hosts' payload shapes.
 
 ## References
 

@@ -57,7 +57,7 @@ See [vision.md](vision.md#non-goals).
   a person trusts them as they read.
 - **Scope:** governed code changes happen inside a session that binds one work item to one
   checkout.
-- **Hosts:** Claude Code and Cursor.
+- **Hosts:** Claude Code, Cursor, and Codex.
 - **Install:** one command, no cloning, checksum-verified, idempotent; uninstall supported.
 
 ### Should

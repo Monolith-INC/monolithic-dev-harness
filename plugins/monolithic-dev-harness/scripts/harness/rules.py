@@ -27,45 +27,6 @@ from . import gitstate, globs, sessions, shellscan, state, tracker_policy
 from .settings import Settings
 from .tracker_policy import TrackerPolicy
 
-EDIT_TOOLS = frozenset(
-    {
-        # Claude Code
-        "Write",
-        "Edit",
-        "MultiEdit",
-        "NotebookEdit",
-        # Cursor
-        "StrReplace",
-        "Delete",
-        "edit_file",
-        "write",
-        "delete_file",
-        "search_replace",
-        # other hosts reaching this runtime through the shared adapters
-        "apply_patch",
-        "write_to_file",
-        "replace_file_content",
-        "multi_replace_file_content",
-    }
-)
-SHELL_TOOLS = frozenset({"Bash", "Shell", "run_terminal_cmd", "shell", "run_command"})
-# Tools that cannot change anything. If the rules fail, only these go through.
-READ_ONLY_TOOLS = frozenset(
-    {
-        "Read",
-        "Glob",
-        "Grep",
-        "LS",
-        "WebSearch",
-        "WebFetch",
-        "read_file",
-        "list_dir",
-        "grep_search",
-        "file_search",
-        "codebase_search",
-        "ToolSearch",
-    }
-)
 GATEWAY_WRITES = frozenset(
     {
         "tracker_create_work_item",
@@ -100,35 +61,15 @@ _NESTED_ID_LISTS = ("batchUpdates", "updates", "items")
 
 @dataclass(frozen=True)
 class ToolCall:
-    raw_name: str
     name: str
+    kind: str = (
+        "other"  # shell, edit, read, mcp, or other; classified by a host adapter
+    )
     server: str = ""
     tool_input: dict[str, Any] = field(default_factory=dict)
     cwd: str = ""  # where the host runs the tool; a shell's relative paths start here
-
-    @property
-    def command(self) -> str:
-        value = (
-            self.tool_input.get("command") or self.tool_input.get("CommandLine") or ""
-        )
-        return value if isinstance(value, str) else ""
-
-    @property
-    def file_paths(self) -> list[str]:
-        paths = []
-        for key in (
-            "file_path",
-            "path",
-            "notebook_path",
-            "target_file",
-            "TargetFile",
-            "AbsolutePath",
-            "file",
-        ):
-            value = self.tool_input.get(key)
-            if isinstance(value, str) and value:
-                paths.append(value)
-        return paths
+    command: str = ""
+    file_paths: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -146,25 +87,24 @@ class Decision:
         return cls(False, rule, f"[harness {rule}] {reason}")
 
 
-def split_tool_name(raw: str) -> tuple[str, str]:
-    """`mcp__plugin_x_azure-devops__wit_work_item` → ("plugin_x_azure-devops", "wit_work_item")."""
-    if raw.startswith("mcp__"):
-        parts = raw.split("__")
-        if len(parts) >= 3:
-            return parts[1], "__".join(parts[2:])
-    return "", raw
-
-
 def make_call(
-    raw_name: str, tool_input: dict[str, Any] | None, server: str = "", cwd: str = ""
+    name: str,
+    tool_input: dict[str, Any] | None,
+    server: str = "",
+    cwd: str = "",
+    *,
+    kind: str = "other",
+    command: str = "",
+    file_paths: tuple[str, ...] = (),
 ) -> ToolCall:
-    parsed_server, name = split_tool_name(raw_name)
     return ToolCall(
-        raw_name=raw_name,
         name=name,
-        server=server or parsed_server,
+        kind=kind,
+        server=server,
         tool_input=tool_input or {},
         cwd=cwd,
+        command=command,
+        file_paths=file_paths,
     )
 
 
@@ -174,10 +114,10 @@ def is_gateway_write(call: ToolCall) -> bool:
 
 def is_remote_write(call: ToolCall, policy: TrackerPolicy) -> bool:
     """A call that changes the tracker or the repository's server: it needs an approval window."""
-    match call.name:
-        case name if name in SHELL_TOOLS:
+    match call.kind:
+        case "shell":
             return "push" in git_subcommands(call.command)
-        case name if name in EDIT_TOOLS and not call.server:
+        case "edit" if not call.server:
             return False
         case _:
             return is_gateway_write(call) or tracker_policy.writes_to_tracker(
@@ -192,12 +132,7 @@ def is_write_class(call: ToolCall) -> bool:
     reads. So does every call to an MCP server, because without the tracker folders nothing says
     which of its tools write.
     """
-    return (
-        call.name in EDIT_TOOLS
-        or call.name in SHELL_TOOLS
-        or bool(call.server)
-        or is_gateway_write(call)
-    )
+    return call.kind != "read" or is_gateway_write(call)
 
 
 # --- helpers ------------------------------------------------------------------------------
@@ -381,7 +316,8 @@ def shell_human_owned_write(call: ToolCall, repo: Path) -> str | None:
 def shell_writes_human_owned(command: str, repo: Path | None = None) -> bool:
     return (
         shell_human_owned_write(
-            make_call("Bash", {"command": command}), repo or Path(".")
+            make_call("shell", {"command": command}, kind="shell", command=command),
+            repo or Path("."),
         )
         is not None
     )
@@ -401,7 +337,13 @@ def shell_writes_matching(
 
 def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
     """The settings, approvals, manual checks, sessions, and tracker trust are written by people or the harness."""
-    if call.name in EDIT_TOOLS:
+    if call.kind == "edit":
+        if call.command and not call.file_paths:
+            return Decision.deny(
+                "human-owned",
+                "The harness could not read which files this patch changes, so it cannot rule out "
+                "human-owned files. Write each file header as `*** Update File: <path>`.",
+            )
         for path in call.file_paths:
             if is_human_owned(_relative(repo, path)):
                 return Decision.deny(
@@ -410,7 +352,7 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
                     "recorded from the user's own prompt; sessions change through `harness session`; the "
                     "settings are edited by a person (or created once by bootstrap).",
                 )
-    if call.name in SHELL_TOOLS:
+    if call.kind == "shell":
         written = shell_human_owned_write(call, repo)
         if written:
             return Decision.deny(
@@ -434,8 +376,8 @@ def rule_tracker_valid(call: ToolCall, policy: TrackerPolicy) -> Decision:
 
 
 def rule_protected_items(call: ToolCall, policy: TrackerPolicy) -> Decision:
-    match call.name:
-        case name if name in SHELL_TOOLS:
+    match call.kind:
+        case "shell":
             return _shell_protected_mentions(call, policy)
         case _ if not policy.protected or not is_remote_write(call, policy):
             return Decision.allow()
@@ -640,7 +582,7 @@ def rule_generated_files(call: ToolCall, repo: Path, settings: Settings) -> Deci
     patterns = list(settings.generated)
     if not patterns:
         return Decision.allow()
-    if call.name in EDIT_TOOLS:
+    if call.kind == "edit":
         for path in call.file_paths:
             rel = _relative(repo, path)
             if globs.matches(rel, patterns):
@@ -648,7 +590,7 @@ def rule_generated_files(call: ToolCall, repo: Path, settings: Settings) -> Deci
                     "generated-files",
                     f"{rel} is generated. Change its source and re-run the generator instead of editing it.",
                 )
-    if call.name in SHELL_TOOLS:
+    if call.kind == "shell":
         written = shell_writes_matching(call, repo, patterns)
         if written:
             return Decision.deny(
@@ -659,7 +601,7 @@ def rule_generated_files(call: ToolCall, repo: Path, settings: Settings) -> Deci
 
 
 def commit_rules(call: ToolCall, repo: Path, settings: Settings) -> Decision:
-    if call.name not in SHELL_TOOLS:
+    if call.kind != "shell":
         return Decision.allow()
     for directory, argv in git_invocations(call.command, _shell_start(call, repo)):
         if not argv or argv[0] != "commit":
@@ -799,7 +741,7 @@ def rule_history_preserved(call: ToolCall) -> Decision:
     """Story and Feature branches keep their history: stacked branches are merged, never rebased,
     squashed, or force-pushed, so every later Story still builds on the commits it branched from.
     Always on in a governed repository, however the command is written."""
-    if call.name in SHELL_TOOLS:
+    if call.kind == "shell":
         for _directory, argv in git_invocations(call.command):
             rewrite = _history_rewrite(argv)
             if rewrite:

@@ -106,6 +106,17 @@ class SpecBeforeCodeCoversCodeOnlyTests(unittest.TestCase):
             self.assertFalse(edits_code(f"{tmp}/.gitignore"))
             self.assertFalse(edits_code(f"{tmp}/AI_Codex/Checkpoints/build.md"))
             self.assertFalse(edits_code("/tmp/elsewhere/lib/a.dart"))
+            self.assertTrue(
+                hook_runtime._edits_code(
+                    CanonicalToolEvent(
+                        client="codex",
+                        tool_name="edit",
+                        kind="edit",
+                        file_paths=(f"{tmp}/README.md", f"{tmp}/lib/a.dart"),
+                        workspace_root=tmp,
+                    )
+                )
+            )
 
 
 class MutatingGitTests(unittest.TestCase):

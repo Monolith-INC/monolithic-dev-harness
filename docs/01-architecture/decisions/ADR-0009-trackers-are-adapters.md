@@ -2,7 +2,7 @@
 title: ADR-0009 Trackers are adapters
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-28
+last_reviewed: 2026-09-30
 ---
 
 # ADR-0009: Trackers are adapters, settings are one file
@@ -91,7 +91,8 @@ copied into each repository's `integrations.json`; and a repository's settings w
 
 ## Host-specific Impact
 
-None: both hosts use the same hook, gateway, and folders.
+None: all three hosts use the same generic policy, gateway, and tracker folders after their host
+adapters translate hook payloads.
 
 ## Validation
 

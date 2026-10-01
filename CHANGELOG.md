@@ -6,8 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-09-30
+
 ### Added
 
+- Added Codex as a supported host with a local marketplace, compatibility manifest, MCP server
+  configuration, `PreToolUse` and `UserPromptSubmit` hooks, and two read-only review subagents.
 - Added an optional BMAD-inspired Stage 0 workflow for shaping an initial idea through
   brainstorming, research, product definition, experience design, architecture, and a canonical
   product specification before backlog or implementation artifacts are created.
@@ -16,8 +20,17 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- Host adapters now translate native hook payloads and decisions at the boundary. The harness
+  rules and workflow policy consume normalized tool calls, including every `apply_patch` target.
+- The installer registers the Codex marketplace, installs only its managed custom-agent files,
+  and refuses to overwrite an unmanaged agent with the same name.
 - Backlog decomposition, Story specifications, and Task architecture now inherit and trace Stage 0
   product capabilities, functional requirements, experience decisions, and architecture decisions.
+
+### Security
+
+- Codex plugin hooks require user trust, and some specialized tool paths do not invoke hooks.
+  Documentation now treats them as a guardrail, not a complete security boundary.
 
 ## [0.3.0] - 2026-09-29
 
@@ -449,7 +462,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.2.0
 [0.1.10]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.10

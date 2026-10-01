@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Single hook entry point for Claude Code and Cursor.
+"""Single hook entry point for Claude Code, Cursor, and Codex.
 
     hook.py --host claude --event pre-tool   (Claude PreToolUse)
     hook.py --host claude --event prompt     (Claude UserPromptSubmit)
@@ -45,6 +45,7 @@ from harness import (  # noqa: E402
     state,
     tracker_policy,
 )
+from host_adapters import hook_bridge  # noqa: E402
 
 # The hosts give the hook 15 seconds and treat a timeout as "no decision", which lets the call
 # through. The rules get less than that, and running out counts as a failure.
@@ -76,15 +77,8 @@ STOP_TRUSTING_RE = re.compile(r"\s*stop\s+trusting\s+(.+?)\s*[.!]?\s*", re.IGNOR
 DEFAULT_WINDOW_MINUTES = 20
 
 
-def _workspace(payload: dict[str, Any]) -> Path:
-    candidates = [
-        payload.get("cwd"),
-        *(payload.get("workspace_roots") or []),
-        os.environ.get("CLAUDE_PROJECT_DIR"),
-        os.environ.get("CURSOR_PROJECT_DIR"),
-        os.getcwd(),
-    ]
-    for candidate in candidates:
+def _workspace(payload: dict[str, Any], host: str = "claude") -> Path:
+    for candidate in hook_bridge.workspace_candidates(host, payload):
         if isinstance(candidate, str) and candidate and Path(candidate).is_dir():
             start = Path(candidate)
             return gitstate.repo_root(start) or start
@@ -92,55 +86,15 @@ def _workspace(payload: dict[str, Any]) -> Path:
 
 
 def _tool_call(host: str, event: str, payload: dict[str, Any]) -> rules.ToolCall:
-    cwd = str(payload.get("cwd") or "")
-    if host == "cursor" and event == "shell":
-        return rules.make_call(
-            "Shell", {"command": payload.get("command", "")}, cwd=cwd
-        )
-    tool_input = (
-        payload.get("tool_input")
-        or payload.get("toolInput")
-        or payload.get("input")
-        or {}
-    )
-    if isinstance(tool_input, str):
-        try:
-            tool_input = json.loads(tool_input)
-        except json.JSONDecodeError:
-            tool_input = {"raw": tool_input}
-    name = (
-        payload.get("tool_name") or payload.get("toolName") or payload.get("tool") or ""
-    )
-    server = payload.get("server") or payload.get("server_name") or ""
-    return rules.make_call(
-        str(name),
-        tool_input if isinstance(tool_input, dict) else {},
-        str(server),
-        cwd=cwd,
-    )
+    return hook_bridge.parse_tool_call(host, event, payload)
 
 
 def _emit_decision(host: str, decision: rules.Decision) -> None:
-    if host == "claude":
-        if decision.allowed:
+    match hook_bridge.format_pre_tool(host, decision):
+        case str(output):
+            print(output)
+        case None:
             return
-        print(
-            json.dumps(
-                {
-                    "hookSpecificOutput": {
-                        "hookEventName": "PreToolUse",
-                        "permissionDecision": "deny",
-                        "permissionDecisionReason": decision.reason,
-                    }
-                }
-            )
-        )
-        return
-    response: dict[str, Any] = {"permission": "allow" if decision.allowed else "deny"}
-    if not decision.allowed:
-        response["user_message"] = decision.reason
-        response["agent_message"] = decision.reason
-    print(json.dumps(response))
 
 
 def _delegate_to_workflow_policy(
@@ -165,7 +119,7 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
         write_class = rules.is_write_class(call)
     except Exception:
         # The classifier broke too: only calls that plainly cannot write go through.
-        write_class = call.name not in rules.READ_ONLY_TOOLS
+        write_class = call.kind != "read"
     if write_class:
         _emit_decision(
             host,
@@ -181,7 +135,7 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     call = _tool_call(host, event, payload)
-    repo = _workspace(payload)
+    repo = _workspace(payload, host)
     if not settings.governed(repo):
         # Not a governed repository: the harness is opt-in per repo (bootstrap writes the settings).
         _emit_decision(host, rules.Decision.allow())
@@ -213,7 +167,7 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     if not decision.allowed:
         _emit_decision(host, decision)
         return 0
-    if host == "claude" or event == "pre-tool":
+    if hook_bridge.delegates_workflow_policy(host, event):
         return _delegate_to_workflow_policy(host, payload, call, repo)
     _emit_decision(host, decision)
     return 0
@@ -315,12 +269,12 @@ def _tracker_reply_notes(repo: Path, prompt: str) -> list[str]:
 
 
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
-    prompt = payload.get("prompt") or payload.get("user_prompt") or ""
-    repo = _workspace(payload)
+    prompt = hook_bridge.prompt_text(payload)
+    repo = _workspace(payload, host)
     notes: list[str] = []
     if not settings.governed(repo):
-        if host == "cursor":
-            print(json.dumps({"continue": True}))
+        if output := hook_bridge.format_prompt(host, []):
+            print(output)
         return 0
     window = _window(repo)
     notes.extend(_tracker_reply_notes(repo, prompt))
@@ -344,10 +298,8 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         notes.append(
             f"[harness] manual check {name} recorded for staged tree {tree[:12]}."
         )
-    if host == "cursor":
-        print(json.dumps({"continue": True}))
-    elif notes:
-        print("\n".join(notes))
+    if output := hook_bridge.format_prompt(host, notes):
+        print(output)
     return 0
 
 
@@ -361,8 +313,7 @@ def handle_ask(payload: dict[str, Any]) -> int:
     repo = _governed(payload)
     if repo is None:
         return 0
-    tool_input = payload.get("tool_input")
-    tool_input = tool_input if isinstance(tool_input, dict) else {}
+    tool_input = hook_bridge.question_input(payload)
     found = questions.problems(tool_input)
     if found:
         _emit_decision(
@@ -412,7 +363,7 @@ def handle_ask(payload: dict[str, Any]) -> int:
         case _:
             pass
     detail = {**tracker_detail, **manual_detail, **adoption_detail}
-    tool_use_id = str(payload.get("tool_use_id") or "")
+    tool_use_id = hook_bridge.question_id(payload)
     if tool_use_id:
         state.mark_asked(repo, questions.marker_name(tool_use_id), detail)
     return 0
@@ -497,18 +448,18 @@ def _adoption_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any]
 def handle_answer(payload: dict[str, Any]) -> int:
     """After the user answers: an `Approve` click opens an approval window."""
     repo = _governed(payload)
-    tool_use_id = str(payload.get("tool_use_id") or "")
+    tool_use_id = hook_bridge.question_id(payload)
     if repo is None or not tool_use_id:
         return 0
     asked = state.take_asked(repo, questions.marker_name(tool_use_id))
     if asked is None:
         return 0  # the question never passed the check, so its answer opens nothing
-    tool_input = payload.get("tool_input")
+    tool_input = hook_bridge.question_input(payload)
     match asked.get("adoption"):
         case dict() as plan:
             chosen = questions.adoption_choice(
-                tool_input if isinstance(tool_input, dict) else {},
-                payload.get("tool_response"),
+                tool_input,
+                hook_bridge.answer_response(payload),
             )
             result = (
                 adoption.approve(
@@ -530,24 +481,15 @@ def handle_answer(payload: dict[str, Any]) -> int:
                     note = f"[harness] adoption approval was NOT recorded: {failure.message}"
                 case None:
                     note = "[harness] the adoption plan was not approved."
-            print(
-                json.dumps(
-                    {
-                        "hookSpecificOutput": {
-                            "hookEventName": "PostToolUse",
-                            "additionalContext": note,
-                        }
-                    }
-                )
-            )
+            print(hook_bridge.format_answer_context(note))
             return 0
         case _:
             pass
     match asked.get("manual"):
         case dict() as manual:
             chosen = questions.manual_choice(
-                tool_input if isinstance(tool_input, dict) else {},
-                payload.get("tool_response"),
+                tool_input,
+                hook_bridge.answer_response(payload),
             )
             current = gitstate.index_tree(repo)
             recorded = chosen and current == manual.get("tree")
@@ -570,43 +512,23 @@ def handle_answer(payload: dict[str, Any]) -> int:
                     )
                 case False:
                     note = "[harness] the guarded change was not approved."
-            print(
-                json.dumps(
-                    {
-                        "hookSpecificOutput": {
-                            "hookEventName": "PostToolUse",
-                            "additionalContext": note,
-                        }
-                    }
-                )
-            )
+            print(hook_bridge.format_answer_context(note))
             return 0
         case _:
             pass
     if asked.get("tracker"):
         chosen = questions.tracker_choice(
-            tool_input if isinstance(tool_input, dict) else {},
-            payload.get("tool_response"),
+            tool_input,
+            hook_bridge.answer_response(payload),
         )
         note = (
             _tracker_act(repo, chosen, asked["tracker"], asked.get("digest", ""))
             if chosen is not None and chosen in asked.get("actions", ())
             else f"[harness] nothing changed for the {asked['tracker']} tracker."
         )
-        print(
-            json.dumps(
-                {
-                    "hookSpecificOutput": {
-                        "hookEventName": "PostToolUse",
-                        "additionalContext": note,
-                    }
-                }
-            )
-        )
+        print(hook_bridge.format_answer_context(note))
         return 0
-    approved = questions.approval(
-        tool_input if isinstance(tool_input, dict) else {}, payload.get("tool_response")
-    )
+    approved = questions.approval(tool_input, hook_bridge.answer_response(payload))
     if approved is None:
         return 0
     window = _window(repo)
@@ -614,15 +536,10 @@ def handle_answer(payload: dict[str, Any]) -> int:
     state.open_approval(repo, approval_id, window, question=approved[0])
     pinned = _pin_approved_notes(repo, approval_id)
     print(
-        json.dumps(
-            {
-                "hookSpecificOutput": {
-                    "hookEventName": "PostToolUse",
-                    "additionalContext": f"[harness] the user approved; approval {approval_id} is open "
-                    f"for {window} minutes. Make only the writes the question described."
-                    + pinned,
-                }
-            }
+        hook_bridge.format_answer_context(
+            f"[harness] the user approved; approval {approval_id} is open "
+            f"for {window} minutes. Make only the writes the question described."
+            + pinned
         )
     )
     return 0
@@ -630,7 +547,7 @@ def handle_answer(payload: dict[str, Any]) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--host", choices=("claude", "cursor"), required=True)
+    parser.add_argument("--host", choices=("claude", "cursor", "codex"), required=True)
     parser.add_argument(
         "--event",
         choices=("pre-tool", "prompt", "shell", "mcp", "ask", "answer"),
@@ -658,9 +575,7 @@ def main(argv: list[str] | None = None) -> int:
         return handle_pre_tool(args.host, args.event, payload)
     except Exception as exc:
         # Last resort: anything that escaped the rules still fails closed.
-        call = rules.make_call(
-            str(payload.get("tool_name") or payload.get("toolName") or "Bash"), {}
-        )
+        call = rules.make_call("unknown", {}, kind="other")
         return _fail(
             args.host, call, f"harness hook failed: {type(exc).__name__}: {exc}"
         )

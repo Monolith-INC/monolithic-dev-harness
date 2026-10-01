@@ -2,13 +2,13 @@
 title: monolithic-dev-harness Documentation
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-09-30
 ---
 
 # monolithic-dev-harness Documentation
 
-This directory is the documentation interface for `monolithic-dev-harness`, a Claude Code and
-Cursor plugin that runs a team's delivery process on Azure DevOps, Linear, a repository-local
+This directory is the documentation interface for `monolithic-dev-harness`, a Claude Code,
+Cursor, and Codex plugin that runs a team's delivery process on Azure DevOps, Linear, a repository-local
 tracker, or an onboarded one: backlog refinement, technical planning, spec-driven implementation,
 and requirements-first review. Model-driven skills do the
 work; a deterministic hook runtime, fed by evidence keyed to git ids, decides which tool calls are
@@ -36,7 +36,8 @@ docs/
 |       |-- ADR-0006-install-from-release-archives.md
 |       |-- ADR-0007-backlog-owns-what-spec-owns-how.md
 |       |-- ADR-0008-the-harness-owns-its-files.md
-|       `-- ADR-0009-trackers-are-adapters.md
+|       |-- ADR-0009-trackers-are-adapters.md
+|       `-- ADR-0010-codex-host-adapter.md
 |-- 02-design/
 |   |-- api.md
 |   |-- components.md
@@ -81,5 +82,5 @@ artifacts and must not be hand-edited.
 
 These documents were written from the repository's code, skills, hook configuration, tests, and
 installer. Behavior the test suites or CI prove is stated as fact. Behavior that has not been
-observed end to end, notably loading in Cursor and full runs against live Azure DevOps and Linear projects,
+observed end to end, notably live hook loading in Cursor and Codex and full runs against live Azure DevOps and Linear projects,
 is marked as pending rather than presented as verified.

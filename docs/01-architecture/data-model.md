@@ -145,7 +145,7 @@ See the tables in [architecture.md](architecture.md#durable-state).
 
 ## Host Differences
 
-None: both hosts read and write the same files.
+None: all three hosts read and write the same repository-local harness files.
 
 ## Failure Modes
 

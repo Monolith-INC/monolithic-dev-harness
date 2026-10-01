@@ -2,7 +2,7 @@
 title: ADR-0006 Install from release archives
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-22
+last_reviewed: 2026-09-30
 ---
 
 # ADR-0006: Install from checksum-verified release archives, in one command
@@ -35,7 +35,7 @@ the `harness` command. Re-running upgrades; `--uninstall` reverses everything.
 ### Positive
 
 - Users never clone; the installed bytes are exactly the released bytes.
-- The same installer serves both hosts and pins versions on request.
+- The same installer serves Claude Code, Cursor, and Codex and pins versions on request.
 
 ### Trade-offs
 

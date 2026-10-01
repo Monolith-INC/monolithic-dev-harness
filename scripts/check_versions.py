@@ -27,6 +27,9 @@ def sources() -> dict[str, str]:
         "plugins/…/.cursor-plugin/plugin.json": json.loads(
             (PLUGIN / ".cursor-plugin/plugin.json").read_text()
         )["version"],
+        "plugins/…/.codex-plugin/plugin.json": json.loads(
+            (PLUGIN / ".codex-plugin/plugin.json").read_text()
+        )["version"],
     }
     marketplace = json.loads((ROOT / ".claude-plugin/marketplace.json").read_text())
     found[".claude-plugin/marketplace.json"] = next(

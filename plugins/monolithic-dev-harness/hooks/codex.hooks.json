@@ -1,0 +1,29 @@
+{
+  "description": "Codex harness policy and approval capture",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event pre-tool",
+            "timeout": 15,
+            "statusMessage": "Checking harness policy"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event prompt",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

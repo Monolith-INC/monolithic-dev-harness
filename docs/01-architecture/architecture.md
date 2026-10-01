@@ -64,8 +64,9 @@ contracts, evidence), and routes every provider call through a place the runtime
 | --- | --- |
 | Skills | Stage procedures. Conductors (`harness`, `implement-story`, `review`) sequence the others. |
 | Reviewer agents | `thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent`; no file-edit tools, pinned to `opus`. |
-| `scripts/harness/hook.py` | Single hook entry point for both hosts; runs the harness rules, then delegates to the workflow policy runtime. |
-| `scripts/harness/rules.py` | The nine named rules. |
+| `scripts/host_adapters/` | Translates each host's payload keys, tool names, patch syntax, workspace hints, and response JSON into and out of the generic hook contract. |
+| `scripts/harness/hook.py` | Host-neutral hook orchestration: evaluates the normalized call, then delegates to the workflow policy runtime. |
+| `scripts/harness/rules.py` | The nine named rules; consumes normalized tool kind, command, paths, and arguments. |
 | `scripts/harness/settings.py` | Reads `.harness/settings.json` once per process into a value nothing can change; holds the defaults for omitted sections. |
 | `scripts/harness/tracker_policy.py` | What the rules know about trackers, built once per call from the tracker folders. |
 | `scripts/harness/sessions.py` | Binds a work item to one checkout; the workflow policy reads the active session. |
@@ -85,6 +86,15 @@ contracts, evidence), and routes every provider call through a place the runtime
 Per tool call:
 
 ```text
+host payload -> host_adapters -> ToolCall(name, kind, command, paths, arguments)
+                                  -> harness rules and workflow policy
+generic decision -> host_adapters -> host-native hook response
+```
+
+Host-specific names and JSON fields belong only in `host_adapters`; policy modules must not parse
+them or construct a host response envelope.
+
+```text
 received --> governed? --no--> allowed
                 |
                yes
@@ -100,7 +110,7 @@ received --> governed? --no--> allowed
                 |                                   |
               pass                                 deny --> denied (rule + fix)
                 v
-         workflow policy (Claude, Cursor preToolUse):
+         workflow policy (normalized host event):
          active session -> branch convention -> item in progress
          -> spec accepted -> completion evidence
                 |
@@ -153,13 +163,13 @@ Details: [data-model.md](data-model.md).
 
 ## Host Differences
 
-| Aspect | Claude Code | Cursor |
-| --- | --- | --- |
-| Hook events | `PreToolUse` (matcher `Bash\|Write\|Edit\|MultiEdit\|NotebookEdit\|mcp__.*`), `UserPromptSubmit` | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `beforeSubmitPrompt` |
-| Deny output | `hookSpecificOutput.permissionDecision: deny` | `{"permission": "deny", "agent_message", "user_message"}` |
-| MCP tool names | `mcp__plugin_monolithic-dev-harness_<server>__<tool>` | bare tool names under the server |
-| Host Azure server's organization | `${AZURE_DEVOPS_ORG}` from the environment (the installer writes it to Claude settings) | the installer pins it into `cursor.mcp.json` |
-| Status | verified in a sandboxed profile | load not yet observed in a live Cursor session |
+| Aspect | Claude Code | Cursor | Codex |
+| --- | --- | --- | --- |
+| Hook events | `PreToolUse`, `UserPromptSubmit`, question hooks | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `beforeSubmitPrompt` | `PreToolUse`, `UserPromptSubmit` |
+| Deny output | `hookSpecificOutput.permissionDecision: deny` | `{"permission": "deny", "agent_message", "user_message"}` | `hookSpecificOutput.permissionDecision: deny` |
+| MCP tool names | `mcp__plugin_monolithic-dev-harness_<server>__<tool>` | bare tool names under the server | `mcp__<server>__<tool>` |
+| Azure organization | environment set in Claude settings | pinned in `cursor.mcp.json` | pinned in the installed `.mcp.json` |
+| Status | verified in a sandboxed profile | live load pending | payload and policy tests pass; live load pending |
 
 ## Failure Modes
 

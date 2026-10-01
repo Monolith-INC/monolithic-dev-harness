@@ -1,0 +1,17 @@
+{
+  "name": "monolithic-dev-harness",
+  "version": "0.4.0",
+  "description": "Product and delivery harness with governed tracker, SCM, and code workflows.",
+  "author": {"name": "Théo Carranza"},
+  "interface": {
+    "displayName": "Monolithic Dev Harness",
+    "shortDescription": "Governed product and delivery workflows",
+    "longDescription": "Plan, implement, and review work with repository policy hooks, tracker integrations, and human approval gates.",
+    "developerName": "Théo Carranza",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"]
+  },
+  "skills": "./skills/",
+  "mcpServers": "./.mcp.json",
+  "hooks": "./hooks/codex.hooks.json"
+}

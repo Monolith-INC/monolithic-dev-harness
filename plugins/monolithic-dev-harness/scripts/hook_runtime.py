@@ -5,7 +5,6 @@ import os
 import re
 import subprocess
 import sys
-from collections.abc import Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -19,33 +18,15 @@ from spec_runtime import SPEC_KINDS
 from core.result import Err, Failure, Ok, Result, bind, fmap, recover
 from harness import sessions, settings, state
 from harness.local_artifacts import approved_kinds_for, artifacts_dir
-from host_adapters import (
-    format_claude_decision,
-    format_cursor_decision,
-    parse_claude_payload,
-    parse_cursor_payload,
-)
+from host_adapters import select_adapter
+from host_adapters.hook_bridge import project_root_hint, should_emit_allow
 from integrations import branches, registry
 from integrations.contracts import LogicalState, TrackerOps, WorkItem
 from policy import CanonicalToolEvent, PolicyDecision
 from policy.commands import git_commands, is_code, writes_code
 from policy.git_branch_guard import evaluate_git_branch_guard
 
-LOG_FILE = "/tmp/codex_hook_debug.log"
-_WRITE_TOOLS = frozenset(
-    {
-        "write_to_file",
-        "replace_file_content",
-        "multi_replace_file_content",
-        "Write",
-        "StrReplace",
-        "Edit",
-        "Delete",
-        "delete_file",
-        "delete",
-        "apply_patch",
-    }
-)
+LOG_FILE = "/tmp/harness_hook_debug.log"
 _MUTATING_GIT = frozenset(
     {
         "commit",
@@ -61,8 +42,6 @@ _MUTATING_GIT = frozenset(
     }
 )
 
-AdapterFormatter = Callable[[PolicyDecision], dict[str, Any]]
-
 
 def log_debug(message: str) -> None:
     try:
@@ -72,11 +51,10 @@ def log_debug(message: str) -> None:
         pass
 
 
-def get_project_root() -> str:
-    for key in ("CURSOR_PROJECT_DIR", "CODEX_PROJECT_ROOT", "CLAUDE_PROJECT_DIR"):
-        value = os.environ.get(key, "").strip()
-        if value and os.path.isdir(value):
-            return value
+def get_project_root(client: str) -> str:
+    value = project_root_hint(client)
+    if value and os.path.isdir(value):
+        return value
     cwd = os.getcwd()
     while cwd != os.path.dirname(cwd):
         if os.path.exists(os.path.join(cwd, ".git")):
@@ -98,14 +76,8 @@ def current_branch(project_root: str) -> str:
         return ""
 
 
-def select_adapter(client: str) -> tuple[Callable[..., Any], AdapterFormatter]:
-    if client.strip().lower() == "cursor":
-        return parse_cursor_payload, format_cursor_decision
-    return parse_claude_payload, format_claude_decision
-
-
 def emit_decision(client: str, decision: PolicyDecision) -> None:
-    if not decision.is_denied() and client.strip().lower() != "cursor":
+    if not decision.is_denied() and not should_emit_allow(client):
         return
     _, formatter = select_adapter(client)
     print(json.dumps(formatter(decision)))
@@ -114,24 +86,22 @@ def emit_decision(client: str, decision: PolicyDecision) -> None:
 def run(client: str, input_data: dict[str, Any], project_root: str = "") -> int:
     """Evaluate one host event. `project_root` is the checkout the call happens in; the hook
     passes the one it found from the payload, so sessions are checked where the edit is."""
-    project_root = project_root or get_project_root()
+    project_root = project_root or get_project_root(client)
     parser, _ = select_adapter(client)
     event = parser(input_data, project_root=project_root)
     event = CanonicalToolEvent(
         **{**event.__dict__, "branch": current_branch(project_root)}
     )
-    decision = evaluate_event(event, input_data)
+    decision = evaluate_event(event)
     if decision.is_denied():
         log_debug(f"DENIED: {decision.reason}")
     emit_decision(client, decision)
     return 0
 
 
-def evaluate_event(
-    event: CanonicalToolEvent, payload: dict[str, Any] | None = None
-) -> PolicyDecision:
+def evaluate_event(event: CanonicalToolEvent) -> PolicyDecision:
     command = event.command or ""
-    if event.tool_name in {"run_command", "run_shell_command", "Shell", "Bash"}:
+    if event.kind == "shell":
         branch_decision = evaluate_git_branch_guard(command, event.workspace_root)
         if branch_decision.is_denied():
             return branch_decision
@@ -144,14 +114,13 @@ def evaluate_event(
             return _evaluate_work_context(event)
         return PolicyDecision.allow()
 
-    normalized = _normalized_tool_name(event.tool_name)
-    if normalized == "tracker_transition_work_item":
-        arguments = _arguments(payload or {})
+    if event.tool_name == "tracker_transition_work_item":
+        arguments = event.arguments or {}
         if arguments.get("state") == "done":
             return _evaluate_completion(event, str(arguments.get("ref", "")))
         return PolicyDecision.allow()
 
-    if event.tool_name in _WRITE_TOOLS and _edits_code(event):
+    if event.kind == "edit" and _edits_code(event):
         return _evaluate_work_context(event)
     return PolicyDecision.allow()
 
@@ -174,10 +143,13 @@ def _code_patterns(project_root: str) -> list[str] | None:
 
 
 def _edits_code(event: CanonicalToolEvent) -> bool:
-    if not event.file_path:
-        return True
-    path = Path(event.file_path)
-    root = Path(event.workspace_root or ".").resolve()
+    paths = event.file_paths or ((event.file_path,) if event.file_path else ())
+    return not paths or any(_is_code_path(path, event.workspace_root) for path in paths)
+
+
+def _is_code_path(file_path: str, workspace_root: str) -> bool:
+    path = Path(file_path)
+    root = Path(workspace_root or ".").resolve()
     if path.is_absolute():
         try:
             relative = path.resolve().relative_to(root).as_posix()
@@ -185,7 +157,7 @@ def _edits_code(event: CanonicalToolEvent) -> bool:
             return False
     else:
         relative = path.as_posix()
-    return is_code(relative, _code_patterns(event.workspace_root))
+    return is_code(relative, _code_patterns(workspace_root))
 
 
 def _decision(result: Result[None]) -> PolicyDecision:
@@ -405,20 +377,6 @@ def _artifact_kind(kind: str) -> str:
 
 # The kinds write-spec produces, plus the generic `spec`, in the form `_artifact_kind` gives them.
 SPEC_ARTIFACT_KINDS = frozenset(map(_artifact_kind, (*SPEC_KINDS, "spec")))
-
-
-def _arguments(payload: dict[str, Any]) -> dict[str, Any]:
-    return (
-        payload.get("tool_input")
-        or payload.get("toolInput")
-        or payload.get("arguments")
-        or payload.get("args")
-        or {}
-    )
-
-
-def _normalized_tool_name(name: str) -> str:
-    return name.rsplit("__", 1)[-1].rsplit("/", 1)[-1]
 
 
 def _is_mutating_git(command: str) -> bool:

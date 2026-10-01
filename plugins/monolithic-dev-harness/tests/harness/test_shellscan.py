@@ -203,9 +203,11 @@ class HumanOwnedTests(ShellscanTestCase):
     def test_relative_paths_start_where_the_shell_runs(self) -> None:
         (self.repo / "projects" / "app").mkdir(parents=True)
         call = make_call(
-            "Bash",
+            "shell",
             {"command": "cp /tmp/p ../../.harness/settings.json"},
             cwd=str(self.repo / "projects" / "app"),
+            kind="shell",
+            command="cp /tmp/p ../../.harness/settings.json",
         )
         self.assertEqual(
             shell_human_owned_write(call, self.repo), ".harness/settings.json"
@@ -221,7 +223,10 @@ class RemoteWriteTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertTrue(
                     is_remote_write(
-                        make_call("Bash", {"command": command}), NO_TRACKERS
+                        make_call(
+                            "shell", {"command": command}, kind="shell", command=command
+                        ),
+                        NO_TRACKERS,
                     )
                 )
 
@@ -230,7 +235,10 @@ class RemoteWriteTests(unittest.TestCase):
             with self.subTest(command=command):
                 self.assertFalse(
                     is_remote_write(
-                        make_call("Bash", {"command": command}), NO_TRACKERS
+                        make_call(
+                            "shell", {"command": command}, kind="shell", command=command
+                        ),
+                        NO_TRACKERS,
                     )
                 )
 
@@ -238,7 +246,9 @@ class RemoteWriteTests(unittest.TestCase):
 class GeneratedFileTests(unittest.TestCase):
     def _written(self, command: str) -> str | None:
         return shell_writes_matching(
-            make_call("Bash", {"command": command}), Path("."), ["**/*.g.dart"]
+            make_call("shell", {"command": command}, kind="shell", command=command),
+            Path("."),
+            ["**/*.g.dart"],
         )
 
     def test_reads_are_allowed(self) -> None:
