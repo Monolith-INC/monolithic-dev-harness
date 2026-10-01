@@ -320,13 +320,14 @@ install_codex() {
       die "${CODEX_AGENTS_DIR}/${agent}.toml already exists and is not harness-managed"
     fi
   done
+  # Codex refuses to run when CODEX_HOME names a directory that does not exist yet.
+  mkdir -p "$CODEX_AGENTS_DIR"
   codex plugin remove "$PLUGIN_ID" >/dev/null 2>&1 || true
   codex plugin marketplace remove "$PLUGIN" >/dev/null 2>&1 || true
   codex plugin marketplace add "$CODEX_MARKETPLACE" >/dev/null
   codex plugin add "$PLUGIN_ID" >/dev/null
   codex plugin list --json | grep -q "\"${PLUGIN_ID}\"" \
     || die "Codex did not report the plugin as installed"
-  mkdir -p "$CODEX_AGENTS_DIR"
   for agent in mdh_thermo_review mdh_thermo_quality; do
     cp "${CODEX_MARKETPLACE}/agents/${agent}.toml" "${CODEX_AGENTS_DIR}/${agent}.toml"
   done

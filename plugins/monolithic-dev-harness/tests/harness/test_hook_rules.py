@@ -216,21 +216,28 @@ class TestCodexAdapter(HookTestCase):
                 self.assertDenied(
                     self.codex(
                         "apply_patch",
-                        {"command": f"*** Begin Patch\n{header}\n@@\n-old\n+new\n*** End Patch"},
+                        {
+                            "command": f"*** Begin Patch\n{header}\n@@\n-old\n+new\n*** End Patch"
+                        },
                     ),
                     "human-owned",
                 )
         self.assertDenied(
             self.codex(
                 "apply_patch",
-                {"command": "*** Begin Patch\n*** Add File: lib/a.g.dart \n+generated\n*** End Patch"},
+                {
+                    "command": "*** Begin Patch\n*** Add File: lib/a.g.dart \n+generated\n*** End Patch"
+                },
             ),
             "generated-files",
         )
 
     def test_patch_without_readable_targets_is_denied(self) -> None:
         self.assertDenied(
-            self.codex("apply_patch", {"command": "*** Begin Patch\n@@\n-old\n+new\n*** End Patch"}),
+            self.codex(
+                "apply_patch",
+                {"command": "*** Begin Patch\n@@\n-old\n+new\n*** End Patch"},
+            ),
             "human-owned",
         )
 
