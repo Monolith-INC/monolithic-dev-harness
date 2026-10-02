@@ -2,7 +2,7 @@
 """`harness` command: version, checks, bootstrap, sessions, and onboarded trackers.
 
 harness version
-harness doctor [--repo <dir>] [--tools] [--azure]
+harness doctor [--repo <dir>] [--tools]
 harness bootstrap --repo <dir> [--inspect | --propose | --apply-digest <hash>]
 harness session start <work item> [--workflow <name>] | status | pause | resume | close
 harness workflow start | checkpoint | list | status | back | pause | resume | cancel | complete
@@ -178,63 +178,45 @@ def _repository(report: Report, repo: Path, args: argparse.Namespace) -> None:
     report.line("ok", "session", sessions.describe(sessions.resolve(repo)))
     if args.tools and isinstance(selected, Ok):
         report.line(*_tools(repo, selected.value))
-    if args.azure and isinstance(selected, Ok):
-        report.line(*_azure_health(selected.value))
 
 
 def _tools(repo: Path, active: registry.Active) -> tuple[str, str, str]:
-    """Whether the tracker's server offers every tool its manifest names (starts the server)."""
-    if active.manifest.connection.get("kind") != "mcp":
-        return ("skip", "tracker tools", "the tracker has no server")
-    command, args = registry.connection_command(active.manifest, active.values, repo)
-    listed = transport.list_tools(transport.process_exchange(command, args, 60))
-    match fmap(
-        listed,
-        lambda tools: (
-            set(active.manifest.tools.values())
-            - {str(tool.get("name")) for tool in tools}
-        ),
-    ):
-        case Ok(missing) if missing:
+    """Check tracker MCP tools, except Azure's private provider transport."""
+    match active.manifest.name, active.manifest.connection.get("kind"):
+        case "azure-devops", _:
             return (
-                "FAIL",
+                "skip",
                 "tracker tools",
-                f"the server does not offer {sorted(missing)}",
+                "Azure provider tools are private to workflow-integrations; verify through that gateway",
             )
-        case Ok(_):
-            return (
-                "ok",
-                "tracker tools",
-                "the server offers every tool the manifest names",
+        case _, kind if kind != "mcp":
+            return ("skip", "tracker tools", "the tracker has no server")
+        case _:
+            command, args = registry.connection_command(
+                active.manifest, active.values, repo
             )
-        case Err(failure):
-            return ("FAIL", "tracker tools", failure.message)
-
-
-def _azure_health(active: registry.Active) -> tuple[str, str, str]:
-    if active.manifest.name != "azure-devops":
-        return ("skip", "health check", "the selected tracker is not Azure DevOps")
-    check = PLUGIN_ROOT / "skills" / "azure-devops" / "scripts" / "health-check.mjs"
-    arguments = (
-        "--org",
-        active.values.get("organization", ""),
-        "--project",
-        active.values.get("project", ""),
-    )
-    try:
-        result = subprocess.run(
-            ["node", str(check), *arguments],
-            capture_output=True,
-            text=True,
-            timeout=100,
-        )
-    except (OSError, subprocess.SubprocessError) as exc:
-        return ("FAIL", "health check", str(exc))
-    return (
-        "ok" if result.returncode == 0 else "FAIL",
-        "health check",
-        (result.stdout or result.stderr).strip(),
-    )
+            listed = transport.list_tools(transport.process_exchange(command, args, 60))
+            match fmap(
+                listed,
+                lambda tools: (
+                    set(active.manifest.tools.values())
+                    - {str(tool.get("name")) for tool in tools}
+                ),
+            ):
+                case Ok(missing) if missing:
+                    return (
+                        "FAIL",
+                        "tracker tools",
+                        f"the server does not offer {sorted(missing)}",
+                    )
+                case Ok(_):
+                    return (
+                        "ok",
+                        "tracker tools",
+                        "the server offers every tool the manifest names",
+                    )
+                case Err(failure):
+                    return ("FAIL", "tracker tools", failure.message)
 
 
 def bootstrap(extra: list[str]) -> int:
@@ -753,11 +735,6 @@ def main(argv: list[str] | None = None) -> int:
         "--tools",
         action="store_true",
         help="also start the tracker's server and check it offers the manifest's tools",
-    )
-    doc.add_argument(
-        "--azure",
-        action="store_true",
-        help="also run the Azure DevOps health check with the settings' values (opens OAuth)",
     )
     sub.add_parser(
         "bootstrap",

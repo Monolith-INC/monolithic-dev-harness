@@ -191,7 +191,7 @@ agent                          you                      prompt hook          pre
   |---------------------------->|                            |                     |
   |                             | "approve HB-7Q2K"          |                     |
   |                             |--------------------------->| window open 20 min  |
-  | wit_work_item_write[create] |                            |                     |
+  | tracker_create_work_item    |                            |                     |
   |---------------------------------------------------------------------------->  | allow, log write
   |                                                                                 |
   | (no window, or window expired)                                                  |

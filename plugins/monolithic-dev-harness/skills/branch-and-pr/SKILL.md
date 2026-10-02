@@ -39,9 +39,8 @@ Then:
    so the Story shows the pull request too.
 4. Read the pull request back with `scm_get_pull_request` and confirm the link.
 
-On Azure Repos the host's `azure-devops` tools (`repo_pull_request_write[create]`, see the
-`azure-devops` skill and its `references/tool-map.md`) are an equivalent path, held to the same
-rules.
+On Azure Repos, use `scm_create_pull_request` through `workflow-integrations` and follow the same
+draft and approval constraints.
 
 Publishing the draft and voting are human steps (gate G4); the hook blocks both.
 

@@ -160,37 +160,21 @@ hours; report that difference plainly.
 
 ### Azure Task board (only when Azure DevOps is selected)
 
-When Azure DevOps is the selected Task destination:
+When Azure DevOps is the selected Task destination, use `workflow-integrations` only:
 
-1. Parent must be the **User Story** id (never Feature/Epic).
-2. Prefer `wit_work_item_write[add_child]` with `workItemType: "Task"`, `parentId: <storyId>`,
-   `items: [{ title, description, format: "Markdown" }, …]` for the AC/plan + Staging + Review
-   batch when possible.
-3. For **Breakdown** (or any Task needing assignee/state): create as child, then
-   `wit_work_item_write[update]` to set:
-   - `/fields/System.AssignedTo` → Story assignee (when present)
-   - `/fields/System.State` → Done (or project-specific completed state for Task)
-4. For **every Task**, `wit_work_item_write[update]` to set:
-   - `/fields/Microsoft.VSTS.Scheduling.RemainingWork` → hours (drives capacity + burndown)
-   - `/fields/Microsoft.VSTS.Scheduling.OriginalEstimate` → hours — **Agile/CMMI only.** This
-     field does not exist on Scrum projects and writing it there fails silently. When the process
-     is unknown, write only `RemainingWork`, which every process has.
-   - `/fields/Microsoft.VSTS.Common.Activity` → activity, when one can be determined. Allowed
-     values are configured per project — read them rather than assuming, and leave it unset when
-     unsure. (`Discipline` on CMMI.)
-   Apply to every Task. Report each figure written; see 'Effort hours per Task' above.
-5. Set `/fields/System.IterationPath` explicitly from the parent Story rather than relying on the
-   project default, so Tasks land in the sprint their Story belongs to.
-6. Alternative: `wit_work_item_write[create]` + `wit_work_item_link_write[link]` with **`type: "parent"`**
-   (Story is parent of Task). Never omit `type` (defaults to Related).
-7. **Read-back** every created Task: assert parent is the Story id; for Breakdown assert Done and
-   assignee match; for any Task given hours assert `RemainingWork` matches what was computed.
-   Failed assertion → STOP.
+1. Parent must be the **User Story** reference (never Feature/Epic).
+2. Create approved Tasks individually with `tracker_create_work_item`, using `kind: "task"`,
+   `parentRef`, title, and description.
+3. The gateway does not expose arbitrary assignee, state, iteration, or estimate updates. Do not
+   call native Azure MCP tools, Azure CLI, or direct APIs as a fallback. If a required field cannot
+   be set through the gateway, stop and report the missing capability.
+4. Read each created Task back with `tracker_get_work_item` and verify its parent reference.
 
 ### Shared Azure notes (Azure only)
 
-Extend behavior from `../../../references/azure-mechanics.md`. Parent of a Task is the **User Story**,
-not the Feature. Description format: Markdown.
+Use only `workflow-integrations`. Parent of a Task is the **User Story**, not the Feature. Description
+format is Markdown. If the gateway cannot represent a required Azure field or operation, stop and
+report the capability gap.
 
 ---
 

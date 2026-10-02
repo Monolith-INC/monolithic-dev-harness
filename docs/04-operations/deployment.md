@@ -31,14 +31,14 @@ hosts       --host, or auto: `claude`/`codex` on PATH, ~/.cursor present
 version     --version, or latest via gh / GitHub API (token if set)
 download    monolithic-dev-harness-<v>.tar.gz + SHA256SUMS; verify checksum
 stage       ~/.local/share/monolithic-dev-harness/marketplace   (atomic replace)
-Claude      marketplace add|update, plugin install|update, env.AZURE_DEVOPS_ORG in settings.json
-Cursor      copy to ~/.cursor/plugins/local/monolithic-dev-harness, pin the org in cursor.mcp.json
-Codex       register its local marketplace and plugin; pin absolute MCP paths and Azure organization;
+Claude      marketplace add|update, plugin install|update
+Cursor      copy to ~/.cursor/plugins/local/monolithic-dev-harness
+Codex       register its local marketplace and plugin; pin absolute MCP paths;
             install two managed read-only custom agents in ${CODEX_HOME:-~/.codex}/agents
 CLI         ~/.local/bin/harness -> the installed bin/harness
 ```
 
-Options: `--host auto|claude|cursor|codex|all`, `--org <name>`, `--version <x.y.z>`,
+Options: `--host auto|claude|cursor|codex|all`, `--version <x.y.z>`,
 `--source <dir|archive>`, `--uninstall`, `--yes`. Full contract:
 [../02-design/api.md](../02-design/api.md#installsh).
 
@@ -59,7 +59,7 @@ bootstrap reports the conflict and the harness keeps the typed `approve HB-…` 
 ```bash
 harness doctor            # tools, hosts, settings, tracker, session
 harness doctor --tools    # plus: the tracker's server offers every tool its manifest names
-harness doctor --azure    # plus: a live Azure DevOps call with the settings' values (opens OAuth)
+harness doctor --tools    # checks the selected tracker's declared tools
 ```
 
 ## State Inspection

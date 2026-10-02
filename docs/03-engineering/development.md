@@ -55,7 +55,7 @@ Never edit these by hand; rebuild or reinstall instead:
 
    ```bash
    S=$(mktemp -d)
-   HOME=$S CLAUDE_CONFIG_DIR=$S/.claude bash install.sh --source . --org contoso --yes
+   HOME=$S CLAUDE_CONFIG_DIR=$S/.claude bash install.sh --source . --yes
    HOME=$S CLAUDE_CONFIG_DIR=$S/.claude claude plugin list
    ```
 

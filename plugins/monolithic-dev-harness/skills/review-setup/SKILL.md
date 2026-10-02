@@ -58,9 +58,9 @@ with the user.
 | `post_summary_comment`     | create a general PR comment |
 | `reply_to_review_thread`   | reply to an existing review thread |
 
-Concrete values may be MCP tool names or command templates. Authentication checks are
-provider-specific: for example `gh auth status` for GitHub or `az account show` plus
-`az devops configure --list` for Azure DevOps.
+Concrete values may be MCP tool names or command templates. For Azure DevOps, use the configured
+`workflow-integrations` gateway and its onboarding flow. Do not use Azure CLI or native Azure MCP
+tools.
 
 ### 2. Enumerate what is actually available
 
@@ -247,7 +247,7 @@ Worked examples, not dependencies. Preserve the provider's native identifiers an
 | Provider | Repository identity | Typical capability implementation |
 | -------- | ------------------- | --------------------------------- |
 | GitHub | `owner`, `repo` | `gh pr view`, `gh pr diff`, GraphQL review threads, and `gh api` comment endpoints |
-| Azure DevOps | `organization`, `project`, `repo` | Azure DevOps MCP tools when present; otherwise `az repos pr show` for metadata and `az devops invoke` Git Pull Request/Thread APIs for diffs, threads, comments, and replies |
+| Azure DevOps | `organization`, `project`, `repo` | `workflow-integrations` tools only; the gateway currently supports PR metadata and review threads, not PR diffs |
 | Other | provider-native fields | available MCP tools, first-party CLI, or authenticated API command templates satisfying each SCM capability |
 
 Do not record the illustrative recipe text itself as a capability. Inspect the installed tool's
@@ -262,7 +262,7 @@ resolve to something.
 | ---------------- | ------------------------------------ | --------------------------------------- | ----------------------------------- |
 | Linear MCP       | `get_issue`                          | `get_issue` on `parent.id`; milestone for feature scope | `list_documents`, issue attachments |
 | Jira MCP         | `getJiraIssue`                       | issue link of type *parent*             | remote links, attachments           |
-| Azure DevOps MCP | `wit_work_item[get]`                 | `System.Parent` relation                | work item `relations[]`             |
+| Azure DevOps | `tracker_get_work_item` through `workflow-integrations` | parent reference | gateway work-item relations |
 | YouTrack         | issue by id                          | `parent` link                           | issue attachments                   |
 | GitHub issues    | `gh issue view <n> --json title,body` | parent from tracking checklist or label | links parsed from the issue body    |
 | Local vault      | read `<stories>/**/{id}*.md`         | `feature:` frontmatter key              | `## Specs` links in the ledger      |

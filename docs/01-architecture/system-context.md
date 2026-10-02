@@ -67,7 +67,7 @@ committed; `.harness/state/` ignored by git).
   `plugins/monolithic-dev-harness/scripts/integrations/contracts.py`.
 - Host hook payloads: Claude `PreToolUse` / `UserPromptSubmit`; Cursor `preToolUse`,
   `beforeShellExecution`, `beforeMCPExecution`, `beforeSubmitPrompt`.
-- Azure DevOps calls: the current `@azure-devops/mcp` tools (`skills/azure-devops/references/tool-map.md`).
+- Azure DevOps calls: provider-neutral `tracker_*` and `scm_*` tools from `workflow-integrations` (`skills/azure-devops/references/tool-map.md`).
 
 ## Host Differences
 

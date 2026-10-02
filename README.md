@@ -145,10 +145,9 @@ gh release download --repo Monolith-INC/monolithic-dev-harness --pattern install
 ```
 
 The installer finds your hosts, downloads the release archive (no cloning), verifies its SHA-256,
-installs the plugin into each host, records `AZURE_DEVOPS_ORG` for the host's Azure DevOps server,
-and links `harness` into
-`~/.local/bin`. Options go after `bash -s --`: `--host claude|cursor|codex|all`, `--org <name>`,
-`--version <x.y.z>`, `--uninstall`. See
+installs the plugin into each host and links `harness` into `~/.local/bin`. Configure Azure
+organization and project through the repository's harness bootstrap. Options go after
+`bash -s --`: `--host claude|cursor|codex|all`, `--version <x.y.z>`, `--uninstall`. See
 [`docs/04-operations/deployment.md`](./docs/04-operations/deployment.md).
 
 ## Quick start
@@ -441,7 +440,6 @@ example:
 | `protected_work_items`                           | no       | ids never written, linked, parented, or mentioned               |
 | `artifacts_path`                                 | no       | where plans, specs, and backlog drafts live                     |
 | `checks`, `tests_required`, `generated`, `guarded_paths`, `pull_requests` | no | inputs to the commit and pull request rules |
-| `AZURE_DEVOPS_ORG` (environment)                 | Azure    | the organization for the host-registered Azure DevOps server    |
 
 Adding a tracker: [`skills/onboard-tracker`](./plugins/monolithic-dev-harness/skills/onboard-tracker/SKILL.md).
 See [`docs/04-operations/environments.md`](./docs/04-operations/environments.md) and

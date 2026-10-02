@@ -43,13 +43,12 @@ matching labels.
 
 ### 1. INGEST
 
-Read the parent via `wit_work_item[get]` (expand relations). Capture the original text VERBATIM, its
+Read the parent via `tracker_get_work_item(ref=<id>)` through `workflow-integrations`. Capture the original text VERBATIM, its
 acceptance criteria, and the parent chain. Read any linked spike/wiki. Determine parent type and the
 mode (decomposition-rules.md → Parent-type branch):
 
 - **Feature** → *story mode*. Continue to DECOMPOSE.
-- **Epic** → *tree mode*. Also read the Epic's existing child Features (`wit_work_item[get_batch]` on
-  the child relation ids): their titles, descriptions, and existing Stories. Continue to DECOMPOSE
+- **Epic** → *tree mode*. Also read the Epic's existing child Features (`tracker_list_children` and inspect each returned child): their titles, descriptions, and existing Stories. Continue to DECOMPOSE
   without asking; the tree proposal at GATE 1 is where the user steers.
 
 Stories never attach to an Epic, in either mode.

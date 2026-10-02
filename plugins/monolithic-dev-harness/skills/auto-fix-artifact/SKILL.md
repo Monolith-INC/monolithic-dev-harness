@@ -29,7 +29,7 @@ References (from `validate-artifact` skill, in `../validate-artifact/references/
 
 1. **Ingest:** 
    - Parse the input to determine its source (local file, azure, or raw text).
-   - If Azure ID: fetch via `wit_work_item[get](id=<id>, expand=Relations)`.
+   - If Azure ID: fetch via `tracker_get_work_item(ref=<id>) through `workflow-integrations``.
    - If file path: read the markdown file.
    - If pasted string: parse as raw text.
 2. **Validate:** Run the orchestrator critic (do not self-judge):
@@ -92,7 +92,7 @@ Systematically address each FAIL and WARN result:
 
 1. **Review:** Output the corrected version of the artifact (or a diff) to the screen.
 2. **Prompt for Save:** Ask the user: *"The artifact has been corrected. Would you like to save this version?"* with options depending on the source:
-   - "Save to Azure DevOps" (if source was Azure, uses `wit_work_item_write[update]`)
+   - "Save to Azure DevOps" only when the configured gateway exposes a supported update operation.
    - "Save to Artifacts/Artifacts" (if source was file/text, uses `write_to_file`/`replace_file_content`)
    - "Discard"
 3. **Persist Report:** Save the final validation report with `bin/agile-backlog-toolkit validate --file <path> --persist`, which writes to `.harness/backlog/reports/`.

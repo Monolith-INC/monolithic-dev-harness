@@ -63,14 +63,15 @@ Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which
 Read `./references/azure-ingest.md` when `source` is an Azure DevOps URL or numeric id.
 
 1. Load `source`:
-   - **Azure URL or id** — per `azure-ingest.md`: parse id, `wit_work_item[get](expand=Relations)`,
+   - **Azure URL or id** — per `azure-ingest.md`: parse id, `tracker_get_work_item(ref=<id>)`,
      enumerate `AttachedFile` relations, parse description for linked docs/URLs/paths, fetch attachment
      and referenced content into `supplementary_context`. Set **Descrição Original** from
      `System.Description` verbatim.
    - **path** — read local markdown; capture body verbatim.
    - **url** (non-Azure) — fetch external doc; capture description verbatim.
    - **text** — treat pasted content as the description to enrich.
-2. If `parent` provided: `wit_work_item[get]` — capture parent chain for context and filename prefix.
+2. If `parent` provided: read it with `tracker_get_work_item(ref=<parent>)` through
+   `workflow-integrations` and capture the parent chain for context and filename prefix.
    When `source` is Azure and `parent` omitted, use `System.Parent` from the fetched item.
 3. If `attachment` provided: read or fetch; fold into enricher context (dedupe against Azure
    attachments already ingested).

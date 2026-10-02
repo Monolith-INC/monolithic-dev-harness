@@ -9,7 +9,6 @@
 #
 # Flags (after `bash -s --` when piping):
 #   --host auto|claude|cursor|codex|all   hosts to install into (default: every host found)
-#   --org <name>                    Azure DevOps organization (default: $AZURE_DEVOPS_ORG, else asked)
 #   --version <x.y.z>               release to install (default: latest)
 #   --source <dir|archive.tar.gz>   install from a local build instead of downloading
 #   --uninstall                     remove the harness from every host and delete its files
@@ -32,10 +31,8 @@ readonly BIN_DIR="${HARNESS_BIN_DIR:-${HOME}/.local/bin}"
 readonly CURSOR_DIR="${CURSOR_PLUGIN_DIR:-${HOME}/.cursor/plugins/local/${PLUGIN}}"
 readonly CODEX_MARKETPLACE="${MARKETPLACE_DIR}/codex-marketplace"
 readonly CODEX_AGENTS_DIR="${CODEX_HOME:-${HOME}/.codex}/agents"
-readonly CLAUDE_SETTINGS="${CLAUDE_CONFIG_DIR:-${HOME}/.claude}/settings.json"
 
 HOSTS="auto"
-ORG="${AZURE_DEVOPS_ORG:-}"
 VERSION="${HARNESS_VERSION:-}"
 SOURCE=""
 UNINSTALL=0
@@ -54,7 +51,6 @@ usage() {
 monolithic-dev-harness installer
 
   --host auto|claude|cursor|codex|all   hosts to install into (default: every host found)
-  --org <name>                    Azure DevOps organization (default: $AZURE_DEVOPS_ORG, else asked)
   --version <x.y.z>               release to install (default: latest)
   --source <dir|archive.tar.gz>   install from a local build instead of downloading
   --uninstall                     remove the harness from every host and delete its files
@@ -66,7 +62,6 @@ parse_args() {
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --host) HOSTS="${2:?--host needs a value}"; shift 2 ;;
-      --org) ORG="${2:?--org needs a value}"; shift 2 ;;
       --version) VERSION="${2:?--version needs a value}"; shift 2 ;;
       --source) SOURCE="${2:?--source needs a value}"; shift 2 ;;
       --uninstall) UNINSTALL=1; shift ;;
@@ -202,33 +197,6 @@ stage_payload() {  # leaves the marketplace root in $PAYLOAD
 
 # --- configuration -----------------------------------------------------------------------------
 
-ask_org() {
-  [[ -n "$ORG" ]] && return 0
-  if [[ $ASSUME_YES -eq 0 && -r /dev/tty ]]; then
-    printf 'Azure DevOps organization (as in dev.azure.com/<org>): ' > /dev/tty
-    IFS= read -r ORG < /dev/tty || true
-  fi
-  [[ -n "$ORG" ]] || warn "no Azure DevOps organization given: set AZURE_DEVOPS_ORG later, or re-run with --org"
-}
-
-claude_settings_env() {  # claude_settings_env set <org> | unset
-  python3 - "$CLAUDE_SETTINGS" "$1" "${2:-}" <<'PY'
-import json, sys
-from pathlib import Path
-path, action, org = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
-data = json.loads(path.read_text()) if path.is_file() and path.read_text().strip() else {}
-env = data.setdefault("env", {})
-if action == "set":
-    env["AZURE_DEVOPS_ORG"] = org
-else:
-    env.pop("AZURE_DEVOPS_ORG", None)
-    if not env:
-        data.pop("env")
-path.parent.mkdir(parents=True, exist_ok=True)
-path.write_text(json.dumps(data, indent=2) + "\n")
-PY
-}
-
 # --- hosts -------------------------------------------------------------------------------------
 
 install_marketplace_copy() {
@@ -248,16 +216,13 @@ install_marketplace_copy() {
   cp "${PAYLOAD}/plugins/${PLUGIN}/codex.mcp.json" \
     "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/.mcp.json"
   python3 - "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/.mcp.json" \
-    "${MARKETPLACE_DIR}/codex-marketplace/plugins/${PLUGIN}" "$ORG" <<'PY'
+    "${MARKETPLACE_DIR}/codex-marketplace/plugins/${PLUGIN}" <<'PY'
 import json, sys
 from pathlib import Path
-path, root, org = Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+path, root = Path(sys.argv[1]), sys.argv[2]
 data = json.loads(path.read_text())
 path.write_text(
-    json.dumps(data)
-    .replace("${PLUGIN_ROOT}", json.dumps(root)[1:-1])
-    .replace("${AZURE_DEVOPS_ORG}", json.dumps(org or "${AZURE_DEVOPS_ORG}")[1:-1])
-    + "\n"
+    json.dumps(data).replace("${PLUGIN_ROOT}", json.dumps(root)[1:-1]) + "\n"
 )
 PY
   rm -rf "${MARKETPLACE_DIR}.new/plugins/${PLUGIN}/tests"
@@ -287,10 +252,6 @@ install_claude() {
   if grep -q "Hooks (0)" <<<"$details" || grep -q "MCP servers (0)" <<<"$details"; then
     die "Claude Code loaded the plugin without its hooks or MCP servers; the release is incomplete"
   fi
-  if [[ -n "$ORG" ]]; then
-    claude_settings_env set "$ORG"
-    say "Claude Code: AZURE_DEVOPS_ORG=${ORG} recorded in ${CLAUDE_SETTINGS}"
-  fi
 }
 
 install_cursor() {
@@ -298,15 +259,6 @@ install_cursor() {
   mkdir -p "$(dirname "$CURSOR_DIR")"
   rm -rf "${CURSOR_DIR}.new"
   cp -R "${MARKETPLACE_DIR}/plugins/${PLUGIN}" "${CURSOR_DIR}.new"
-  if [[ -n "$ORG" ]]; then
-    # Cursor is usually started from the desktop, without the shell's environment: pin the org.
-    python3 - "${CURSOR_DIR}.new/cursor.mcp.json" "$ORG" <<'PY'
-import sys
-from pathlib import Path
-path, org = Path(sys.argv[1]), sys.argv[2]
-path.write_text(path.read_text().replace("${env:AZURE_DEVOPS_ORG}", org))
-PY
-  fi
   rm -rf "$CURSOR_DIR"
   mv "${CURSOR_DIR}.new" "$CURSOR_DIR"
   [[ -f "${CURSOR_DIR}/.cursor-plugin/plugin.json" ]] || die "Cursor plugin manifest missing after install"
@@ -357,7 +309,6 @@ uninstall() {
   if have claude; then
     claude plugin uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
     claude plugin marketplace remove "$PLUGIN" >/dev/null 2>&1 || true
-    if [[ -f "$CLAUDE_SETTINGS" ]]; then claude_settings_env unset; fi
   fi
   rm -rf "$CURSOR_DIR" "$HARNESS_HOME"
   if [[ -L "${BIN_DIR}/harness" ]]; then rm -f "${BIN_DIR}/harness"; fi
@@ -370,7 +321,6 @@ main() {
   preflight
   select_hosts
   stage_payload
-  ask_org
   install_marketplace_copy
   if [[ $INSTALL_CLAUDE -eq 1 ]]; then install_claude; fi
   if [[ $INSTALL_CURSOR -eq 1 ]]; then install_cursor; fi

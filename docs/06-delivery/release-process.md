@@ -47,7 +47,7 @@ Manual (after publishing, before announcing):
   (`approval-required`) and one approved write;
 - restart Codex, review and trust the plugin hooks through `/hooks`, and confirm one denied write
   and one approved write in a governed repository; untrusted hooks are skipped;
-- `harness doctor --azure` in a governed repository whose settings select Azure DevOps.
+- make one read-only Azure DevOps call through `workflow-integrations` in a governed repository.
 
 ## Owner Approval Requirements
 
