@@ -41,9 +41,33 @@ The current `harness` entry point labels Stage 0 “Define the intent.” It rou
 
 The harness's later `write-spec` runs after backlog decomposition and produces Story-local technical detail. That is useful for implementation, but it is too late to discover that the proposed feature is infeasible, changes architectural boundaries, needs a migration, or should be divided differently before the backlog is created.
 
-## Proposed Stage 0 backbone
+## Assimilation approach: follow Thermos
 
-This sequence adapts BMad's ticket-to-build planning behavior to the harness's earlier position in its delivery flow. It does not copy all BMad stages or assume every ticket needs every artifact.
+The current harness inventory is a map of reusable pieces, not a limit on what can be included. Use the same approach as the Thermos assimilation: bring the relevant open-source source package into the harness, preserve its source structure and license/attribution, then adapt the host integration and runtime connections needed for the harness. Do not author a parallel planning method from scratch.
+
+For this redesign, `bmad-build` is the primary source package to assess and assimilate because it contains the ticket intake, repository investigation, planning, review, and handoff sequence closest to the intended default flow. Bring the supporting files and assets that its own workflow requires, not just its `SKILL.md`. Assess `bmad-ticket`, `bmad-spec`, and `bmad-architecture` as source components for the larger-work and artifact routes described by BMad; reuse or import them where the workflow calls for them. Keep BMad's optional product discovery paths available for requests that need them.
+
+Before implementation, inventory the selected source package and its dependencies: skills, templates, references, prompts, configuration, runtime or renderer, method assets, and tracker assumptions. Import the needed source components with their attribution, then map host-specific invocation, tracker storage, approval checkpoints, and durable state to harness adapters. Any changes to imported workflow content should remain traceable to its BMad source. The harness may change when these pieces run to make technical investigation the first step for an assigned ticket, while preserving the source method rather than inventing a new one.
+
+## Existing harness pieces and source components to assimilate
+
+Use the table to identify harness capabilities that can be reused and BMad source components that may need to be brought in. It does not require the current harness to already contain every capability. The imported BMad workflow supplies the source method; harness components can provide integration where they already fit.
+
+| BMad need | Reusable harness capability or source package | Gap or boundary to preserve |
+| --- | --- | --- |
+| Enter from an assigned ticket and load its context | `harness` workflow state; `start-ticket` and tracker read skills; `validate-artifact` | `start-ticket` changes tracker state and starts implementation work, so it is too late and too consequential to use as read-only Stage 0 intake. Stage 0 needs a safe read/resolve route. |
+| Route based on what is known or missing | `plan-initiative` and `planning-artifacts.md` | The router currently centers raw product intent and a product spec; reshape its route for an assigned, incomplete ticket. |
+| Research unknown domain or technical facts | `research-decision`; repository inspection instructions in `architect`, `write-spec`, and `generate-breakdown-work-items` | Reuse these research behaviors and source rules. Avoid duplicating them in a new generic research system. |
+| Set product behavior and capability boundaries | `product-spec`; `experience-design` | Invoke only when behavior or interaction decisions are actually unresolved. `product-spec` owns the WHAT, not the technical HOW. |
+| Set cross-unit technical invariants | `architecture-spine` | Use only when separate stories or components could diverge; it is not a per-ticket design document. |
+| Produce an implementation plan and atomic tasks | `generate-breakdown-work-items` and its implementation-plan generation | It currently runs after a Story and acceptance criteria exist. Reuse its planning rules and output where appropriate, but move the feature-level investigation earlier only if its inputs and ownership can be cleanly adapted. |
+| Produce the detailed technical specification | `write-spec` | It currently expects a decomposed Story and Tasks. Keep it for Story-level detail unless the redesign can reuse it without duplicating Stage 0's feature strategy. |
+| Compare code structures before implementation | `architect` | It compares code sketches for an approved Task/Story. It may be invoked for a genuinely load-bearing design question, not as mandatory ceremony for every feature. |
+| Preserve reviews, approvals, pause and resume | `workflow-storyboard.md`, `harness` and its hooks | Reuse existing checkpoints, review surfaces, protected-write approvals, and pause/resume state; don't invent a second gate system. |
+
+## Proposed Stage 0 composition
+
+Assimilate BMad's ticket-to-build source workflow and supporting files, then connect it to harness entry points and state. Existing harness skills may be reused where they match the source workflow; import missing source capabilities instead of recreating them. Any adaptation should be limited to integration and the agreed Stage 0 sequencing. Do not create a parallel specification format or duplicate capabilities. Not every ticket needs every skill or artifact.
 
 1. **Resume or start.** Check for an active workflow and the ticket's latest known state. Resume existing analysis when possible. Keep the source ticket intact and record which revision is being assessed.
 2. **Read the request in context.** Read the ticket, parent/related items, repository guidance, product and design documents, architecture decisions, recent relevant changes, and existing tests. Summarize the requested outcome, known constraints, and missing information without rewriting the request as fact.
@@ -97,3 +121,4 @@ Current harness entry points:
 | Workflow point | What went wrong | Effect | Recovery or current state |
 | --- | --- | --- | --- |
 | Saving the research record | Git could not create `.git/index.lock` because repository metadata is read-only in the current workspace. | The scoped commit of the two research notes did not complete; the files remain in the working tree. | Used the authorized elevated write path; the scoped commit of both research notes completed. |
+| Source assimilation research | Looked for a harness-local plugin README that is not present at that path. | No source evidence was lost; the lookup did not find the Thermos package description. | Read the README from the installed Thermos source package and inspected the copied harness skills, agents, and license instead. |
