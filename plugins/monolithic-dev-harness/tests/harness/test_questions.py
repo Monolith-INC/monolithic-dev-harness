@@ -237,9 +237,7 @@ class ApprovalByClickTests(unittest.TestCase):
                 host="codex",
             )
         )
-        response = {
-            "answers": {"approval": {"answers": ["Approve (Recommended)"]}}
-        }
+        response = {"answers": {"approval": {"answers": ["Approve (Recommended)"]}}}
         out = run(
             self.repo,
             "answer",

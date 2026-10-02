@@ -107,7 +107,7 @@ jobs:
           "$HARNESS_BIN_DIR/harness" doctor
       - name: Uninstall cleanly
         run: |
-          bash dist/install.sh --uninstall
+          bash dist/install.sh --uninstall --yes
           ! claude plugin list --json | grep -q '"monolithic-dev-harness@monolithic-dev-harness"'
           ! codex plugin list --json | grep -q '"monolithic-dev-harness@monolithic-dev-harness"'
           test ! -e "$CODEX_HOME/agents/mdh_thermo_review.toml"

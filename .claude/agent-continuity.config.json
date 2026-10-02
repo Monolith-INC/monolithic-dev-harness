@@ -1,0 +1,16 @@
+{
+  "markdownAllowlist": {
+    "patterns": [
+      "CLAUDE.md",
+      "GEMINI.md",
+      ".agent/*",
+      "docs/*",
+      "plugins/*",
+      "plugins/**",
+      "README.md",
+      "CHANGELOG.md",
+      "CONTRIBUTING.md",
+      "THIRD_PARTY_NOTICES.md"
+    ]
+  }
+}

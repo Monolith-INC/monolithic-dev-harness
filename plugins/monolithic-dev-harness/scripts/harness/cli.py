@@ -655,9 +655,7 @@ def workflow_command(args: argparse.Namespace) -> int:
                 )
             )
         case "start":
-            return _workflow_result(
-                repo, _workflow_start(repo, args.request or "")
-            )
+            return _workflow_result(repo, _workflow_start(repo, args.request or ""))
         case "checkpoint":
             return _workflow_result(repo, _workflow_point(repo, args))
         case "pause":

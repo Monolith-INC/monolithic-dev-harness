@@ -74,7 +74,9 @@ def archive_terminal(repo: Path) -> Result[Path]:
 
 def _archive(repo: Path, current: Workflow) -> Path:
     source = path(repo)
-    destination = repo / ".harness" / "state" / "workflows" / f"{secrets.token_hex(8)}.json"
+    destination = (
+        repo / ".harness" / "state" / "workflows" / f"{secrets.token_hex(8)}.json"
+    )
     state.write_json(destination, asdict(current))
     source.unlink()
     return destination

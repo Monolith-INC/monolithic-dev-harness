@@ -35,7 +35,7 @@ bash install.sh [options]
 | `--version <x.y.z>` / `HARNESS_VERSION` | latest release | version to install |
 | `--source <dir\|archive>` | download | install from a local build |
 | `--uninstall` | | remove from every host |
-| `--yes` | | never prompt |
+| `--yes` | | skip install or uninstall confirmation prompts; use for automation |
 | `HARNESS_HOME` | `~/.local/share/monolithic-dev-harness` | installed marketplace copy |
 | `HARNESS_BIN_DIR` | `~/.local/bin` | where `harness` is linked |
 | `CURSOR_PLUGIN_DIR` | `~/.cursor/plugins/local/monolithic-dev-harness` | Cursor plugin copy |

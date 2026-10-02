@@ -261,11 +261,7 @@ def manual_signoff(tool_input: dict[str, Any]) -> str | None:
         for option in question.get("options") or []
         if isinstance(option, dict)
     }
-    return (
-        str(question.get("question", ""))
-        if labels & MANUAL_APPROVE_LABELS
-        else None
-    )
+    return str(question.get("question", "")) if labels & MANUAL_APPROVE_LABELS else None
 
 
 def manual_choice(tool_input: dict[str, Any], tool_response: Any) -> bool:

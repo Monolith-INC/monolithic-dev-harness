@@ -103,10 +103,7 @@ def _selection(raw: Mapping[str, Any], name: str) -> dict[str, Any]:
 def _values(raw: Mapping[str, Any]) -> dict[str, str]:
     values = raw.get("values")
     return (
-        {
-            str(key): "" if value is None else str(value)
-            for key, value in values.items()
-        }
+        {str(key): "" if value is None else str(value) for key, value in values.items()}
         if isinstance(values, dict)
         else {}
     )
@@ -150,8 +147,7 @@ def inspect(repo: Path) -> Result[dict[str, Any]]:
             *(f"scm.{item}" for item in scm_missing),
             *(
                 ("git.base_branch",)
-                if not _git_settings(raw).get("base_branch")
-                and not inferred_base(repo)
+                if not _git_settings(raw).get("base_branch") and not inferred_base(repo)
                 else ()
             ),
             *(("artifacts_path",) if not raw.get("artifacts_path") else ()),

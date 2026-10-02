@@ -12,7 +12,7 @@
 #   --version <x.y.z>               release to install (default: latest)
 #   --source <dir|archive.tar.gz>   install from a local build instead of downloading
 #   --uninstall                     remove the harness from every host and delete its files
-#   --yes                           never prompt
+#   --yes                           skip the install or uninstall confirmation prompt
 #
 # Environment: HARNESS_HOME (default ~/.local/share/monolithic-dev-harness), HARNESS_BIN_DIR
 # (default ~/.local/bin), CURSOR_PLUGIN_DIR (default ~/.cursor/plugins/local/monolithic-dev-harness),
@@ -46,6 +46,18 @@ have() { command -v "$1" >/dev/null 2>&1; }
 cleanup() { [[ -n "$TMP" ]] && rm -rf "$TMP"; return 0; }
 trap cleanup EXIT
 
+confirm_action() {
+  [[ $ASSUME_YES -eq 1 ]] && return 0
+  local answer
+  if ! IFS= read -r -p "$1 [y/N] " answer </dev/tty; then
+    die "confirmation requires an interactive terminal; rerun with --yes"
+  fi
+  case "$answer" in
+    y|Y|yes|YES|Yes) ;;
+    *) die "cancelled" ;;
+  esac
+}
+
 usage() {
   cat <<'EOF'
 monolithic-dev-harness installer
@@ -54,7 +66,7 @@ monolithic-dev-harness installer
   --version <x.y.z>               release to install (default: latest)
   --source <dir|archive.tar.gz>   install from a local build instead of downloading
   --uninstall                     remove the harness from every host and delete its files
-  --yes                           never prompt
+  --yes                           skip the install or uninstall confirmation prompt
 EOF
 }
 
@@ -317,10 +329,19 @@ uninstall() {
 
 main() {
   parse_args "$@"
-  if [[ $UNINSTALL -eq 1 ]]; then uninstall; return 0; fi
+  if [[ $UNINSTALL -eq 1 ]]; then
+    confirm_action "Remove ${PLUGIN} from this computer?"
+    uninstall
+    return 0
+  fi
   preflight
   select_hosts
   stage_payload
+  local targets=()
+  [[ $INSTALL_CLAUDE -eq 1 ]] && targets+=("Claude Code")
+  [[ $INSTALL_CURSOR -eq 1 ]] && targets+=("Cursor")
+  [[ $INSTALL_CODEX -eq 1 ]] && targets+=("Codex")
+  confirm_action "Install ${PLUGIN} v${VERSION} for ${targets[*]}?"
   install_marketplace_copy
   if [[ $INSTALL_CLAUDE -eq 1 ]]; then install_claude; fi
   if [[ $INSTALL_CURSOR -eq 1 ]]; then install_cursor; fi

@@ -19,7 +19,7 @@ must pass before a change is done.
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install pytest ruff==0.16.4 shellcheck-py
+.venv/bin/python -m pip install -r requirements-dev.txt
 ```
 
 ## Authoritative Source Files
@@ -69,7 +69,7 @@ See [testing.md](testing.md).
 
 ```bash
 .venv/bin/ruff check --no-cache . && .venv/bin/ruff format --no-cache --check .
-.venv/bin/shellcheck install.sh scripts/build_release.sh plugins/monolithic-dev-harness/bin/* plugins/monolithic-dev-harness/tests/run.sh
+.venv/bin/shellcheck install.sh scripts/build_release.sh plugins/monolithic-dev-harness/bin/* plugins/monolithic-dev-harness/tests/run.sh plugins/monolithic-dev-harness/tests/test_installer_confirmation.sh
 PYTHON=.venv/bin/python plugins/monolithic-dev-harness/tests/run.sh
 python3 scripts/check_versions.py
 claude plugin validate plugins/monolithic-dev-harness && claude plugin validate .
