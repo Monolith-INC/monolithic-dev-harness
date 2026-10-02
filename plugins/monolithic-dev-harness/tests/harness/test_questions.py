@@ -219,7 +219,10 @@ class ApprovalByClickTests(unittest.TestCase):
                     "question": PLAIN,
                     "header": "Azure",
                     "options": [
-                        {"label": "Approve", "description": "I create them now."},
+                        {
+                            "label": "Approve (Recommended)",
+                            "description": "I create them now.",
+                        },
                         {"label": "Not now", "description": "Nothing is written."},
                     ],
                 }
@@ -234,7 +237,9 @@ class ApprovalByClickTests(unittest.TestCase):
                 host="codex",
             )
         )
-        response = {"answers": {"approval": {"answers": ["Approve"]}}}
+        response = {
+            "answers": {"approval": {"answers": ["Approve (Recommended)"]}}
+        }
         out = run(
             self.repo,
             "answer",
