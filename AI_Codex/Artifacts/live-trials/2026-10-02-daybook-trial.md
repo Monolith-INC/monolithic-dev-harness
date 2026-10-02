@@ -63,3 +63,38 @@ The user clarified that the main first planning step should start from a rough p
 | BMad reference research | The first lookup used a nonexistent English overview path. | That overview comparison did not run. | Used the actual BMad skill instructions as primary evidence and the available English planning guide at `docs/plan/design-ux-and-architecture.md`. |
 
 Append each new failure or recovery here with its workflow stage as the trial continues.
+
+### Technical-first trial — 2026-10-02
+
+The technical-first trial was restarted from a fresh disposable copy at
+`/tmp/monolithic-dev-harness-trial-ynlyr7ac/project`, using the request: “I can see how many tasks I
+still need to do, but I also want to see how many I have finished. Show both counts on the task
+screen.” The local harness setup and Stage 0 `bmad-build` workflow were prepared. The workflow then
+stopped at checkpoint 2, “Working tree review,” because setup had created untracked files in
+`.codex/`, `.harness/`, and `_bmad/`. Its clean-checkout gate required a decision before discovery
+could continue.
+
+**Outcome: inconclusive.** The agent followed the stop rule and did not inspect the feature, produce
+a grounded proposal, or draft backlog items. No code was changed in the disposable copy. The pending
+decision in the checkpoint is whether to keep the setup-generated files and continue, or clean the
+checkout first. This run remains untouched so that decision does not rewrite its evidence. To get a
+useful product-planning result, prepare a new disposable run with setup artifacts handled before the
+feature request begins, then repeat the same request and observe Stage 0 through its review point.
+
+### Clean-checkout rule review — 2026-10-02
+
+The stop came from the explicit VCS sentence in the rendered BMad Step 1, not from a harness Git
+guard: “If the tree is dirty or the branch is an obvious mismatch, HALT and ask the human before
+proceeding.” Setup had just generated the untracked files. A developer's first run would therefore
+have stopped before inspecting the requested feature and been asked to clean or approve the setup
+files.
+
+The harness's local `bmad-build/step-01-clarify-and-route.md` now treats dirty state and branch names
+as evidence to inspect, not automatic stop conditions. It directs the agent to preserve all changes,
+continue read-only discovery, treat unclear file ownership as user-owned, and ask only before a
+specific conflicting write or a write that would land on an unintended branch. A fresh project copy
+was rendered with the updated source while `_bmad/` was untracked. A focused check confirmed the
+rendered Step 1 contains the continue-and-preserve instructions and no longer contains the old
+dirty-tree halt. This verifies the rendered rule; a complete post-fix planning run has not yet been
+performed. The sub-agent's retained transcript is in
+`2026-10-02-daybook-stage-zero-subagent-transcript.md`.

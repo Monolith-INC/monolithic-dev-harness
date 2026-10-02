@@ -40,13 +40,17 @@ class TestBuildCollective(unittest.TestCase):
         self.assertEqual(col["bmad-agent-analyst"]["source"], "installed")
 
     def test_custom_member_appends(self):
-        col, _, _ = rp.build_collective(AGENTS, [{"code": "morpheus", "name": "Morpheus", "persona": "riddles"}])
+        col, _, _ = rp.build_collective(
+            AGENTS, [{"code": "morpheus", "name": "Morpheus", "persona": "riddles"}]
+        )
         self.assertIn("morpheus", col)
         self.assertEqual(col["morpheus"]["source"], "custom")
         self.assertEqual(col["morpheus"]["persona"], "riddles")
 
     def test_custom_overrides_installed_by_alias(self):
-        col, _, _ = rp.build_collective(AGENTS, [{"code": "analyst", "name": "Mary-Custom", "persona": "p"}])
+        col, _, _ = rp.build_collective(
+            AGENTS, [{"code": "analyst", "name": "Mary-Custom", "persona": "p"}]
+        )
         # Override lands on the canonical installed code, not a new "analyst" entry.
         self.assertNotIn("analyst", col)
         self.assertEqual(col["bmad-agent-analyst"]["source"], "custom")
@@ -59,11 +63,17 @@ class TestBuildCollective(unittest.TestCase):
 
 class TestResolveMembers(unittest.TestCase):
     def setUp(self):
-        self.col, self.idx, _ = rp.build_collective(AGENTS, [{"code": "morpheus", "name": "Morpheus"}])
+        self.col, self.idx, _ = rp.build_collective(
+            AGENTS, [{"code": "morpheus", "name": "Morpheus"}]
+        )
 
     def test_resolves_in_listed_order_and_flags_unknowns(self):
-        resolved, unresolved = rp.resolve_members(["morpheus", "analyst", "ghost"], self.col, self.idx)
-        self.assertEqual([m["code"] for m in resolved], ["morpheus", "bmad-agent-analyst"])
+        resolved, unresolved = rp.resolve_members(
+            ["morpheus", "analyst", "ghost"], self.col, self.idx
+        )
+        self.assertEqual(
+            [m["code"] for m in resolved], ["morpheus", "bmad-agent-analyst"]
+        )
         self.assertEqual(unresolved, ["ghost"])
 
     def test_empty(self):
@@ -94,7 +104,9 @@ class TestGroups(unittest.TestCase):
 
 class TestGroupDetail(unittest.TestCase):
     def setUp(self):
-        self.col, self.idx, _ = rp.build_collective(AGENTS, [{"code": "morpheus", "name": "Morpheus"}])
+        self.col, self.idx, _ = rp.build_collective(
+            AGENTS, [{"code": "morpheus", "name": "Morpheus"}]
+        )
 
     def test_scene_passes_through_when_present(self):
         g = {
@@ -108,7 +120,10 @@ class TestGroupDetail(unittest.TestCase):
         self.assertEqual([m["code"] for m in d["members"]], ["morpheus"])
 
     def test_scene_omitted_when_absent_or_empty(self):
-        for g in ({"id": "g", "members": ["morpheus"]}, {"id": "g", "members": ["morpheus"], "scene": ""}):
+        for g in (
+            {"id": "g", "members": ["morpheus"]},
+            {"id": "g", "members": ["morpheus"], "scene": ""},
+        ):
             self.assertNotIn("scene", rp.group_detail(g, self.col, self.idx))
 
     def test_anchored_group_is_not_open_cast(self):
@@ -127,11 +142,17 @@ class TestGroupDetail(unittest.TestCase):
         self.assertEqual(d["scene"][:7], "Figures")
 
     def test_memory_enabled_follows_group_flag_and_defaults_off(self):
-        on = rp.group_detail({"id": "g", "members": ["morpheus"], "memory": True}, self.col, self.idx)
+        on = rp.group_detail(
+            {"id": "g", "members": ["morpheus"], "memory": True}, self.col, self.idx
+        )
         self.assertTrue(on["memory_enabled"])
-        off = rp.group_detail({"id": "g", "members": ["morpheus"], "memory": False}, self.col, self.idx)
+        off = rp.group_detail(
+            {"id": "g", "members": ["morpheus"], "memory": False}, self.col, self.idx
+        )
         self.assertFalse(off["memory_enabled"])
-        absent = rp.group_detail({"id": "g", "members": ["morpheus"]}, self.col, self.idx)
+        absent = rp.group_detail(
+            {"id": "g", "members": ["morpheus"]}, self.col, self.idx
+        )
         self.assertFalse(absent["memory_enabled"])  # opt-in per named group
 
 
@@ -161,7 +182,12 @@ class TestInstalledCodesIsDefaultRoom(unittest.TestCase):
 class TestRoster(unittest.TestCase):
     GUESTS = {
         "pip": {"name": "Pip", "persona": "Asks why."},
-        "bmad-agent-dev": {"name": "Amelia", "persona": "Exact.", "skill": "bmad-agent-dev", "installed": False},
+        "bmad-agent-dev": {
+            "name": "Amelia",
+            "persona": "Exact.",
+            "skill": "bmad-agent-dev",
+            "installed": False,
+        },
     }
 
     def test_guests_join_the_pool_and_never_the_default_room(self):
@@ -173,14 +199,23 @@ class TestRoster(unittest.TestCase):
 
     def test_a_group_can_seat_a_guest_and_an_agent_whose_skill_is_absent(self):
         col, idx, _ = rp.build_collective(AGENTS, [], self.GUESTS)
-        detail = rp.group_detail({"id": "room", "members": ["analyst", "pip", "dev"]}, col, idx)
-        self.assertEqual([m["name"] for m in detail["members"]], ["Mary", "Pip", "Amelia"])
+        detail = rp.group_detail(
+            {"id": "room", "members": ["analyst", "pip", "dev"]}, col, idx
+        )
+        self.assertEqual(
+            [m["name"] for m in detail["members"]], ["Mary", "Pip", "Amelia"]
+        )
         self.assertEqual(detail["unresolved"], [])
 
     def test_a_short_alias_two_codes_claim_resolves_to_neither(self):
-        agents = {"bmad-agent-dev": {"name": "Amelia"}, "bmad-cis-agent-dev": {"name": "Devi"}}
+        agents = {
+            "bmad-agent-dev": {"name": "Amelia"},
+            "bmad-cis-agent-dev": {"name": "Devi"},
+        }
         col, idx, _ = rp.build_collective(agents, [])
-        members, unresolved = rp.resolve_members(["dev", "bmad-cis-agent-dev", "amelia"], col, idx)
+        members, unresolved = rp.resolve_members(
+            ["dev", "bmad-cis-agent-dev", "amelia"], col, idx
+        )
         self.assertEqual([m["name"] for m in members], ["Devi", "Amelia"])
         self.assertEqual(unresolved, ["dev"])
 
@@ -189,7 +224,10 @@ class TestRoster(unittest.TestCase):
         report = {
             "agents": {},
             "problems": [
-                {"kind": "member", "problem": "demo: member 'x' is already defined by other"},
+                {
+                    "kind": "member",
+                    "problem": "demo: member 'x' is already defined by other",
+                },
                 {
                     "kind": "module",
                     "bmod": "bmod-demo",
@@ -204,16 +242,24 @@ class TestRoster(unittest.TestCase):
             problems = rp.load_roster(Path("project"), Path("skill"))[4]
         finally:
             rp._run_json = original
-        self.assertEqual(problems, ["demo: member 'x' is already defined by other", absent])
+        self.assertEqual(
+            problems, ["demo: member 'x' is already defined by other", absent]
+        )
 
     def test_a_custom_group_replaces_a_roster_group_with_its_id(self):
         groups = rp.merge_groups(
-            [{"id": "room", "name": "Shipped"}, {"id": "other", "name": "Other"}], [{"id": "room", "name": "Mine"}]
+            [{"id": "room", "name": "Shipped"}, {"id": "other", "name": "Other"}],
+            [{"id": "room", "name": "Mine"}],
         )
-        self.assertEqual([(g["id"], g["name"]) for g in groups], [("room", "Mine"), ("other", "Other")])
+        self.assertEqual(
+            [(g["id"], g["name"]) for g in groups],
+            [("room", "Mine"), ("other", "Other")],
+        )
 
     def test_an_install_from_before_rosters_keeps_its_description_as_the_persona(self):
-        col, _, _ = rp.build_collective({"bmad-agent-pm": {"name": "John", "description": "Asks why."}}, [])
+        col, _, _ = rp.build_collective(
+            {"bmad-agent-pm": {"name": "John", "description": "Asks why."}}, []
+        )
         self.assertEqual(col["bmad-agent-pm"]["persona"], "Asks why.")
 
 
@@ -235,13 +281,17 @@ class TestResolverInvocation(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             cmd = self._captured_command(tmp)
             self.assertIn("--project-root", cmd)
-            self.assertEqual(cmd[cmd.index("--project-root") + 1], str(Path(tmp) / "project"))
+            self.assertEqual(
+                cmd[cmd.index("--project-root") + 1], str(Path(tmp) / "project")
+            )
 
 
 class TestArguments(unittest.TestCase):
     def test_group_is_an_alias_of_party(self):
         for flag in ("--party", "--group"):
-            args = rp.build_parser().parse_args(["--project-root", "p", "--skill", "s", flag, "writers-room"])
+            args = rp.build_parser().parse_args(
+                ["--project-root", "p", "--skill", "s", flag, "writers-room"]
+            )
             self.assertEqual(args.party, "writers-room")
 
 

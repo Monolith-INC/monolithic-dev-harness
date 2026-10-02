@@ -17,7 +17,9 @@ from pathlib import Path
 
 import pytest
 
-_SPEC = importlib.util.spec_from_file_location("lint_spine", Path(__file__).resolve().parent.parent / "lint_spine.py")
+_SPEC = importlib.util.spec_from_file_location(
+    "lint_spine", Path(__file__).resolve().parent.parent / "lint_spine.py"
+)
 lint_spine = importlib.util.module_from_spec(_SPEC)
 sys.modules["lint_spine"] = lint_spine
 _SPEC.loader.exec_module(lint_spine)
@@ -90,15 +92,17 @@ def test_unfilled_template_token_caught():
 
 
 def test_duplicate_ad_id_caught():
-    text = CLEAN.replace("### AD-2 — layered deps `[ADOPTED]`", "### AD-1 — layered deps")
+    text = CLEAN.replace(
+        "### AD-2 — layered deps `[ADOPTED]`", "### AD-1 — layered deps"
+    )
     result = lint_spine.lint(text)
     assert "ad_id" in cats(result)
 
 
 def test_non_monotonic_ad_id_caught():
-    text = CLEAN.replace("### AD-2 — layered deps `[ADOPTED]`", "### AD-5 — layered deps").replace(
-        "### AD-1 — single write path", "### AD-9 — single write path"
-    )
+    text = CLEAN.replace(
+        "### AD-2 — layered deps `[ADOPTED]`", "### AD-5 — layered deps"
+    ).replace("### AD-1 — single write path", "### AD-9 — single write path")
     result = lint_spine.lint(text)
     assert any("non-monotonic" in f["detail"] for f in result["findings"])
 
@@ -106,7 +110,10 @@ def test_non_monotonic_ad_id_caught():
 def test_missing_field_caught():
     text = CLEAN.replace("- **Rule:** state changes only through the command bus\n", "")
     result = lint_spine.lint(text)
-    assert any(f["category"] == "ad_fields" and "rule" in f["detail"] for f in result["findings"])
+    assert any(
+        f["category"] == "ad_fields" and "rule" in f["detail"]
+        for f in result["findings"]
+    )
 
 
 def test_unpinned_dep_caught():
@@ -125,7 +132,10 @@ def test_unpinned_dep_location_names_the_spine_not_the_dep():
 def test_placeholder_version_caught():
     text = CLEAN.replace("| fastapi | 0.115 |", "| fastapi | {pin} |")
     result = lint_spine.lint(text)
-    assert any(f["category"] == "version_pin" and "fastapi" in f["detail"] for f in result["findings"])
+    assert any(
+        f["category"] == "version_pin" and "fastapi" in f["detail"]
+        for f in result["findings"]
+    )
 
 
 def test_no_stack_section_ok():
@@ -136,13 +146,17 @@ def test_no_stack_section_ok():
 
 def test_stack_skeleton_row_not_version_pinned():
     # a leftover {token} name is the placeholder pass's job, not a double-reported version_pin
-    text = CLEAN.replace("| fastapi | 0.115 |", "| {language / framework} | {pinned version} |")
+    text = CLEAN.replace(
+        "| fastapi | 0.115 |", "| {language / framework} | {pinned version} |"
+    )
     result = lint_spine.lint(text)
     assert "version_pin" not in cats(result)
 
 
 def test_stack_html_comment_not_parsed_as_row():
-    text = CLEAN.replace("## Stack\n", "## Stack\n\n<!-- SEED — verified current 2026-06 -->\n")
+    text = CLEAN.replace(
+        "## Stack\n", "## Stack\n\n<!-- SEED — verified current 2026-06 -->\n"
+    )
     result = lint_spine.lint(text)
     assert "version_pin" not in cats(result)
 
@@ -152,7 +166,11 @@ def test_template_token_is_low_severity():
     # mechanical pass stays near-zero false-positive
     text = CLEAN.replace("single write path", "{decision}")
     result = lint_spine.lint(text)
-    toks = [f for f in result["findings"] if f["category"] == "placeholder" and "template token" in f["detail"]]
+    toks = [
+        f
+        for f in result["findings"]
+        if f["category"] == "placeholder" and "template token" in f["detail"]
+    ]
     assert toks and all(f["severity"] == "low" for f in toks)
 
 
@@ -169,7 +187,9 @@ def test_frontmatter_value_with_dashes_not_truncated():
         "## Stack\n\n| Name | Version |\n| --- | --- |\n| fastapi |  |\n"
     )
     result = lint_spine.lint(text)
-    assert any(f["category"] == "version_pin" for f in result["findings"])  # read past the inline ---
+    assert any(
+        f["category"] == "version_pin" for f in result["findings"]
+    )  # read past the inline ---
 
 
 def test_ad_heading_in_fence_not_counted():
@@ -179,7 +199,9 @@ def test_ad_heading_in_fence_not_counted():
         "## Docs\n\n```text\n### AD-2 — illustrative only, no fields\n```\n"
     )
     result = lint_spine.lint(text)
-    assert result["ok"] is True  # the fenced AD-2 is not a live AD → no ad_fields/ad_id finding
+    assert (
+        result["ok"] is True
+    )  # the fenced AD-2 is not a live AD → no ad_fields/ad_id finding
 
 
 def test_stack_table_flags_only_the_unpinned_row():
@@ -248,7 +270,11 @@ def test_frontmatter_unfilled_token_caught():
     # an unfilled {scope}/{paradigm}/{date} in frontmatter is part of the contract and must lint
     text = "---\nname: 'x'\nscope: '{what this spine governs}'\n---\n\n## Invariants\n"
     result = lint_spine.lint(text)
-    fm = [f for f in result["findings"] if f["category"] == "placeholder" and "frontmatter" in f["detail"]]
+    fm = [
+        f
+        for f in result["findings"]
+        if f["category"] == "placeholder" and "frontmatter" in f["detail"]
+    ]
     assert fm and any("template token" in f["detail"] for f in fm)
 
 
@@ -256,13 +282,17 @@ def test_frontmatter_tbd_caught():
     text = "---\nname: 'x'\nstatus: TBD\n---\n\n## Invariants\n"
     result = lint_spine.lint(text)
     assert any(
-        f["category"] == "placeholder" and "frontmatter" in f["detail"] and "TBD" in f["detail"]
+        f["category"] == "placeholder"
+        and "frontmatter" in f["detail"]
+        and "TBD" in f["detail"]
         for f in result["findings"]
     )
 
 
 def test_findings_name_the_folder_named_spine(tmp_path, capsys):
-    (tmp_path / f"{tmp_path.name}.md").write_text("---\nname: 'x'\n---\n\nTBD here\n", encoding="utf-8")
+    (tmp_path / f"{tmp_path.name}.md").write_text(
+        "---\nname: 'x'\n---\n\nTBD here\n", encoding="utf-8"
+    )
     rc = lint_spine.main(["--workspace", str(tmp_path)])
     out = json.loads(capsys.readouterr().out)
     assert rc == 0 and out["spine"] == f"{tmp_path.name}.md"

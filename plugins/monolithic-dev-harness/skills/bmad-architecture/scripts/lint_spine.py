@@ -239,21 +239,37 @@ def lint(text: str, name: str = "spine") -> dict:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Lint an architecture spine for mechanical integrity.")
-    ap.add_argument("--workspace", required=True, help="run folder containing the spine, named after the folder")
+    ap = argparse.ArgumentParser(
+        description="Lint an architecture spine for mechanical integrity."
+    )
+    ap.add_argument(
+        "--workspace",
+        required=True,
+        help="run folder containing the spine, named after the folder",
+    )
     ap.add_argument("-o", "--output", help="write JSON here instead of stdout")
     args = ap.parse_args(argv)
 
     workspace = Path(args.workspace).resolve()
     spine_path = workspace / f"{workspace.name}.md"
     if not spine_path.exists():
-        result = {"ok": False, "error": f"{spine_path} not found", "findings": [], "total_findings": 0}
+        result = {
+            "ok": False,
+            "error": f"{spine_path} not found",
+            "findings": [],
+            "total_findings": 0,
+        }
     else:
         try:
             text = spine_path.read_text(encoding="utf-8")
         except (OSError, UnicodeDecodeError) as e:
             # honor the "exit code is always 0" contract: a read/decode failure travels in JSON
-            result = {"ok": False, "error": f"could not read {spine_path}: {e}", "findings": [], "total_findings": 0}
+            result = {
+                "ok": False,
+                "error": f"could not read {spine_path}: {e}",
+                "findings": [],
+                "total_findings": 0,
+            }
         else:
             result = lint(text, spine_path.name)
 

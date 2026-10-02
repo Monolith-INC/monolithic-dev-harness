@@ -48,7 +48,9 @@ except ImportError:  # pragma: no cover - guarded for <3.11
 def _run_json(cmd):
     """Run a resolver script and parse its JSON stdout. None on any failure."""
     try:
-        out = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", timeout=60)
+        out = subprocess.run(
+            cmd, capture_output=True, text=True, encoding="utf-8", timeout=60
+        )
     except (OSError, subprocess.SubprocessError):
         return None
     if out.returncode != 0 or not out.stdout.strip():
@@ -68,15 +70,43 @@ def load_roster(project_root: Path, skill_root: Path):
     """
     scripts = project_root / "_bmad" / "scripts"
     data = _run_json(
-        [sys.executable, str(scripts / "roster.py"), "--skill", str(skill_root), "--project-root", str(project_root)]
+        [
+            sys.executable,
+            str(scripts / "roster.py"),
+            "--skill",
+            str(skill_root),
+            "--project-root",
+            str(project_root),
+        ]
     )
     if data is not None:
         agents = data.get("agents", {}) or {}
-        guests = {code: m for code, m in (data.get("members", {}) or {}).items() if code not in agents}
-        problems = [p.get("problem", "") for p in data.get("problems", []) or [] if isinstance(p, dict)]
-        return agents, guests, data.get("groups", []) or [], True, [p for p in problems if p]
+        guests = {
+            code: m
+            for code, m in (data.get("members", {}) or {}).items()
+            if code not in agents
+        }
+        problems = [
+            p.get("problem", "")
+            for p in data.get("problems", []) or []
+            if isinstance(p, dict)
+        ]
+        return (
+            agents,
+            guests,
+            data.get("groups", []) or [],
+            True,
+            [p for p in problems if p],
+        )
     data = _run_json(
-        [sys.executable, str(scripts / "resolve_config.py"), "--project-root", str(project_root), "--key", "agents"]
+        [
+            sys.executable,
+            str(scripts / "resolve_config.py"),
+            "--project-root",
+            str(project_root),
+            "--key",
+            "agents",
+        ]
     )
     if data is None:
         return {}, {}, [], False, []
@@ -191,7 +221,17 @@ def build_collective(agents: dict, party_members: list, guests: dict | None = No
 
     for code, info in (guests or {}).items():
         entry = {"code": code, "source": "roster"}
-        for field in ("name", "icon", "title", "persona", "capabilities", "model", "module", "skill", "install"):
+        for field in (
+            "name",
+            "icon",
+            "title",
+            "persona",
+            "capabilities",
+            "model",
+            "module",
+            "skill",
+            "install",
+        ):
             if info.get(field):
                 entry[field] = info[field]
         entry.setdefault("name", code)
@@ -243,7 +283,11 @@ def group_menu(groups):
         if not isinstance(g, dict) or not g.get("id"):
             continue
         members = g.get("members", []) or []
-        entry = {"id": g["id"], "name": g.get("name", g["id"]), "member_count": len(members)}
+        entry = {
+            "id": g["id"],
+            "name": g.get("name", g["id"]),
+            "member_count": len(members),
+        }
         if not members:
             entry["open_cast"] = True
         out.append(entry)
@@ -288,8 +332,12 @@ def group_detail(g, collective, index):
 def build_parser():
     ap = argparse.ArgumentParser(description="Resolve the party-mode roster, lazily.")
     ap.add_argument("--project-root", required=True)
-    ap.add_argument("--skill", required=True, help="Path to the bmad-party-mode skill dir")
-    ap.add_argument("--party", "--group", dest="party", help="Resolve full detail for this group id")
+    ap.add_argument(
+        "--skill", required=True, help="Path to the bmad-party-mode skill dir"
+    )
+    ap.add_argument(
+        "--party", "--group", dest="party", help="Resolve full detail for this group id"
+    )
     ap.add_argument("--list-groups", action="store_true", help="Group names only")
     return ap
 
@@ -301,7 +349,9 @@ def main():
     skill_root = Path(args.skill).resolve()
 
     workflow = load_workflow(project_root, skill_root)
-    agents, guests, roster_groups, agents_ok, roster_problems = load_roster(project_root, skill_root)
+    agents, guests, roster_groups, agents_ok, roster_problems = load_roster(
+        project_root, skill_root
+    )
     groups = merge_groups(roster_groups, workflow.get("party_groups", []) or [])
     default_party = workflow.get("default_party", "") or ""
     party_mode = workflow.get("party_mode", "session") or "session"
@@ -319,12 +369,20 @@ def main():
         )
         return
 
-    collective, index, installed_codes = build_collective(agents, workflow.get("party_members", []), guests)
+    collective, index, installed_codes = build_collective(
+        agents, workflow.get("party_members", []), guests
+    )
 
     if args.party:
         g = find_group(groups, args.party)
         if g is None:
-            _emit({"error": "unknown_group", "requested": args.party, "available": group_menu(groups)})
+            _emit(
+                {
+                    "error": "unknown_group",
+                    "requested": args.party,
+                    "available": group_menu(groups),
+                }
+            )
             return
         detail = {**group_detail(g, collective, index), "party_mode": party_mode}
         if roster_problems:
@@ -333,7 +391,11 @@ def main():
         return
 
     # Default: the active roster to load on entry.
-    result = {"party_mode": party_mode, "groups": group_menu(groups), "installed_agents_resolved": agents_ok}
+    result = {
+        "party_mode": party_mode,
+        "groups": group_menu(groups),
+        "installed_agents_resolved": agents_ok,
+    }
     if roster_problems:
         result["roster_problems"] = roster_problems
     g = find_group(groups, default_party) if default_party else None
@@ -343,7 +405,11 @@ def main():
         # No default group: the installed agents (custom additions stay in the
         # pool but don't crowd the default room), exactly like a plain install.
         result.update(
-            {"active": "installed", "members": [collective[c] for c in installed_codes], "memory_enabled": party_memory}
+            {
+                "active": "installed",
+                "members": [collective[c] for c in installed_codes],
+                "memory_enabled": party_memory,
+            }
         )
     _emit(result)
 

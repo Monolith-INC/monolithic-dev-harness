@@ -1,6 +1,6 @@
 ---
 name: harness
-description: The end-to-end AI product and delivery flow — optional idea discovery and product planning, backlog (Epic → Features → Stories with points → Tasks), technical spec, spec-driven implementation, requirements-first review, and a draft pull request — with human gates G1–G4 and hook-enforced rules. Use when the user wants to take an idea or work item through the whole process, asks "what's next" in a harness run, or asks how the process works.
+description: Default entry point when the user asks to add, build, change, or fix a meaningful feature in a project, even if they do not mention the harness or provide a tracker item. Start with technical discovery for feature requests, then follow the product and delivery workflow as requested. Also use when the user asks to take an idea or work item through the whole process, asks what comes next in a harness run, or asks how the process works. Keep small mechanical edits on the direct path.
 ---
 
 # Harness
@@ -33,14 +33,21 @@ Stacked Feature work (several Stories under one Feature) runs stage 3–4 per St
 
 ## Before the first run in a repository
 
+The plugin ships the `harness` command. Use `harness` from the shell path when available. If it is
+not available, run the sibling `bin/harness` executable using the absolute plugin path derived from
+this skill's own location; do not ask the user to find the path, change their shell path, or install
+the plugin again. Report a missing command only if neither the shell command nor the bundled
+executable exists.
+
 Before routing the request, run `harness preference show` and `harness bootstrap --inspect`. If the
 language is unset, ask English or Português (Brasil) through the host's option UI and save the
 choice. Start the workflow with the user's original request before asking for setup details:
 `harness workflow start --request "<original request>"`. If a workflow is already active or paused,
 show its saved checkpoints and let the user resume or cancel it before starting another. If setup is
-missing or incomplete, ask only for the missing choices, prepare a reviewed settings proposal,
-verify it, and return to the original request. Do not ask the user to edit JSON or assume the
-bundled Azure example. Host trust and sign-in remain human actions where required. Run
+missing or incomplete, guide the user through only the choices that are actually missing, prepare a
+reviewable settings proposal, apply it after the user's choice, verify it, and return to the original
+request in this same run. Do not ask the user to edit JSON or assume the bundled Azure example.
+Host trust and sign-in remain human actions where required. Run
 `review-setup` before tracker-backed work. Mark the workflow complete when its requested outcome is
 finished.
 

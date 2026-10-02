@@ -1,8 +1,5 @@
-# Open product opportunity
+# Open product questions
 
-People trying the prototype have said that, once they have more tasks, it can be hard to find the
-next task they want to work on. We do not yet know which situations cause the most difficulty, how
-often this happens, or what kind of help would fit their routine.
+People may need more help choosing what to work on next as their task list grows. The current fixture does not contain research that confirms this need or identifies which solution would help most.
 
-This is an observation to investigate, not an approved feature. Learn more about the need and
-consider alternatives before choosing a solution.
+Use the local backlog for specific requests that are ready to investigate. Use the ideation starter when the user wants to explore a broad question such as how Daybook could help with weekly routines. Treat both as prompts for investigation, not as approved product decisions.

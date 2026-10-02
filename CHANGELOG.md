@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-02
+
+### Added
+
+- Added technical-first Stage 0 discovery for ordinary feature requests, with BMAD-inspired
+  clarification, product, design, architecture, specification, and review skills.
+- Added the Stage 0 workflow to the harness default entry point and included the supporting
+  templates, validators, party-mode routing, and vendor references.
+- Expanded the test project template into a local-first Daybook example with authentication,
+  shared application state, due dates, and backlog examples.
+
+### Changed
+
+- Updated plugin descriptions and first-run guidance to explain the ordinary feature-request path,
+  bundled command fallback, and same-run setup completion.
+
 ## [0.4.0] - 2026-09-30
 
 ### Added
@@ -463,6 +479,7 @@ First release.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
 [Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.4.0...HEAD
+[0.5.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.3.0
 [0.2.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.2.0

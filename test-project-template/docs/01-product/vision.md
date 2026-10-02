@@ -1,7 +1,7 @@
-# Product intent
+# Product vision
 
-Daybook should help one person keep track of a few everyday tasks without needing a larger project
-management system.
+Daybook should make it easy for one person to keep a small everyday task list without the setup and coordination features of a larger project tool.
 
-The current prototype is useful for trying the basic task-list interaction. It is not yet a durable
-or complete product, and we do not know which needs matter most as a person's list grows.
+The current app is a harness fixture, not a finished product. It demonstrates sign-in flow, task management, search, and status filters using local sample data. It should remain simple enough that a developer can understand its behavior before investigating a new request.
+
+Future product choices—such as reminders, recurring tasks, shared lists, and synchronization—remain open. Use the optional ideation prompt when the user wants to explore what Daybook should become.

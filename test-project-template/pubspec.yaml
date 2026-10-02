@@ -1,5 +1,5 @@
 name: daybook
-description: A small, early-stage personal task-list app.
+description: A local-first demo app used to exercise the development harness.
 publish_to: none
 version: 0.1.0+1
 
@@ -7,8 +7,10 @@ environment:
   sdk: '>=3.3.0 <4.0.0'
 
 dependencies:
+  fpdart: ^1.2.0
   flutter:
     sdk: flutter
+  flutter_riverpod: ^3.4.3
 
 dev_dependencies:
   flutter_test:

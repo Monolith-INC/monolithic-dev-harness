@@ -77,20 +77,29 @@ def test_load_extra_json_literal_and_file(tmp_path, lib):
 
 
 def test_merge_extra_replaces_by_name_and_appends(lib):
-    merged = pick_methods.merge_extra(rows(lib), pick_methods.load_extra(json.dumps(EXTRA)))
+    merged = pick_methods.merge_extra(
+        rows(lib), pick_methods.load_extra(json.dumps(EXTRA))
+    )
     assert len(merged) == 6  # 5 shipped, 1 replaced in place, 1 appended
     premortem = next(r for r in merged if r["method_name"] == "Pre-mortem Analysis")
     assert premortem["description"] == "RETUNED pre-mortem"
     assert premortem["num"] == "1"  # replacement inherits the shipped num
     appended = next(r for r in merged if r["method_name"] == "Regulatory Inversion")
     assert appended["num"] == "6"  # appended extras get the next free num
-    assert dict(pick_methods.categories(merged))["domain"] == 1  # new category is first-class
+    assert (
+        dict(pick_methods.categories(merged))["domain"] == 1
+    )  # new category is first-class
 
 
 def test_extras_are_addressable_by_num(lib):
-    merged = pick_methods.merge_extra(rows(lib), pick_methods.load_extra(json.dumps(EXTRA)))
+    merged = pick_methods.merge_extra(
+        rows(lib), pick_methods.load_extra(json.dumps(EXTRA))
+    )
     found, missing = pick_methods.find(merged, ["6", "1"])
-    assert [r["method_name"] for r in found] == ["Regulatory Inversion", "Pre-mortem Analysis"]
+    assert [r["method_name"] for r in found] == [
+        "Regulatory Inversion",
+        "Pre-mortem Analysis",
+    ]
     assert missing == []
 
 
@@ -98,12 +107,19 @@ def test_extras_are_addressable_by_num(lib):
 
 
 def test_categories_counts_sorted(lib):
-    assert pick_methods.categories(rows(lib)) == [("core", 2), ("creative", 1), ("risk", 2)]
+    assert pick_methods.categories(rows(lib)) == [
+        ("core", 2),
+        ("creative", 1),
+        ("risk", 2),
+    ]
 
 
 def test_filter_is_case_insensitive(lib):
     got = pick_methods.filter_cats(rows(lib), ["RISK"])
-    assert {r["method_name"] for r in got} == {"Pre-mortem Analysis", "Assumption Audit"}
+    assert {r["method_name"] for r in got} == {
+        "Pre-mortem Analysis",
+        "Assumption Audit",
+    }
 
 
 def test_filter_none_returns_all(lib):
@@ -112,7 +128,10 @@ def test_filter_none_returns_all(lib):
 
 def test_find_by_name_num_and_missing(lib):
     found, missing = pick_methods.find(rows(lib), ["scamper method", "3", "Nope"])
-    assert [r["method_name"] for r in found] == ["SCAMPER Method", "First Principles Analysis"]
+    assert [r["method_name"] for r in found] == [
+        "SCAMPER Method",
+        "First Principles Analysis",
+    ]
     assert missing == ["Nope"]
 
 
@@ -183,7 +202,9 @@ def test_cli_show_found_and_missing(lib, capsys):
 
 
 def test_cli_random_spread_exclude(lib, capsys):
-    code, out, _ = run(["random", "-n", "3", "--spread", "--exclude", "SCAMPER Method"], lib, capsys)
+    code, out, _ = run(
+        ["random", "-n", "3", "--spread", "--exclude", "SCAMPER Method"], lib, capsys
+    )
     assert code == 0
     lines = [ln for ln in out.strip().splitlines() if ln]
     assert len(lines) == 3
@@ -198,12 +219,16 @@ def test_cli_random_clamps_and_empty_pool(lib, capsys):
 
 
 def test_cli_extra_inline_json(lib, capsys):
-    code, out, _ = run(["--extra", json.dumps(EXTRA), "list", "--category", "domain"], lib, capsys)
+    code, out, _ = run(
+        ["--extra", json.dumps(EXTRA), "list", "--category", "domain"], lib, capsys
+    )
     assert code == 0 and "Regulatory Inversion" in out
 
 
 def test_cli_bad_extra_and_missing_file(tmp_path, lib, capsys):
-    code, _, err = run(["--extra", str(tmp_path / "gone.json"), "categories"], lib, capsys)
+    code, _, err = run(
+        ["--extra", str(tmp_path / "gone.json"), "categories"], lib, capsys
+    )
     assert code == 2 and "--extra" in err
     code = pick_methods.main(["--file", str(tmp_path / "gone.csv"), "categories"])
     assert code == 2
