@@ -34,7 +34,7 @@
       "additionalProperties": false,
       "required": ["name"],
       "properties": {
-        "name": {"enum": ["github", "azure-repos"]},
+        "name": {"enum": ["local", "github", "azure-repos"]},
         "values": {"$ref": "#/$defs/values"}
       }
     },

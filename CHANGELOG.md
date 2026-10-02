@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-10-02
+
+### Added
+
+- Added a post-setup route for continuing a task, preparing work items, or exploring an idea, with
+  a ready reference to workflow steps and tracker tools.
+
+### Changed
+
+- Made setup and review work without a hosted code service, and made user decisions use clickable
+  choices with Codex's built-in **Other** field.
+- Kept BMad setup within the bundled plugin, recognized plugin-managed module metadata, and made
+  setup and rendering failures offer clear recovery choices.
+
 ## [0.5.0] - 2026-10-02
 
 ### Added
@@ -478,7 +492,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.4.0
 [0.3.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.3.0

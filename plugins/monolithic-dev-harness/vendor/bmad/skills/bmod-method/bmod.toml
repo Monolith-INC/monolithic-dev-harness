@@ -1,4 +1,5 @@
 [bmod]
 code = "method"
 version = "6.13.0-next"
+update_source = "plugin:monolithic-dev-harness"
 skills = ["bmad", "bmad-advanced-elicitation", "bmad-architecture", "bmad-build", "bmad-party-mode", "bmad-prd", "bmad-review", "bmad-spec", "bmad-ticket"]

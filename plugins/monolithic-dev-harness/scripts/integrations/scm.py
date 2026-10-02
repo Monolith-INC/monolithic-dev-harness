@@ -37,6 +37,8 @@ Runner = Callable[[tuple[str, ...]], Result[str]]
 
 
 def build(selection: Selection, repo: Path) -> Result[ScmOps]:
+    if selection.name == "local":
+        return Ok(local())
     missing = tuple(
         key
         for key in REQUIRED_VALUES[selection.name]
@@ -56,6 +58,24 @@ def build(selection: Selection, repo: Path) -> Result[ScmOps]:
                 lambda call: azure_repos(selection.values, call),
             )
         ),
+    )
+
+
+def local() -> ScmOps:
+    """Unavailable hosted operations for a repository without a code host."""
+
+    def unavailable() -> Result[Any]:
+        return err(
+            "unsupported_capability",
+            "pull-request publishing and pull-request thread actions need a hosted code service",
+        )
+
+    return ScmOps(
+        get_pull_request=lambda _ref: unavailable(),
+        create_pull_request=lambda _draft: unavailable(),
+        list_review_threads=lambda _ref: unavailable(),
+        reply_to_thread=lambda _ref, _thread, _text: unavailable(),
+        link_work_item=lambda _ref, _item: unavailable(),
     )
 
 

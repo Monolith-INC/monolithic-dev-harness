@@ -92,7 +92,7 @@ def inferred_base(repo: Path) -> str:
     remote = _git(
         repo, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"
     )
-    return remote.removeprefix("origin/")
+    return remote.removeprefix("origin/") or _git(repo, "branch", "--show-current")
 
 
 def _selection(raw: Mapping[str, Any], name: str) -> dict[str, Any]:
@@ -135,11 +135,13 @@ def inspect(repo: Path) -> Result[dict[str, Any]]:
             else ("tracker",)
         )
         current_scm = _selection(raw, "scm")
-        source = current_scm or inferred_scm(repo)
+        source = current_scm or inferred_scm(repo) or {"name": "local", "values": {}}
         scm_name = str(source.get("name", ""))
         scm_missing = (
-            _missing(_values(source), scm.REQUIRED_VALUES.get(scm_name, ()))
+            _missing(_values(source), scm.REQUIRED_VALUES[scm_name])
             if scm_name in scm.REQUIRED_VALUES
+            else ()
+            if scm_name == "local"
             else ("scm",)
         )
         missing = (
@@ -208,7 +210,11 @@ def propose(
 ) -> Result[dict[str, Any]]:
     def candidate(raw: dict[str, Any]) -> Result[dict[str, Any]]:
         old_tracker = _selection(raw, "tracker")
-        old_scm = _selection(raw, "scm") or inferred_scm(repo)
+        old_scm = (
+            _selection(raw, "scm")
+            or inferred_scm(repo)
+            or {"name": "local", "values": {}}
+        )
         chosen_tracker = tracker_name or str(old_tracker.get("name", ""))
         chosen_scm = scm_name or str(old_scm.get("name", ""))
         revised = {
@@ -245,7 +251,8 @@ def propose(
                         registry.selected(repo, Ok(chosen)),
                         lambda _: bind(
                             require(
-                                chosen_scm in scm.REQUIRED_VALUES
+                                chosen_scm == "local"
+                                or chosen_scm in scm.REQUIRED_VALUES
                                 and not _missing(
                                     _values(revised["scm"]),
                                     scm.REQUIRED_VALUES.get(chosen_scm, ()),

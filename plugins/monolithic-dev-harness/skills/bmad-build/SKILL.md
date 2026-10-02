@@ -10,8 +10,14 @@ repository. Before rendering the workflow, prepare its project runtime from the 
 uv run --no-cache "{skill-root}/../../vendor/bmad/skills/bmad/scripts/setup.py" --project-root "{project-root}" --skill "{skill-root}/../../vendor/bmad/skills/bmad" --root "{skill-root}/.." --root "{skill-root}/../../vendor/bmad/skills"
 ```
 
-- If this setup command fails, report its output and stop. Do not run `npx skills`, access the
-  upstream checkout, or download BMad files.
+- Read the setup command's JSON. `current: false` by itself is not a failure: setup may report a
+  missing or stale runtime and repair it in this run. Continue when the command exits successfully
+  and `problems` is empty. If it exits non-zero or reports problems, do not continue to rendering.
+  Summarize the cause in plain language, preserve the workflow checkpoint, and offer clickable
+  choices to update the harness plugin and retry, switch to backlog drafting, or stop. Explain
+  which choice is safest for the user's request. Never end on an unexplained error or send raw logs
+  as the only response. Do not run `npx skills`, access an upstream checkout, or download BMad
+  files.
 
 Then run the bundled renderer exactly once without changing the current working directory. Replace
 `{project-root}` with the absolute path to the project root and `{skill-root}` with the absolute path
@@ -23,9 +29,10 @@ uv run --no-cache "{project-root}/_bmad/scripts/render_skill.py" --project-root 
 ```
 
 - On success, read and follow the one absolute `workflow.md` instruction printed to stdout.
-- If the renderer is still missing after bundled setup, report that failure and stop.
-- On any other failure, including missing `uv`, report the command output and stop. Do not run
-  unrendered workflow source directly.
+- If the renderer is still missing, exits non-zero, or prints a rendering error, explain what failed
+  and what the user can choose next. Use clickable choices to update the harness plugin and retry,
+  switch to backlog drafting, or stop. Preserve the checkpoint and do not run unrendered workflow
+  source directly. Never end on an unexplained error or send raw logs as the only response.
 
 For this harness integration, follow BMad's clarify, investigate, plan, and human review steps. When
 the reviewed plan is approved, stop and hand it to the harness backlog stage. Do not continue into

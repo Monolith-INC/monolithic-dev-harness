@@ -16,7 +16,7 @@ from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
 from harness import state
 
 VERSION = 1
-STAGES = ("setup", "discover", "backlog", "technical-plan", "build", "verify")
+STAGES = ("setup", "discover", "ideate", "backlog", "technical-plan", "build", "verify")
 STATUSES = ("active", "paused", "cancelled", "completed")
 TERMINAL_STATUSES = frozenset({"cancelled", "completed"})
 RELATIVE_PATH = Path(".harness/state/workflow.json")

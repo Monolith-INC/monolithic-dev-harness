@@ -1,13 +1,13 @@
 ---
 name: review
-description: Verification stage for a finished User Story — requirements coverage first (review-story-preflight), then a deep correctness and quality audit (thermos), fixes, a recorded verdict, and the draft pull request. Use after implement-story, or when asked to review a Story branch before its pull request.
+description: Verification stage for a finished User Story — requirements coverage first (review-story-preflight), then a deep correctness and quality audit (thermos), fixes, and a recorded verdict. If a hosted code service is configured, the workflow can continue by opening a draft pull request. Use after implement-story, or when asked to review a Story branch.
 ---
 
 # Review
 
 Requirements first, code quality second, a human last. The stage produces one recorded verdict per
-HEAD commit. The pull request gate (`draft-reviewed-prs`) only accepts `ready`, so the order below is enforced, not
-advisory.
+HEAD commit using the local branch diff. It does not need a remote code host. A pull request is an
+optional publishing step available only when a hosted service is configured.
 
 ## 1. Requirements coverage
 
@@ -40,13 +40,14 @@ python3 "<plugin root>/scripts/harness/review_verdict.py" --verdict ready --summ
 
 Use `--verdict blocked` when something must go back to the backlog or the spec: an acceptance
 criterion that cannot be met as written, or a finding that needs a product decision. Report the
-blocker instead of opening the pull request.
+blocker and do not open a pull request.
 
 ## 5. Pull request
 
-`branch-and-pr` → *Pull request*: push and open the **draft** pull request linked to the Story (one
-approval batch for both). Include the requirements coverage and the thermos verdict in the
-description. Move the Story's Review Task to active.
+When GitHub or Azure Repos is configured, `branch-and-pr` can push and open the **draft** pull
+request linked to the Story (one approval batch for both). Include the requirements coverage and
+the thermos verdict in the description. If no hosted service is configured, finish after recording
+the verdict; the local review is complete and must not be marked blocked for lack of a pull request.
 
 ## Human gates
 
