@@ -142,13 +142,11 @@ class ChoiceContractTests(unittest.TestCase):
         fallback = questions.render_choice(choice, "pt-br", "text", False)
         self.assertEqual(codex["questions"][0]["id"], "language")
         self.assertEqual(codex["questions"][0]["options"][0]["label"], "Inglês")
-        self.assertEqual(
-            tuple(item["id"] for item in fallback["options"]), ("en", "pt-br")
-        )
-        self.assertIn("1. Inglês", fallback["text"])
+        self.assertIn("error", fallback)
+        self.assertNotIn("text", fallback)
         self.assertEqual(questions.problems(codex), [])
 
-    def test_approval_fallback_shows_exact_token_in_first_prompt(self) -> None:
+    def test_approval_requires_clickable_control(self) -> None:
         choice = questions.Choice(
             "publish",
             "Publish",
@@ -173,8 +171,8 @@ class ChoiceContractTests(unittest.TestCase):
             ),
             approval=True,
         )
-        fallback = questions.render_choice(choice, "en", "text", False, "HB-7Q2K")
-        self.assertIn("approve HB-7Q2K", fallback["text"])
+        fallback = questions.render_choice(choice, "en", "text", False)
+        self.assertNotIn("text", fallback)
         self.assertNotIn("questions", fallback)
         self.assertIn("questions", questions.render_choice(choice, "en", "codex", True))
         self.assertIn("error", questions.render_choice(choice, "en", "text", False))

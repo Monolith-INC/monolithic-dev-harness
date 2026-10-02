@@ -42,8 +42,9 @@ executable exists.
 Before routing the request, run `harness bootstrap --inspect` once. If `language_confirmed` is false,
 offer **English** and **Português (Brasil)** as clickable choices for this project, even if a
 different project saved a preference. Save the selected language with
-`harness preference language <en|pt-br> --repo .`. In Codex, call
-`request_user_input_async` and wait for a click selection. Never ask the user to type an option or
+`harness preference language <en|pt-br> --repo .`. In the Codex editor or command line, call
+`request_user_input` when available; in the Codex desktop app, use `request_user_input_async` when
+that is the available control. Wait for a click selection. Never ask the user to type an option or
 answer in chat; if controls are unavailable, pause before the decision or any dependent write. Start the workflow with the user's
 original request before asking for setup details:
 `harness workflow start --request "<original request>"`. If a workflow is already active or paused,
@@ -122,8 +123,8 @@ point, ask this one structured question:
 - Option `Draft work items`: `Use the request as provided and prepare work items now.`
 - Option `Explore the idea`: `Shape or challenge the idea before planning the technical work.`
 
-Use the host's normal question UI (`AskUserQuestion` in Claude and `request_user_input_async` in
-Codex). Do not add an `Other` option; the Codex question UI supplies its default free-text field.
+Use the host's normal question UI (`AskUserQuestion` in Claude, `request_user_input` in the Codex
+editor, or `request_user_input_async` in the Codex desktop app). Do not add an `Other` option; the Codex question UI supplies its default free-text field.
 The existing `plain-questions` hook validates the question before display. Every listed option must
 be clickable; if the host cannot display a question control, pause before asking for a decision.
 

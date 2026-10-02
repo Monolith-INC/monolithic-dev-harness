@@ -31,6 +31,8 @@ readonly BIN_DIR="${HARNESS_BIN_DIR:-${HOME}/.local/bin}"
 readonly CURSOR_DIR="${CURSOR_PLUGIN_DIR:-${HOME}/.cursor/plugins/local/${PLUGIN}}"
 readonly CODEX_MARKETPLACE="${MARKETPLACE_DIR}/codex-marketplace"
 readonly CODEX_AGENTS_DIR="${CODEX_HOME:-${HOME}/.codex}/agents"
+readonly CODEX_CONFIG="${CODEX_HOME:-${HOME}/.codex}/config.toml"
+readonly CODEX_CHOICES_MARKER="${HARNESS_HOME}/codex-choices-enabled-by-harness"
 
 HOSTS="auto"
 VERSION="${HARNESS_VERSION:-}"
@@ -95,7 +97,7 @@ python_ok() {
 preflight() {
   have tar || die "tar is required"
   python_ok || die "python3 3.10 or newer is required (the harness hooks and orchestrators are Python)"
-  have git || die "git is required (the hooks read git state)"
+  have git || warn "git not found: versioned delivery features will be unavailable"
   have npx || warn "npx not found: install Node.js so the Azure DevOps MCP server can start"
   if [[ -z "$SOURCE" ]]; then
     have gh || have curl || die "curl or the GitHub CLI (gh) is required to download the release"
@@ -286,6 +288,7 @@ install_codex() {
   done
   # Codex refuses to run when CODEX_HOME names a directory that does not exist yet.
   mkdir -p "$CODEX_AGENTS_DIR"
+  configure_codex_choices
   codex plugin remove "$PLUGIN_ID" >/dev/null 2>&1 || true
   codex plugin marketplace remove "$PLUGIN" >/dev/null 2>&1 || true
   codex plugin marketplace add "$CODEX_MARKETPLACE" >/dev/null
@@ -295,6 +298,72 @@ install_codex() {
   for agent in mdh_thermo_review mdh_thermo_quality; do
     cp "${CODEX_MARKETPLACE}/agents/${agent}.toml" "${CODEX_AGENTS_DIR}/${agent}.toml"
   done
+}
+
+codex_choice_setting() {
+  python3 - "$CODEX_CONFIG" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+section = ""
+for line in path.read_text(encoding="utf-8").splitlines() if path.is_file() else ():
+    match = re.match(r"\s*\[([^]]+)\]\s*(?:#.*)?$", line)
+    if match:
+        section = match.group(1)
+    elif section == "features":
+        value = re.match(r"\s*default_mode_request_user_input\s*=\s*(true|false)\b", line)
+        if value:
+            print(value.group(1))
+            raise SystemExit(0)
+print("unset")
+PY
+}
+
+configure_codex_choices() {
+  case "$(codex_choice_setting)" in
+    true) return 0 ;;
+    false) die "Codex explicitly disables clickable questions in ${CODEX_CONFIG}; the harness cannot offer its required choices" ;;
+    unset)
+      codex features enable default_mode_request_user_input >/dev/null \
+        || die "Codex could not enable clickable questions; the harness cannot run its choice-driven workflow"
+      [[ "$(codex_choice_setting)" == true ]] \
+        || die "Codex did not save the clickable-question setting"
+      mkdir -p "$HARNESS_HOME"
+      : > "$CODEX_CHOICES_MARKER"
+      ;;
+  esac
+}
+
+restore_codex_choices() {
+  [[ -f "$CODEX_CHOICES_MARKER" ]] || return 0
+  python3 - "$CODEX_CONFIG" <<'PY'
+import os
+import re
+import stat
+import sys
+from pathlib import Path
+
+path = Path(sys.argv[1])
+if not path.is_file():
+    raise SystemExit(0)
+section = ""
+kept = []
+for line in path.read_text(encoding="utf-8").splitlines(keepends=True):
+    match = re.match(r"\s*\[([^]]+)\]\s*(?:#.*)?$", line)
+    if match:
+        section = match.group(1)
+    if section == "features" and re.match(
+        r"\s*default_mode_request_user_input\s*=\s*true\b", line
+    ):
+        continue
+    kept.append(line)
+replacement = path.with_suffix(".toml.harness-tmp")
+replacement.write_text("".join(kept), encoding="utf-8")
+os.chmod(replacement, stat.S_IMODE(path.stat().st_mode))
+replacement.replace(path)
+PY
 }
 
 install_cli() {
@@ -308,6 +377,7 @@ install_cli() {
 
 uninstall() {
   say "Removing ${PLUGIN}"
+  restore_codex_choices
   if have codex; then
     codex plugin remove "$PLUGIN_ID" >/dev/null 2>&1 || true
     codex plugin marketplace remove "$PLUGIN" >/dev/null 2>&1 || true
@@ -336,6 +406,9 @@ main() {
   fi
   preflight
   select_hosts
+  if [[ $INSTALL_CODEX -eq 1 && "$(codex_choice_setting)" == false ]]; then
+    die "Codex explicitly disables clickable questions in ${CODEX_CONFIG}; the harness cannot offer its required choices"
+  fi
   stage_payload
   local targets=()
   [[ $INSTALL_CLAUDE -eq 1 ]] && targets+=("Claude Code")

@@ -58,9 +58,8 @@ def render_choice(
     language: str,
     host: str,
     native_available: bool,
-    approval_token: str = "",
 ) -> dict[str, Any]:
-    """One decision contract, shown natively or with an equivalent text fallback."""
+    """One decision contract, shown only through a clickable native control."""
     portuguese = language == "pt-br"
     options = tuple(
         {
@@ -74,8 +73,8 @@ def render_choice(
     )
     question = choice.question_pt_br if portuguese else choice.question_en
     header = choice.header_pt_br if portuguese else choice.header_en
-    match native_available, len(options) <= 3, choice.approval, approval_token:
-        case True, True, _, _ if not choice.approval or any(
+    match native_available, len(options) <= 3, choice.approval:
+        case True, True, _ if not choice.approval or any(
             item["label"].strip().lower() in APPROVE_LABELS for item in options
         ):
             return {
@@ -97,38 +96,10 @@ def render_choice(
                     }
                 ],
             }
-        case _, _, True, str() as token if token:
-            return {
-                "host": host,
-                "text": f"{question}\n"
-                + (
-                    f"Reply exactly: approve {token}"
-                    if not portuguese
-                    else f"Responda exatamente: approve {token}"
-                ),
-                "options": options,
-            }
-        case _, _, True, _:
-            return {
-                "host": host,
-                "error": "approval needs a working native control or an exact typed token",
-            }
         case _:
             return {
                 "host": host,
-                "text": "\n".join(
-                    (
-                        question,
-                        *(
-                            f"{index}. {item['label']} — {item['description']}"
-                            for index, item in enumerate(options, 1)
-                        ),
-                        "Reply with the number."
-                        if not portuguese
-                        else "Responda com o número.",
-                    )
-                ),
-                "options": options,
+                "error": "a working clickable question control is required",
             }
 
 
