@@ -3,9 +3,11 @@
 Date: 2026-10-02
 Status: research and proposed direction; no harness implementation authorized by this note
 
+> This was an initial proposal. The source-based workflow mapping and revised Stage 0 design are in [stage-zero-redesign-bmad-analysis.md](stage-zero-redesign-bmad-analysis.md).
+
 ## User direction
 
-The default first planning step should serve a developer who brings a rough feature request or product-owner requirement. It should investigate the existing product and technical context, expose flaws and unknowns, compare feasible technical approaches with their costs and benefits, and shape the request into a grounded proposal and implementation plan. Open-ended product ideation remains useful as an optional path when the user asks to explore what problem or product to pursue.
+The main first planning step should serve a developer who brings a rough technical proposition or product-owner feature request. It should inspect the existing product and code, expose implementation risks and unknowns, compare feasible approaches with costs and benefits, and produce the documentation and complete implementation strategy needed to take the feature into delivery. Open-ended product ideation remains useful as an optional path when the user asks to explore what problem or product to pursue; it is not the main flow.
 
 ## What BMad actually does
 
@@ -22,7 +24,7 @@ Therefore, the user’s description of brainstorming as a deep technical first s
 
 `plugins/monolithic-dev-harness/skills/plan-initiative/SKILL.md` routes Stage 0 through optional product discovery and ends at a product `product-spec`. `harness/SKILL.md` then routes into backlog creation. Detailed story-local technical specifications are created later by `write-spec`, after work items and implementation tasks exist. `architecture-spine` can record cross-unit rules before backlog work, but its own scope excludes task-level technical designs.
 
-The current Daybook live trial selected `brainstorm-ideas` because the sample request was an unresolved product opportunity and the user chose “Ideate for me.” That exercised the optional ideation path, but it did not exercise the main technical-first path now described by the user. The user chose to document ideation as a future feature; existing draft `AI_Codex/Tickets/Ready/draft-support-structured-product-discovery.md` already covers optional discovery and should be refined to distinguish it from the default technical-first route rather than duplicated. The trial is paused before any feature selection, backlog write, or code change.
+The current Daybook live trial selected `brainstorm-ideas` because the sample request was an unresolved product opportunity and the user chose “Ideate for me.” That exercised ideation as the primary flow, which was the mismatch; the user clarified that ideation itself is still valuable as an optional path. It did not exercise the main technical-first path. The user chose to retain optional ideation; existing draft `AI_Codex/Tickets/Ready/draft-support-structured-product-discovery.md` already covers optional discovery and should be refined to distinguish it from the default technical-first route rather than duplicated. The trial is paused before any feature selection, backlog write, or code change.
 
 The observed ideation run produced 36 ideas and stopped to ask the user to select one. The source BMad skill says to aim past 100 ideas and avoid stopping until the topic is spent. This is a workflow fidelity gap to preserve as a trial finding; the current harness adaptation only says “well beyond the first obvious batch,” so the source behavior was not carried over explicitly.
 
