@@ -13,7 +13,8 @@ enforce the rules that must never depend on the model remembering them.
 ```
  idea / work item
       │
- 0 DEFINE ────── plan-initiative: optional discovery → product-spec (+ UX / architecture companions)
+ 0 DISCOVER ──── bmad-build: read request → investigate repository → review feature plan
+      │           plan-initiative remains available when the user wants product ideation
       │
  1 BACKLOG ───── generate-work-item → enrich-work-item → decompose-backlog → generate-breakdown-work-items
       │           (top ancestor draft)  (team format)     (Epic→Features→Stories,  (Tasks + Staging/
@@ -58,29 +59,42 @@ captures its content digest. When the user says Pause, save any new progress fir
 earlier review points in one choice. After revising an earlier point, rebuild only affected drafts
 and save a new checkpoint before asking for another decision.
 
-## Stage 0: Define the intent
+## Stage 0: Technical discovery
 
-When the input is an early idea rather than an already-defined work item, run `plan-initiative`.
-It follows a smallest-useful-path rule: brainstorm, forge, research, brief, PRD, UX, and architecture
-are independent tools, not required stages. The endpoint is a compact `product-spec` with stable
-`CAP-N` capabilities and any load-bearing UX or architecture artifacts referenced as companions.
+For an assigned ticket or draft request to change an existing product, use the bundled `bmad-build`
+workflow by default. It reads the request and relevant context, investigates the actual repository,
+compares feasible approaches, and produces a reviewed feature implementation plan before backlog
+work begins. Do not start implementation from this step. On approval, save the plan as a harness
+workflow checkpoint and pass it to Stage 1 as the source for work-item drafting. The Stage 0 approval
+does not publish tracker items; the normal backlog review and write gates still apply.
 
-If the intent already says what should be true, what must not change, what is out of scope, and how
-success is observed, start at `product-spec`. If a supplied work item already carries that contract,
-skip Stage 0. Before closing Stage 0, challenge the idea with its strongest counterargument,
-unsupported assumptions, likely failure cases, and a simpler alternative. Let the user defend,
-revise, or abandon it; present that critique with the complete product contract. Finishing
-planning never implies permission to create tracker items.
+For a ticket in an external or local harness tracker, check `workflow_tracking_status`, read the
+item with `tracker_get_work_item`, and include relevant parent context. This read must not move the
+ticket, create a branch, start a session, or publish an artifact. Use BMad's file-based ticket tree
+only when the user explicitly chose that store. The BMad runtime files are bundled under the harness
+plugin and set up from that local bundle; do not install or fetch BMad from its upstream project.
+
+Use `plan-initiative` when the user explicitly wants to explore what problem or product to pursue,
+or when the intended outcome is not yet identifiable. Its optional brainstorming, idea-forging,
+research, brief, requirements, experience, and architecture routes remain available. A clear request
+that only needs a product contract can still go directly to `product-spec`. Do not make ideation a
+prerequisite for an assigned change.
+
+The BMad plan is the feature-level strategy. Later `write-spec` work must use it as an input and
+cover only story-level details needed for implementation. Do not repeat Stage 0 investigation or
+silently change its accepted decisions. Finishing Stage 0 never implies permission to create or
+publish tracker items.
 
 ### Offer the starting point
 
-When the user asks to take an idea through the harness but has not said whether to plan it first or
-start drafting work items, ask this **one structured UI question before doing either**:
+When the user asks to take a feature request through the harness and its starting point is unclear,
+use technical discovery by default. Ask this **one structured UI question only when the user has
+not indicated whether they want technical discovery or direct backlog drafting**:
 
 - Header: `Starting point`
-- Question: `Would you like to plan the idea before I draft the work items?`
-- Option `Plan the idea`: `Explore it first and produce a clear product plan.`
-- Option `Draft work items`: `Use what you provided and draft the work items now.`
+- Question: `Would you like me to investigate the technical approach first, or draft work items from what you provided?`
+- Option `Investigate first`: `Review the repository and prepare a technical implementation plan.`
+- Option `Draft work items`: `Use the request as provided and prepare work items now.`
 
 Use the host's normal question UI (`AskUserQuestion` in Claude and `request_user_input` in Codex
 when that tool is available). The existing `plain-questions` hook validates it before display. In
@@ -88,10 +102,10 @@ Cursor, which has no question buttons, show the same two choices in plain text a
 reply. If Codex does not expose `request_user_input`, show the numbered text choices. Typed approval
 tokens are only for protected writes; ordinary routing choices never need one.
 
-The choice is routing, not approval: it never opens an approval window. `Plan the idea` invokes
-`plan-initiative`; `Draft work items` enters Stage 1. Do not ask when the user already chose a
-starting point, directly invoked a planning skill, or explicitly asked to create or modify a work
-item.
+The choice is routing, not approval: it never opens an approval window. `Investigate first` invokes
+`bmad-build`; `Draft work items` enters Stage 1. Invoke `plan-initiative` only when the user asks to
+explore what product or problem to pursue. Do not ask when the user already chose a starting point,
+directly invoked a planning skill, or explicitly asked to create or modify a work item.
 
 ## Stage 1: Backlog
 

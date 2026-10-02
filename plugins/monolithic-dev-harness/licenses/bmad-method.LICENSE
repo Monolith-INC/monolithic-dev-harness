@@ -3,7 +3,7 @@ MIT License
 Copyright (c) 2025 BMad Code, LLC
 
 This project incorporates contributions from the open source community.
-See the upstream CONTRIBUTORS.md for contributor attribution.
+See [CONTRIBUTORS.md](../vendor/bmad/CONTRIBUTORS.md) for contributor attribution.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -24,7 +24,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 TRADEMARK NOTICE:
-BMad™, BMad Method™, and BMad Core™ are trademarks of BMad Code, LLC,
-covering all casings and variations. The use of these trademarks in this
-software does not grant any rights to use the trademarks for any other
-purpose. See the upstream TRADEMARK.md for detailed guidelines.
+BMad™, BMad Method™, and BMad Core™ are trademarks of BMad Code, LLC, covering all
+casings and variations (including BMAD, bmad, BMadMethod, BMAD-METHOD, etc.). The use of
+these trademarks in this software does not grant any rights to use the trademarks
+for any other purpose. See [TRADEMARK.md](../vendor/bmad/TRADEMARK.md) for detailed guidelines.

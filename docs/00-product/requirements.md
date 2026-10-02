@@ -22,9 +22,9 @@ Feature Owner / PO, Tech Lead, developers; owned by the monolithic-dev-harness m
 
 ## Goals
 
-Cover idea definition, backlog management, technical planning, implementation, and verification;
-answer how the process uses the team's tracker, where people decide, and which models run each
-stage.
+Cover technical discovery of assigned feature requests, backlog management, technical planning,
+implementation, and verification. Keep product ideation available as an optional route, and explain
+how the process uses the team's tracker and where people make decisions.
 
 ## Non-Goals
 
@@ -34,9 +34,9 @@ See [vision.md](vision.md#non-goals).
 
 ### Must
 
-- **Definition:** route an early idea through only the discovery, research, requirements, UX, and
-  architecture work its uncertainty requires; distill the result into a compact product spec with
-  stable capability IDs, explicit constraints, non-goals, success conditions, and companions.
+- **Technical discovery:** start from an assigned ticket or draft feature request; inspect the
+  existing repository, research implementation options, and produce a reviewed feature plan before
+  backlog drafting. Keep optional product ideation available when requested.
 - **Backlog:** decompose an Epic into Features and Stories in one run with two approval gates;
   write Story Points into the process's Azure points field and read them back; break Stories into
   atomic Tasks plus Staging, Review, and a done Breakdown Task; audit coverage against the source
