@@ -6,6 +6,14 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-10-02
+
+### Fixed
+
+- The Codex installer enables clickable questions before bootstrap begins and restores the previous setting on uninstall.
+- Skills use the question control available in each Codex host. Bootstrap no longer asks users to type a choice when that control is missing.
+- Git is optional during installation, consistent with local planning and review.
+
 ## [0.5.2] - 2026-10-02
 
 ### Fixed
@@ -508,7 +516,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.2...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.3...HEAD
+[0.5.3]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.5.0

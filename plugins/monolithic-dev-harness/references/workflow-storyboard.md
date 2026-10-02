@@ -1,7 +1,8 @@
 # Harness workflow storyboard
 
 The harness owns the sequence and the meaning of each decision. The host shows decisions as clickable
-question controls. In Codex, call `request_user_input_async`; its default **Other** text field handles
+question controls. In the Codex editor or command line, use `request_user_input` when available; in
+the Codex desktop app, use `request_user_input_async` when available. Their default **Other** field handles
 anything outside the listed choices, so never add an `Other` option yourself. A first request resumes
 after setup instead of making the user repeat it.
 
@@ -19,7 +20,7 @@ An agent continues through reversible local work within a stage. It stops for mi
 
 ## After setup
 
-When setup completes, call `request_user_input_async` with up to three routes that fit the request:
+When setup completes, use the available native question control with up to three routes that fit the request:
 
 - Continue the named task or request.
 - Prepare or organize work items.

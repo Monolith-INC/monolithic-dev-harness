@@ -7,8 +7,10 @@ description: Use on first harness activation or when repository setup is absent,
 
 The harness is opt-in per repository. Before any planning or backlog stage, inspect setup. Preserve
 the user's original request and return to it as soon as setup is usable. Drive every decision and
-approval through clickable choices in the host's question controls. In Codex, call
-`request_user_input_async` with selectable options and wait for a click selection. Never ask the
+approval through clickable choices in the host's question controls. In the Codex editor or command
+line, call `request_user_input` when it is available. In the Codex desktop app, call
+`request_user_input_async` when that is the available control. Use `AskUserQuestion` in Claude Code.
+Wait for the user's click before proceeding. Never ask the
 user to type an option, command, or free-text answer. If a required value cannot be discovered or
 offered as a clickable choice, stop before asking or applying changes and report that setup is waiting
 for an interactive control. The user never needs to edit settings JSON by hand.
@@ -85,7 +87,7 @@ building as part of basic setup. Do those only when the user's next task needs t
 optional tool without searching for or installing replacements. Tell the user only about a sign-in,
 project trust, or restart that is actually required.
 
-After setup is ready, ask what to do next through `request_user_input_async`. Offer up to three
+After setup is ready, ask what to do next through the available native question control. Offer up to three
 clickable choices based on the current request: continue the named task, prepare work items, or
 explore an idea. When no task was supplied, use **Start feature work** as the first choice. Do not
 add a literal **Other** option: the question UI supplies its default **Other** text field. Route the
