@@ -6,41 +6,51 @@ description: Use on first harness activation or when repository setup is absent,
 # Guided bootstrap
 
 The harness is opt-in per repository. Before any planning or backlog stage, inspect setup. Preserve
-the user's original request and return to it as soon as setup is usable. Use the host's structured
-question UI when available; use numbered choices with the same meaning otherwise. The user never
-needs to edit settings JSON by hand.
+the user's original request and return to it as soon as setup is usable. Drive every decision and
+approval through clickable choices in the host's question controls. In Codex, call
+`request_user_input_async` with selectable options and wait for a click selection. Never ask the
+user to type an option, command, or free-text answer. If a required value cannot be discovered or
+offered as a clickable choice, stop before asking or applying changes and report that setup is waiting
+for an interactive control. The user never needs to edit settings JSON by hand.
 
-## 1. Inspect the user and repository
+## 1. Inspect once
 
-Run `harness preference show` and `harness bootstrap --inspect`. The latter reports whether the
-repository is missing settings, incomplete, or ready; it lists shipped trackers, required values,
-and safe Git inferences. An absent preference is a first activation: ask **English** or
-**Português (Brasil)** as one two-option choice, then set it with `harness preference language en`
-or `harness preference language pt-br`. This preference lives outside the repository and applies to
-future harness requests by this user. Do not ask again when it is already set.
+Run only `harness bootstrap --inspect` first. Its output includes the saved language, setup status,
+available trackers and their required values, current choices, and safe Git inferences. Do not run
+`harness preference show`, search the plugin source, or explore the repository to rediscover this
+information. If the command is unavailable, use the bundled `bin/harness` described in the parent
+`harness` skill.
 
-When settings are ready, check the selected tracker and proceed with the original request. When
-missing or incomplete, ask which listed tracker to use. Do not select Azure from the bundled example
-or assume the tracker from a placeholder setting. The shipped choices include Azure DevOps, Linear,
-and the local tracker; explain where work will appear. Ask for the tracker's required values one at
-a time, then ask only for source-control values, base branch, and artifact destination that cannot be
-inferred. Explain any host trust or sign-in action the user actually must take.
+If status is ready, do not ask setup questions; continue the user's original request. Otherwise, use
+the inspection output as the full setup checklist. Never choose a tracker from an example or accept
+placeholder values. If the language is unset, offer **English** and **Português (Brasil)** as
+clickable choices. Offer the tracker choices the same way. Resolve required tracker values and
+missing project paths from repository inspection or available provider choices; do not ask the user
+to type them. If a required value cannot be inferred or presented as a selectable option, stop and
+report which value is unavailable instead of opening a text prompt. Do not ask for values already
+present or safely inferred.
+No hosted code service is required: use the inferred GitHub or Azure Repos choice when present, and
+otherwise use `local` without asking another question. Explain where tracker work will appear and
+where the artifacts will be saved.
 
 ## 2. Prepare one reviewable proposal
 
-Use `harness bootstrap --propose` with the chosen values. Example:
+Make one `harness bootstrap --propose` call with all chosen values. Example:
 
 ```bash
 harness bootstrap --propose --tracker linear --tracker-value team=ENG \
-  --scm github --scm-value owner=team --scm-value repo=project \
+  --scm local \
   --artifacts-path docs/backlog --base-branch main
 ```
 
 The command prints the complete candidate, a `digest`, and a `source_digest`. Existing unrelated
-settings are preserved. Show the proposed changes and destination in the selected language. Ask a
-single choice, **Apply setup** or **Change choices**, through the available host UI. For a text-only
-host, show those same options as numbered choices. A reply to apply authorizes only this exact
-local setup proposal; it does not authorize tracker or source-control writes.
+settings are preserved. If proposal validation fails, use its error to correct the missing value;
+do not inspect implementation files to second-guess the command. Show the candidate and artifact
+destination briefly, then offer **Apply setup** or **Change choices** as clickable choices. Do not
+provide a typed reply as a fallback. If the controls are unavailable or fail, leave
+the proposal unapplied and report that approval is waiting for an interactive host. A selection to
+apply authorizes only this exact local proposal; it does not authorize tracker or source-control
+writes.
 
 After the user chooses Apply, repeat the proposal arguments with `--apply-digest <digest>
 --source-digest <source_digest>`. A change to the candidate or existing settings makes application
@@ -51,13 +61,19 @@ user to paste or modify JSON manually.
 The older `--settings-from <file>` import remains for a user who supplies an already reviewed file.
 Bare `harness bootstrap` now inspects the repository; it never writes the Azure example.
 
-## 3. Verify and return
+## 3. Verify once and return
 
-Run `harness doctor`; use `--tools` for the selected tracker when authentication/tool readiness
-needs checking. Run `review-setup` if its sources are missing. Tell the user precisely about any
-sign-in, project trust, or session restart the host requires. Save a workflow checkpoint before a
-required interruption and resume the original request after it. Do not ask the user to start the
-harness again.
+Run `harness doctor` once. Do not run `--tools`, `review-setup`, knowledge discovery, or knowledge
+building as part of basic setup. Do those only when the user's next task needs them. Report a missing
+optional tool without searching for or installing replacements. Tell the user only about a sign-in,
+project trust, or restart that is actually required.
+
+After setup is ready, ask what to do next through `request_user_input_async`. Offer up to three
+clickable choices based on the current request: continue the named task, prepare work items, or
+explore an idea. When no task was supplied, use **Start feature work** as the first choice. Do not
+add a literal **Other** option: the question UI supplies its default **Other** text field. Route the
+clicked choice or the text entered through **Other** and continue in this same run; do not ask the
+user to invoke the harness again.
 
 Repository settings are human-owned. Existing custom checks, paths, and host configuration survive
 setup. The user-level language preference and clone-local workflow checkpoints are separate from

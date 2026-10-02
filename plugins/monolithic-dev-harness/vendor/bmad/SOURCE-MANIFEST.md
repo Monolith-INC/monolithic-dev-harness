@@ -9,7 +9,7 @@
 
 ## Files in this repository
 
-The source copies are kept under `upstream/skills/`. One excess blank line at end of the PRD template was removed to satisfy the repository whitespace check; all other source content is preserved:
+The source copies are kept under `upstream/skills/`. One excess blank line at end of the PRD template was removed to satisfy the repository whitespace check; all other source content is preserved. Runtime manifests replace upstream update links with `plugin:monolithic-dev-harness`, so setup recognizes these skills as plugin-managed and never offers a network download:
 
 - `upstream/skills/bmad-build/` — full BMad Build workflow, its review prompts, and templates.
 - `upstream/skills/bmad-spec/` — optional BMad spec skill.

@@ -14,7 +14,7 @@ enforce the rules that must never depend on the model remembering them.
  idea / work item
       │
  0 DISCOVER ──── bmad-build: read request → investigate repository → review feature plan
-      │           plan-initiative remains available when the user wants product ideation
+      │           plan-initiative: ideate or shape a product idea when selected
       │
  1 BACKLOG ───── generate-work-item → enrich-work-item → decompose-backlog → generate-breakdown-work-items
       │           (top ancestor draft)  (team format)     (Epic→Features→Stories,  (Tasks + Staging/
@@ -39,9 +39,12 @@ this skill's own location; do not ask the user to find the path, change their sh
 the plugin again. Report a missing command only if neither the shell command nor the bundled
 executable exists.
 
-Before routing the request, run `harness preference show` and `harness bootstrap --inspect`. If the
-language is unset, ask English or Português (Brasil) through the host's option UI and save the
-choice. Start the workflow with the user's original request before asking for setup details:
+Before routing the request, run `harness bootstrap --inspect` once; it includes the language
+preference, so do not separately run `harness preference show`. If the language is unset, offer
+**English** and **Português (Brasil)** as clickable choices. In Codex, call
+`request_user_input_async` and wait for a click selection. Never ask the user to type an option or
+answer in chat; if controls are unavailable, pause before the decision or any dependent write. Start the workflow with the user's
+original request before asking for setup details:
 `harness workflow start --request "<original request>"`. If a workflow is already active or paused,
 show its saved checkpoints and let the user resume or cancel it before starting another. If setup is
 missing or incomplete, guide the user through only the choices that are actually missing, prepare a
@@ -51,12 +54,9 @@ Host trust and sign-in remain human actions where required. Run
 `review-setup` before tracker-backed work. Mark the workflow complete when its requested outcome is
 finished.
 
-`back`, `pause`, `resume`, and `cancel` are workflow actions. Present native controls where supported
-and textual commands otherwise. Include Back on a review screen when an earlier decision can be
-revised. Accept Pause at any point without asking a second question. When the host cannot show all
-actions as controls, state the words the user can send in the same prompt. The matching terminal
-commands live under `harness workflow`;
-`harness session pause/resume` controls only an implementation checkout. Checkpoints never grant
+`back`, `pause`, `resume`, and `cancel` are workflow actions. Use native controls; never ask the user
+to type these actions. Include Back on a review screen when an earlier decision can be revised.
+Accept Pause at any point without asking a second question. Checkpoints never grant
 permission for an external write. Resume rechecks files, tracker, and approvals before work.
 
 Save a checkpoint after setup and at each material review point. Before a review question, record
@@ -75,11 +75,13 @@ work begins. Do not start implementation from this step. On approval, save the p
 workflow checkpoint and pass it to Stage 1 as the source for work-item drafting. The Stage 0 approval
 does not publish tracker items; the normal backlog review and write gates still apply.
 
-For a ticket in an external or local harness tracker, check `workflow_tracking_status`, read the
-item with `tracker_get_work_item`, and include relevant parent context. This read must not move the
-ticket, create a branch, start a session, or publish an artifact. Use BMad's file-based ticket tree
-only when the user explicitly chose that store. The BMad runtime files are bundled under the harness
-plugin and set up from that local bundle; do not install or fetch BMad from its upstream project.
+For a ticket in an external or local harness tracker, check `workflow_tracking_status`, use
+`tracker_get_work_item` for the named item and `tracker_list_children` for relevant parent context.
+Use `tracker_search_work_items` only when a named item cannot be retrieved directly. For an explicit
+file or path such as `backlog/DAY-001-task-counts.md`, read that file directly. This lookup must not
+move the ticket, create a branch, start a session, or publish an artifact. Use BMad's file-based
+ticket tree only when the user explicitly chose that store. The BMad runtime files are bundled under
+the harness plugin and set up from that local bundle; do not install or fetch BMad from upstream.
 
 Use `plan-initiative` when the user explicitly wants to explore what problem or product to pursue,
 or when the intended outcome is not yet identifiable. Its optional brainstorming, idea-forging,
@@ -94,25 +96,25 @@ publish tracker items.
 
 ### Offer the starting point
 
-When the user asks to take a feature request through the harness and its starting point is unclear,
-use technical discovery by default. Ask this **one structured UI question only when the user has
-not indicated whether they want technical discovery or direct backlog drafting**:
+When the request names an existing task or ticket, follow the storyboard directly; do not ask whether
+to investigate or draft new work items. When the request is a feature idea with no clear starting
+point, ask this one structured question:
 
 - Header: `Starting point`
-- Question: `Would you like me to investigate the technical approach first, or draft work items from what you provided?`
+- Question: `What would you like to do with this idea?`
 - Option `Investigate first`: `Review the repository and prepare a technical implementation plan.`
 - Option `Draft work items`: `Use the request as provided and prepare work items now.`
+- Option `Explore the idea`: `Shape or challenge the idea before planning the technical work.`
 
-Use the host's normal question UI (`AskUserQuestion` in Claude and `request_user_input` in Codex
-when that tool is available). The existing `plain-questions` hook validates it before display. In
-Cursor, which has no question buttons, show the same two choices in plain text and wait for the
-reply. If Codex does not expose `request_user_input`, show the numbered text choices. Typed approval
-tokens are only for protected writes; ordinary routing choices never need one.
+Use the host's normal question UI (`AskUserQuestion` in Claude and `request_user_input_async` in
+Codex). Do not add an `Other` option; the Codex question UI supplies its default free-text field.
+The existing `plain-questions` hook validates the question before display. Every listed option must
+be clickable; if the host cannot display a question control, pause before asking for a decision.
 
 The choice is routing, not approval: it never opens an approval window. `Investigate first` invokes
-`bmad-build`; `Draft work items` enters Stage 1. Invoke `plan-initiative` only when the user asks to
-explore what product or problem to pursue. Do not ask when the user already chose a starting point,
-directly invoked a planning skill, or explicitly asked to create or modify a work item.
+`bmad-build`; `Draft work items` enters Stage 1; `Explore the idea` invokes `plan-initiative`.
+Continue directly when the user already chose a starting point, named an existing task, directly
+invoked a planning skill, or explicitly asked to create or modify a work item.
 
 ## Stage 1: Backlog
 
@@ -180,9 +182,8 @@ requests, threads, branches, `git push`) unless the user has opened an approval 
    Claude or trusted Codex opens the window for `approvals.window_minutes` (default 20).
 3. Make only the writes you described. Anything new needs a new question.
 
-Where a native approval control is unavailable, show the exact typed command in the first prompt:
-`approve HB-7Q2K` (using the real batch id). Do not show a button that cannot authorize the write.
-`harness revoke` closes a window early.
+If the native approval control is unavailable, do not write. Leave the approval pending and report
+that the host needs to provide a clickable approval control. `harness revoke` closes a window early.
 
 You cannot open the window yourself: approvals are recorded only from the user's own prompt or
 click, a question that arrives with answers already filled in is refused, and hook `human-owned`

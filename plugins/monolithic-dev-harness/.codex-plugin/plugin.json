@@ -1,6 +1,6 @@
 {
   "name": "monolithic-dev-harness",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "description": "Start from an ordinary feature request, guide first-run setup, investigate the project, and support planning, implementation, and review with protected external writes.",
   "author": {"name": "Théo Carranza"},
   "interface": {

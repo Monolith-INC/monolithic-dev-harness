@@ -10,7 +10,8 @@ Story. Ask a destination question only when the user requests a different destin
 selected tracker cannot represent Tasks. Explain exactly which Tasks would be absent from the
 tracker before that choice.
 
-Ask each missing choice through native host controls when available, or show numbered options with
-the same labels and consequences. Back revises an earlier reversible choice; Pause saves progress.
+Ask each missing choice through native host controls. Do not ask the user to type a choice or answer
+in chat. If the host lacks controls, pause before the decision. Back revises an earlier reversible
+choice; Pause saves progress.
 Do not add a confirmation gate for the normalized intake. Continue to reading the work items once
 the required reference and destination are known.
