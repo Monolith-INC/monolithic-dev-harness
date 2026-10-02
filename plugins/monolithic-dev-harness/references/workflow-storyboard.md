@@ -7,7 +7,7 @@ after setup instead of making the user repeat it.
 
 | Stage | Entry | Work before stopping | Review point | Exit |
 | --- | --- | --- | --- | --- |
-| Setup | Any harness request | Run `harness bootstrap --inspect` once; use its tracker, language, and Git results; ask only for missing decisions; prepare one candidate | Show exact settings changes; get approval by click | Check once, then ask what to do next with clickable routes and the default Other field |
+| Setup | Any harness request | Inspect current project and workflow state; prepare the bundled local tracker in the background if its folders are missing; confirm this project's language; ask only for missing project choices | Show user-facing settings and get approval by click | Check once, then ask what to do next with clickable routes and the default Other field |
 | Discover | Named existing task or request for a technical plan | Read the named item directly. Use tracker tools for tracker items; read an explicitly linked project file directly. Investigate fit and alternatives, then prepare a reviewed implementation plan. | Show the technical plan and review notes | Accepted plan enters backlog; no repeated starting-point question |
 | Ideate | User selects idea exploration or submits a new idea | Use `plan-initiative` and only its needed routes: brainstorm, pressure-test, research, brief, requirements, UX, architecture, product spec | Show the product contract and critique | Accepted contract enters backlog; ideation is offered after setup |
 | Backlog | Accepted product contract or sufficiently defined work item | Draft, enrich, decompose, create Story Tasks, and validate locally; check tracker readiness before publication | Show the complete Feature, Story, and Task batch and its destination; seek one approval for the specified external writes | Publish and read back the approved batch |
@@ -35,7 +35,9 @@ Use this map instead of searching plugin files to rediscover workflow capabiliti
 
 | Need | Source |
 | --- | --- |
-| Language, tracker choices, missing settings, inferred branch | `harness bootstrap --inspect` |
+| Project language confirmation, tracker choices, missing settings | `harness bootstrap --inspect` |
+| Current commit, branch, saved workflow, and local tracker readiness | `harness bootstrap --inspect` |
+| Prepare missing bundled local tracker folders | `harness bootstrap --prepare-local-tracker` |
 | Setup health | `harness doctor` |
 | Tracker states, item kinds, hierarchy, required capabilities | `tracker_describe` |
 | Named tracker item | `tracker_get_work_item` |
@@ -44,12 +46,14 @@ Use this map instead of searching plugin files to rediscover workflow capabiliti
 | Existing requirements/spec/review artifacts | `tracker_list_artifacts` |
 | Active or saved workflow state | `harness workflow status` / `harness workflow list` |
 | Settings and artifact folder for backlog work | `bin/agile-backlog-toolkit config --show` |
-| Technical discovery | Bundled `bmad-build`, using the bundled setup and renderer |
+| Technical discovery | `skills/harness/references/technical-discovery.md` |
 | Ideation and product shaping | `plan-initiative` and its listed optional routes |
 
 For a named project file, open that file directly. Use the host's tool catalog and these known
 capabilities; do not search source code to find tool names or infer settings already reported by a
-command.
+command. The bundled local tracker needs no provider onboarding. Its records are under
+`.harness/tracker/`; the configured artifact folder holds plans and drafts. A project file can be
+planned directly even when it is not yet a tracker record.
 
 ## Workflow actions
 
@@ -60,7 +64,8 @@ command.
 - **Complete:** mark the requested outcome finished. Starting a later workflow archives the completed record first.
 
 These actions are semantic choices. Show them as clickable host controls; never ask the user to type
-an option or command. If controls are unavailable, pause before the decision. `harness session
+an option or command. This also applies to permission for a branch or commit. If controls are
+unavailable, pause before the decision. `harness session
 pause/resume` still controls only an implementation checkout.
 
 `harness workflow list` shows saved review points and the current point. `harness workflow status` shows the full saved record. Resuming can choose any listed point.
@@ -77,4 +82,11 @@ window.
 
 ## Language and setup
 
-Ask for English or Português (Brasil) only when the user-level harness preference is unset. Store that preference outside the repository; record the effective language in a workflow checkpoint for recovery. Repository settings hold tracker and project choices. Preserve unrelated user-owned settings and explicit host conflicts. Do not silently select the bundled Azure example. Check the selected tracker's required values and capabilities before any publication batch.
+Ask for English or Português (Brasil) once for each project, even when another project has a saved
+user-level preference. Store the preference outside the repository and a project confirmation under
+`.harness/state/`; record the effective language in the workflow checkpoint. Repository settings
+hold tracker and project choices. Default source control to local and do not expose provider setup
+as a routine choice. Preserve unrelated user-owned settings. Do not silently select the bundled
+Azure example. Check the selected tracker's required values and capabilities before any publication
+batch. Check current commit state afresh on each run; a saved checkpoint can describe an earlier
+state. Git metadata, an initial commit, branches, and hosted code are optional for setup and planning.

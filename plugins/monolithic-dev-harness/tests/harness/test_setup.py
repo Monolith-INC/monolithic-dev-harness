@@ -12,7 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core.result import Err, Ok
-from scripts.harness import settings, setup
+from scripts.harness import settings, setup, workflow
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 CLI = PLUGIN_ROOT / "scripts/harness/cli.py"
@@ -142,7 +142,7 @@ class SetupTests(unittest.TestCase):
         )
         self.assertEqual(settings.path(self.repo).read_text(), "{}")
 
-    def test_scm_is_inferred_from_git_remote(self) -> None:
+    def test_hosted_code_is_not_selected_from_a_remote(self) -> None:
         subprocess.run(
             [
                 "git",
@@ -155,10 +155,122 @@ class SetupTests(unittest.TestCase):
             ],
             check=True,
         )
-        self.assertEqual(
-            setup.inferred_scm(self.repo),
-            {"name": "github", "values": {"owner": "team", "repo": "project"}},
+        reviewed = setup.review(
+            self.repo, tracker_name="local", artifacts_path="docs/backlog"
+        ).value
+        self.assertEqual(reviewed["candidate"]["scm"]["name"], "local")
+        self.assertEqual(reviewed["candidate"]["git"], {})
+
+    def test_local_tracker_is_ready_after_apply_and_commit_state_is_current(
+        self,
+    ) -> None:
+        reviewed = setup.review(
+            self.repo, tracker_name="local", artifacts_path="docs/backlog"
+        ).value
+        self.assertIsInstance(
+            setup.apply(
+                self.repo,
+                reviewed["candidate"],
+                reviewed["digest"],
+                reviewed["source_digest"],
+            ),
+            Ok,
         )
+        before = setup.inspect(self.repo).value
+        self.assertEqual(before["status"], "ready")
+        self.assertTrue(before["tracker_storage"]["ready"])
+        self.assertFalse(before["repository"]["has_committed_head"])
+        paused = workflow.pause(
+            workflow.add_point(
+                workflow.start("DAY-001").value,
+                "Old blocker",
+                "discover",
+                pending="No first commit",
+            ).value
+        ).value
+        self.assertIsInstance(workflow.save(self.repo, paused), Ok)
+        (self.repo / "README.md").write_text("project\n")
+        subprocess.run(["git", "-C", str(self.repo), "add", "README.md"], check=True)
+        subprocess.run(
+            [
+                "git",
+                "-C",
+                str(self.repo),
+                "-c",
+                "user.name=Harness Test",
+                "-c",
+                "user.email=test@example.invalid",
+                "commit",
+                "-qm",
+                "initial",
+            ],
+            check=True,
+        )
+        after = setup.inspect(self.repo).value
+        self.assertTrue(after["repository"]["has_committed_head"])
+        self.assertTrue(after["repository"]["head"])
+        self.assertEqual(after["workflow"]["pending"], "No first commit")
+
+    def test_existing_local_settings_prepare_missing_folders_without_replacing_records(
+        self,
+    ) -> None:
+        settings.path(self.repo).parent.mkdir(parents=True)
+        settings.write_reviewed_setup(
+            settings.path(self.repo),
+            setup.review(
+                self.repo, tracker_name="local", artifacts_path="docs/backlog"
+            ).value["candidate"],
+        )
+        self.assertIn("tracker.storage", setup.inspect(self.repo).value["missing"])
+        record = self.repo / ".harness/tracker/backlog/STORY-0001.json"
+        record.parent.mkdir(parents=True)
+        record.write_text('{"key":"STORY-0001"}\n')
+        before = record.read_bytes()
+        command = subprocess.run(
+            [
+                sys.executable,
+                str(CLI),
+                "bootstrap",
+                "--repo",
+                str(self.repo),
+                "--prepare-local-tracker",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(command.returncode, 0, command.stderr)
+        prepared = json.loads(command.stdout)
+        self.assertTrue(prepared["ready"])
+        self.assertEqual(prepared["work_item_count"], 1)
+        self.assertEqual(record.read_bytes(), before)
+        self.assertEqual(setup.inspect(self.repo).value["status"], "ready")
+
+    def test_local_bootstrap_and_doctor_work_without_git(self) -> None:
+        plain = Path(self.temp.name) / "plain"
+        plain.mkdir()
+        reviewed = setup.review(
+            plain, tracker_name="local", artifacts_path="docs/backlog"
+        ).value
+        self.assertIsInstance(
+            setup.apply(
+                plain,
+                reviewed["candidate"],
+                reviewed["digest"],
+                reviewed["source_digest"],
+            ),
+            Ok,
+        )
+        inspected = setup.inspect(plain).value
+        self.assertEqual(inspected["status"], "ready")
+        self.assertFalse(inspected["repository"]["git_present"])
+        self.assertTrue(inspected["tracker_storage"]["ready"])
+        doctor = subprocess.run(
+            [sys.executable, str(CLI), "doctor", "--repo", str(plain)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(doctor.returncode, 0, doctor.stdout + doctor.stderr)
+        self.assertIn("local tracker folders", doctor.stdout)
 
 
 if __name__ == "__main__":

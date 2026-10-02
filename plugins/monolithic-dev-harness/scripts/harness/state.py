@@ -30,13 +30,16 @@ def state_dir(repo: Path) -> Path:
 
 def ensure_local_exclude(repo: Path) -> tuple[str, ...]:
     """Keep clone-local records out of Git, including before repository bootstrap."""
-    result = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--git-path", "info/exclude"],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=10,
-    )
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "--git-path", "info/exclude"],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return ()
     match result.returncode, result.stdout.strip():
         case 0, str() as location if location:
             path = Path(location)

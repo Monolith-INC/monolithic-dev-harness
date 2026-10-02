@@ -4,23 +4,14 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 import subprocess
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
 from core.result import Ok, Result, attempt, bind, err, fmap, require
-from harness import preferences, settings, state
+from harness import local_tracker, preferences, settings, state, workflow
 from integrations import registry, scm
-
-_GITHUB = re.compile(r"(?:github\.com[:/])(?P<owner>[^/]+)/(?P<repo>[^/]+?)(?:\.git)?$")
-_AZURE_HTTP = re.compile(
-    r"dev\.azure\.com/(?P<organization>[^/]+)/(?P<project>[^/]+)/_git/(?P<repository>[^/]+)"
-)
-_AZURE_SSH = re.compile(
-    r"ssh\.dev\.azure\.com:v3/(?P<organization>[^/]+)/(?P<project>[^/]+)/(?P<repository>[^/]+)"
-)
 
 
 def _raw(repo: Path) -> Result[dict[str, Any]]:
@@ -71,28 +62,37 @@ def match_git(result: Result[subprocess.CompletedProcess[str]]) -> str:
             return ""
 
 
-def inferred_scm(repo: Path) -> dict[str, Any]:
-    url = _git(repo, "remote", "get-url", "origin")
-    match _GITHUB.search(url), _AZURE_HTTP.search(url) or _AZURE_SSH.search(url):
-        case re.Match() as found, _:
-            return {
-                "name": "github",
-                "values": {
-                    "owner": found.group("owner"),
-                    "repo": found.group("repo"),
-                },
-            }
-        case _, re.Match() as found:
-            return {"name": "azure-repos", "values": found.groupdict()}
-        case _:
-            return {}
-
-
 def inferred_base(repo: Path) -> str:
     remote = _git(
         repo, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD"
     )
     return remote.removeprefix("origin/") or _git(repo, "branch", "--show-current")
+
+
+def _repository_snapshot(repo: Path) -> dict[str, Any]:
+    present = _git(repo, "rev-parse", "--is-inside-work-tree") == "true"
+    head = _git(repo, "rev-parse", "--verify", "HEAD") if present else ""
+    return {
+        "git_present": present,
+        "has_committed_head": bool(head),
+        "head": head,
+        "branch": _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD")
+        if present
+        else "",
+    }
+
+
+def _workflow_snapshot(repo: Path) -> dict[str, str]:
+    match workflow.load(repo):
+        case Ok(current):
+            return {
+                "status": current.status,
+                "request": current.request,
+                "stage": current.current.stage,
+                "pending": current.current.pending,
+            }
+        case _:
+            return {}
 
 
 def _selection(raw: Mapping[str, Any], name: str) -> dict[str, Any]:
@@ -134,8 +134,13 @@ def inspect(repo: Path) -> Result[dict[str, Any]]:
             if isinstance(manifest, Ok)
             else ("tracker",)
         )
+        local_storage = (
+            local_tracker.describe(repo, manifest.value)
+            if isinstance(manifest, Ok) and selected.get("name") == "local"
+            else {}
+        )
         current_scm = _selection(raw, "scm")
-        source = current_scm or inferred_scm(repo) or {"name": "local", "values": {}}
+        source = current_scm or {"name": "local", "values": {}}
         scm_name = str(source.get("name", ""))
         scm_missing = (
             _missing(_values(source), scm.REQUIRED_VALUES[scm_name])
@@ -146,40 +151,70 @@ def inspect(repo: Path) -> Result[dict[str, Any]]:
         )
         missing = (
             *(f"tracker.{item}" for item in tracker_missing),
+            *(
+                ("tracker.storage",)
+                if local_storage and not local_storage["ready"]
+                else ()
+            ),
             *(f"scm.{item}" for item in scm_missing),
             *(
                 ("git.base_branch",)
-                if not _git_settings(raw).get("base_branch") and not inferred_base(repo)
+                if scm_name != "local"
+                and not _git_settings(raw).get("base_branch")
+                and not inferred_base(repo)
                 else ()
             ),
             *(("artifacts_path",) if not raw.get("artifacts_path") else ()),
         )
-        return fmap(
+        return bind(
             preferences.language(),
-            lambda language: {
-                "status": "ready"
-                if raw and not missing and isinstance(settings.parse(raw), Ok)
-                else "incomplete"
-                if raw
-                else "missing",
-                "language": language,
-                "trackers": [
-                    {
-                        "name": item.name,
-                        "label": item.label,
-                        "required_values": list(item.required_settings),
-                    }
-                    for item in registry.usable(repo)
-                ],
-                "current_tracker": selected,
-                "current_scm": current_scm,
-                "inferred_scm": inferred_scm(repo),
-                "inferred_base_branch": inferred_base(repo),
-                "missing": list(missing),
-            },
+            lambda language: fmap(
+                preferences.language_confirmed(repo),
+                lambda language_confirmed: {
+                    "status": "ready"
+                    if raw and not missing and isinstance(settings.parse(raw), Ok)
+                    else "incomplete"
+                    if raw
+                    else "missing",
+                    "language": language,
+                    "language_confirmed": language_confirmed,
+                    "trackers": [
+                        {
+                            "name": item.name,
+                            "label": item.label,
+                            "required_values": list(item.required_settings),
+                        }
+                        for item in registry.usable(repo)
+                    ],
+                    "current_tracker": selected,
+                    "current_scm": current_scm,
+                    "tracker_storage": local_storage,
+                    "repository": _repository_snapshot(repo),
+                    "workflow": _workflow_snapshot(repo),
+                    "missing": list(missing),
+                },
+            ),
         )
 
     return bind(_raw(repo), describe)
+
+
+def prepare_local_tracker(repo: Path) -> Result[dict[str, object]]:
+    loaded = settings.load(repo)
+    return bind(
+        loaded,
+        lambda chosen: bind(
+            require(
+                chosen.tracker.name == "local",
+                "invalid_request",
+                "the selected tracker is not local",
+            ),
+            lambda _: bind(
+                registry.selected(repo, loaded),
+                lambda active: local_tracker.prepare(repo, active.manifest),
+            ),
+        ),
+    )
 
 
 def _merged_selection(
@@ -210,13 +245,14 @@ def propose(
 ) -> Result[dict[str, Any]]:
     def candidate(raw: dict[str, Any]) -> Result[dict[str, Any]]:
         old_tracker = _selection(raw, "tracker")
-        old_scm = (
-            _selection(raw, "scm")
-            or inferred_scm(repo)
-            or {"name": "local", "values": {}}
-        )
+        old_scm = _selection(raw, "scm") or {"name": "local", "values": {}}
         chosen_tracker = tracker_name or str(old_tracker.get("name", ""))
         chosen_scm = scm_name or str(old_scm.get("name", ""))
+        chosen_base = (
+            base_branch
+            or _git_settings(raw).get("base_branch", "")
+            or (inferred_base(repo) if chosen_scm != "local" else "")
+        )
         revised = {
             **raw,
             "schemaVersion": 1,
@@ -228,9 +264,7 @@ def propose(
             "artifacts_path": artifacts_path or raw.get("artifacts_path", ""),
             "git": {
                 **_git_settings(raw),
-                "base_branch": base_branch
-                or _git_settings(raw).get("base_branch")
-                or inferred_base(repo),
+                **({"base_branch": chosen_base} if chosen_base else {}),
             },
         }
         return bind(
@@ -241,7 +275,7 @@ def propose(
             ),
             lambda _: bind(
                 require(
-                    bool(revised["git"]["base_branch"]),
+                    chosen_scm == "local" or bool(chosen_base),
                     "setup_missing",
                     "choose the repository base branch",
                 ),
@@ -319,12 +353,19 @@ def apply(
                     settings.parse(candidate),
                     lambda chosen: bind(
                         registry.selected(repo, Ok(chosen)),
-                        lambda _: attempt(
-                            lambda: _write(repo, candidate),
-                            "setup_unwritable",
-                            str(settings.path(repo)),
-                            OSError,
-                            subprocess.TimeoutExpired,
+                        lambda _: bind(
+                            attempt(
+                                lambda: _write(repo, candidate),
+                                "setup_unwritable",
+                                str(settings.path(repo)),
+                                OSError,
+                                subprocess.TimeoutExpired,
+                            ),
+                            lambda file: (
+                                fmap(prepare_local_tracker(repo), lambda _: file)
+                                if chosen.tracker.name == "local"
+                                else Ok(file)
+                            ),
                         ),
                     ),
                 ),

@@ -7,9 +7,11 @@ import os
 from pathlib import Path
 from typing import Any
 
-from core.result import Ok, Result, attempt, bind, err
+from core.result import Ok, Result, attempt, bind, err, fmap
+from harness import state
 
 LANGUAGES = ("en", "pt-br")
+LANGUAGE_STATE = Path(".harness/state/language.json")
 
 
 def path() -> Path:
@@ -58,20 +60,43 @@ def language() -> Result[str]:
     )
 
 
-def set_language(chosen: str) -> Result[Path]:
+def language_confirmed(repo: Path) -> Result[bool]:
+    chosen = state.read_json(repo / LANGUAGE_STATE)
+    return Ok(bool(chosen and chosen.get("language") in LANGUAGES))
+
+
+def set_language(chosen: str, repo: Path | None = None) -> Result[Path]:
     match chosen:
         case "en" | "pt-br":
             return bind(
                 read(),
-                lambda current: attempt(
-                    lambda: _write({**current, "language": chosen}),
-                    "preferences_unwritable",
-                    str(path()),
-                    OSError,
+                lambda current: bind(
+                    attempt(
+                        lambda: _write({**current, "language": chosen}),
+                        "preferences_unwritable",
+                        str(path()),
+                        OSError,
+                    ),
+                    lambda saved: fmap(
+                        attempt(
+                            lambda: _write_project_language(repo, chosen),
+                            "preferences_unwritable",
+                            str(repo / LANGUAGE_STATE),
+                            OSError,
+                        )
+                        if repo is not None
+                        else Ok(None),
+                        lambda _: saved,
+                    ),
                 ),
             )
         case _:
             return err("invalid_preferences", "choose en or pt-br")
+
+
+def _write_project_language(repo: Path, chosen: str) -> None:
+    state.ensure_local_exclude(repo)
+    state.write_json(repo / LANGUAGE_STATE, {"language": chosen})
 
 
 def _write(value: dict[str, Any]) -> Path:

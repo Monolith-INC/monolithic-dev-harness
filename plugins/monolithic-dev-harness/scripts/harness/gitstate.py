@@ -89,6 +89,8 @@ def staged_paths(repo: Path, include_tracked_modifications: bool = False) -> lis
 
 def branch_paths(repo: Path, base_branch: str) -> list[str]:
     """Paths changed on this branch relative to its merge-base with the base branch."""
+    if not base_branch:
+        return []
     for base in (f"origin/{base_branch}", base_branch):
         try:
             merge_base = git(repo, "merge-base", base, "HEAD")
