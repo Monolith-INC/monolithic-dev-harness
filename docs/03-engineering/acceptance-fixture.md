@@ -1,3 +1,10 @@
+---
+title: Acceptance Fixture
+status: active
+owner: monolithic-dev-harness maintainers
+last_reviewed: 2026-10-02
+---
+
 # Live-trial project fixture
 
 `test-project-template/` is the canonical starting project for human-run acceptance trials of the

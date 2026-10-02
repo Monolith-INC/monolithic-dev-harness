@@ -1,8 +1,8 @@
 {
   "name": "monolithic-dev-harness",
   "displayName": "Monolithic Dev Harness",
-  "version": "0.4.0",
-  "description": "AI product-and-delivery harness: idea shaping and product specs, linear backlog (Epic → Feature → Story → Task), Feature Owner spec-driven delivery, requirements-first review with thermos, and deterministic hooks that gate every tracker write, commit, and pull request.",
+  "version": "0.5.0",
+  "description": "Start from an ordinary feature request, guide first-run setup, investigate the project, then plan, implement, and review changes with human approval for external writes.",
   "author": {
     "name": "Théo Carranza"
   },

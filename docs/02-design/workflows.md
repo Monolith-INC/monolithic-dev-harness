@@ -11,9 +11,9 @@ last_reviewed: 2026-09-30
 
 ```text
 idea / work item
-  -> 0 DEFINE    plan-initiative: use only the needed discovery / requirements / UX /
-                 architecture skills -> product-spec with stable CAP-N ids and companions
-                 stop and ask before starting tracker-backed work
+  -> 0 DISCOVER  bmad-build: read assigned request -> investigate repository and options
+                 -> review technical implementation plan -> checkpoint for backlog drafting
+                 optional plan-initiative remains for product ideation when requested
   -> 1 BACKLOG   generate-work-item -> enrich-work-item -> decompose-backlog
                  -> generate-breakdown-work-items
                  G1: Feature Owner / PO approve the outline, then the bodies (one batch each)
@@ -25,11 +25,20 @@ idea / work item
                  G4: a person publishes and approves the pull request
 ```
 
-The `harness` skill conducts this flow. Stage 0 is optional when the input is already a defined
-intent or an existing work item. Stacked Features run stages 2–4 once per Story inside
+The `harness` skill conducts this flow. Stage 0 is the default for assigned requests that need
+technical investigation; a user can go directly to backlog drafting when the request is ready.
+Stacked Features run stages 2–4 once per Story inside
 `feature-implementation`, on Story branches based on the Feature branch.
 
-## Definition stage
+## Discovery stage
+
+For an assigned ticket or draft feature request, Stage 0 uses the bundled BMad Build workflow to
+inspect the repository, investigate feasible approaches, and produce a reviewed feature-level
+implementation plan. The plan is checkpointed and passed to backlog drafting. Tracker reads are
+read-only; no ticket state, branch, session, or tracker item is changed in this stage. BMad runtime
+files are bundled with this plugin and set up from those local files.
+
+Product ideation remains available when a user asks to explore which product or problem to pursue:
 
 ```text
 unclear idea
@@ -51,10 +60,10 @@ These are independent tools, not a fixed waterfall. The product spec adopts load
 architecture artifacts as companions. Planning creates no tracker item, branch, commit, or pull
 request. The existing approval protocol begins when the user chooses to enter the backlog stage.
 
-When a whole-harness request starts from an idea and the user has not selected a starting point,
-the agent asks one structured question: **Plan the idea** or **Draft work items**. The first enters
-Stage 0; the second enters Stage 1. The existing question hook validates that prompt before it is
-shown. This routing choice is not an approval and opens no write window.
+For a feature request with no clear starting point, the agent defaults to technical discovery and
+may ask whether to investigate first or draft work items directly. Product ideation is a separate
+optional route, offered when the user wants to explore which product or problem to pursue. Routing
+is not approval and opens no write window.
 
 ## Backlog stage
 
