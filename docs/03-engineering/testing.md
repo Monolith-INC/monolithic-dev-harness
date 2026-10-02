@@ -68,6 +68,6 @@ What the suites do **not** prove, and how it is covered instead:
 | The hooks firing inside a live Claude Code session | release gate: manual smoke test after install (see [../06-delivery/release-process.md](../06-delivery/release-process.md)) |
 | Loading in Cursor | release gate; pending first observation |
 | Codex hook trust and live invocation | release gate: review the installed hooks through `/hooks`, then observe one deny and one approved write |
-| Calls against a live Azure DevOps organization | release gate: `harness doctor --azure` and a read-only work item fetch |
+| Calls against a live Azure DevOps organization | release gate: one read-only work-item fetch through `workflow-integrations` |
 | Calls against a live Linear workspace | release gate: `harness doctor --tools` and a read-only issue fetch (the adapter's arguments follow Linear's documentation) |
 | Skill quality (the model following a procedure well) | review of real runs; not unit-testable |

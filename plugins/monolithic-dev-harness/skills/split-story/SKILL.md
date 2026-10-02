@@ -38,7 +38,7 @@ extension inside the artifacts tree):
    `parent_id`, `provider_id`. Parse body: identify sections by emoji + label headings.
 
 **If Azure ID** (numeric argument):
-1. Call `wit_work_item[get](id=<id>, expand=Relations)`.
+1. Call `tracker_get_work_item(ref=<id>) through `workflow-integrations``.
 2. Extract: `System.Title`, `System.Description`,
    `Microsoft.VSTS.Scheduling.StoryPoints`, `System.Parent`.
 
@@ -228,13 +228,13 @@ Read `../../common/providers.md` and use the selected Azure DevOps or Linear con
 
 For each sub-story draft (in order):
 
-1. `wit_work_item_write[create]` with `Markdown description` = full body from the draft.
+1. Create each approved child using `tracker_create_work_item`, with its harness kind, title,
+   description, and parent reference.
 2. Assert response contains `System.Id`. If absent: STOP and report failure with the item
    title and the raw error.
-3. `wit_work_item_link_write[link]` with explicit `type: "parent"` linking the new item to
-   `parent_id`. Skip this step when the story has no parent — sub-stories of a standalone story
-   are standalone too, and a Story is never attached to an Epic to give it a parent.
-4. Read back: `wit_work_item[get](id=<new_id>, expand=Relations)`.
+3. Supply `parentRef` at creation when the story has a parent. Do not parent a Story directly to
+   an Epic; sub-stories of a standalone Story stay standalone.
+4. Read back: `tracker_get_work_item(ref=<new_id>)`.
    Assert `System.Parent == parent_id`, or that there is no parent when the original had none.
    Assert that the relations array contains no `System.LinkTypes.Related` links
    (no stray Related links from prior failed runs).

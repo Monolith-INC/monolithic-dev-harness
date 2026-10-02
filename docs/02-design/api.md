@@ -32,22 +32,20 @@ bash install.sh [options]
 | Option / variable | Default | Meaning |
 | --- | --- | --- |
 | `--host auto\|claude\|cursor\|codex\|all` | `auto` | hosts to install into; `auto` = every host found |
-| `--org <name>` / `AZURE_DEVOPS_ORG` | asked on a TTY | Azure DevOps organization for the host-registered `azure-devops` server (repositories name theirs in `.harness/settings.json`) |
 | `--version <x.y.z>` / `HARNESS_VERSION` | latest release | version to install |
 | `--source <dir\|archive>` | download | install from a local build |
 | `--uninstall` | | remove from every host |
-| `--yes` | | never prompt |
+| `--yes` | | skip install or uninstall confirmation prompts; use for automation |
 | `HARNESS_HOME` | `~/.local/share/monolithic-dev-harness` | installed marketplace copy |
 | `HARNESS_BIN_DIR` | `~/.local/bin` | where `harness` is linked |
 | `CURSOR_PLUGIN_DIR` | `~/.cursor/plugins/local/monolithic-dev-harness` | Cursor plugin copy |
 | `GH_TOKEN` / `GITHUB_TOKEN` | | private downloads without `gh` |
-| `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude settings to update |
+| `CLAUDE_CONFIG_DIR` | `~/.claude` | Claude CLI profile directory used during installation |
 
 ### Outputs
 
-The marketplace copy under `HARNESS_HOME`, the plugin registered and enabled in Claude Code,
-`env.AZURE_DEVOPS_ORG` in Claude's `settings.json`, the Cursor plugin copy with the organization
-pinned in `cursor.mcp.json`, and the `harness` link.
+The marketplace copy under `HARNESS_HOME`, the plugin registered in selected hosts, and the
+`harness` link. Azure organization and project are repository settings configured during bootstrap.
 
 ### Exit Codes
 
@@ -62,7 +60,7 @@ rename), so a failed copy never leaves a half-installed plugin.
 ### Examples
 
 ```bash
-curl -fsSL …/install.sh | bash -s -- --org contoso --host claude
+curl -fsSL …/install.sh | bash -s -- --host claude
 bash install.sh --source dist/monolithic-dev-harness-0.1.0.tar.gz --yes
 bash install.sh --uninstall
 ```
@@ -78,7 +76,7 @@ safe adoption of implementation already in progress.
 
 ```bash
 harness version
-harness doctor [--repo <dir>] [--tools] [--azure]
+harness doctor [--repo <dir>] [--tools]
 harness bootstrap [--repo <dir>] [--settings-from <file>]
 harness session start <work item> [--workflow <name>] [--base-ref <Feature branch>] [--repo <dir>]
 harness session status | pause | resume | close [--repo <dir>]
@@ -92,9 +90,9 @@ harness knowledge init | refresh | catalog | find | resolve | fetch | status [..
 ### Inputs
 
 `bootstrap` defaults to the current git repository and `examples/settings.example.json`.
-`doctor --tools` starts the selected tracker's server and checks it offers every tool the manifest
-names; `doctor --azure` runs the Azure DevOps health check with the settings' organization and
-project. `session start` records the work item's readiness and specification artifacts; with
+`doctor --tools` checks the selected tracker's declared tools, except Azure's provider tools, which
+are private to `workflow-integrations`; use that gateway for live Azure calls. `session start` records
+the work item's readiness and specification artifacts; with
 `--workflow feature-implementation` it also needs `--base-ref`, the Feature branch the Story
 branch descends from, and pins that branch and its commit. `session start` needs the checkout to be
 on the work item's branch (the settings'
@@ -183,7 +181,6 @@ echo '{"tool_name":"Bash","tool_input":{"command":"git push"},"cwd":"."}' \
 | `scripts/harness/checks.py [--head \| --staged] [--only <name>…]` | `.harness/state/checks/<tree>.json` | `0` all passed or none applied; `1` a check failed; `2` `--head` with uncommitted tracked changes, or `--staged` when the working files differ from the index |
 | `scripts/harness/review_verdict.py --verdict ready\|blocked --summary <text>` | `.harness/state/review/<commit>.json` | `0` recorded; `2` `ready` with uncommitted tracked changes |
 | `scripts/harness/bootstrap.py --repo <dir> --settings-from <file>` | `.harness/settings.json` (once), `.git/info/exclude`, the knowledge store | `0`; `2` not a repository root, invalid settings, or an unusable selected tracker |
-| `skills/azure-devops/scripts/health-check.mjs --project <p> [--org <o>]` | nothing | `0` healthy; `1` call failed; `2` bad arguments; `124` timeout |
 | `bin/agile-backlog-toolkit <command>` | backlog reports | per command; `config --show` exits non-zero while required values are missing |
 
 ## Repository settings — `.harness/settings.json`

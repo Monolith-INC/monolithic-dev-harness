@@ -5,8 +5,10 @@ description: The end-to-end AI product and delivery flow — optional idea disco
 
 # Harness
 
-One linear flow. Each stage consumes the previous stage's output; none re-invents it. Humans decide
-at four gates. Hooks enforce the rules that must never depend on the model remembering them.
+Follow [the workflow storyboard](../../references/workflow-storyboard.md) for stage entry and exit,
+review surfaces, and Back/Pause/Resume/Cancel/Complete behavior. This skill supplies the
+stage-specific details. Each stage consumes the previous stage's output; none re-invents it. Hooks
+enforce the rules that must never depend on the model remembering them.
 
 ```
  idea / work item
@@ -16,7 +18,7 @@ at four gates. Hooks enforce the rules that must never depend on the model remem
  1 BACKLOG ───── generate-work-item → enrich-work-item → decompose-backlog → generate-breakdown-work-items
       │           (top ancestor draft)  (team format)     (Epic→Features→Stories,  (Tasks + Staging/
       │                                                     points)                  Review/Breakdown)
-      ├── G1  Feature Owner / PO approve the split and the bodies before any Azure write
+      ├── G1  Feature Owner / PO reviews the complete batch before any tracker write
  2 TECH PLAN ─── start-ticket → write-spec (Actor-Critic)
       ├── G2  Tech Lead approves the spec
  3 BUILD ─────── implement-story: per Task architect → tdd → implement → check → deslop → commit
@@ -30,9 +32,31 @@ Stacked Feature work (several Stories under one Feature) runs stage 3–4 per St
 
 ## Before the first run in a repository
 
-The repository must be opted in: `.harness/settings.json` exists (run `bootstrap`), the selected
-tracker answers (`harness doctor`; `azure-devops` for Azure), and `review-setup` has run. If any is missing, do that
-first and say so.
+Before routing the request, run `harness preference show` and `harness bootstrap --inspect`. If the
+language is unset, ask English or Português (Brasil) through the host's option UI and save the
+choice. Start the workflow with the user's original request before asking for setup details:
+`harness workflow start --request "<original request>"`. If a workflow is already active or paused,
+show its saved checkpoints and let the user resume or cancel it before starting another. If setup is
+missing or incomplete, ask only for the missing choices, prepare a reviewed settings proposal,
+verify it, and return to the original request. Do not ask the user to edit JSON or assume the
+bundled Azure example. Host trust and sign-in remain human actions where required. Run
+`review-setup` before tracker-backed work. Mark the workflow complete when its requested outcome is
+finished.
+
+`back`, `pause`, `resume`, and `cancel` are workflow actions. Present native controls where supported
+and textual commands otherwise. Include Back on a review screen when an earlier decision can be
+revised. Accept Pause at any point without asking a second question. When the host cannot show all
+actions as controls, state the words the user can send in the same prompt. The matching terminal
+commands live under `harness workflow`;
+`harness session pause/resume` controls only an implementation checkout. Checkpoints never grant
+permission for an external write. Resume rechecks files, tracker, and approvals before work.
+
+Save a checkpoint after setup and at each material review point. Before a review question, record
+the artifact path, pending decision, and next action; include `--artifact <path>` so the saved point
+captures its content digest. When the user says Pause, save any new progress first, then run
+`harness workflow pause`. On Resume, show `harness workflow list` and offer the current point and
+earlier review points in one choice. After revising an earlier point, rebuild only affected drafts
+and save a new checkpoint before asking for another decision.
 
 ## Stage 0: Define the intent
 
@@ -43,8 +67,10 @@ are independent tools, not required stages. The endpoint is a compact `product-s
 
 If the intent already says what should be true, what must not change, what is out of scope, and how
 success is observed, start at `product-spec`. If a supplied work item already carries that contract,
-skip Stage 0. Finishing planning never implies permission to create tracker items; ask before
-starting Stage 1.
+skip Stage 0. Before closing Stage 0, challenge the idea with its strongest counterargument,
+unsupported assumptions, likely failure cases, and a simpler alternative. Let the user defend,
+revise, or abandon it; present that critique with the complete product contract. Finishing
+planning never implies permission to create tracker items.
 
 ### Offer the starting point
 
@@ -59,7 +85,8 @@ start drafting work items, ask this **one structured UI question before doing ei
 Use the host's normal question UI (`AskUserQuestion` in Claude and `request_user_input` in Codex
 when that tool is available). The existing `plain-questions` hook validates it before display. In
 Cursor, which has no question buttons, show the same two choices in plain text and wait for the
-reply. If Codex does not expose `request_user_input`, use the typed approval fallback.
+reply. If Codex does not expose `request_user_input`, show the numbered text choices. Typed approval
+tokens are only for protected writes; ordinary routing choices never need one.
 
 The choice is routing, not approval: it never opens an approval window. `Plan the idea` invokes
 `plan-initiative`; `Draft work items` enters Stage 1. Do not ask when the user already chose a
@@ -82,7 +109,9 @@ item.
    one outline at GATE 1 and one body batch at GATE 2. Points go into the Azure points field.
 4. **Break down** each Story that will be built next (`generate-breakdown-work-items`): atomic Tasks
    aligned to the acceptance criteria, plus Staging, Review, and a done Breakdown Task.
-5. `validate-artifact` on anything the user edited by hand.
+5. `validate-artifact` on anything the user edited by hand. Check the selected tracker's hierarchy,
+   labels, and required values before publishing the batch. In Linear, confirm Story and Task
+   labels exist before the first item is created. Explain where every Task will be visible.
 
 ## Stage 2: Technical plan
 
@@ -90,7 +119,8 @@ item.
 Story, its acceptance criteria, its covered `CAP-N` values, its Tasks, and any adopted UX and
 architecture companions as input. It decides the Story-local *how*: affected modules, contracts,
 test strategy, and implementation details. It cannot override an upstream `AD-N` or product
-constraint silently. Present it for **G2** and stop until the user approves.
+constraint silently. Present its exact revision through the best available review surface for
+**G2** and stop until the user approves. A path or short summary alone is insufficient.
 
 ## Stage 3: Build
 
@@ -110,22 +140,27 @@ them:
 - Plain words. No file names, code, rule names, tool names, or batch ids unless they ask. Describe
   what a thing does instead ("the setting that hides local files from git").
 - One question at a time, with options that say what happens for them.
+- Apply `generate-plain-language-documentation` writing rules to labels, questions, updates, and
+  artifact summaries as an inline prose pass; do not run its standalone intake for every message.
+- Continue through reversible local drafting and checks within a stage. Stop only for missing
+  information, a material decision, an actual protected write, or a complete artifact review.
 
 Hook `plain-questions` checks every question before it is shown and sends back one that is too long,
 asks several things, or needs the harness's vocabulary to understand.
 
 ## The approval protocol (every tracker or SCM write)
 
-Hook `approval-required` blocks every write to Azure DevOps (work items, links, comments, pull
+Hook `approval-required` blocks every write to a tracker or SCM (work items, links, comments, pull
 requests, threads, branches, `git push`) unless the user has opened an approval window. To open one:
 
 1. Say in plain words what will be written: which items, with their titles, and what changes.
-2. Ask one question with two options, labelled exactly `Approve` and `Not now`. The user's click on
-   `Approve` opens the window for `approvals.window_minutes` (default 20).
+2. Present the complete relevant artifact or batch through the best available host surface. Ask one
+   question with two options, labelled exactly `Approve` and `Not now`. A working native control in
+   Claude or trusted Codex opens the window for `approvals.window_minutes` (default 20).
 3. Make only the writes you described. Anything new needs a new question.
 
-In Cursor, where questions cannot be asked, give the batch an id (`HB-` plus 4–8 uppercase letters
-or digits) and ask the user to reply `approve HB-7Q2K`. Typing it works in Claude too.
+Where a native approval control is unavailable, show the exact typed command in the first prompt:
+`approve HB-7Q2K` (using the real batch id). Do not show a button that cannot authorize the write.
 `harness revoke` closes a window early.
 
 You cannot open the window yourself: approvals are recorded only from the user's own prompt or

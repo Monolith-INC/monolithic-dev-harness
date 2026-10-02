@@ -32,12 +32,12 @@ the URL omits it.
 
 ---
 
-## Fetch work item (primary: Azure DevOps MCP)
+## Fetch work item through the harness integration
 
-**Preferred:** Azure DevOps MCP (`azure-devops` server configured in `.mcp.json` / `.cursor/mcp.json`).
+Use only the provider-neutral `workflow-integrations` gateway:
 
 ```
-wit_work_item[get](id=<work_item_id>, expand=Relations)
+tracker_get_work_item(ref=<work_item_id>)
 ```
 
 Capture at minimum:
@@ -52,9 +52,9 @@ Capture at minimum:
 | `Microsoft.VSTS.Common.AcceptanceCriteria` | AC when stored outside Description |
 | `relations` | Attachments, parent link, hyperlinks |
 
-Access is through the host's Azure DevOps MCP server only, signed in interactively (see
-`skills/azure-devops/SKILL.md`); no PAT, no `az login`, no direct REST calls. If the server is
-unavailable, STOP and say so.
+The gateway owns the Azure adapter and its interactive OAuth session. Do not call native Azure MCP
+tools, Azure CLI, `az login`, a PAT, or direct REST APIs. If the gateway is unavailable, STOP and
+say so.
 
 On 401/403: STOP — report missing auth; do not enrich from a partial fetch.
 
@@ -62,7 +62,11 @@ On 401/403: STOP — report missing auth; do not enrich from a partial fetch.
 
 ## Enumerate attachments
 
-From `relations`, collect entries where `rel` is `AttachedFile` (case-insensitive).
+The gateway does not expose attachment downloads. If the work item indicates Azure attachments,
+record them as unavailable and continue only when the attachment contents are not required.
+
+From relations returned by the gateway, collect other linked sources that the gateway makes
+available.
 
 Each relation provides:
 
@@ -101,10 +105,10 @@ reader to use. Include a hit when any of the following match:
 
 ### Azure attachments (all `AttachedFile` relations)
 
-**Preferred MCP** (when the server exposes it):
+**Current gateway capability:**
 
 ```
-wit_work_item_attachment(project=<project>, attachmentId=<guid>, fileName=<name>)
+No gateway attachment-download tool is currently available.
 ```
 
 Returns base64 content — decode and interpret by extension:
@@ -196,9 +200,8 @@ Normalize before PHASE 2 (route enricher):
 
 | Tool | Purpose |
 | --- | --- |
-| `wit_work_item[get]` | Work item fields + relations |
-| `wit_work_item_attachment` | Download attachment content (when available on server) |
-| `wit_work_item[get_batch]` | Parent chain batch fetch |
+| `tracker_get_work_item` | Work item fields and provider-neutral relation data |
+| `tracker_list_children` | Child work items |
 
-If `wit_work_item_attachment` is missing on an older MCP build, note each attachment as
+The gateway does not currently expose attachment download or direct REST access. Note each attachment as
 `[attachment: <name>, not fetched]` and say so in the run summary.

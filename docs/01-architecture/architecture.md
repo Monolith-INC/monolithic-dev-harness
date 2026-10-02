@@ -56,7 +56,7 @@ contracts, evidence), and routes every provider call through a place the runtime
 |                                                                |
 |  .mcp.json / cursor.mcp.json:                                  |
 |    backlog-orchestrator  workflow-orchestrator                 |
-|    workflow-integrations  azure-devops                         |
+|    workflow-integrations (routes to native provider internally) |
 +----------------------------------------------------------------+
 ```
 
@@ -79,7 +79,7 @@ contracts, evidence), and routes every provider call through a place the runtime
 | `workflow-integrations` (`scripts/integrations/`) | The gateway: provider-neutral tools dispatched to the selected tracker's adapter and the SCM adapter (GitHub, Azure Repos). |
 | `scripts/integrations/registry.py` | Finds tracker folders, checks each against the contract on its own, resolves the selected one (not configured, active, or invalid), and loads its adapter. |
 | `trackers/<name>/` | One tracker each: `tracker.json` (what it is) and `adapter.py` (translation only). Shipped: Azure DevOps, Linear, local. |
-| `azure-devops` | The `@azure-devops/mcp` server registered with the host, started with the organization from `AZURE_DEVOPS_ORG` (the installer sets it). The gateway starts its own copy with the settings' organization. |
+| Azure DevOps adapter | Internal gateway implementation using `@azure-devops/mcp`; it is not separately registered with the host. The gateway starts one persistent provider transport using repository settings. |
 
 ## Runtime State Machine
 
@@ -168,7 +168,7 @@ Details: [data-model.md](data-model.md).
 | Hook events | `PreToolUse`, `UserPromptSubmit`, question hooks | `preToolUse`, `beforeShellExecution`, `beforeMCPExecution`, `beforeSubmitPrompt` | `PreToolUse`, `PostToolUse`, `UserPromptSubmit`, question-tool hooks |
 | Deny output | `hookSpecificOutput.permissionDecision: deny` | `{"permission": "deny", "agent_message", "user_message"}` | `hookSpecificOutput.permissionDecision: deny` |
 | MCP tool names | `mcp__plugin_monolithic-dev-harness_<server>__<tool>` | bare tool names under the server | `mcp__<server>__<tool>` |
-| Azure organization | environment set in Claude settings | pinned in `cursor.mcp.json` | pinned in the installed `.mcp.json` |
+| Azure organization | `.harness/settings.json` → tracker/scm values | `.harness/settings.json` → tracker/scm values | `.harness/settings.json` → tracker/scm values |
 | Status | verified in a sandboxed profile | live load pending | payload and policy tests pass; live load pending |
 
 ## Failure Modes

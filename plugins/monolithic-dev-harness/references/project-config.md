@@ -63,9 +63,9 @@ The agent never writes the settings file. When a value is missing:
 
 | Missing | Discover with |
 |---|---|
-| project | `core_list_projects` |
-| team | `core_list_project_teams` |
-| process | `wit_backlog[list]`: the Stories backlog column names it (`StoryPoints` agile, `Effort` scrum, `Size` cmmi) |
+| project | Azure DevOps project selection in the harness bootstrap/onboarding flow |
+| team | harness tracker onboarding flow |
+| process | `tracker_describe` when returned by the selected adapter; otherwise onboarding must report the available choices |
 
 Present the options, let the user pick, and give them the exact `tracker.values` entry to add.
 

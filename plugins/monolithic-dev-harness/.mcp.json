@@ -1,13 +1,5 @@
 {
   "mcpServers": {
-    "azure-devops": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "@azure-devops/mcp",
-        "${AZURE_DEVOPS_ORG}"
-      ]
-    },
     "backlog-orchestrator": {
       "command": "python3",
       "args": [

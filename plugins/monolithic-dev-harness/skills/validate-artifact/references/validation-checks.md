@@ -36,7 +36,7 @@ mixing labels from both columns fails the check the same as a missing section.
 
 ## b) HIERARCHY
 
-Requires Azure MCP (`wit_work_item[get]`). If `provider_id` is null and source is a local file, emit
+Requires the configured tracker through `workflow-integrations` (`tracker_get_work_item`). If `provider_id` is null and source is a local file, emit
 `WARN hierarchy-skipped-no-azure-id` and skip the entire category.
 
 Failures are logged and validation continues to the next check.

@@ -30,29 +30,8 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
 
 from core.result import Err, Failure, Ok, Result, attempt, bind, fmap  # noqa: E402
-from harness import settings, state  # noqa: E402
+from harness import settings, setup, state  # noqa: E402
 from integrations import registry  # noqa: E402
-
-
-def _ensure_local_exclude(repo: Path) -> tuple[str, ...]:
-    """Ignore local-only harness paths in this clone: git's own exclude file, not the tracked `.gitignore`."""
-    result = subprocess.run(
-        ["git", "-C", str(repo), "rev-parse", "--git-path", "info/exclude"],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=10,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        return ()
-    path = Path(result.stdout.strip())
-    path = path if path.is_absolute() else repo / path
-    lines = path.read_text(encoding="utf-8").splitlines() if path.exists() else []
-    added = tuple(entry for entry in state.LOCAL_ONLY_PATHS if entry not in lines)
-    if added:
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("\n".join([*lines, *added]) + "\n", encoding="utf-8")
-    return added
 
 
 def _ensure_codex_config(repo: Path) -> Result[str]:
@@ -109,7 +88,9 @@ def _ensure_codex_config(repo: Path) -> Result[str]:
                     )
                 )
     except OSError as exc:
-        return Err(Failure("codex_config_unwritable", f"{path} could not be updated: {exc}"))
+        return Err(
+            Failure("codex_config_unwritable", f"{path} could not be updated: {exc}")
+        )
 
 
 def _candidate(source: Path) -> Result[settings.Settings]:
@@ -164,20 +145,83 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--repo", required=True)
+    parser.add_argument("--repo", default=".")
     parser.add_argument(
         "--settings-from",
-        required=True,
-        help="a settings file to start from (see examples/settings.example.json)",
+        help="legacy one-time import of a reviewed settings file",
     )
+    parser.add_argument("--inspect", action="store_true")
+    parser.add_argument("--propose", action="store_true")
+    parser.add_argument("--apply-digest")
+    parser.add_argument("--source-digest")
+    parser.add_argument("--tracker")
+    parser.add_argument("--tracker-value", action="append", default=[])
+    parser.add_argument("--scm")
+    parser.add_argument("--scm-value", action="append", default=[])
+    parser.add_argument("--artifacts-path")
+    parser.add_argument("--base-branch")
     args = parser.parse_args(argv)
 
     repo = Path(args.repo).resolve()
     if not (repo / ".git").exists():
         print(f"{repo} is not a git repository root", file=sys.stderr)
         return 2
+    choices = {
+        "tracker_name": args.tracker or "",
+        "tracker_values": dict(
+            item.partition("=")[::2] for item in args.tracker_value if "=" in item
+        ),
+        "scm_name": args.scm or "",
+        "scm_values": dict(
+            item.partition("=")[::2] for item in args.scm_value if "=" in item
+        ),
+        "artifacts_path": args.artifacts_path or "",
+        "base_branch": args.base_branch or "",
+    }
+    match args.settings_from, args.propose, args.apply_digest:
+        case None, False, None:
+            return _report(setup.inspect(repo))
+        case None, True, None:
+            return _report(setup.review(repo, **choices))
+        case None, _, str() as approved:
+            return _apply_reviewed(repo, choices, approved, args.source_digest or "")
+        case str() as source, False, None:
+            return _legacy_install(repo, Path(source))
+        case _:
+            print("choose one bootstrap operation", file=sys.stderr)
+            return 2
+
+
+def _report(result: Result[dict]) -> int:
+    match result:
+        case Ok(value):
+            print(json.dumps(value, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+        case Err(failure):
+            print(failure.message, file=sys.stderr)
+            return 2
+
+
+def _apply_reviewed(
+    repo: Path, choices: dict, approved: str, source_digest: str
+) -> int:
+    match setup.review(repo, **choices):
+        case Err(failure):
+            print(failure.message, file=sys.stderr)
+            return 2
+        case Ok(review):
+            match setup.apply(repo, review["candidate"], approved, source_digest):
+                case Err(failure):
+                    print(failure.message, file=sys.stderr)
+                    return 2
+                case Ok(file):
+                    print(f"wrote {file}")
+                    return _finish(repo)
+
+
+def _legacy_install(repo: Path, source: Path) -> int:
     # State stays out of git before anything can write it: the settings opt the repository in.
-    added = _ensure_local_exclude(repo)
+    added = state.ensure_local_exclude(repo)
     if added:
         print(f"ignored {', '.join(added)} in .git/info/exclude (this clone only)")
     committed = subprocess.run(
@@ -193,7 +237,7 @@ def main(argv: list[str] | None = None) -> int:
             f"`git rm -r --cached --ignore-unmatch {' '.join(state.LOCAL_ONLY_PATHS)}`",
             file=sys.stderr,
         )
-    match _install(repo, Path(args.settings_from)):
+    match _install(repo, source):
         case Err(failure):
             print(
                 f"settings or their tracker cannot be used: {failure.message}",
@@ -202,9 +246,16 @@ def main(argv: list[str] | None = None) -> int:
             return 2
         case Ok(note):
             print(note)
+    return _finish(repo)
+
+
+def _finish(repo: Path) -> int:
     match _ensure_codex_config(repo):
         case Err(failure):
-            print(f"warning: {failure.message}; typed approvals remain available", file=sys.stderr)
+            print(
+                f"warning: {failure.message}; typed approvals remain available",
+                file=sys.stderr,
+            )
         case Ok(note):
             print(note)
     active = registry.selected(repo, settings.load(repo)).value

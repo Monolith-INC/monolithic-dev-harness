@@ -32,7 +32,7 @@ None.
 | Python 3.10+ (standard library only) | hooks, orchestrators, gateway, CLI | checked by the installer and `harness doctor` |
 | git | hooks | trees, staged paths, branch diffs |
 | Node.js / `npx` | `@azure-devops/mcp` | downloaded by `npx` on first start |
-| `@azure-devops/mcp` | Azure DevOps access | interactive OAuth; the gateway passes the settings' organization, the host-registered server reads `AZURE_DEVOPS_ORG` |
+| `@azure-devops/mcp` | Internal Azure DevOps adapter used by `workflow-integrations` | interactive OAuth; the gateway reads organization from harness settings |
 | `mcp-remote` | Linear access, when selected | started by `npx`; OAuth in the browser |
 | Claude Code and/or Cursor | host | |
 | `curl` or `gh` | installer | `gh` or a token while the repository is private |

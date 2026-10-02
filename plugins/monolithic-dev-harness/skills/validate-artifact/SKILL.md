@@ -35,7 +35,7 @@ Determine source from the argument:
 2. Derive artifact type from `work_item_type` frontmatter value.
 
 **If Azure ID (numeric argument):**
-1. Call `wit_work_item[get](id=<id>, expand=Relations)`.
+1. Call `tracker_get_work_item(ref=<id>) through `workflow-integrations``.
 2. Extract: `System.WorkItemType`, `System.Title`, `System.Description`,
    `Microsoft.VSTS.Scheduling.StoryPoints`, `System.Parent`.
 3. Artifact type = `System.WorkItemType`.
@@ -103,13 +103,13 @@ A Feature or a User Story with no parent is valid: its parent check passes with 
 `hierarchy_parent_is_feature: false` only when the Story **has** a parent and it is not a Feature.
 
 **User Story:**
-1. If `parent_id` is set: `wit_work_item[get](id=artifact.parent_id)`. Assert
+1. If `parent_id` is set: `tracker_get_work_item(ref=artifact.parent_id)`. Assert
    `System.WorkItemType == "Feature"`.
 2. Check `hierarchy-story-parent-is-feature` — FAIL if the parent is not a Feature (for example an
    Epic). PASS when there is no parent.
 
 **Feature:**
-1. If `parent_id` is set: `wit_work_item[get](id=artifact.parent_id)`. Assert
+1. If `parent_id` is set: `tracker_get_work_item(ref=artifact.parent_id)`. Assert
    `System.WorkItemType == "Epic"`.
 2. Check `hierarchy-feature-parent-is-epic` — FAIL if the parent is not an Epic. PASS when there is
    no parent.
