@@ -23,7 +23,7 @@ from pathlib import Path
 from typing import Any
 
 from core.result import Ok, Result, attempt, bind, err, fmap, oks, require, sequence
-from harness import gitstate
+from harness import local_tracker
 from harness.state import write_json
 from integrations import artifacts
 from integrations.contracts import (
@@ -44,7 +44,6 @@ from integrations.planning_files import (
     read_capacity_file,
 )
 
-ROOT = Path(".harness") / "tracker"
 PAGE_SIZE = 50
 PREFIXES = {
     WorkItemKind.EPIC: "EPIC",
@@ -57,19 +56,8 @@ PREFIXES = {
 Record = tuple[Path, Mapping[str, Any]]
 
 
-def _clone_root(repo: Path) -> Path:
-    """The clone's main worktree, shared by every linked worktree; `repo` outside git."""
-    try:
-        common = gitstate.git(
-            repo, "rev-parse", "--path-format=absolute", "--git-common-dir"
-        )
-    except gitstate.GitError:
-        return repo
-    return Path(common).parent if Path(common).name == ".git" else repo
-
-
 def adapter(context: AdapterContext) -> TrackerOps:
-    root = _clone_root(context.repo) / ROOT
+    root = local_tracker.storage_root(context.repo)
     return TrackerOps(
         get_work_item=lambda ref: fmap(
             _find(context, root, ref), lambda found: _item(found[1])

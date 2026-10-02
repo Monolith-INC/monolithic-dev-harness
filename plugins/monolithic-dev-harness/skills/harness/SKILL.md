@@ -39,9 +39,10 @@ this skill's own location; do not ask the user to find the path, change their sh
 the plugin again. Report a missing command only if neither the shell command nor the bundled
 executable exists.
 
-Before routing the request, run `harness bootstrap --inspect` once; it includes the language
-preference, so do not separately run `harness preference show`. If the language is unset, offer
-**English** and **Português (Brasil)** as clickable choices. In Codex, call
+Before routing the request, run `harness bootstrap --inspect` once. If `language_confirmed` is false,
+offer **English** and **Português (Brasil)** as clickable choices for this project, even if a
+different project saved a preference. Save the selected language with
+`harness preference language <en|pt-br> --repo .`. In Codex, call
 `request_user_input_async` and wait for a click selection. Never ask the user to type an option or
 answer in chat; if controls are unavailable, pause before the decision or any dependent write. Start the workflow with the user's
 original request before asking for setup details:
@@ -50,9 +51,15 @@ show its saved checkpoints and let the user resume or cancel it before starting 
 missing or incomplete, guide the user through only the choices that are actually missing, prepare a
 reviewable settings proposal, apply it after the user's choice, verify it, and return to the original
 request in this same run. Do not ask the user to edit JSON or assume the bundled Azure example.
-Host trust and sign-in remain human actions where required. Run
-`review-setup` before tracker-backed work. Mark the workflow complete when its requested outcome is
-finished.
+Host trust and sign-in remain human actions where required. The selected tracker and its manifest
+provide the work-item capabilities for planning; do not start a second tracker or review-source
+setup during discovery, ideation, or backlog drafting. Mark the workflow complete when its
+requested outcome is finished.
+
+Use the inspection's current `repository.has_committed_head`, `tracker_storage`, and `workflow`
+fields when resuming. A saved note about a missing commit describes the past. Recheck current
+state and continue the pending product or engineering step. If the bundled local tracker has missing
+folders, bootstrap prepares them without a user question.
 
 `back`, `pause`, `resume`, and `cancel` are workflow actions. Use native controls; never ask the user
 to type these actions. Include Back on a review screen when an earlier decision can be revised.
@@ -68,20 +75,29 @@ and save a new checkpoint before asking for another decision.
 
 ## Stage 0: Technical discovery
 
-For an assigned ticket or draft request to change an existing product, use the bundled `bmad-build`
-workflow by default. It reads the request and relevant context, investigates the actual repository,
-compares feasible approaches, and produces a reviewed feature implementation plan before backlog
-work begins. Do not start implementation from this step. On approval, save the plan as a harness
-workflow checkpoint and pass it to Stage 1 as the source for work-item drafting. The Stage 0 approval
-does not publish tracker items; the normal backlog review and write gates still apply.
+For an assigned ticket or request to change an existing product, follow
+[`technical-discovery.md`](references/technical-discovery.md). It is included in the plugin, so this
+stage does not prepare a project copy of BMad, render generated steps, install modules, or fetch
+dependencies. Do not offer the user choices about repairing or installing workflow infrastructure.
+Do not start implementation from this step. On approval, save the plan as a harness workflow
+checkpoint and pass it to Stage 1 as the source for work-item drafting. The Stage 0 approval does
+not publish tracker items; the normal backlog review and write gates still apply.
 
 For a ticket in an external or local harness tracker, check `workflow_tracking_status`, use
 `tracker_get_work_item` for the named item and `tracker_list_children` for relevant parent context.
 Use `tracker_search_work_items` only when a named item cannot be retrieved directly. For an explicit
 file or path such as `backlog/DAY-001-task-counts.md`, read that file directly. This lookup must not
 move the ticket, create a branch, start a session, or publish an artifact. Use BMad's file-based
-ticket tree only when the user explicitly chose that store. The BMad runtime files are bundled under
-the harness plugin and set up from that local bundle; do not install or fetch BMad from upstream.
+ticket tree only when the user explicitly chose that store.
+
+An existing project file does not need a tracker-issued key for discovery. The local tracker creates
+its own keys when backlog items are published later. Do not run `harness tracker stage` for the
+bundled local tracker or ask the user to initialize it during planning.
+
+Git is optional. Discovery, planning, local work-item drafts, and workflow checkpoints must continue
+when the folder has no Git metadata or has no commit yet. Do not request an initial commit, branch,
+or implementation session to read or save a plan. Session and commit rules apply only when the
+repository has a committed Git baseline and the workflow reaches governed code changes.
 
 Use `plan-initiative` when the user explicitly wants to explore what problem or product to pursue,
 or when the intended outcome is not yet identifiable. Its optional brainstorming, idea-forging,

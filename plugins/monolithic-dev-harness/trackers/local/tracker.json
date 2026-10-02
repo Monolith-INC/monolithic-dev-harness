@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "name": "local",
   "label": "Local tracker",
-  "docs": "Work items are JSON files under .harness/tracker/<state>/, kept in this clone only (ignored through .git/info/exclude).",
+  "docs": "Bundled local tracker. Bootstrap prepares .harness/tracker/{backlog,ready,in_progress,done,canceled,artifacts,capacity}/. Work items are JSON files under the matching state folder; creating an item issues its key. Records stay in this project clone and are ignored through .git/info/exclude when Git is present. No provider onboarding is needed.",
   "connection": {"kind": "local"},
   "settings": [],
   "kinds": {"epic": "epic", "feature": "feature", "user_story": "user_story", "task": "task", "bug": "bug"},

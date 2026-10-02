@@ -193,7 +193,7 @@ def _parse(raw: Mapping[str, Any]) -> Result[Settings]:
                 str(item) for item in raw.get("protected_work_items", [])
             ),
             artifacts_path=str(raw.get("artifacts_path", "")),
-            base_branch=str(raw.get("git", {}).get("base_branch", "develop")),
+            base_branch=str(raw.get("git", {}).get("base_branch", "")),
             approval_minutes=int(raw.get("approvals", {}).get("window_minutes", 20)),
             checks=tuple(
                 Check(str(item["name"]), str(item["run"]), tuple(item.get("when", ())))

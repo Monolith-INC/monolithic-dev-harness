@@ -16,7 +16,7 @@ if _SCRIPTS_DIR not in sys.path:
 from spec_runtime import SPEC_KINDS
 
 from core.result import Err, Failure, Ok, Result, bind, fmap, recover
-from harness import sessions, settings, state
+from harness import gitstate, sessions, settings, state
 from harness.local_artifacts import approved_kinds_for, artifacts_dir
 from host_adapters import select_adapter
 from host_adapters.hook_bridge import project_root_hint, should_emit_allow
@@ -211,7 +211,11 @@ def _failure(message: str) -> Failure:
 
 def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
     root = Path(event.workspace_root or ".")
-    if _is_bootstrap_or_repair(event.command) or not _enforced(root):
+    if (
+        _is_bootstrap_or_repair(event.command)
+        or not _enforced(root)
+        or not _has_committed_head(root)
+    ):
         return PolicyDecision.allow()
     boundary = "push" in {
         command[0] for command in git_commands(event.command or "") if command
@@ -229,6 +233,15 @@ def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
             ),
         )
     )
+
+
+def _has_committed_head(root: Path) -> bool:
+    """Session and evidence rules apply only when Git can identify a committed baseline."""
+    try:
+        gitstate.head_sha(root)
+        return True
+    except gitstate.GitError:
+        return False
 
 
 def _live_ready(root: Path) -> Result[None]:

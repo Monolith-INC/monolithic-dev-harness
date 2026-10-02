@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-10-02
+
+### Fixed
+
+- Bootstrap now prepares every folder needed by the bundled local tracker and reports its storage
+  readiness. Existing local settings are repaired in the background without onboarding another
+  tracker or replacing work items.
+- Bootstrap reports the current commit and saved workflow together, so an old pause note cannot be
+  mistaken for the repository's present state.
+- Technical discovery runs from instructions included in the plugin, without downloading planning
+  dependencies or asking the user to repair workflow infrastructure.
+- Setup asks for the project's language and keeps hosting and version control optional. Planning
+  can continue without Git, an initial commit, a branch, or an implementation session.
+- User decisions throughout the workflow, including later branch decisions, remain in clickable
+  question controls. Local tracker records and planning drafts are described as separate folders.
+
 ## [0.5.1] - 2026-10-02
 
 ### Added
@@ -492,7 +508,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.2...HEAD
+[0.5.2]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.5.0
 [0.4.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.4.0

@@ -15,7 +15,7 @@ class SettingsTest(unittest.TestCase):
         loaded = settings.parse(MINIMAL).value
         self.assertEqual(
             (loaded.base_branch, loaded.approval_minutes, loaded.require_draft),
-            ("develop", 20, True),
+            ("", 20, True),
         )
         self.assertEqual(
             (loaded.tracker.source, loaded.protected_work_items),

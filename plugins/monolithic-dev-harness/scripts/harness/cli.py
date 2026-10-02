@@ -40,6 +40,7 @@ from harness import (  # noqa: E402
     adoption,
     gitstate,
     knowledge,
+    local_tracker,
     preferences,
     sessions,
     settings,
@@ -94,12 +95,12 @@ def doctor(args: argparse.Namespace) -> int:
         f"{py.major}.{py.minor} (3.10+ required)",
     )
     for tool, why in (
-        ("git", "hooks read git state"),
+        ("git", "needed only for versioned delivery"),
         ("npx", "runs the Azure DevOps MCP server"),
     ):
         found = shutil.which(tool)
         report.line(
-            "ok" if found else ("FAIL" if tool == "git" else "warn"),
+            "ok" if found else "warn",
             tool,
             found or f"not found; {why}",
         )
@@ -145,10 +146,8 @@ def doctor(args: argparse.Namespace) -> int:
             )
 
     print("Repository")
-    repo = gitstate.repo_root(Path(args.repo))
-    if repo is None:
-        report.line("skip", "git repository", f"{args.repo} is not inside one")
-    elif not settings.governed(repo):
+    repo = gitstate.repo_root(Path(args.repo)) or Path(args.repo).resolve()
+    if not settings.governed(repo):
         report.line("skip", str(repo), "not opted in (run `harness bootstrap`)")
     else:
         _repository(report, repo, args)
@@ -170,12 +169,22 @@ def _repository(report: Report, repo: Path, args: argparse.Namespace) -> None:
             report.line(
                 "ok", "tracker", f"{active.manifest.label} ({active.manifest.source})"
             )
+            if active.manifest.name == "local":
+                storage = local_tracker.describe(repo, active.manifest)
+                report.line(
+                    "ok" if storage["ready"] else "FAIL",
+                    "local tracker folders",
+                    str(storage["path"]),
+                )
         case Err(failure):
             report.line("FAIL", "tracker", failure.message)
     for problem in registry.problems(repo):
         report.line("warn", "tracker folder", problem.message)
     report.line("ok", "tracking", state.tracking_mode(repo))
-    report.line("ok", "session", sessions.describe(sessions.resolve(repo)))
+    if gitstate.repo_root(repo) is not None:
+        report.line("ok", "session", sessions.describe(sessions.resolve(repo)))
+    else:
+        report.line("skip", "session", "version control is not in use")
     if args.tools and isinstance(selected, Ok):
         report.line(*_tools(repo, selected.value))
 
@@ -222,10 +231,7 @@ def _tools(repo: Path, active: registry.Active) -> tuple[str, str, str]:
 def bootstrap(extra: list[str]) -> int:
     args = list(extra)
     if "--repo" not in args:
-        repo = gitstate.repo_root(Path.cwd())
-        if repo is None:
-            print("not inside a git repository; pass --repo <dir>", file=sys.stderr)
-            return 2
+        repo = gitstate.repo_root(Path.cwd()) or Path.cwd().resolve()
         args += ["--repo", str(repo)]
     script = PLUGIN_ROOT / "scripts" / "harness" / "bootstrap.py"
     return subprocess.call([sys.executable, str(script), *args])
@@ -508,7 +514,10 @@ def preference_command(args: argparse.Namespace) -> int:
         case "language":
             return _print(
                 fmap(
-                    preferences.set_language(args.value or ""),
+                    preferences.set_language(
+                        args.value or "",
+                        Path(args.repo).resolve() if args.repo else None,
+                    ),
                     lambda _: f"preferred language: {args.value}",
                 )
             )
@@ -784,6 +793,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     preference_parser.add_argument("operation", choices=("show", "language"))
     preference_parser.add_argument("value", nargs="?")
+    preference_parser.add_argument("--repo")
     tracker_parser = sub.add_parser(
         "tracker", help="list or inspect trackers, check readiness, or stage a new one"
     )

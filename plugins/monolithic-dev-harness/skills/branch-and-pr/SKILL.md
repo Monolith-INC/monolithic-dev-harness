@@ -10,6 +10,11 @@ tools, which work the same on Azure Repos and GitHub (`scm.name` in `.harness/se
 
 ## Branch
 
+Branch creation belongs to implementation after the user has reviewed the plan and a tracker item
+exists. Do not create a branch or start a session during bootstrap, discovery, or ideation. If a
+decision or approval is needed, use the host's clickable question control. In Codex call
+`request_user_input_async` with selectable options; never fall back to a plain-text question.
+
 1. The working tree is clean, or its changes are explicitly handled.
 2. Branch name: the repository's convention from `.harness/settings.json` →
    `branch_template` (for example `{category}/{key}-{slug}` → `feature/9123-avatar-do-estudante`). The

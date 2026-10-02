@@ -30,7 +30,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
 
 from core.result import Err, Failure, Ok, Result, attempt, bind, fmap  # noqa: E402
-from harness import settings, setup, state  # noqa: E402
+from harness import gitstate, settings, setup, state  # noqa: E402
 from integrations import registry  # noqa: E402
 
 
@@ -151,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
         help="legacy one-time import of a reviewed settings file",
     )
     parser.add_argument("--inspect", action="store_true")
+    parser.add_argument("--prepare-local-tracker", action="store_true")
     parser.add_argument("--propose", action="store_true")
     parser.add_argument("--apply-digest")
     parser.add_argument("--source-digest")
@@ -163,9 +164,6 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     repo = Path(args.repo).resolve()
-    if not (repo / ".git").exists():
-        print(f"{repo} is not a git repository root", file=sys.stderr)
-        return 2
     choices = {
         "tracker_name": args.tracker or "",
         "tracker_values": dict(
@@ -178,14 +176,21 @@ def main(argv: list[str] | None = None) -> int:
         "artifacts_path": args.artifacts_path or "",
         "base_branch": args.base_branch or "",
     }
-    match args.settings_from, args.propose, args.apply_digest:
-        case None, False, None:
+    match (
+        args.settings_from,
+        args.propose,
+        args.apply_digest,
+        args.prepare_local_tracker,
+    ):
+        case None, False, None, True:
+            return _report(setup.prepare_local_tracker(repo))
+        case None, False, None, False:
             return _report(setup.inspect(repo))
-        case None, True, None:
+        case None, True, None, False:
             return _report(setup.review(repo, **choices))
-        case None, _, str() as approved:
+        case None, _, str() as approved, False:
             return _apply_reviewed(repo, choices, approved, args.source_digest or "")
-        case str() as source, False, None:
+        case str() as source, False, None, False:
             return _legacy_install(repo, Path(source))
         case _:
             print("choose one bootstrap operation", file=sys.stderr)
@@ -224,13 +229,17 @@ def _legacy_install(repo: Path, source: Path) -> int:
     added = state.ensure_local_exclude(repo)
     if added:
         print(f"ignored {', '.join(added)} in .git/info/exclude (this clone only)")
-    committed = subprocess.run(
-        ["git", "-C", str(repo), "ls-files", "--", *state.LOCAL_ONLY_PATHS],
-        capture_output=True,
-        text=True,
-        check=False,
-        timeout=10,
-    ).stdout.split()
+    committed = (
+        subprocess.run(
+            ["git", "-C", str(repo), "ls-files", "--", *state.LOCAL_ONLY_PATHS],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=10,
+        ).stdout.split()
+        if gitstate.repo_root(repo) is not None
+        else []
+    )
     if committed:
         print(
             "warning: local-only harness records are committed; stop sharing them with "
@@ -250,10 +259,24 @@ def _legacy_install(repo: Path, source: Path) -> int:
 
 
 def _finish(repo: Path) -> int:
+    chosen = settings.load(repo)
+    match chosen:
+        case Err(failure):
+            print(failure.message, file=sys.stderr)
+            return 2
+        case Ok(value) if value.tracker.name == "local":
+            match setup.prepare_local_tracker(repo):
+                case Err(failure):
+                    print(failure.message, file=sys.stderr)
+                    return 2
+                case Ok(_):
+                    pass
+        case _:
+            pass
     match _ensure_codex_config(repo):
         case Err(failure):
             print(
-                f"warning: {failure.message}; typed approvals remain available",
+                f"warning: {failure.message}; clickable choices require host support",
                 file=sys.stderr,
             )
         case Ok(note):
@@ -266,17 +289,7 @@ def _finish(repo: Path) -> int:
     print(
         f"knowledge {knowledge_result['outcome']}: {knowledge_result.get('revision', '')}"
     )
-    print(
-        json.dumps(
-            {
-                "next": [
-                    "trust this repository in Codex so .codex/config.toml is loaded",
-                    "run the review-setup skill",
-                    "restart the agent session",
-                ]
-            }
-        )
-    )
+    print(json.dumps({"setup": "ready"}))
     return 0
 
 
