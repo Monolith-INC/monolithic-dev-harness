@@ -42,6 +42,7 @@ last_reviewed: 2026-09-30
 | Tracker policy | What the rules know about trackers for one hook call: which calls write (from every shipped and onboarded tracker folder, trusted or not), and how ids look and which text links (from every usable one). |
 | Tracker trust | The user's click on **Trust** in a question that names an onboarded tracker, pinning it to its folder's exact content as it read when the question was shown. |
 | Tracker | Where work items live. The repository selects one in the settings: a shipped one (`azure-devops`, `linear`, `local`) or an onboarded one. |
+| Suspension | `harness policies suspend` (`/suspend-harness`) turns off every harness check in one repository except `human-owned`; `resume` (`/resume-harness`) restores them. Kept in `.harness/state/policies.json`. |
 | Tracking mode | `enforced` or `skipped` (`/skip-tracker`, `/resume-tracker`), kept in `.harness/state/tracking.json`. Skipped turns off tracker tools and the session requirement. |
 | Tree mode | `decompose-backlog` run on an Epic: Features and their Stories in one pass. |
 | Workflow policy | The workflow rules: an active session for code changes, new branches on the convention, the session's work item in progress, spec before code (source and test files), completion evidence, protected branches. |

@@ -39,6 +39,7 @@ from harness import (  # noqa: E402
     adoption,
     gitstate,
     globs,
+    policies,
     questions,
     rules,
     settings,
@@ -136,6 +137,14 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     call = _tool_call(host, event, payload)
     repo = _workspace(payload, host)
+    if policies.control_command(call.command, repo, call.cwd):
+        # Suspending must work even when the settings or the rules are broken.
+        _emit_decision(host, rules.Decision.allow())
+        return 0
+    if policies.suspended(repo):
+        # The human released the harness checks; only their own records stay protected.
+        _emit_decision(host, rules.rule_human_owned(call, repo))
+        return 0
     if not settings.governed(repo):
         # Not a governed repository: the harness is opt-in per repo (bootstrap writes the settings).
         _emit_decision(host, rules.Decision.allow())
@@ -311,7 +320,7 @@ def _governed(payload: dict[str, Any], host: str = "claude") -> Path | None:
 def handle_ask(host: str, payload: dict[str, Any]) -> int:
     """Before a question is shown: send it back if a person would have to decode it."""
     repo = _governed(payload, host)
-    if repo is None:
+    if repo is None or policies.suspended(repo):
         return 0
     tool_input = hook_bridge.question_input(payload)
     found = questions.problems(tool_input)

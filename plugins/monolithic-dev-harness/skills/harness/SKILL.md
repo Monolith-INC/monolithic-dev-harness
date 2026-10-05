@@ -210,7 +210,7 @@ blocks any agent write to the records. Gates G1, G2, and G4 map to these approva
 
 | Rule | What it blocks |
 | --- | --- |
-| `human-owned` | agent writes to `.harness/settings.json`, and to approval, manual-check, question, session, tracker-trust, or tracking-mode records |
+| `human-owned` | agent writes to `.harness/settings.json`, and to approval, manual-check, question, session, tracker-trust, tracking-mode, or suspension records |
 | `tracker-invalid` | tracker and SCM writes while the selected tracker is missing, untrusted, or lacks its values |
 | `plain-questions` | questions to the user that are long, ask several things, contain file names, code, or internal names, or come with answers filled in |
 | `approval-required` | tracker/SCM writes and `git push` without an open approval window |
@@ -224,6 +224,11 @@ blocks any agent write to the records. Gates G1, G2, and G4 map to these approva
 
 When a hook blocks you, read its reason and fix the cause. Never retry through another tool or
 route around it.
+
+When the user asks to work outside the harness, use `suspend-harness`
+(`harness policies suspend --repo <project>`); it turns off every rule above except `human-owned`
+and keeps the settings, tracker, and evidence. `resume-harness` turns them back on. Their explicit
+request is the authorization. Never suspend on your own to get past a refusal.
 
 ## Models per stage
 

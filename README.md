@@ -1,7 +1,7 @@
 # monolithic-dev-harness
 
 [![CI](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.5.3-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
+[![Version](https://img.shields.io/badge/version-0.5.4-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
 [![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![Cursor](https://img.shields.io/badge/Cursor-supported-black.svg)](https://cursor.com)
@@ -287,6 +287,20 @@ Every board write, push, and pull request along the way needs a person's approva
 a single Story.
 
 ### Common questions
+
+#### How do I turn the harness off in a repository?
+
+Ask the agent to suspend the harness, run `/suspend-harness`, or run this in the repository yourself:
+
+```bash
+harness policies suspend
+```
+
+Every harness check stops applying in that repository except the protection of the harness's own
+records under `.harness/`. The settings, tracker, sessions, and evidence are kept. It works even
+when the settings are invalid or the tracker is unavailable. `harness policies status` shows the
+mode, `harness doctor` warns while it is suspended, and `harness policies resume` (or
+`/resume-harness`) turns the checks back on. `/skip-tracker` only pauses tracker enforcement.
 
 #### How does code review fit into the workflow?
 

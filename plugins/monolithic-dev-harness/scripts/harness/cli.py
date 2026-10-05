@@ -41,6 +41,7 @@ from harness import (  # noqa: E402
     gitstate,
     knowledge,
     local_tracker,
+    policies,
     preferences,
     sessions,
     settings,
@@ -158,6 +159,12 @@ def doctor(args: argparse.Namespace) -> int:
 
 def _repository(report: Report, repo: Path, args: argparse.Namespace) -> None:
     loaded = settings.load(repo)
+    if policies.suspended(repo):
+        report.line(
+            "warn",
+            "harness checks",
+            "suspended (`harness policies resume` restores them)",
+        )
     report.line(
         "ok" if isinstance(loaded, Ok) else "FAIL",
         "settings",
@@ -525,6 +532,15 @@ def preference_command(args: argparse.Namespace) -> int:
             return 2
 
 
+def policies_command(args: argparse.Namespace) -> int:
+    repo = _repo(args.repo)
+    match args.operation:
+        case "status":
+            return _print(Ok(json.dumps(policies.status(repo))))
+        case operation:
+            return _print(fmap(policies.change(repo, operation), json.dumps))
+
+
 def _workflow_result(repo: Path, result: Result[workflow.Workflow]) -> int:
     return _print(
         bind(
@@ -829,6 +845,12 @@ def main(argv: list[str] | None = None) -> int:
         "--destination", help="new recovery worktree path (plan)"
     )
     adoption_parser.add_argument("--repo", default=".")
+    policies_parser = sub.add_parser(
+        "policies",
+        help="suspend or restore every harness check in a repository, on the human's request",
+    )
+    policies_parser.add_argument("operation", choices=policies.OPERATIONS)
+    policies_parser.add_argument("--repo", default=".")
     knowledge_parser = sub.add_parser(
         "knowledge", help="query or refresh a harness-owned immutable knowledge store"
     )
@@ -858,6 +880,8 @@ def main(argv: list[str] | None = None) -> int:
         return tracker_command(args)
     if args.command == "adoption":
         return adoption_command(args)
+    if args.command == "policies":
+        return policies_command(args)
     return bootstrap(extra)
 
 
