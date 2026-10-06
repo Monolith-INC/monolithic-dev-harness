@@ -44,7 +44,6 @@ from harness import (  # noqa: E402
     gitstate,
     knowledge,
     local_tracker,
-    policies,
     preferences,
     prepared_workflows,
     sessions,
@@ -594,18 +593,6 @@ def suspension_command(args: argparse.Namespace) -> int:
     )
 
 
-def policies_command(args: argparse.Namespace) -> int:
-    repo = Path(args.repo).resolve()
-    match args.operation:
-        case "status":
-            print(json.dumps(policies.status(repo)))
-            return 0
-        case "suspend" | "resume":
-            return _print(fmap(policies.change(repo, args.operation), json.dumps))
-        case _:
-            return 2
-
-
 def decision_command(args: argparse.Namespace) -> int:
     repo = Path(args.repo).resolve()
     match args.operation:
@@ -1029,7 +1016,9 @@ def main(argv: list[str] | None = None) -> int:
     )
     decision_parser.add_argument("operation", choices=("present", "status"))
     decision_parser.add_argument("--repo", default=".")
-    decision_parser.add_argument("--session-id", help="scope the question to a project work session")
+    decision_parser.add_argument(
+        "--session-id", help="scope the question to a project work session"
+    )
     decision_parser.add_argument(
         "--host", choices=("codex", "claude", "cursor", "text"), default="text"
     )
@@ -1039,11 +1028,6 @@ def main(argv: list[str] | None = None) -> int:
     decision_parser.add_argument("--option", action="append")
     decision_parser.add_argument("--artifact", action="append")
     decision_parser.add_argument("--approval", action="store_true")
-    policies_parser = sub.add_parser(
-        "policies", help="suspend or restore harness checks on the human's request"
-    )
-    policies_parser.add_argument("operation", choices=("suspend", "resume", "status"))
-    policies_parser.add_argument("--repo", default=".")
     preference_parser = sub.add_parser(
         "preference", help="show or set user-level preferences"
     )
@@ -1118,8 +1102,6 @@ def main(argv: list[str] | None = None) -> int:
         return workflow_command(args)
     if args.command == "preference":
         return preference_command(args)
-    if args.command == "policies":
-        return policies_command(args)
     if args.command == "decision":
         return decision_command(args)
     if args.command == "tracker":

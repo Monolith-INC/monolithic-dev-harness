@@ -67,7 +67,7 @@ or migrate that unbound workflow.
 Use the selected session's exact saved request as the run context. Pass the project root, session
 ID, bundled command, isolated preferences environment, checkpoint, and next action to any delegated
 agent; do not make it rediscover the project or reset confirmed setup. Inspect is read-only. Pending
-questions and suspended policies remain explicit; do not resume a stopped run or replace invalid
+questions and a suspended harness remain explicit; do not resume a stopped run or replace invalid
 saved progress automatically. If `language_confirmed` is false,
 offer **English** and **Português (Brasil)** as clickable choices for this project, even if a
 different project saved a preference. Save the selected language with
@@ -98,22 +98,22 @@ permission for an external write. Resume rechecks files, tracker, and approvals 
 
 ### Suspend harness checks on the human's request
 
-When the human wants to continue ordinary work outside the harness, use the bundled
-`harness policies suspend --repo <project>` command. Their explicit request is authorization;
-do not ask again or require a tracker-write approval window. If intent is unclear, offer
-**Suspend harness checks** and **Keep them active** once, then apply their actual choice.
-This command works before setup and with invalid settings or an unavailable tracker.
+Only the human can suspend the harness: the hook records it when they send `harness suspend` as its
+own message, and no command lets an agent do it. When they want to continue ordinary work outside
+the harness, use `suspend-harness` to ask them to send it. It works before setup and with invalid
+settings or an unavailable tracker. Verify with `harness suspension status --repo <project>`; until
+it reports `"mode": "suspended"`, the checks still apply.
 
-Use `harness policies status --repo <project>` to verify the result. A failed command is not a
-successful suspension. While suspended, continue the human's ordinary work without harness
-workflow, tracker, branch, commit, review, or question-format checks. Direct edits to human-owned
+While suspended, continue the human's ordinary work without harness workflow, tracker, branch,
+commit, review, decision-wait, or question-wording checks. Approval and decision clicks are still
+recorded, a pending decision is kept rather than answered, and direct edits to human-owned
 control/evidence records remain protected; host permissions and other plugins are independent.
 Preserve the existing workflow, settings, tracker, and evidence. Workflow/session pause and
 `skip-tracker` are different operations and do not suspend all checks.
 
-On the human's request to restore enforcement, use `harness policies resume --repo <project>`.
-Resume restores checks without opening an approval window or accepting old readiness evidence.
-Do not suspend or resume automatically to escape a refusal.
+To restore enforcement, use `resume-harness` (`harness suspension resume --repo <project>`, or the
+human sends `harness resume`). Resume restores checks without opening an approval window or
+accepting old readiness evidence. Never ask the human to suspend the harness to get past a refusal.
 
 Save a checkpoint after setup and at each material review point. Before a review question, record
 the artifact path, pending decision, and next action; include `--artifact <path>` so the saved point

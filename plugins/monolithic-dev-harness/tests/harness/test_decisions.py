@@ -95,6 +95,35 @@ def test_pending_gate_blocks_workflow_and_gateway_before_configuration(
     assert result.failure.code == "decision_pending"
 
 
+def test_only_a_plain_status_query_passes_the_pending_gate(tmp_path: Path) -> None:
+    write_settings(tmp_path)
+    decisions.begin(tmp_path, "d1", "Continue?", ("Continue",), "chat")
+    fake = tmp_path / "bin" / "harness"
+    fake.parent.mkdir()
+    fake.write_text("#!/bin/sh\n")
+    fake.chmod(0o755)
+
+    def shell(command: str) -> str:
+        return native(
+            tmp_path,
+            "pre-tool",
+            {"tool_name": "Bash", "tool_input": {"command": command}},
+        )
+
+    assert "deny" not in shell(f"{CLI} decision status --repo {tmp_path}")
+    for command in (
+        "touch notes.txt",
+        f"{CLI} decision status; touch P1",
+        f'{CLI} decision status --repo "$(touch P2)"',
+        f"{CLI} decision status --repo x|touch${{IFS}}P3",
+        f"{CLI} decision status --question x",
+        "./bin/harness decision status",
+    ):
+        assert "decision-pending" in shell(command), command
+    state.set_harness_mode(tmp_path, "suspended")
+    assert "deny" not in shell("touch notes.txt")
+
+
 def test_second_question_and_wrong_answer_id_cannot_replace_pending(
     tmp_path: Path,
 ) -> None:

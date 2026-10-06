@@ -40,7 +40,6 @@ from harness import (  # noqa: E402
     decisions,
     gitstate,
     globs,
-    policies,
     questions,
     rules,
     settings,
@@ -146,15 +145,18 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     call = _tool_call(host, event, payload)
     repo = _workspace(payload, host)
-    if policies.control_command(
-        call.command, repo, call.cwd
-    ) or decisions.status_command(call.command, repo, call.cwd):
-        _emit_decision(host, rules.Decision.allow())
-        return 0
-    if policies.suspended(repo):
-        _emit_decision(host, rules.rule_human_owned(call, repo))
-        return 0
-    if decisions.waiting(repo) and rules.is_write_class(call):
+    # The user released the checks from their own prompt; only their records stay protected.
+    suspended = state.harness_mode(repo) == "suspended"
+    # Reading the pending decision passes the decision gate, never the rules below.
+    status_query = call.kind == "shell" and decisions.status_command(
+        call.command, Path(call.cwd or repo)
+    )
+    if (
+        not suspended
+        and not status_query
+        and decisions.waiting(repo)
+        and rules.is_write_class(call)
+    ):
         _emit_decision(
             host,
             rules.Decision.deny(
@@ -167,8 +169,6 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
         # Not a governed repository: the harness is opt-in per repo (bootstrap writes the settings).
         _emit_decision(host, rules.Decision.allow())
         return 0
-    # The user released the checks from their own prompt; only their records stay protected.
-    suspended = state.harness_mode(repo) == "suspended"
     timed = hasattr(signal, "SIGALRM")
     if timed:
         signal.signal(signal.SIGALRM, _out_of_time)
@@ -195,7 +195,7 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     finally:
         if timed:
             signal.setitimer(signal.ITIMER_REAL, 0)
-    if not decision.allowed or suspended:
+    if not decision.allowed or suspended or status_query:
         _emit_decision(host, decision)
         return 0
     if hook_bridge.delegates_workflow_policy(host, event):
@@ -404,8 +404,6 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
     """Before a question is shown: send it back if a person would have to decode it."""
     repo = _governed(payload, host)
     if repo is None:
-        return 0
-    if policies.suspended(repo):
         return 0
     context = work_session_context.for_payload(repo, host, payload)
     if isinstance(context, Err):

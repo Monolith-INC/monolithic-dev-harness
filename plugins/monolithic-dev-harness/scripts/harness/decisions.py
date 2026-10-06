@@ -4,14 +4,18 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shlex
+import re
+import shutil
 from pathlib import Path
 from typing import Any
 
 from core.result import Err, Ok, Result, attempt, bind, fmap
-from harness import policies, state
+from harness import state
 
 RELATIVE_PATH = Path(".harness/state/decision.json")
+PLUGIN_ROOT = Path(__file__).resolve().parents[2]
+# One plain command: words of path characters separated by single spaces, no shell syntax.
+_PLAIN_COMMAND = re.compile(r"[\w./:@+-]+(?: [\w./:@+-]+)*")
 
 
 def _path(
@@ -255,15 +259,36 @@ def status(repo: Path, work_session_id: str | None = None) -> str:
     return json.dumps(record(repo, work_session_id) or {"status": "absent"})
 
 
-def status_command(command: str, repo: Path, cwd: str = "") -> bool:
-    try:
-        args = shlex.split(command)
-    except ValueError:
+def status_command(command: str, cwd: Path) -> bool:
+    """Whether a shell command only reads the pending decision.
+
+    The decision gate lets it run so the agent can see what it is waiting for; it never skips
+    the rules. Any shell syntax disqualifies it, so nothing else can ride along.
+    """
+    if not _PLAIN_COMMAND.fullmatch(command):
         return False
-    return (
-        len(args) >= 3
-        and args[1:3] == ["decision", "status"]
-        and policies.control_command(
-            shlex.join([args[0], "policies", "status", *args[3:]]), repo, cwd
-        )
+    match command.split(" "):
+        case [executable, "decision", "status", *options] if _status_options(options):
+            return _this_harness(executable, cwd)
+        case _:
+            return False
+
+
+def _status_options(options: list[str]) -> bool:
+    return len(options) % 2 == 0 and all(
+        flag in ("--repo", "--session-id") for flag in options[::2]
+    )
+
+
+def _this_harness(executable: str, cwd: Path) -> bool:
+    """This plugin's `bin/harness`, or the `harness` the installer linked onto the path."""
+    found = shutil.which(executable) if "/" not in executable else str(cwd / executable)
+    if found is None or not Path(found).is_file():
+        return False
+    resolved = Path(found).resolve()
+    linked = shutil.which("harness")
+    return resolved == (PLUGIN_ROOT / "bin/harness").resolve() or (
+        linked is not None
+        and resolved == Path(linked).resolve()
+        and (resolved.parents[1] / "scripts/harness/decisions.py").is_file()
     )

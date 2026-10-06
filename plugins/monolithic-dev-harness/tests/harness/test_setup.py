@@ -30,7 +30,7 @@ class SetupTests(unittest.TestCase):
         }
 
     def test_handoff_preserves_project_language_request_and_wait(self) -> None:
-        from scripts.harness import decisions, policies, preferences, state
+        from scripts.harness import decisions, preferences, state
 
         with patch.dict(os.environ, self.preference_env):
             preferences.set_language("pt-br")
@@ -46,7 +46,7 @@ class SetupTests(unittest.TestCase):
             decisions.begin(
                 self.repo, "q1", "Review this plan?", ("Approve", "Revise"), "async"
             )
-            policies.change(self.repo, "suspend")
+            state.set_harness_mode(self.repo, "suspended")
             inspected = setup.inspect(self.repo).value
         self.assertEqual(inspected["language"], "en")
         context = inspected["handoff"]
@@ -59,7 +59,7 @@ class SetupTests(unittest.TestCase):
         self.assertEqual(context["next_action"], "Present the saved plan")
         self.assertTrue(context["waiting_for_answer"])
         self.assertEqual(context["pending_question"]["id"], "q1")
-        self.assertTrue(context["policies_suspended"])
+        self.assertTrue(context["harness_suspended"])
 
     def test_invalid_workflow_is_reported_without_replacement(self) -> None:
         target = workflow.path(self.repo)

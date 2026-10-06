@@ -286,10 +286,10 @@ class PreparedWorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(prepared.PreparedWorkflowError, "unknown stage"):
             prepared.routes(plugin)
 
-    def test_suspension_route_is_standalone_and_uses_policy_control(self) -> None:
+    def test_suspension_route_is_standalone_and_reads_suspension_status(self) -> None:
         package = prepared.prepare_stage(self.project, "suspend-checks", "suspend")
         self.assertEqual(package["route"]["stages"], ["suspend"])
-        self.assertIn("harness.policies.suspend", {tool["name"] for tool in package["operations"]})
+        self.assertIn("harness.suspension.status", {tool["name"] for tool in package["operations"]})
 
 
 if __name__ == "__main__":

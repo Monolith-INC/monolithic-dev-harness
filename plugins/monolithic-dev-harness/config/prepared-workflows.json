@@ -99,14 +99,14 @@
       "recovery": ["keep the item open and record the exact failed or unavailable check"]
     },
     "suspend": {
-      "title": "Pause harness checks and continue ordinary work",
+      "title": "Help the user suspend harness checks and continue ordinary work",
       "knowledge": ["references/workflow-storyboard.md", "skills/harness/SKILL.md"],
-      "operations": ["harness.policies.suspend", "harness.bootstrap.inspect"],
+      "operations": ["harness.suspension.status", "harness.bootstrap.inspect"],
       "skills": [
-        {"name": "harness", "when": "Read the policy-suspension instructions and preserve the current checkpoint."}
+        {"name": "suspend-harness", "when": "Ask the user to send `harness suspend` as its own message; never suspend for them."}
       ],
       "outputs": ["suspension status", "preserved workflow and project settings"],
-      "checks": ["verify suspension with the policy status command", "confirm ordinary work can continue"],
+      "checks": ["after the user sends `harness suspend`, verify with `harness suspension status`", "confirm ordinary work can continue"],
       "recovery": ["report persistence failure; do not claim checks are suspended"]
     }
   },

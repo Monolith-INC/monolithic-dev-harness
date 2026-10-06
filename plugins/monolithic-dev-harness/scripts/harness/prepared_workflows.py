@@ -30,7 +30,7 @@ LOCAL_OPERATIONS = {
     "harness.workflow.checkpoint": "Save a workflow checkpoint without granting write approval.",
     "harness.knowledge.find": "Search the selected harness knowledge store.",
     "harness.knowledge.fetch": "Read a selected harness knowledge item.",
-    "harness.policies.suspend": "Release harness-owned checks on the user's request.",
+    "harness.suspension.status": "Read whether the user suspended the harness checks; only their own `harness suspend` message does.",
 }
 
 

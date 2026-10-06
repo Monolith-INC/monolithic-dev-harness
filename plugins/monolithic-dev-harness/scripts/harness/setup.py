@@ -13,7 +13,6 @@ from core.result import Ok, Result, attempt, bind, err, fmap, require
 from harness import (
     decisions,
     local_tracker,
-    policies,
     preferences,
     settings,
     state,
@@ -140,14 +139,14 @@ def _handoff(
         "original_request": current.get("request", ""),
         "next_action": current.get("next_action", ""),
         "workflow_status": current.get("status", "absent"),
-        "policies_suspended": policies.suspended(repo),
+        "harness_suspended": state.harness_mode(repo) == "suspended",
         "waiting_for_answer": decisions.waiting(repo),
         "pending_question": {
             key: pending.get(key) for key in ("id", "question", "options", "transport")
         }
         if pending and decisions.waiting(repo)
         else None,
-        "instruction": "Use this project and environment for every operation. Preserve the saved original request and current checkpoint. Do not repeat confirmed setup choices, restart an existing run, or advance while a question is unanswered. Report invalid saved state instead of replacing it. Suspended policies do not authorize automatically resuming the run.",
+        "instruction": "Use this project and environment for every operation. Preserve the saved original request and current checkpoint. Do not repeat confirmed setup choices, restart an existing run, or advance while a question is unanswered. Report invalid saved state instead of replacing it. A suspended harness does not authorize automatically resuming the run.",
     }
 
 
