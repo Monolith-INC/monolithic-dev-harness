@@ -184,7 +184,11 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
                 )
             case False, Ok(chosen):
                 decision = rules.evaluate(
-                    call, repo, chosen, tracker_policy.build(repo, loaded)
+                    call,
+                    repo,
+                    chosen,
+                    tracker_policy.build(repo, loaded),
+                    _work_session(repo, host, payload),
                 )
     except (Exception, _OutOfTime) as exc:
         # Any failure of the rules, including a crash or running out of time, blocks writes.
@@ -220,6 +224,15 @@ def _pin_approved_notes(repo: Path, approval_id: str) -> str:
         f" It also covers {len(notes)} plan or spec note(s) marked approved, as they read now;"
         " editing one needs a new approval."
     )
+
+
+def _work_session(repo: Path, host: str, payload: dict[str, Any]) -> str | None:
+    """The work session this conversation is bound to; `None` when there is none to find."""
+    match work_session_context.for_payload(repo, host, payload):
+        case Ok(found):
+            return found
+        case Err():
+            return None
 
 
 def _window(repo: Path) -> int:
@@ -352,7 +365,12 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
                     and str(found["answer"]).casefold() in questions.APPROVE_LABELS
                 ):
                     approval_id = questions.approval_id(str(found["id"]))
-                    state.open_approval(repo, approval_id, DEFAULT_WINDOW_MINUTES)
+                    state.open_approval(
+                        repo,
+                        approval_id,
+                        _window(repo),
+                        work_session_id=decision_session_id,
+                    )
                     notes.append(_pin_approved_notes(repo, approval_id))
             case Err(failure):
                 notes.append(f"[harness] decision not recorded: {failure.message}")
@@ -375,7 +393,7 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
             f"[harness] revoked {state.revoke_approvals(repo)} open approval window(s)."
         )
     for approval_id in dict.fromkeys(m.upper() for m in APPROVE_RE.findall(prompt)):
-        state.open_approval(repo, approval_id, window)
+        state.open_approval(repo, approval_id, window, work_session_id=work_session_id)
         notes.append(
             f"[harness] approval {approval_id} recorded; tracker/SCM writes are open for {window} minutes."
             + _pin_approved_notes(repo, approval_id)
@@ -746,7 +764,9 @@ def handle_answer(host: str, payload: dict[str, Any], *, delayed: bool = False) 
         return 0
     window = _window(repo)
     approval_id = questions.approval_id(tool_use_id)
-    state.open_approval(repo, approval_id, window, question=approved[0])
+    state.open_approval(
+        repo, approval_id, window, approved[0], work_session_id=work_session_id
+    )
     pinned = _pin_approved_notes(repo, approval_id)
     print(
         hook_bridge.format_answer_context(

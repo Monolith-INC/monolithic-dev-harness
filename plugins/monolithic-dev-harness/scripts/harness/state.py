@@ -93,8 +93,16 @@ def safe_name(name: str) -> str:
 
 
 def open_approval(
-    repo: Path, approval_id: str, minutes: int, question: str = ""
+    repo: Path,
+    approval_id: str,
+    minutes: int,
+    question: str = "",
+    work_session_id: str | None = None,
 ) -> dict[str, Any]:
+    """A window for tracker/SCM writes, scoped to the work session it was opened in.
+
+    Without a work session (Cursor, or a project with none bound) the window is project-wide.
+    """
     now = _now()
     record: dict[str, Any] = {
         "id": approval_id,
@@ -104,16 +112,23 @@ def open_approval(
     }
     if question:
         record["question"] = question
+    if work_session_id is not None:
+        record["work_session"] = work_session_id
     write_json(state_dir(repo) / "approvals" / f"{safe_name(approval_id)}.json", record)
     return record
 
 
-def revoke_approvals(repo: Path) -> int:
+def revoke_approvals(repo: Path, work_session_id: str | None = None) -> int:
+    """Close open windows: one work session's, or every window when none is named."""
     directory = state_dir(repo) / "approvals"
     count = 0
     for path in directory.glob("*.json") if directory.is_dir() else []:
         record = read_json(path)
-        if record and datetime.fromisoformat(record["expires"]) > _now():
+        if (
+            record
+            and (work_session_id is None or _scope(record) == work_session_id)
+            and datetime.fromisoformat(record["expires"]) > _now()
+        ):
             record["expires"] = _now().isoformat()
             record["revoked"] = True
             write_json(path, record)
@@ -121,14 +136,22 @@ def revoke_approvals(repo: Path) -> int:
     return count
 
 
-def active_approval(repo: Path) -> tuple[Path, dict[str, Any]] | None:
+def _scope(record: dict[str, Any]) -> str | None:
+    scope = record.get("work_session")
+    return scope if isinstance(scope, str) else None
+
+
+def active_approval(
+    repo: Path, work_session_id: str | None = None
+) -> tuple[Path, dict[str, Any]] | None:
+    """The newest open window for exactly this work session; `None` means project-wide only."""
     directory = state_dir(repo) / "approvals"
     if not directory.is_dir():
         return None
     best: tuple[Path, dict[str, Any]] | None = None
     for path in directory.glob("*.json"):
         record = read_json(path)
-        if not record or "expires" not in record:
+        if not record or "expires" not in record or _scope(record) != work_session_id:
             continue
         try:
             expires = datetime.fromisoformat(record["expires"])

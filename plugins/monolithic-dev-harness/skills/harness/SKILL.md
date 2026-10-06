@@ -243,7 +243,8 @@ requests, threads, branches, `git push`) unless the user has opened an approval 
 1. Say in plain words what will be written: which items, with their titles, and what changes.
 2. Present the complete relevant artifact or batch through the best available host surface. Ask one
    question with two options, labelled exactly `Approve` and `Not now`. A working native control in
-   Claude or trusted Codex opens the window for `approvals.window_minutes` (default 20).
+   Claude or trusted Codex opens the window for `approvals.window_minutes` (default 20). The window
+   covers only the work session it was opened in; another session needs its own approval.
 3. Make only the writes you described. Anything new needs a new question.
 
 If a blocking approval control is unavailable, show the complete review and ask in chat. End the turn and wait for the real human reply; do not write while approval is pending. `harness revoke` closes a window early.

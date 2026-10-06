@@ -860,7 +860,7 @@ def workflow_command(args: argparse.Namespace) -> int:
             )
             match result:
                 case Ok():
-                    state.revoke_approvals(repo)
+                    state.revoke_approvals(repo, args.session_id)
                 case _:
                     pass
             return _workflow_result(repo, result, args.session_id)
@@ -868,7 +868,7 @@ def workflow_command(args: argparse.Namespace) -> int:
             result = _workflow_resume(repo, args.point, args.session_id)
             match result:
                 case Ok():
-                    state.revoke_approvals(repo)
+                    state.revoke_approvals(repo, args.session_id)
                 case _:
                     pass
             return _workflow_result(repo, result, args.session_id)
@@ -876,7 +876,7 @@ def workflow_command(args: argparse.Namespace) -> int:
             result = bind(workflow.load(repo, args.session_id), workflow.cancel)
             match result:
                 case Ok():
-                    state.revoke_approvals(repo)
+                    state.revoke_approvals(repo, args.session_id)
                 case _:
                     pass
             return _workflow_result(repo, result, args.session_id)

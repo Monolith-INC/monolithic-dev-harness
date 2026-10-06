@@ -567,7 +567,10 @@ def _branch_paths(repo: Path, base: str) -> list[str]:
 
 
 def rule_approval_required(
-    call: ToolCall, repo: Path, policy: TrackerPolicy
+    call: ToolCall,
+    repo: Path,
+    policy: TrackerPolicy,
+    work_session_id: str | None = None,
 ) -> Decision:
     return (
         Decision.deny(
@@ -578,7 +581,8 @@ def rule_approval_required(
             "batch an id such as HB-7Q2K and ask them to reply `approve HB-7Q2K`. You cannot open the "
             "window yourself.",
         )
-        if is_remote_write(call, policy) and state.active_approval(repo) is None
+        if is_remote_write(call, policy)
+        and state.active_approval(repo, work_session_id) is None
         else Decision.allow()
     )
 
@@ -769,7 +773,11 @@ def rule_history_preserved(call: ToolCall) -> Decision:
 
 
 def evaluate(
-    call: ToolCall, repo: Path, settings: Settings, policy: TrackerPolicy
+    call: ToolCall,
+    repo: Path,
+    settings: Settings,
+    policy: TrackerPolicy,
+    work_session_id: str | None = None,
 ) -> Decision:
     """The first rule that denies the call, or allow. A write that passes is logged to its approval."""
     decision = next(
@@ -782,7 +790,7 @@ def evaluate(
                 lambda: rule_feature_branch(call, repo),
                 lambda: rule_draft_reviewed_prs(call, repo, settings),
                 lambda: rule_history_preserved(call),
-                lambda: rule_approval_required(call, repo, policy),
+                lambda: rule_approval_required(call, repo, policy, work_session_id),
                 lambda: rule_generated_files(call, repo, settings),
                 lambda: commit_rules(call, repo, settings),
             )
@@ -791,7 +799,7 @@ def evaluate(
         Decision.allow(),
     )
     approval = (
-        state.active_approval(repo)
+        state.active_approval(repo, work_session_id)
         if decision.allowed and is_remote_write(call, policy)
         else None
     )

@@ -15,6 +15,18 @@ All notable changes to this project are documented here. The format follows
   operation returns `unsupported_capability`, and a malformed answer or a crash returns
   `invalid_host_result`. No host supports any operation yet; each is unsupported until verified.
 
+### Changed
+
+- An approval window now covers only the work session it was opened in. A write from another
+  session needs its own approval; a window opened without a session (Cursor, or no session bound)
+  covers only writes without one. `harness revoke` still closes every window; workflow back,
+  resume, and cancel close only their session's.
+
+### Fixed
+
+- Approving through a pending decision now opens the window for `approvals.window_minutes`
+  instead of a fixed 20 minutes.
+
 ## [0.5.4] - 2026-10-06
 
 ### Added

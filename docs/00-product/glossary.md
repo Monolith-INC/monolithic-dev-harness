@@ -11,7 +11,7 @@ last_reviewed: 2026-09-30
 | --- | --- |
 | Adapter | A tracker folder's `adapter.py`: pure translation between the harness's contract and one provider, exporting `adapter(context) -> TrackerOps`. |
 | Approval batch | The exact set of tracker/SCM writes the agent proposes, labeled with a batch id such as `HB-7Q2K`. |
-| Approval window | A time-limited permission (default 20 minutes, `approvals.window_minutes`) to perform tracker/SCM writes, opened only by the user: a click on `Approve`, or a typed `approve HB-…`. |
+| Approval window | A time-limited permission (default 20 minutes, `approvals.window_minutes`) to perform tracker/SCM writes, opened only by the user: a click on `Approve`, or a typed `approve HB-…`. It covers only the work session it was opened in; one opened without a session covers only writes without one. |
 | Artifacts path | The repository folder where backlog drafts, plans, and reports are written (`artifacts_path` in the settings). The plugin never creates it. |
 | Check evidence | The recorded result of the repository's configured checks for one git tree. |
 | Checkout | One working copy on one branch: its worktree folder, its git directory, and its branch. A session binds to exactly one. |
