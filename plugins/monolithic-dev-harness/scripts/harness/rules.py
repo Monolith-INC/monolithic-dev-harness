@@ -351,8 +351,44 @@ def runs_harness_hook(command: str) -> bool:
     The prompt and answer hooks record the user's answers and approvals from what they read on
     stdin, so an agent that pipes a payload into them could answer for the user.
     """
-    return bool(_HOOK_MODULE.search(command)) or (
-        bool(_HOOK_SCRIPT.search(command)) and "harness" in command
+    return any(
+        _invocation_mentions_hook(invocation)
+        for invocation in shellscan.invocations(command)
+    )
+
+
+def _invocation_mentions_hook(invocation: shellscan.Invocation) -> bool:
+    """Readers may inspect hooks; execution and copying remain protected."""
+    return (
+        invocation.name not in shellscan.NON_WRITERS
+        and (
+            invocation.name not in shellscan.IN_PLACE_FLAGS
+            or any(
+                shellscan.IN_PLACE_FLAGS[invocation.name].match(argument)
+                for argument in invocation.args
+            )
+        )
+        and (
+            any(_HOOK_MODULE.search(argument) for argument in invocation.args)
+            or (
+                any(
+                    _HOOK_SCRIPT.search(argument)
+                    for argument in (
+                        invocation.name,
+                        *invocation.args,
+                        invocation.cwd or "",
+                    )
+                )
+                and any(
+                    "harness" in argument
+                    for argument in (
+                        invocation.name,
+                        *invocation.args,
+                        invocation.cwd or "",
+                    )
+                )
+            )
+        )
     )
 
 

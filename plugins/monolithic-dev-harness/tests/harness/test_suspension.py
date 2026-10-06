@@ -99,10 +99,10 @@ class TestTypedSwitch(SuspensionTestCase):
         self.type("harness suspend")
         self.assertAllowed(self.bash("touch notes.txt"))
 
-    def test_a_repository_without_settings_is_unaffected(self) -> None:
+    def test_a_repository_without_settings_can_be_suspended(self) -> None:
         (self.repo / ".harness" / "settings.json").unlink()
         self.type("harness suspend")
-        self.assertEqual(self.mode(), "active")
+        self.assertEqual(self.mode(), "suspended")
         self.assertAllowed(self.bash("echo x > .harness/state/suspension.json"))
 
 

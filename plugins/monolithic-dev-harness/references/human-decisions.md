@@ -28,6 +28,13 @@ Status is available through `harness decision status --repo <project> --session-
 workflow advancement and writes. Suspending harness checks remains independently available on the
 human's request; it preserves the pending decision rather than inventing an answer.
 
+An unanswered decision must not block read-only diagnosis or `harness suspension status`.
+Inspect the installed registration, event format, and project/state paths when a genuine reply
+is not recorded. Do not ask the human to repeat a failed answer or suspend enforcement merely to
+read diagnostics. A human suspension request works before onboarding and even when the saved
+conversation binding is invalid. Capture exceptions are reported without including private reply
+content; a successful hook exit does not prove that an answer was recorded.
+
 Codex delayed button replies are read only from the actual human prompt event. The adapter checks
 the saved tool-call id, question index, and question text before passing the choice to the shared
 answer handler. Immediate tool completion cannot answer an asynchronous question. A typed chat

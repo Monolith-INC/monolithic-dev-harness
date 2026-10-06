@@ -6,6 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-10-06
+
+### Fixed
+
+- Codex typed choices now resolve asynchronous questions when they exactly match an offered option;
+  delayed button replies still require the matching call and question identity.
+- Pending decisions allow read-only diagnosis and suspension-status checks while continuing to
+  block writes. Reading hook source no longer counts as executing or copying a hook.
+- Human suspension requests work before setup and with invalid conversation bindings, preserving
+  pending decisions. Reply-capture exceptions report a visible diagnostic without private reply content.
+- The decision protocol explains recovery without repeated answers or suspension just for diagnosis.
+
 ## [0.6.0] - 2026-10-06
 
 ### Added
@@ -588,6 +600,7 @@ First release.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
 [Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.0...HEAD
+[0.6.1]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.6.1
 [0.6.0]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.2...v0.5.3

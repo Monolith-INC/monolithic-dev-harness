@@ -305,7 +305,6 @@ def test_async_delivery_waits_for_matching_actual_reply(tmp_path: Path) -> None:
     native(tmp_path, "prompt", {"prompt": changed_question})
     assert decisions.waiting(tmp_path)
     for message in (
-        "Continue",
         "the buttons disappeared",
         "I did not click",
         reply("call-1", "I can reopen it"),

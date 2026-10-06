@@ -93,7 +93,11 @@ def normalize_question(host: str, tool_input: dict[str, Any]) -> dict[str, Any]:
 def prompt_answer(
     host: str, prompt: str, pending: Pending
 ) -> tuple[str, str, str] | None:
-    if pending.transport == "chat":
+    if pending.transport == "chat" or (
+        host == "codex"
+        and pending.transport == "async"
+        and not prompt.lstrip().startswith("<send_user_message_question_reply>")
+    ):
         typed = prompt.strip().rstrip(".!").strip().casefold()
         chosen = next(
             (
@@ -103,7 +107,7 @@ def prompt_answer(
             ),
             None,
         )
-        return (pending.id, chosen, "chat") if chosen else None
+        return (pending.id, chosen, pending.transport) if chosen else None
     if host != "codex" or pending.transport != "async":
         return None
     match = re.fullmatch(

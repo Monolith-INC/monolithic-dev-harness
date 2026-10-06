@@ -216,7 +216,7 @@ def _held(
     request: tuple[str, str] | None,
 ) -> rules.Decision | None:
     """Why a write must wait: the conversation's session or a pending decision, checked once."""
-    if not rules.is_write_class(call):
+    if not rules.is_write_class(call) or _diagnostic_read(call, repo):
         return None
     match context:
         case Err(failure):
@@ -234,6 +234,21 @@ def _held(
             "Wait for the human's answer before continuing this run.",
         )
     return None
+
+
+def _diagnostic_read(call: rules.ToolCall, repo: Path) -> bool:
+    """Let proven file reads through the waiting gate, without skipping other rules."""
+    match call.kind:
+        case "shell":
+            return _has_no_shell_writes(
+                rules.shellscan.scan(call.command, str(call.cwd or repo), repo)
+            )
+        case _:
+            return False
+
+
+def _has_no_shell_writes(writes: rules.shellscan.ShellWrites) -> bool:
+    return not (writes.targets or writes.trees or writes.unresolved)
 
 
 def _bind(
@@ -377,6 +392,12 @@ def _print_prompt(host: str, notes: list[str]) -> None:
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     prompt = hook_bridge.prompt_text(payload)
     repo = _workspace(payload, host)
+    match SUSPEND_RE.fullmatch(prompt):
+        case re.Match() as switch:
+            _print_prompt(host, [_switch_harness(repo, switch.group(1).lower())])
+            return 0
+        case _:
+            pass
     context = work_session_context.for_payload(repo, host, payload)
     if isinstance(context, Err):
         _print_prompt(host, [context.failure.message])
@@ -391,11 +412,6 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         return 0
     if not settings.governed(repo):
         if output := hook_bridge.format_prompt(host, []):
-            print(output)
-        return 0
-    if switch := SUSPEND_RE.fullmatch(prompt):
-        notes.append(_switch_harness(repo, switch.group(1).lower()))
-        if output := hook_bridge.format_prompt(host, notes):
             print(output)
         return 0
     window = _window(repo)
@@ -841,8 +857,21 @@ def main(argv: list[str] | None = None) -> int:
     if args.event == "prompt":
         try:
             return handle_prompt(args.host, payload)
-        except Exception:
+        except Exception as exc:
             # Prompts only record what the user typed; a broken record must not drop the message.
+            _print_prompt(
+                args.host,
+                [
+                    "[harness] Your reply could not be recorded. "
+                    "The decision remains unconfirmed; read-only diagnosis is available."
+                ],
+            )
+            print(
+                f"[harness] human reply capture failed ({args.host}, prompt): "
+                f"{type(exc).__name__}. No answer or suspension was confirmed; "
+                "inspect the hook configuration and project state.",
+                file=sys.stderr,
+            )
             return 0
     if args.event in ("ask", "answer"):
         try:
