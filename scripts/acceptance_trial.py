@@ -15,6 +15,7 @@ import sys
 import tempfile
 import uuid
 from collections import Counter
+from itertools import count
 from pathlib import Path
 
 MARKER_NAME = ".monolithic-dev-harness-trial.json"
@@ -33,6 +34,25 @@ HOST_CONTEXT_VARIABLES = frozenset(
 )
 TEMPLATE = Path(__file__).resolve().parents[1] / "test-project-template"
 PLUGIN = Path(__file__).resolve().parents[1] / "plugins" / "monolithic-dev-harness"
+CHECKOUT_TRIALS = Path(__file__).resolve().parents[1] / "temp"
+
+
+def checkout_trial_root() -> Path:
+    """Allocate a fresh numbered root; never reuse or overwrite an existing copy."""
+    CHECKOUT_TRIALS.mkdir(exist_ok=True)
+    return _claim_checkout_root(
+        next(
+            CHECKOUT_TRIALS / f"test-{number:03d}"
+            for number in count()
+            if not (CHECKOUT_TRIALS / f"test-{number:03d}").exists()
+        )
+    )
+
+
+def _claim_checkout_root(path: Path) -> Path:
+    path.mkdir(mode=0o700)
+    return path
+
 
 PROFILES: dict[str, dict] = {
     "unconfigured": {},
@@ -52,13 +72,18 @@ def prepare(
     *,
     root_prefix: str = ROOT_PREFIX,
     kind: str = "prepared",
+    in_checkout: bool = False,
 ) -> Path:
     if profile not in PROFILES:
         raise ValueError(f"Unknown starting profile: {profile}")
     settings = copy.deepcopy(PROFILES[profile])
     if overrides:
         settings = merge(settings, overrides)
-    trial_root = Path(tempfile.mkdtemp(prefix=root_prefix))
+    trial_root = (
+        checkout_trial_root()
+        if in_checkout
+        else Path(tempfile.mkdtemp(prefix=root_prefix))
+    )
     project = trial_root / "project"
     runner_temp = trial_root / "runner-tmp"
     preference_home = trial_root / "preferences"
@@ -103,6 +128,7 @@ def prepare(
                 encoding="utf-8",
             )
             prepare_local_tracker(project)
+            prepare_planning(project, str(settings.get("artifacts_path", "")))
         run_git(project, "add", "--all")
         run_git(project, "commit", "--quiet", "-m", "Starting project")
     except BaseException:
@@ -119,6 +145,20 @@ def merge(base: dict, overrides: dict) -> dict:
         else copy.deepcopy(value)
         for key, value in (base | overrides).items()
     }
+
+
+def prepare_planning(project: Path, artifacts_path: str) -> dict:
+    """Create the normal bundled planning setup before committing the starting fixture."""
+    from core.result import Err, Ok
+    from harness import bmad
+
+    match bmad.prepare(project, artifacts_path):
+        case Ok(report):
+            return report
+        case Err(failure):
+            raise ValueError(
+                f"Planning setup failed: {failure.code}: {failure.message}"
+            )
 
 
 def prepare_local_tracker(project: Path) -> None:
@@ -155,12 +195,20 @@ def _trial_metadata(project_arg: str) -> tuple[Path, Path, dict]:
     project = supplied.resolve(strict=True)
     trial_root = project.parent
     temp_root = Path(tempfile.gettempdir()).resolve()
-    if project.name != "project" or trial_root.parent != temp_root:
+    if project.name != "project" or trial_root.parent not in (
+        temp_root,
+        CHECKOUT_TRIALS.resolve(),
+    ):
         raise ValueError(
             "Refusing: path is not a direct trial project under the system temp folder."
         )
-    if trial_root.is_symlink() or not trial_root.name.startswith(
-        (ROOT_PREFIX, RUN_PREFIX)
+    if trial_root.is_symlink() or not (
+        trial_root.name.startswith((ROOT_PREFIX, RUN_PREFIX))
+        or (
+            trial_root.parent == CHECKOUT_TRIALS.resolve()
+            and trial_root.name.startswith("test-")
+            and trial_root.name[5:].isdigit()
+        )
     ):
         raise ValueError("Refusing: trial folder was not created by this helper.")
     marker_path = trial_root / MARKER_NAME

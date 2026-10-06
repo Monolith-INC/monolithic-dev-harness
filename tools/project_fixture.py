@@ -45,6 +45,7 @@ def create_test_project(configuration_file: str | Path) -> Result[Path]:
                                 overrides=raw,
                                 root_prefix=acceptance_trial.RUN_PREFIX,
                                 kind="run",
+                                in_checkout=True,
                             )
                         )
                     except (

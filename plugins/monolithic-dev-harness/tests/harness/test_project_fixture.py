@@ -71,9 +71,17 @@ class ProjectFixtureTests(unittest.TestCase):
         self.assertIsInstance(result, Ok)
         project = result.value
         try:
+            self.assertEqual(project.parent.parent, REPOSITORY / "temp")
+            self.assertTrue(project.parent.name.startswith("test-"))
             applied = json.loads((project / ".harness/settings.json").read_text())
             self.assertEqual(applied, settings)
             self.assertTrue((project / "README.md").is_file())
+            self.assertTrue((project / "_bmad/config.toml").is_file())
+            self.assertTrue((project / "_bmad/scripts").is_dir())
+            self.assertIn(
+                "{project-root}/docs/planning",
+                (project / "_bmad/custom/config.toml").read_text(),
+            )
             self.assertTrue((project / ".harness/tracker/backlog").is_dir())
         finally:
             discarded = discard_test_project(project)

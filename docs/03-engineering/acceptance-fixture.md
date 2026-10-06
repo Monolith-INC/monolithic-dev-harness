@@ -17,11 +17,19 @@ opportunity, current design notes, architecture, and test instructions.
 For an app-based test run, pass a complete `.harness/settings.json` configuration to the test-only
 factory in `tools/project_fixture.py`; `tools/test-project-config.example.json` is a starting
 example. It validates the JSON against the harness settings schema,
-creates a fresh copy, applies the configuration, initializes a selected local tracker through the
-harness setup path, and returns `Ok(project_path)`. Missing, unreadable, malformed, and invalid
+creates a fresh numbered copy under `temp/test-000/project` in the source checkout (or the next
+unused number), applies the configuration, initializes a selected local tracker through the
+harness setup path, prepares the bundled `_bmad/` setup for configured trials before committing
+the starting files, and returns `Ok(project_path)`. Unconfigured first-run trials leave setup absent.
+Missing, unreadable, malformed, and invalid
 configurations return `Err` with a specific error. Starting a new fixture first removes abandoned
 test-run copies created by this helper. Call `discard_test_project(project_path)` when the test ends.
 This factory is not used by ordinary harness setup.
+
+Interactive agents receive the fixture's absolute path in a fresh briefing and target it for every
+file operation and command. A launcher working-directory option is not a prerequisite, and its
+absence must not cause a manual handoff to the human. Record shared-host isolation limitations.
+Keep evidence outside the disposable root and discard the marked copy when the run ends.
 
 ```python
 from tools.project_fixture import create_test_project, discard_test_project
