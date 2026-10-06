@@ -48,6 +48,11 @@ settings file use `tests/settings_fixture.py`.
   tracker refuses tracker writes; no active session refuses governed code changes.
 - **Adapter boundary:** tests confirm host payloads normalize before policy evaluation and host
   response envelopes are emitted only by adapters.
+- **Question recovery:** Codex JSON-text answers, first-run Yes/No confirmation, native Other
+  routing, transcript recovery from a matching real prompt, and blocking/async/chat fallback run
+  through hook subprocesses in temporary projects. Fallback keeps the reviewed artifacts and
+  cannot answer, reopen an approval, or approve a stale review. Live host capture remains a
+  separate install smoke test; `harness doctor` checks configuration only.
 - **Installer:** CI builds the release archive and installs it into sandboxed Claude Code and Codex
   profiles and a Cursor directory, then checks plugin registration and `harness doctor`.
 

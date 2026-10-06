@@ -361,6 +361,15 @@ def _invocation_mentions_hook(invocation: shellscan.Invocation) -> bool:
     """Readers may inspect hooks; execution and copying remain protected."""
     return (
         invocation.name not in shellscan.NON_WRITERS
+        and not (
+            invocation.name == "ruff"
+            and invocation.args[:1] in (("check",), ("format",))
+        )
+        and not (
+            invocation.name == "git"
+            and invocation.args[:1] in (("diff",), ("show",), ("status",))
+            and "--ext-diff" not in invocation.args
+        )
         and (
             invocation.name not in shellscan.IN_PLACE_FLAGS
             or any(

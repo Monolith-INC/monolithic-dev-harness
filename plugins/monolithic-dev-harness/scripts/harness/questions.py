@@ -317,6 +317,23 @@ def choice_label(value: str) -> str:
     return re.sub(r"\s*\(recommended\)\s*$", "", value, flags=re.IGNORECASE).strip()
 
 
+def authorizing_options(options: tuple[str, ...]) -> bool:
+    """Free text must never resolve a question that can authorize a protected action."""
+    return any(
+        choice_label(option).casefold()
+        in APPROVE_LABELS
+        | MANUAL_APPROVE_LABELS
+        | ADOPTION_APPROVE_LABELS
+        | frozenset(TRACKER_ACTIONS)
+        for option in options
+    )
+
+
+def native_routing_question(tool_input: dict[str, Any]) -> bool:
+    """Named direct routing controls accept Other; prepared controls opt in explicitly."""
+    return _first_question(tool_input).get("id") in {"next_step", "starting_point"}
+
+
 def tracker_action(tool_input: dict[str, Any]) -> tuple[tuple[str, ...], str] | None:
     """(actions offered, question text) for a question about a tracker; None for any other.
 

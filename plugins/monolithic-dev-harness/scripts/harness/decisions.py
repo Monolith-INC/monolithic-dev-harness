@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from core.result import Err, Ok, Result, attempt, bind, fmap
+from core.result import Err, Ok, Result, attempt, bind, err, fmap
 from harness import commands, questions, state
 
 RELATIVE_PATH = Path(".harness/state/decision.json")
@@ -26,6 +26,7 @@ class Pending:
     approval: bool
     scope: str | None
     presentation_id: str = ""
+    allow_free_text: bool = False
 
     @classmethod
     def from_record(cls, value: dict[str, Any], scope: str | None) -> Pending:
@@ -37,6 +38,8 @@ class Pending:
             approval=bool(value.get("approval")),
             scope=scope,
             presentation_id=str(value.get("presentation_id", "")),
+            allow_free_text=bool(value.get("allow_free_text"))
+            and not bool(value.get("approval")),
         )
 
     def matches_presentation(self, question: dict[str, Any], transport: str) -> bool:
@@ -159,6 +162,7 @@ def begin(
     approval: bool = False,
     *,
     work_session_id: str | None = None,
+    allow_free_text: bool = False,
 ) -> Result[dict[str, Any]]:
     return bind(
         _path(repo, work_session_id, active=True),
@@ -173,6 +177,7 @@ def begin(
                 artifacts,
                 approval,
                 work_session_id,
+                allow_free_text,
             ),
             "decision_invalid",
             "human decision",
@@ -192,6 +197,7 @@ def _begin(
     artifacts: tuple[tuple[str, str], ...],
     approval: bool,
     work_session_id: str | None,
+    allow_free_text: bool,
 ) -> dict[str, Any]:
     if waiting(repo, work_session_id):
         raise ValueError("answer the pending question before asking another")
@@ -203,6 +209,7 @@ def _begin(
         or any(not option.strip() for option in options)
         or len({option.strip().casefold() for option in options}) != len(options)
         or transport not in ("chat", "blocking", "async")
+        or (allow_free_text and (approval or questions.authorizing_options(options)))
     ):
         raise ValueError("a decision needs an id, question, and distinct options")
     value = {
@@ -214,6 +221,7 @@ def _begin(
         "approval": approval,
         "status": "pending",
         "answer": "",
+        "allow_free_text": allow_free_text,
     }
     if work_session_id:
         value["work_session_id"] = work_session_id
@@ -295,7 +303,9 @@ def _resolve(
         ),
         answer,
     )
-    if answer not in current.get("options", ()):
+    if answer not in current.get("options", ()) and not _free_text_allowed(
+        current, answer
+    ):
         raise ValueError("the human reply does not select an offered option")
     if source != current.get("transport"):
         raise ValueError("the answer arrived through a different interaction")
@@ -310,6 +320,54 @@ def _resolve(
     updated = {**current, "status": "answered", "answer": answer}
     state.write_json(path, updated)
     return updated
+
+
+def _free_text_allowed(current: dict[str, Any], answer: str) -> bool:
+    return (
+        bool(current.get("allow_free_text"))
+        and not current.get("approval")
+        and not questions.authorizing_options(tuple(current.get("options", ())))
+        and bool(answer.strip())
+    )
+
+
+def fallback(
+    repo: Path,
+    transport: str,
+    *,
+    work_session_id: str | None = None,
+) -> Result[dict[str, Any]]:
+    """Move the same unanswered review to a simpler delivery method; never answer it."""
+    return bind(
+        _path(repo, work_session_id),
+        lambda path: bind(
+            _fallback_record(state.read_json(path) or {}, transport),
+            lambda updated: fmap(
+                attempt(
+                    lambda: state.write_json(path, updated),
+                    "decision_invalid",
+                    "question fallback",
+                    OSError,
+                ),
+                lambda _: updated,
+            ),
+        ),
+    )
+
+
+def _fallback_record(current: dict[str, Any], transport: str) -> Result[dict[str, Any]]:
+    match current.get("status"), current.get("transport"), transport:
+        case "pending", "blocking", "async" | "chat":
+            return Ok({**current, "transport": transport, "presentation_id": ""})
+        case "pending", "async", "chat":
+            return Ok({**current, "transport": transport, "presentation_id": ""})
+        case "pending", "chat", "chat":
+            return Ok(current)
+        case _:
+            return err(
+                "decision_invalid",
+                "fallback requires a pending question and a simpler transport",
+            )
 
 
 def _digest(path: Path) -> str:
@@ -331,5 +389,28 @@ def status_command(command: str, cwd: Path) -> bool:
             return len(options) % 2 == 0 and all(
                 flag in ("--repo", "--session-id") for flag in options[::2]
             )
+        case _:
+            return False
+
+
+def fallback_command(command: str, cwd: Path) -> bool:
+    """Only the controlled transport change may pass the waiting gate."""
+    match commands.harness_args(command, cwd):
+        case ("decision", "fallback", *options):
+            return _fallback_options(tuple(options))
+        case _:
+            return False
+
+
+def _fallback_options(options: tuple[str, ...]) -> bool:
+    match options:
+        case ():
+            return True
+        case ("--async-available", *rest):
+            return _fallback_options(tuple(rest))
+        case ("--repo" | "--session-id" | "--host", value, *rest) if (
+            not value.startswith("--")
+        ):
+            return _fallback_options(tuple(rest))
         case _:
             return False

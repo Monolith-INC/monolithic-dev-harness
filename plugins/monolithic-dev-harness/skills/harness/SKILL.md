@@ -185,8 +185,12 @@ point, ask this one structured question:
 - Option `Explore the idea`: `Shape or challenge the idea before planning the technical work.`
 
 Use the host adapter's supported blocking presentation or chat-and-wait fallback. Do not add an `Other` option; the Codex question UI supplies its default free-text field.
-The existing `plain-questions` hook validates the question before display. Every listed option must
-be clickable; if the host cannot display a blocking control, ask in chat and end the turn.
+Prepare this routing decision with `harness decision present --allow-free-text`; for a direct Codex
+control use id `starting_point`. The existing `plain-questions` hook validates the question before
+display. Use the available native control. If delivery fails, quietly run `harness decision fallback`
+and re-ask the same question by the next method, including ordinary chat when needed. Preserve
+the choices and progress and continue this same run after the reply; do not abandon it or expose
+internal question-tool errors. The shared human-decisions contract applies to every later question too.
 
 The choice is routing, not approval: it never opens an approval window. `Investigate first` invokes
 `bmad-build`; `Draft work items` enters Stage 1; `Explore the idea` invokes `plan-initiative`.

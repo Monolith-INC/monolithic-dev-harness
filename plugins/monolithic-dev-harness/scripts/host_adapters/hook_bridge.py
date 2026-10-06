@@ -8,6 +8,7 @@ import re
 from pathlib import Path
 from typing import Any
 
+from core.result import Failure, Ok, Result, attempt, bind, err, map_failure
 from harness.rules import Decision, ToolCall, make_call
 from policy.events import CanonicalToolEvent, PolicyDecision
 
@@ -278,8 +279,34 @@ def question_id(payload: dict[str, Any]) -> str:
     return str(payload.get("tool_use_id") or "")
 
 
-def answer_response(payload: dict[str, Any]) -> Any:
-    return payload.get("tool_response")
+def answer_response(payload: dict[str, Any]) -> Result[dict[str, Any] | None]:
+    """Codex function outputs are JSON text; Claude may supply an object already."""
+    match payload.get("tool_response"):
+        case str() as serialized:
+            return bind(
+                map_failure(
+                    attempt(
+                        lambda: json.loads(serialized),
+                        "answer_capture_invalid",
+                        "question response",
+                        ValueError,
+                    ),
+                    lambda _: Failure(
+                        "answer_capture_invalid", "question response is not valid JSON"
+                    ),
+                ),
+                _answer_object,
+            )
+        case response:
+            return _answer_object(response)
+
+
+def _answer_object(response: Any) -> Result[dict[str, Any] | None]:
+    match response:
+        case dict() | None:
+            return Ok(response)
+        case _:
+            return err("answer_capture_invalid", "question response must be an object")
 
 
 def format_answer_context(note: str) -> str:

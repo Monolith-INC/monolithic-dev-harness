@@ -48,6 +48,7 @@ from harness import (  # noqa: E402
     workflow,
 )
 from host_adapters import hook_bridge, work_session_context  # noqa: E402
+from host_adapters.answer_recovery import recorded_answer  # noqa: E402
 from host_adapters.interactions import (  # noqa: E402
     decision_exchange,
     normalize_question,
@@ -226,8 +227,9 @@ def _held(
     mismatch = work_session_context.mismatch(current, request)
     if mismatch is not None:
         return rules.Decision.deny("work-session-mismatch", mismatch.message)
-    if decisions.blocking(repo, current) and not decisions.status_command(
-        call.command, Path(call.cwd or repo)
+    if decisions.blocking(repo, current) and not (
+        decisions.status_command(call.command, Path(call.cwd or repo))
+        or decisions.fallback_command(call.command, Path(call.cwd or repo))
     ):
         return rules.Decision.deny(
             "decision-pending",
@@ -403,10 +405,20 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         _print_prompt(host, [context.failure.message])
         return 0
     work_session_id = context.value
-    notes: list[str] = []
-    pending = decisions.pending(repo, work_session_id)
+    match _recover_prompt_answer(repo, host, payload, work_session_id):
+        case notes, pending:
+            pass
     # Only a reply that picks an offered option answers; anything else is an ordinary prompt.
-    reply = prompt_answer(host, prompt, pending) if pending else None
+    reply = (
+        prompt_answer(host, prompt, pending)
+        if pending
+        and not (
+            REVOKE_RE.search(prompt)
+            or APPROVE_RE.search(prompt)
+            or MANUAL_RE.search(prompt)
+        )
+        else None
+    )
     if pending is not None and reply is not None:
         _print_prompt(host, _answer_decision(repo, pending, work_session_id, reply))
         return 0
@@ -441,14 +453,43 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     return 0
 
 
+def _recover_prompt_answer(
+    repo: Path,
+    host: str,
+    payload: dict[str, Any],
+    scope: str | None,
+) -> tuple[list[str], decisions.Pending | None]:
+    match decisions.pending(repo, scope):
+        case decisions.Pending() as pending:
+            match recorded_answer(host, payload, pending):
+                case tuple() as captured:
+                    return (
+                        _answer_decision(repo, pending, scope, captured),
+                        decisions.pending(repo, scope),
+                    )
+                case None:
+                    return [], pending
+        case None:
+            return [], None
+
+
 def _governed(payload: dict[str, Any], host: str = "claude") -> Path | None:
     repo = _workspace(payload, host)
     return repo if settings.governed(repo) else None
 
 
+def _question_repo(payload: dict[str, Any], host: str) -> Path | None:
+    """Prepared onboarding decisions exist before shared repository settings do."""
+    match _workspace(payload, host):
+        case repo if settings.governed(repo) or decisions.pending(repo) is not None:
+            return repo
+        case _:
+            return None
+
+
 def handle_ask(host: str, payload: dict[str, Any]) -> int:
     """Before a question is shown: send it back if a person would have to decode it."""
-    repo = _governed(payload, host)
+    repo = _question_repo(payload, host)
     if repo is None:
         return 0
     context = work_session_context.for_payload(repo, host, payload)
@@ -552,6 +593,9 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
             transport,
             _artifacts(repo, decision_scope),
             work_session_id=decision_scope,
+            allow_free_text=questions.native_routing_question(tool_input)
+            and not detail
+            and not questions.authorizing_options(options),
         )
     )
     if isinstance(result, Err):
@@ -559,6 +603,11 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
             host, rules.Decision.deny("decision-invalid", result.failure.message)
         )
         return 0
+    match preparing, pending:
+        case True, decisions.Pending(id=old_id) if old_id != tool_use_id:
+            state.take_asked(repo, questions.marker_name(old_id), decision_scope)
+        case _:
+            pass
     state.mark_asked(repo, questions.marker_name(tool_use_id), detail, decision_scope)
     return 0
 
@@ -647,7 +696,7 @@ def _adoption_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any]
 
 def handle_answer(host: str, payload: dict[str, Any]) -> int:
     """After the user answers a question: record the decision, then what the question pinned."""
-    repo = _governed(payload, host)
+    repo = _question_repo(payload, host)
     tool_use_id = hook_bridge.question_id(payload)
     if repo is None or not tool_use_id:
         return 0
@@ -659,13 +708,37 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
     pending = decisions.pending(repo, work_session_id)
     decision_scope = pending.scope if pending is not None else work_session_id
     tool_input = normalize_question(host, hook_bridge.question_input(payload))
-    response = hook_bridge.answer_response(payload)
     if pending is not None and pending.transport == "async":
         return 0  # tool completion is delivery; the reply arrives later as a prompt
+    match hook_bridge.answer_response(payload):
+        case Err(failure):
+            print(
+                hook_bridge.format_answer_context(
+                    f"[harness] human reply capture failed ({host}, answer): {failure.message}. "
+                    "The question remains pending; inspect the host response format."
+                    " Quietly re-ask through `harness decision fallback` using the next supported "
+                    "method. Preserve the review and choices; do not expose internal errors to the user."
+                )
+            )
+            return 0
+        case Ok(response):
+            pass
     if pending is not None:
         answered = questions.answer(tool_input, response)
-        if answered is None:
-            return 0  # delivery acknowledgment is not a human answer
+        match answered:
+            case None:
+                print(
+                    hook_bridge.format_answer_context(
+                        f"[harness] human reply capture failed ({host}, answer): "
+                        "no matching human answer was received. The question remains pending; "
+                        "delivery or dismissal does not answer it."
+                        " If delivery failed, quietly re-ask through `harness decision fallback`; "
+                        "continue the same run once the human answers."
+                    )
+                )
+                return 0
+            case _:
+                pass
         chosen = next(
             (
                 str(option)
@@ -714,12 +787,15 @@ def _answer_decision(
         case Ok(found):
             pass
     notes = [f"[harness] human decision recorded: {found['answer']}"]
-    if transport == "async":
-        tool_input, response = decision_exchange(pending, answer)
-        note = _apply_marker(
-            repo, key, decision_scope, conversation_scope, tool_input, response
-        )
-        return notes + ([note] if note else [])
+    match decision_exchange(pending, answer):
+        case tool_input, response:
+            match _apply_marker(
+                repo, key, decision_scope, conversation_scope, tool_input, response
+            ):
+                case str() as note:
+                    return notes + [note]
+                case None:
+                    pass
     if (
         found.get("approval")
         and questions.choice_label(str(found["answer"])).casefold()

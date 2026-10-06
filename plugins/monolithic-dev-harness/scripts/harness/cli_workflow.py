@@ -101,7 +101,7 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     decision_parser = sub.add_parser(
         "decision", help="present a host-adapted decision and wait for the human"
     )
-    decision_parser.add_argument("operation", choices=("present", "status"))
+    decision_parser.add_argument("operation", choices=("present", "status", "fallback"))
     decision_parser.add_argument("--repo", default=".")
     decision_parser.add_argument(
         "--session-id", help="scope the question to a project work session"
@@ -115,6 +115,11 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     decision_parser.add_argument("--option", action="append")
     decision_parser.add_argument("--artifact", action="append")
     decision_parser.add_argument("--approval", action="store_true")
+    decision_parser.add_argument(
+        "--allow-free-text",
+        action="store_true",
+        help="accept a native Other response for routing; never for write approval",
+    )
     suspension_parser = sub.add_parser(
         "suspension",
         help="show or end a suspension of the harness checks (type `harness suspend` to start one)",
@@ -214,6 +219,15 @@ def decision_command(args: argparse.Namespace) -> int:
         case "status":
             print(decisions.status(repo, args.session_id))
             return 0
+        case "fallback" if not (
+            args.question
+            or args.option
+            or args.artifact
+            or args.approval
+            or args.allow_free_text
+            or args.blocking_available
+        ):
+            return _fallback_decision(repo, args)
         case "present":
             key = decisions.new_key()
             wording = questions.problems(
@@ -260,6 +274,7 @@ def decision_command(args: argparse.Namespace) -> int:
                             artifacts,
                             args.approval,
                             work_session_id=args.session_id,
+                            allow_free_text=args.allow_free_text,
                         ),
                         lambda _: json.dumps(
                             {**shown, "decision_id": key, "state": "waiting_for_human"}
@@ -269,6 +284,48 @@ def decision_command(args: argparse.Namespace) -> int:
             )
         case _:
             return 2
+
+
+def _fallback_decision(repo: Path, args: argparse.Namespace) -> int:
+    match decisions.pending(repo, args.session_id):
+        case None:
+            return print_result(err("decision_invalid", "no question is waiting"))
+        case pending:
+            return _show_fallback(
+                repo,
+                args,
+                pending,
+                present(
+                    {
+                        "id": pending.id,
+                        "header": "Review",
+                        "question": pending.question,
+                        "options": [
+                            {"label": option, "description": ""}
+                            for option in pending.options
+                        ],
+                    },
+                    args.host,
+                    False,
+                    args.async_available and pending.transport == "blocking",
+                ),
+            )
+
+
+def _show_fallback(
+    repo: Path,
+    args: argparse.Namespace,
+    pending: decisions.Pending,
+    shown: dict,
+) -> int:
+    return print_result(
+        fmap(
+            decisions.fallback(repo, shown["transport"], work_session_id=pending.scope),
+            lambda _: json.dumps(
+                {**shown, "decision_id": pending.id, "state": "waiting_for_human"}
+            ),
+        )
+    )
 
 
 def _workflow_result(

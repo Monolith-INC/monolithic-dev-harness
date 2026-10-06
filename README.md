@@ -1,7 +1,7 @@
 # monolithic-dev-harness
 
 [![CI](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.6.1-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
+[![Version](https://img.shields.io/badge/version-0.6.2-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![Cursor](https://img.shields.io/badge/Cursor-supported-black.svg)](https://cursor.com)
