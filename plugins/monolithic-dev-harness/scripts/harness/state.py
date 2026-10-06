@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +23,7 @@ _SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def state_dir(repo: Path) -> Path:

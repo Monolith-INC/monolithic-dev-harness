@@ -199,7 +199,7 @@ See [../05-security/security.md](../05-security/security.md).
 ## Validation Gates
 
 - `ruff check` and `ruff format --check` clean.
-- Backlog, delivery, and harness suites green on Python 3.10 and 3.12.
+- Backlog, delivery, and harness suites green on Python 3.12 and 3.13.
 - `scripts/check_versions.py` agrees across every version source.
 - The built release installs into a sandboxed Claude Code profile in CI and reports the plugin as
   enabled.

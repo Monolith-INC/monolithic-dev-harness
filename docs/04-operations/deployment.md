@@ -26,7 +26,7 @@ gh release download --repo Monolith-INC/monolithic-dev-harness --pattern install
 What the installer does, in order:
 
 ```text
-preflight   python3 >= 3.10, git, tar; warns if npx is missing
+preflight   Python >= 3.12, git, tar; warns if npx is missing
 hosts       --host, or auto: `claude`/`codex` on PATH, ~/.cursor present
 version     --version, or latest via gh / GitHub API (token if set)
 download    monolithic-dev-harness-<v>.tar.gz + SHA256SUMS; verify checksum

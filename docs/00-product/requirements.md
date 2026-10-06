@@ -86,7 +86,7 @@ policy runtime, and the CI installer job for installation.
 
 ## Constraints
 
-- Python 3.10+ on the developer's machine (standard library only in hooks); Node.js for the Azure
+- Python 3.12+ on the developer's machine (standard library only in hooks); Node.js for the Azure
   DevOps and Linear MCP servers.
 - Hooks must answer within the host's hook timeout (15 s for pre-tool calls).
 

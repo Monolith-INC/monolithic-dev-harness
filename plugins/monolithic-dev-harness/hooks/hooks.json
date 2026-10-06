@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/harness/hook.py\" --host claude --event pre-tool",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/harness-python\" \"${CLAUDE_PLUGIN_ROOT}/scripts/harness/hook.py\" --host claude --event pre-tool",
             "timeout": 15,
             "statusMessage": "Checking harness policy"
           }
@@ -18,7 +18,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/harness/hook.py\" --host claude --event ask",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/harness-python\" \"${CLAUDE_PLUGIN_ROOT}/scripts/harness/hook.py\" --host claude --event ask",
             "timeout": 10
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/harness/hook.py\" --host claude --event prompt",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/harness-python\" \"${CLAUDE_PLUGIN_ROOT}/scripts/harness/hook.py\" --host claude --event prompt",
             "timeout": 10
           }
         ]
@@ -41,7 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/scripts/harness/hook.py\" --host claude --event answer",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/harness-python\" \"${CLAUDE_PLUGIN_ROOT}/scripts/harness/hook.py\" --host claude --event answer",
             "timeout": 10
           }
         ]

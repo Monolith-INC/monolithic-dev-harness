@@ -1,8 +1,9 @@
 {
   "mcpServers": {
     "backlog-orchestrator": {
-      "command": "python3",
+      "command": "sh",
       "args": [
+        "${CURSOR_PLUGIN_ROOT}/bin/harness-python",
         "-m",
         "orchestrator_core",
         "mcp"
@@ -13,8 +14,9 @@
       }
     },
     "workflow-orchestrator": {
-      "command": "python3",
+      "command": "sh",
       "args": [
+        "${CURSOR_PLUGIN_ROOT}/bin/harness-python",
         "${CURSOR_PLUGIN_ROOT}/scripts/orchestrator/run_mcp_server.py"
       ],
       "env": {
@@ -23,8 +25,9 @@
       }
     },
     "workflow-integrations": {
-      "command": "python3",
+      "command": "sh",
       "args": [
+        "${CURSOR_PLUGIN_ROOT}/bin/harness-python",
         "${CURSOR_PLUGIN_ROOT}/scripts/integrations/run_gateway.py"
       ],
       "env": {

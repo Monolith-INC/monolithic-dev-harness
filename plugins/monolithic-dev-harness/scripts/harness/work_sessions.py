@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import secrets
 from dataclasses import dataclass, replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -46,7 +46,7 @@ def root(project: Path) -> Path:
 
 
 def _now() -> str:
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _payload(session: Session) -> dict[str, Any]:

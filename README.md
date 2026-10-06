@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml)
 [![Version](https://img.shields.io/badge/version-0.5.4-brightgreen.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
+[![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![Cursor](https://img.shields.io/badge/Cursor-supported-black.svg)](https://cursor.com)
 [![Codex](https://img.shields.io/badge/Codex-supported-black.svg)](https://developers.openai.com/codex)
@@ -126,7 +126,7 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
 | Requirement               | Version / Notes                                                        |
 | ------------------------- | ---------------------------------------------------------------------- |
 | Claude Code, Cursor, or Codex | current releases                                                    |
-| Python                    | 3.10 or newer (hooks, orchestrators, CLI)                              |
+| Python                    | 3.12 or newer (hooks, orchestrators, CLI)                              |
 | git                       | any recent version (the hooks read git state)                          |
 | Node.js                   | provides `npx`, which starts the Azure DevOps and Linear MCP servers   |
 | A tracker                 | Azure DevOps or Linear (sign-in is OAuth in your browser), or none for the local tracker |

@@ -40,6 +40,7 @@ SOURCE=""
 UNINSTALL=0
 ASSUME_YES=0
 TMP=""
+PY=""
 
 say() { printf '\033[1m→\033[0m %s\n' "$*"; }
 warn() { printf '\033[33m!\033[0m %s\n' "$*" >&2; }
@@ -90,13 +91,22 @@ parse_args() {
 
 # --- preflight ---------------------------------------------------------------------------------
 
-python_ok() {
-  have python3 && python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 10) else 1)'
+# The first Python 3.12 or newer, found the way the plugin's bin/harness-python finds it.
+find_python() {
+  local candidate
+  for candidate in "${HARNESS_PYTHON:-}" python3.15 python3.14 python3.13 python3.12 python3; do
+    [[ -n "$candidate" ]] || continue
+    if have "$candidate" && "$candidate" -c 'import sys; sys.exit(sys.version_info < (3, 12))' 2>/dev/null; then
+      command -v "$candidate"
+      return 0
+    fi
+  done
+  return 1
 }
 
 preflight() {
   have tar || die "tar is required"
-  python_ok || die "python3 3.10 or newer is required (the harness hooks and orchestrators are Python)"
+  PY="$(find_python)" || die "Python 3.12 or newer is required (the harness hooks and orchestrators are Python); install it or set HARNESS_PYTHON"
   have git || warn "git not found: versioned delivery features will be unavailable"
   have npx || warn "npx not found: install Node.js so the Azure DevOps MCP server can start"
   if [[ -z "$SOURCE" ]]; then
@@ -147,7 +157,7 @@ api_get() {  # api_get <path under the repository> [<accept header>]
 }
 
 json_field() {  # json_field <python expression over `d`>; reads JSON on stdin
-  python3 -c "import json,sys; d=json.load(sys.stdin); print($1)" 2>/dev/null
+  "$PY" -c "import json,sys; d=json.load(sys.stdin); print($1)" 2>/dev/null
 }
 
 resolve_version() {
@@ -206,7 +216,7 @@ stage_payload() {  # leaves the marketplace root in $PAYLOAD
   fi
   [[ -f "${PAYLOAD}/.claude-plugin/marketplace.json" && -f "${PAYLOAD}/plugins/${PLUGIN}/.claude-plugin/plugin.json" ]] \
     || die "${SOURCE:-the release archive} does not look like a ${PLUGIN} build"
-  VERSION="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "${PAYLOAD}/plugins/${PLUGIN}/.claude-plugin/plugin.json")"
+  VERSION="$("$PY" -c 'import json,sys; print(json.load(open(sys.argv[1]))["version"])' "${PAYLOAD}/plugins/${PLUGIN}/.claude-plugin/plugin.json")"
 }
 
 # --- configuration -----------------------------------------------------------------------------
@@ -229,7 +239,7 @@ install_marketplace_copy() {
   rm -rf "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/tests"
   cp "${PAYLOAD}/plugins/${PLUGIN}/codex.mcp.json" \
     "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/.mcp.json"
-  python3 - "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/.mcp.json" \
+  "$PY" - "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/.mcp.json" \
     "${MARKETPLACE_DIR}/codex-marketplace/plugins/${PLUGIN}" <<'PY'
 import json, sys
 from pathlib import Path
@@ -301,7 +311,7 @@ install_codex() {
 }
 
 codex_choice_setting() {
-  python3 - "$CODEX_CONFIG" <<'PY'
+  "$PY" - "$CODEX_CONFIG" <<'PY'
 import re
 import sys
 from pathlib import Path
@@ -338,7 +348,7 @@ configure_codex_choices() {
 
 restore_codex_choices() {
   [[ -f "$CODEX_CHOICES_MARKER" ]] || return 0
-  python3 - "$CODEX_CONFIG" <<'PY'
+  "$PY" - "$CODEX_CONFIG" <<'PY'
 import os
 import re
 import stat
@@ -400,6 +410,8 @@ uninstall() {
 main() {
   parse_args "$@"
   if [[ $UNINSTALL -eq 1 ]]; then
+    # Removing the harness only edits JSON, so any Python 3 will do.
+    PY="$(find_python)" || PY="python3"
     confirm_action "Remove ${PLUGIN} from this computer?"
     uninstall
     return 0

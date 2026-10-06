@@ -29,7 +29,7 @@ None.
 
 | Dependency | Needed by | Notes |
 | --- | --- | --- |
-| Python 3.10+ (standard library only) | hooks, orchestrators, gateway, CLI | checked by the installer and `harness doctor` |
+| Python 3.12+ (standard library only) | hooks, orchestrators, gateway, CLI | checked by the installer and `harness doctor` |
 | git | hooks | trees, staged paths, branch diffs |
 | Node.js / `npx` | `@azure-devops/mcp` | downloaded by `npx` on first start |
 | `@azure-devops/mcp` | Internal Azure DevOps adapter used by `workflow-integrations` | interactive OAuth; the gateway reads organization from harness settings |
@@ -54,7 +54,7 @@ The plugin is assembled from internal and MIT-licensed sources; see
 
 ## Tests
 
-CI runs on Python 3.10 and 3.12.
+CI runs on Python 3.12 and 3.13.
 
 ## Full Outcome Gate
 

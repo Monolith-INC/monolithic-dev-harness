@@ -1,25 +1,38 @@
 {
   "mcpServers": {
     "backlog-orchestrator": {
-      "command": "python3",
-      "args": ["-m", "orchestrator_core", "mcp"],
+      "command": "sh",
+      "args": [
+        "${PLUGIN_ROOT}/bin/harness-python",
+        "-m",
+        "orchestrator_core",
+        "mcp"
+      ],
       "env": {
         "PYTHONPATH": "${PLUGIN_ROOT}/runtime",
         "ORCHESTRATOR_SKILLS_DIR": "${PLUGIN_ROOT}/skills"
       }
     },
     "workflow-orchestrator": {
-      "command": "python3",
-      "args": ["${PLUGIN_ROOT}/scripts/orchestrator/run_mcp_server.py"],
+      "command": "sh",
+      "args": [
+        "${PLUGIN_ROOT}/bin/harness-python",
+        "${PLUGIN_ROOT}/scripts/orchestrator/run_mcp_server.py"
+      ],
       "env": {
         "PYTHONPATH": "${PLUGIN_ROOT}",
         "ORCHESTRATOR_SKILLS_DIR": "${PLUGIN_ROOT}/skills"
       }
     },
     "workflow-integrations": {
-      "command": "python3",
-      "args": ["${PLUGIN_ROOT}/scripts/integrations/run_gateway.py"],
-      "env": {"PYTHONPATH": "${PLUGIN_ROOT}"}
+      "command": "sh",
+      "args": [
+        "${PLUGIN_ROOT}/bin/harness-python",
+        "${PLUGIN_ROOT}/scripts/integrations/run_gateway.py"
+      ],
+      "env": {
+        "PYTHONPATH": "${PLUGIN_ROOT}"
+      }
     }
   }
 }

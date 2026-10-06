@@ -96,9 +96,9 @@ def doctor(args: argparse.Namespace) -> int:
     print("Tools")
     py = sys.version_info
     report.line(
-        "ok" if py >= (3, 10) else "FAIL",
-        "python3",
-        f"{py.major}.{py.minor} (3.10+ required)",
+        "ok" if py >= (3, 12) else "FAIL",
+        "python",
+        f"{py.major}.{py.minor} at {sys.executable} (3.12+ required)",
     )
     for tool, why in (
         ("git", "needed only for versioned delivery"),

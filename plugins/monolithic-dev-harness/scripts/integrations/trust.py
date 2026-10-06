@@ -9,7 +9,7 @@ folder changes its digest, and the tracker stops counting until the user trusts 
 from __future__ import annotations
 
 import hashlib
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 from core.result import Result, attempt, bind, require
@@ -101,7 +101,7 @@ def _write(repo: Path, name: str, value: str) -> Result[str]:
     record = {
         "name": name,
         "digest": value,
-        "trusted": datetime.now(timezone.utc).isoformat(),
+        "trusted": datetime.now(UTC).isoformat(),
     }
     return attempt(
         lambda: state.write_json(path, record) or value,

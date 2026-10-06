@@ -17,6 +17,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- The harness now requires Python 3.12 or newer. Hooks, MCP servers, and the `harness` command
+  start through `bin/harness-python`, which picks the first Python 3.12+ on the machine
+  (`HARNESS_PYTHON`, then `python3.15` down to `python3.12`, then `python3`), so they work where the
+  default `python3` is older. The installer and `harness doctor` check for it. CI tests 3.12 and 3.13.
 - An approval window now covers only the work session it was opened in. A write from another
   session needs its own approval; a window opened without a session (Cursor, or no session bound)
   covers only writes without one. `harness revoke` still closes every window; workflow back,
