@@ -6,14 +6,26 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-06
+
 ### Added
 
+- Project work sessions: several tickets can be in flight in one project, each bound to its own
+  host conversation, with `harness work-session` lifecycle commands (start, list, route, select,
+  status, pause, stop, resume, complete), per-session workflow checkpoints, and routing that keeps
+  the user's original request.
+- Human decisions: a question shown to the user is recorded as pending, and only the user's own
+  answer, read by the prompt and answer hooks, resolves it. A pending decision blocks the writes
+  that depend on it. `harness decision status` reports it.
+- Prepared workflows: a catalog of routes and steps (`config/prepared-workflows.json`) that hands
+  each step its references, skills, operations, outputs, checks, and recovery.
 - A subagent contract for agent hosts: `SubagentOps` (start, status, follow-up, cancel, events)
   with typed requests, handles, and statuses. Each host declares in `hosts/<host>.json`, checked
   against `config/host.schema.json`, which operations it supports and where that claim comes
-  from. Every answer is checked against the declaration and the contract: an undeclared
-  operation returns `unsupported_capability`, and a malformed answer or a crash returns
-  `invalid_host_result`. No host supports any operation yet; each is unsupported until verified.
+  from. An undeclared operation returns `unsupported_capability`; a malformed answer or a crash
+  returns `invalid_host_result`. No host supports any operation yet.
+- Test-run tooling for harness acceptance trials: `scripts/acceptance_trial.py`, the
+  `tools/project_fixture.py` test-project factory, and the `run-test-project` skill.
 
 ### Changed
 
@@ -21,6 +33,8 @@ All notable changes to this project are documented here. The format follows
   start through `bin/harness-python`, which picks the first Python 3.12+ on the machine
   (`HARNESS_PYTHON`, then `python3.15` down to `python3.12`, then `python3`), so they work where the
   default `python3` is older. The installer and `harness doctor` check for it. CI tests 3.12 and 3.13.
+- The installer installs Jinja2 into the plugin's own `runtime/python` folder
+  (`requirements-runtime.txt`), never into the user's Python.
 - An approval window now covers only the work session it was opened in. A write from another
   session needs its own approval; a window opened without a session (Cursor, or no session bound)
   covers only writes without one. `harness revoke` still closes every window; workflow back,
@@ -28,11 +42,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
-- BMad is hooked back in. Stage 0 runs BMad Build's own clarify and plan steps (rendered at build
-  time with BMad's renderer) instead of a hand-written checklist. `harness bootstrap` runs BMad's
-  bundled setup and points its output folder at `artifacts_path`; BMad skills run their unchanged
-  scripts through `bin/harness-python` instead of `uv`; the module record ships beside the skills,
-  and BMad's ticket script is installed again.
+- BMad is hooked back in. Stage 0 runs BMad Build's own clarify and plan steps instead of a
+  hand-written checklist: `harness workflow render` renders them for the project after onboarding
+  and pins the snapshot to the work session. `harness bootstrap` runs BMad's bundled setup and
+  points its output folder at `artifacts_path`; BMad skills run their unchanged scripts through
+  `bin/harness-python` instead of `uv`; the module record ships beside the skills, and BMad's
+  ticket script is installed again.
 - Approving through a pending decision now opens the window for `approvals.window_minutes`
   instead of a fixed 20 minutes.
 
@@ -559,7 +574,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.1...v0.5.2
