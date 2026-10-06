@@ -145,28 +145,26 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     call = _tool_call(host, event, payload)
     repo = _workspace(payload, host)
+    entry = rules.rule_hook_entry(call)
+    if not entry.allowed:
+        _emit_decision(host, entry)
+        return 0
     # The user released the checks from their own prompt; only their records stay protected.
     suspended = state.harness_mode(repo) == "suspended"
-    # Reading the pending decision passes the decision gate, never the rules below.
-    status_query = call.kind == "shell" and decisions.status_command(
-        call.command, Path(call.cwd or repo)
+    context = work_session_context.for_payload(repo, host, payload)
+    request = (
+        work_session_context.requested(call.command, Path(call.cwd or repo))
+        if call.kind == "shell"
+        else None
     )
-    if (
-        not suspended
-        and not status_query
-        and decisions.waiting(repo)
-        and rules.is_write_class(call)
-    ):
-        _emit_decision(
-            host,
-            rules.Decision.deny(
-                "decision-pending",
-                "Wait for the human's answer before continuing this run.",
-            ),
-        )
+    held = None if suspended else _held(repo, call, context, request)
+    if held is not None:
+        _emit_decision(host, held)
         return 0
+    work_session_id = context.value if isinstance(context, Ok) else None
     if not settings.governed(repo):
         # Not a governed repository: the harness is opt-in per repo (bootstrap writes the settings).
+        _bind(repo, host, payload, work_session_id, request)
         _emit_decision(host, rules.Decision.allow())
         return 0
     timed = hasattr(signal, "SIGALRM")
@@ -188,7 +186,7 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
                     repo,
                     chosen,
                     tracker_policy.build(repo, loaded),
-                    _work_session(repo, host, payload),
+                    work_session_id,
                 )
     except (Exception, _OutOfTime) as exc:
         # Any failure of the rules, including a crash or running out of time, blocks writes.
@@ -199,13 +197,57 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     finally:
         if timed:
             signal.setitimer(signal.ITIMER_REAL, 0)
-    if not decision.allowed or suspended or status_query:
+    if decision.allowed:
+        _bind(repo, host, payload, work_session_id, request)
+    if not decision.allowed or suspended:
         _emit_decision(host, decision)
         return 0
     if hook_bridge.delegates_workflow_policy(host, event):
         return _delegate_to_workflow_policy(host, payload, call, repo)
     _emit_decision(host, decision)
     return 0
+
+
+def _held(
+    repo: Path,
+    call: rules.ToolCall,
+    context: Any,
+    request: tuple[str, str] | None,
+) -> rules.Decision | None:
+    """Why a write must wait: the conversation's session or a pending decision, checked once."""
+    if not rules.is_write_class(call):
+        return None
+    match context:
+        case Err(failure):
+            return rules.Decision.deny("work-session-context", failure.message)
+        case Ok(current):
+            pass
+    mismatch = work_session_context.mismatch(current, request)
+    if mismatch is not None:
+        return rules.Decision.deny("work-session-mismatch", mismatch.message)
+    if decisions.blocking(repo, current) and not decisions.status_command(
+        call.command, Path(call.cwd or repo)
+    ):
+        return rules.Decision.deny(
+            "decision-pending",
+            "Wait for the human's answer before continuing this run.",
+        )
+    return None
+
+
+def _bind(
+    repo: Path,
+    host: str,
+    payload: dict[str, Any],
+    current: str | None,
+    request: tuple[str, str] | None,
+) -> None:
+    """Bind the conversation to the session an allowed command chose; a failure binds nothing."""
+    from host_adapters import native_session_id
+
+    work_session_context.bind_requested(
+        repo, host, native_session_id(host, payload), current, request
+    )
 
 
 def _pin_approved_notes(repo: Path, approval_id: str) -> str:
@@ -448,11 +490,7 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
         and not pending.get("presentation_id")
     )
     decision_session_id = pending_session_id if preparing else work_session_id
-    if (
-        decisions.waiting(repo, work_session_id)
-        if work_session_id is not None
-        else decisions.any_waiting(repo)
-    ) and not preparing:
+    if decisions.blocking(repo, work_session_id) and not preparing:
         _emit_decision(
             host,
             rules.Decision.deny(
@@ -661,8 +699,8 @@ def handle_answer(host: str, payload: dict[str, Any], *, delayed: bool = False) 
             (
                 str(option)
                 for option in pending.get("options", ())
-                if questions._choice_label(str(option)).casefold()
-                == questions._choice_label(response).casefold()
+                if questions.choice_label(str(option)).casefold()
+                == questions.choice_label(response).casefold()
             ),
             response,
         )

@@ -16,9 +16,9 @@ if _SCRIPTS_DIR not in sys.path:
 from spec_runtime import SPEC_KINDS
 
 from core.result import Err, Failure, Ok, Result, bind, fmap, recover
-from harness import decisions, gitstate, sessions, settings, state
+from harness import gitstate, sessions, settings, state
 from harness.local_artifacts import approved_kinds_for, artifacts_dir
-from host_adapters import select_adapter, work_session_context
+from host_adapters import select_adapter
 from host_adapters.hook_bridge import project_root_hint, should_emit_allow
 from integrations import branches, registry
 from integrations.contracts import LogicalState, TrackerOps, WorkItem
@@ -100,19 +100,7 @@ def run(client: str, input_data: dict[str, Any], project_root: str = "") -> int:
 
 
 def evaluate_event(event: CanonicalToolEvent) -> PolicyDecision:
-    root = Path(event.workspace_root or ".")
-    match work_session_context.for_event(root, event):
-        case Err(failure):
-            return PolicyDecision.deny(failure.message)
-        case Ok(work_session_id):
-            pass
-    if event.kind != "read" and (
-        decisions.waiting(root, work_session_id)
-        or (work_session_id is None and decisions.any_waiting(root))
-    ):
-        return PolicyDecision.deny(
-            "Wait for the human's answer before continuing this run."
-        )
+    # The decision gate and work-session binding run once, in harness/hook.py, before this.
     command = event.command or ""
     if event.kind == "shell":
         branch_decision = evaluate_git_branch_guard(command, event.workspace_root)

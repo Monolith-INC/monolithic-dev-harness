@@ -4,18 +4,13 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
-import shutil
 from pathlib import Path
 from typing import Any
 
 from core.result import Err, Ok, Result, attempt, bind, fmap
-from harness import state
+from harness import commands, questions, state
 
 RELATIVE_PATH = Path(".harness/state/decision.json")
-PLUGIN_ROOT = Path(__file__).resolve().parents[2]
-# One plain command: words of path characters separated by single spaces, no shell syntax.
-_PLAIN_COMMAND = re.compile(r"[\w./:@+-]+(?: [\w./:@+-]+)*")
 
 
 def _path(
@@ -56,6 +51,18 @@ def _waiting_at(path: Path) -> bool:
     return path.exists() and (state.read_json(path) or {}).get("status") != "answered"
 
 
+def blocking(repo: Path, work_session_id: str | None) -> bool:
+    """The one gate: whether a pending decision holds work done from this scope.
+
+    A project-wide decision holds everyone; a session's decision holds that session. Work with no
+    session (an unbound conversation, or a host that gives no session id) is held by any pending
+    decision, so it can never act around one.
+    """
+    return (
+        any_waiting(repo) if work_session_id is None else waiting(repo, work_session_id)
+    )
+
+
 def any_waiting(repo: Path) -> bool:
     if _waiting_at(repo / RELATIVE_PATH):
         return True
@@ -70,24 +77,41 @@ def any_waiting(repo: Path) -> bool:
             return True
 
 
-def pending_for(
-    repo: Path, work_session_id: str | None = None
-) -> dict[str, Any] | None:
-    pending, _scope = pending_scope(repo, work_session_id)
-    return pending
-
-
 def pending_scope(
     repo: Path, work_session_id: str | None = None
 ) -> tuple[dict[str, Any] | None, str | None]:
-    """Return the pending decision and the storage scope it actually belongs to."""
+    """Return the pending decision and the storage scope it actually belongs to.
+
+    Without a session (Cursor gives none), the one pending session decision is the one the user
+    is answering; with several, none is guessed.
+    """
     scoped = record(repo, work_session_id)
     if scoped and scoped.get("status") == "pending":
         return scoped, work_session_id
     global_record = record(repo)
     if global_record and global_record.get("status") == "pending":
         return global_record, None
+    if work_session_id is None:
+        match _pending_sessions(repo):
+            case [(session_id, only)]:
+                return only, session_id
     return None, work_session_id
+
+
+def _pending_sessions(repo: Path) -> list[tuple[str, dict[str, Any]]]:
+    from harness import work_sessions
+
+    match work_sessions.list_sessions(repo):
+        case Ok(sessions):
+            found = [
+                (session.id, state.read_json(session.folder / "decision.json") or {})
+                for session in sessions
+            ]
+            return [
+                (sid, value) for sid, value in found if value.get("status") == "pending"
+            ]
+        case Err():
+            return []
 
 
 def begin(
@@ -240,7 +264,9 @@ def _resolve(
         raise ValueError("the human reply does not select an offered option")
     if source != current.get("transport"):
         raise ValueError("the answer arrived through a different interaction")
-    if answer.casefold() not in ("revise", "stop", "not now") and any(
+    if questions.choice_label(
+        answer
+    ).casefold() not in questions.DECLINE_LABELS and any(
         _digest(repo / name) != digest for name, digest in current.get("artifacts", ())
     ):
         raise ValueError(
@@ -263,32 +289,12 @@ def status_command(command: str, cwd: Path) -> bool:
     """Whether a shell command only reads the pending decision.
 
     The decision gate lets it run so the agent can see what it is waiting for; it never skips
-    the rules. Any shell syntax disqualifies it, so nothing else can ride along.
+    the rules. Anything but exactly one `harness decision status` run disqualifies it.
     """
-    if not _PLAIN_COMMAND.fullmatch(command):
-        return False
-    match command.split(" "):
-        case [executable, "decision", "status", *options] if _status_options(options):
-            return _this_harness(executable, cwd)
+    match commands.harness_args(command, cwd):
+        case ("decision", "status", *options):
+            return len(options) % 2 == 0 and all(
+                flag in ("--repo", "--session-id") for flag in options[::2]
+            )
         case _:
             return False
-
-
-def _status_options(options: list[str]) -> bool:
-    return len(options) % 2 == 0 and all(
-        flag in ("--repo", "--session-id") for flag in options[::2]
-    )
-
-
-def _this_harness(executable: str, cwd: Path) -> bool:
-    """This plugin's `bin/harness`, or the `harness` the installer linked onto the path."""
-    found = shutil.which(executable) if "/" not in executable else str(cwd / executable)
-    if found is None or not Path(found).is_file():
-        return False
-    resolved = Path(found).resolve()
-    linked = shutil.which("harness")
-    return resolved == (PLUGIN_ROOT / "bin/harness").resolve() or (
-        linked is not None
-        and resolved == Path(linked).resolve()
-        and (resolved.parents[1] / "scripts/harness/decisions.py").is_file()
-    )

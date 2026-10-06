@@ -339,6 +339,34 @@ def shell_writes_matching(
     return None
 
 
+_HOOK_SCRIPT = re.compile(r"(?:^|[\s/'\"=])(?:hook|hook_runtime)\.py\b")
+_HOOK_MODULE = re.compile(
+    r"\bhook_runtime\b|\bharness\.hook\b|\bharness\s+import\s+.*\bhook\b"
+)
+
+
+def runs_harness_hook(command: str) -> bool:
+    """Whether a shell command runs (or copies) the harness's own hook entry points.
+
+    The prompt and answer hooks record the user's answers and approvals from what they read on
+    stdin, so an agent that pipes a payload into them could answer for the user.
+    """
+    return bool(_HOOK_MODULE.search(command)) or (
+        bool(_HOOK_SCRIPT.search(command)) and "harness" in command
+    )
+
+
+def rule_hook_entry(call: ToolCall) -> Decision:
+    """Only the host runs the harness hooks; a shell command that runs them is refused."""
+    if call.kind == "shell" and runs_harness_hook(call.command):
+        return Decision.deny(
+            "hook-entry",
+            "Only the host runs the harness hooks. Running them yourself could record an answer "
+            "or approval the user never gave, so this command is refused.",
+        )
+    return Decision.allow()
+
+
 def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
     """The settings, approvals, manual checks, sessions, and tracker trust are written by people or the harness."""
     if call.kind == "edit":

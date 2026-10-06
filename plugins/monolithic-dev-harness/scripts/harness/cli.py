@@ -681,13 +681,6 @@ def _workflow_result(
 
 
 def _workflow_point(repo: Path, args: argparse.Namespace) -> Result[workflow.Workflow]:
-    if decisions.waiting(repo, args.session_id):
-        return Err(
-            Failure(
-                "decision_pending",
-                "wait for the human's answer before advancing the workflow",
-            )
-        )
     return bind(
         workflow.load(repo, args.session_id),
         lambda current: bind(
@@ -799,7 +792,7 @@ def _workflow_start(
 
 def workflow_command(args: argparse.Namespace) -> int:
     repo = _repo(args.repo)
-    if decisions.waiting(repo, args.session_id) and args.operation not in (
+    if decisions.blocking(repo, args.session_id) and args.operation not in (
         "status",
         "list",
         "pause",

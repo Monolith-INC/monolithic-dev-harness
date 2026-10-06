@@ -29,6 +29,10 @@ from host_adapters.interactions import present
 MAX_QUESTION_WORDS = 50
 MAX_DESCRIPTION_WORDS = 25
 APPROVE_LABELS = frozenset({"approve", "aprovar", "aprovo"})
+# Answers that approve nothing, so a changed artifact never blocks them.
+DECLINE_LABELS = frozenset(
+    {"revise", "stop", "not now", "revisar", "parar", "agora não"}
+)
 MANUAL_APPROVE_LABELS = frozenset({"approve change", "aprovar mudança"})
 ADOPTION_APPROVE_LABELS = frozenset({"approve adoption", "aprovar adoção"})
 TRACKER_ACTIONS = {"trust": "trust", "use it": "select", "stop trusting": "untrust"}
@@ -214,15 +218,15 @@ def approval(tool_input: dict[str, Any], tool_response: Any) -> tuple[str, str] 
             continue
         text = str(question.get("question", ""))
         labels = {
-            _choice_label(str(option.get("label", "")))
+            choice_label(str(option.get("label", "")))
             for option in question.get("options") or []
             if isinstance(option, dict)
         }
         answer = _answer_for(question, answers)
         match answer:
             case str() if (
-                _choice_label(answer) in labels
-                and _choice_label(answer).casefold() in APPROVE_LABELS
+                choice_label(answer) in labels
+                and choice_label(answer).casefold() in APPROVE_LABELS
             ):
                 return text, answer
     return None
@@ -232,7 +236,7 @@ def manual_signoff(tool_input: dict[str, Any]) -> str | None:
     """Question text when it offers the dedicated guarded-change approval action."""
     question = _first_question(tool_input)
     labels = {
-        _choice_label(str(option.get("label", ""))).casefold()
+        choice_label(str(option.get("label", ""))).casefold()
         for option in question.get("options") or []
         if isinstance(option, dict)
     }
@@ -245,7 +249,7 @@ def manual_choice(tool_input: dict[str, Any], tool_response: Any) -> bool:
     answer = _answer_for(_first_question(tool_input), answers)
     return (
         isinstance(answer, str)
-        and _choice_label(answer).casefold() in MANUAL_APPROVE_LABELS
+        and choice_label(answer).casefold() in MANUAL_APPROVE_LABELS
     )
 
 
@@ -253,7 +257,7 @@ def adoption_signoff(tool_input: dict[str, Any]) -> tuple[str, str] | None:
     """Question text and adoption id for the dedicated continuation-plan approval."""
     question = _first_question(tool_input)
     labels = {
-        _choice_label(str(option.get("label", ""))).casefold()
+        choice_label(str(option.get("label", ""))).casefold()
         for option in question.get("options") or []
         if isinstance(option, dict)
     }
@@ -269,7 +273,7 @@ def adoption_signoff(tool_input: dict[str, Any]) -> tuple[str, str] | None:
 def adoption_requested(tool_input: dict[str, Any]) -> bool:
     return any(
         isinstance(option, dict)
-        and _choice_label(str(option.get("label", ""))).casefold()
+        and choice_label(str(option.get("label", ""))).casefold()
         in ADOPTION_APPROVE_LABELS
         for option in _first_question(tool_input).get("options") or []
     )
@@ -281,7 +285,7 @@ def adoption_choice(tool_input: dict[str, Any], tool_response: Any) -> bool:
     answer = _answer_for(_first_question(tool_input), answers)
     return (
         isinstance(answer, str)
-        and _choice_label(answer).casefold() in ADOPTION_APPROVE_LABELS
+        and choice_label(answer).casefold() in ADOPTION_APPROVE_LABELS
     )
 
 
@@ -308,7 +312,7 @@ def _answer_for(question: dict[str, Any], answers: Any) -> str | None:
             return None
 
 
-def _choice_label(value: str) -> str:
+def choice_label(value: str) -> str:
     """Normalize Codex's recommended-option suffix while preserving the choice label."""
     return re.sub(r"\s*\(recommended\)\s*$", "", value, flags=re.IGNORECASE).strip()
 
@@ -326,7 +330,7 @@ def tracker_action(tool_input: dict[str, Any]) -> tuple[tuple[str, ...], str] | 
             TRACKER_ACTIONS[label]
             for option in question.get("options") or []
             if isinstance(option, dict)
-            and (label := _choice_label(str(option.get("label", ""))).casefold())
+            and (label := choice_label(str(option.get("label", ""))).casefold())
             in TRACKER_ACTIONS
         )
     )
@@ -339,7 +343,7 @@ def tracker_choice(tool_input: dict[str, Any], tool_response: Any) -> str | None
     answers = tool_response.get("answers") if isinstance(tool_response, dict) else None
     answer = _answer_for(_first_question(tool_input), answers)
     return (
-        TRACKER_ACTIONS.get(_choice_label(answer).casefold())
+        TRACKER_ACTIONS.get(choice_label(answer).casefold())
         if isinstance(answer, str)
         else None
     )
