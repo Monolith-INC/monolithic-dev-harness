@@ -6,17 +6,18 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
-## [0.5.4] - 2026-10-05
+## [0.5.4] - 2026-10-06
 
 ### Added
 
-- `harness policies suspend|resume|status` turns every harness check in a repository off and back
-  on, on the user's request. While suspended, only direct edits to the harness's own records under
-  `.harness/` stay blocked; settings, tracker, sessions, and evidence are kept. The suspend command
-  is allowed even when the settings are invalid or the rules cannot run, so a blocked repository
-  can always be released.
-- `suspend-harness` and `resume-harness` skills, and a `harness doctor` warning while a repository
-  is suspended.
+- The user can turn off every harness check in a repository by sending `harness suspend` as its own
+  message, and turn them back on with `harness resume`. Only the user's own message can suspend the
+  harness; no command or tool call lets an agent do it. While suspended, only direct edits to the
+  harness's own records under `.harness/` stay blocked, and approval clicks are still recorded.
+  Settings, tracker, sessions, and evidence are kept. It works even when the settings are invalid,
+  so a blocked repository can always be released.
+- `harness suspension status|resume`, the `suspend-harness` and `resume-harness` skills, and a
+  `harness doctor` warning while a repository is suspended.
 
 ## [0.5.3] - 2026-10-02
 

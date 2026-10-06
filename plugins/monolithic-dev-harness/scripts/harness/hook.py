@@ -39,7 +39,6 @@ from harness import (  # noqa: E402
     adoption,
     gitstate,
     globs,
-    policies,
     questions,
     rules,
     settings,
@@ -75,6 +74,8 @@ TRACKER_REPLY_RE = re.compile(
     re.IGNORECASE,
 )
 STOP_TRUSTING_RE = re.compile(r"\s*stop\s+trusting\s+(.+?)\s*[.!]?\s*", re.IGNORECASE)
+# The whole message, so a quoted or negated mention ("don't run harness suspend") never counts.
+SUSPEND_RE = re.compile(r"\s*harness\s+(suspend|resume)\s*[.!]?\s*", re.IGNORECASE)
 DEFAULT_WINDOW_MINUTES = 20
 
 
@@ -137,30 +138,26 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     call = _tool_call(host, event, payload)
     repo = _workspace(payload, host)
-    if policies.control_command(call.command, repo, call.cwd):
-        # Suspending must work even when the settings or the rules are broken.
-        _emit_decision(host, rules.Decision.allow())
-        return 0
-    if policies.suspended(repo):
-        # The human released the harness checks; only their own records stay protected.
-        _emit_decision(host, rules.rule_human_owned(call, repo))
-        return 0
     if not settings.governed(repo):
         # Not a governed repository: the harness is opt-in per repo (bootstrap writes the settings).
         _emit_decision(host, rules.Decision.allow())
         return 0
+    # The user released the checks from their own prompt; only their records stay protected.
+    suspended = state.harness_mode(repo) == "suspended"
     timed = hasattr(signal, "SIGALRM")
     if timed:
         signal.signal(signal.SIGALRM, _out_of_time)
         signal.setitimer(signal.ITIMER_REAL, RULES_BUDGET_SECONDS)
     try:
         loaded = settings.load(repo)
-        match loaded:
-            case Err(failure):
+        match suspended, loaded:
+            case True, _:
+                decision = rules.rule_human_owned(call, repo)
+            case False, Err(failure):
                 return _fail(
                     host, call, f"the settings cannot be used: {failure.message}"
                 )
-            case Ok(chosen):
+            case False, Ok(chosen):
                 decision = rules.evaluate(
                     call, repo, chosen, tracker_policy.build(repo, loaded)
                 )
@@ -173,7 +170,7 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     finally:
         if timed:
             signal.setitimer(signal.ITIMER_REAL, 0)
-    if not decision.allowed:
+    if not decision.allowed or suspended:
         _emit_decision(host, decision)
         return 0
     if hook_bridge.delegates_workflow_policy(host, event):
@@ -277,12 +274,31 @@ def _tracker_reply_notes(repo: Path, prompt: str) -> list[str]:
     return [_tracker_act(repo, "untrust", name, "")] if name is not None else []
 
 
+def _switch_harness(repo: Path, operation: str) -> str:
+    mode = {"suspend": "suspended", "resume": "active"}[operation]
+    try:
+        state.set_harness_mode(repo, mode)
+    except OSError as exc:
+        return f"[harness] the harness checks were NOT {mode}: {exc}"
+    if mode == "active":
+        return "[harness] every harness check applies again in this repository."
+    return (
+        "[harness] every harness check is suspended in this repository at the user's request; "
+        "edits to the harness's own records stay blocked. Type `harness resume` to restore them."
+    )
+
+
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     prompt = hook_bridge.prompt_text(payload)
     repo = _workspace(payload, host)
     notes: list[str] = []
     if not settings.governed(repo):
         if output := hook_bridge.format_prompt(host, []):
+            print(output)
+        return 0
+    if switch := SUSPEND_RE.fullmatch(prompt):
+        notes.append(_switch_harness(repo, switch.group(1).lower()))
+        if output := hook_bridge.format_prompt(host, notes):
             print(output)
         return 0
     window = _window(repo)
@@ -320,11 +336,12 @@ def _governed(payload: dict[str, Any], host: str = "claude") -> Path | None:
 def handle_ask(host: str, payload: dict[str, Any]) -> int:
     """Before a question is shown: send it back if a person would have to decode it."""
     repo = _governed(payload, host)
-    if repo is None or policies.suspended(repo):
+    if repo is None:
         return 0
     tool_input = hook_bridge.question_input(payload)
     found = questions.problems(tool_input)
-    if found:
+    # While suspended only the wording check is off: the checks below pin what a click approves.
+    if found and state.harness_mode(repo) != "suspended":
         _emit_decision(
             host,
             rules.Decision.deny("plain-questions", questions.rewrite_reason(found)),

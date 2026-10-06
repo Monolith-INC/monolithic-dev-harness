@@ -290,17 +290,19 @@ a single Story.
 
 #### How do I turn the harness off in a repository?
 
-Ask the agent to suspend the harness, run `/suspend-harness`, or run this in the repository yourself:
+Send this to the agent as its own message, with nothing else in it:
 
-```bash
-harness policies suspend
+```text
+harness suspend
 ```
 
 Every harness check stops applying in that repository except the protection of the harness's own
-records under `.harness/`. The settings, tracker, sessions, and evidence are kept. It works even
-when the settings are invalid or the tracker is unavailable. `harness policies status` shows the
-mode, `harness doctor` warns while it is suspended, and `harness policies resume` (or
-`/resume-harness`) turns the checks back on. `/skip-tracker` only pauses tracker enforcement.
+records under `.harness/`. Approval clicks still count, and the settings, tracker, sessions, and
+evidence are kept. It works even when the settings are invalid or the tracker is unavailable. Only
+your own message can suspend the harness; an agent cannot do it with a command. `harness suspension
+status` shows the mode, `harness doctor` warns while it is suspended, and sending `harness resume`
+(or running `harness suspension resume`) turns the checks back on. `/skip-tracker` only pauses
+tracker enforcement.
 
 #### How does code review fit into the workflow?
 

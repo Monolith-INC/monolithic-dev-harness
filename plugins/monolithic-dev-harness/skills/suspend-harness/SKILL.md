@@ -1,25 +1,31 @@
 ---
 name: suspend-harness
-description: Turn off every harness check in this repository so the user can work outside its enforcement. Use only when the user explicitly asks to turn off, disable, suspend, or bypass the harness (/suspend-harness); never to get past a refusal on your own.
+description: Explain how the user turns off every harness check in this repository so they can work outside its enforcement. Use when the user asks to turn off, disable, suspend, or bypass the harness (/suspend-harness).
 ---
 
 # Suspend harness
 
-Run `harness policies suspend --repo <project>`. If `harness` is not on the shell path, run the
-sibling `bin/harness` executable using the absolute plugin path derived from this skill's location.
-The user's explicit request is the authorization: do not ask again or require an approval window.
-The command works before setup, with invalid settings, and with an unavailable tracker.
+Only the user can suspend the harness: the hook records it from their own message, and no command
+or tool call lets an agent do it. Ask the user to send this as its own message, with nothing else in
+it:
 
-Then run `harness policies status --repo <project>` and confirm it reports `"mode": "suspended"`. A
-failed command is not a suspension; report its error.
+```text
+harness suspend
+```
 
-Tell the user what changed:
+It works before setup, with invalid settings, and with an unavailable tracker. After they send it,
+run `harness suspension status --repo <project>` (or the sibling `bin/harness` from this plugin)
+and confirm it reports `"mode": "suspended"`. Never try to suspend the harness yourself, and never
+ask the user to suspend it to get past a refusal they did not ask about.
 
-- Workflow, session, tracker, branch, commit, review, and question-format checks are off for this
-  repository. Continue their work without those checks.
+Tell the user what changes while it is suspended:
+
+- Workflow, session, tracker, branch, commit, review, and question-wording checks are off in this
+  repository.
+- Approval, trust, manual-check, and adoption clicks are still recorded.
 - The settings, tracker, sessions, approvals, and evidence are kept as they are.
 - Direct edits to the harness's own records under `.harness/` stay blocked; host permissions and
   other plugins are unaffected.
-- `/resume-harness` (or `harness policies resume`) turns the checks back on.
+- Sending `harness resume`, or `/resume-harness`, turns the checks back on.
 
 `/skip-tracker` is different: it only pauses tracker enforcement and keeps the other checks.

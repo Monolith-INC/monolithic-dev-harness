@@ -225,10 +225,10 @@ blocks any agent write to the records. Gates G1, G2, and G4 map to these approva
 When a hook blocks you, read its reason and fix the cause. Never retry through another tool or
 route around it.
 
-When the user asks to work outside the harness, use `suspend-harness`
-(`harness policies suspend --repo <project>`); it turns off every rule above except `human-owned`
-and keeps the settings, tracker, and evidence. `resume-harness` turns them back on. Their explicit
-request is the authorization. Never suspend on your own to get past a refusal.
+When the user asks to work outside the harness, use `suspend-harness`: the user sends
+`harness suspend` as its own message, and the hook turns off every rule above except `human-owned`
+while keeping the settings, tracker, and evidence. Only the user's own message can suspend the
+harness. `resume-harness` turns the checks back on.
 
 ## Models per stage
 
