@@ -37,7 +37,6 @@ The installer places the declared Jinja2 dependency and its dependencies in the 
 `runtime/python` directory. The isolated renderer process loads them there. Development uses the
 same dependency declaration through `requirements-dev.txt`; no user-global Python install is needed.
 
-`scripts/render_bmad.py` synchronizes the canonical Stage 0 templates into the shipped skill;
-`--check` checks their consistency. It no longer resolves a throwaway project's context and restores
-placeholders. The discovery tests exercise real runtime rendering, pin reuse, session separation,
+The Stage 0 templates live only in `skills/bmad-build/`; BMad's unmodified originals stay in
+`vendor/bmad/upstream/` for reference. The discovery tests exercise real runtime rendering, pin reuse, session separation,
 corruption refusal, CLI binding, onboarding readiness, and resume verification.

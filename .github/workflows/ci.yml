@@ -36,9 +36,6 @@ jobs:
         run: python scripts/check_repo.py
       - name: Version sources agree
         run: python scripts/check_versions.py
-      - name: BMad Build runtime templates are current
-        run: |
-          python scripts/render_bmad.py --check
       - name: Markdown
         run: npx --yes markdownlint-cli2@0.23.3
 
