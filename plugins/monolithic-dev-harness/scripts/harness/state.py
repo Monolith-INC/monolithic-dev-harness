@@ -10,9 +10,11 @@ from __future__ import annotations
 import json
 import re
 import subprocess
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
+
+from core.result import Err, Ok
 
 STATE_RELATIVE_PATH = Path(".harness") / "state"
 # Harness state and local tracker records belong to one clone: never committed, shared, or adopted.
@@ -21,7 +23,7 @@ _SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
 
 
 def _now() -> datetime:
-    return datetime.now(timezone.utc)
+    return datetime.now(UTC)
 
 
 def state_dir(repo: Path) -> Path:
@@ -91,8 +93,16 @@ def safe_name(name: str) -> str:
 
 
 def open_approval(
-    repo: Path, approval_id: str, minutes: int, question: str = ""
+    repo: Path,
+    approval_id: str,
+    minutes: int,
+    question: str = "",
+    work_session_id: str | None = None,
 ) -> dict[str, Any]:
+    """A window for tracker/SCM writes, scoped to the work session it was opened in.
+
+    Without a work session (Cursor, or a project with none bound) the window is project-wide.
+    """
     now = _now()
     record: dict[str, Any] = {
         "id": approval_id,
@@ -102,16 +112,23 @@ def open_approval(
     }
     if question:
         record["question"] = question
+    if work_session_id is not None:
+        record["work_session"] = work_session_id
     write_json(state_dir(repo) / "approvals" / f"{safe_name(approval_id)}.json", record)
     return record
 
 
-def revoke_approvals(repo: Path) -> int:
+def revoke_approvals(repo: Path, work_session_id: str | None = None) -> int:
+    """Close open windows: one work session's, or every window when none is named."""
     directory = state_dir(repo) / "approvals"
     count = 0
     for path in directory.glob("*.json") if directory.is_dir() else []:
         record = read_json(path)
-        if record and datetime.fromisoformat(record["expires"]) > _now():
+        if (
+            record
+            and (work_session_id is None or _scope(record) == work_session_id)
+            and datetime.fromisoformat(record["expires"]) > _now()
+        ):
             record["expires"] = _now().isoformat()
             record["revoked"] = True
             write_json(path, record)
@@ -119,14 +136,22 @@ def revoke_approvals(repo: Path) -> int:
     return count
 
 
-def active_approval(repo: Path) -> tuple[Path, dict[str, Any]] | None:
+def _scope(record: dict[str, Any]) -> str | None:
+    scope = record.get("work_session")
+    return scope if isinstance(scope, str) else None
+
+
+def active_approval(
+    repo: Path, work_session_id: str | None = None
+) -> tuple[Path, dict[str, Any]] | None:
+    """The newest open window for exactly this work session; `None` means project-wide only."""
     directory = state_dir(repo) / "approvals"
     if not directory.is_dir():
         return None
     best: tuple[Path, dict[str, Any]] | None = None
     for path in directory.glob("*.json"):
         record = read_json(path)
-        if not record or "expires" not in record:
+        if not record or "expires" not in record or _scope(record) != work_session_id:
             continue
         try:
             expires = datetime.fromisoformat(record["expires"])
@@ -207,21 +232,42 @@ def set_harness_mode(repo: Path, mode: str) -> str:
 # --- questions shown to the user (approval by click) ------------------------------------------
 
 
-def mark_asked(repo: Path, name: str, detail: dict[str, Any] | None = None) -> None:
+def _session_record_path(
+    repo: Path, folder: str, name: str, work_session_id: str | None
+) -> Path:
+    from harness import work_sessions
+
+    match work_sessions.scope_folder(repo, work_session_id):
+        case Ok(scope):
+            return scope / folder / f"{safe_name(name)}.json"
+        case Err(failure):
+            raise ValueError(failure.message)
+
+
+def mark_asked(
+    repo: Path,
+    name: str,
+    detail: dict[str, Any] | None = None,
+    work_session_id: str | None = None,
+) -> None:
     """Mark a question the check let through, with what the hook pinned when it was shown."""
     write_json(
-        state_dir(repo) / "asked" / f"{safe_name(name)}.json",
+        _session_record_path(repo, "asked", name, work_session_id),
         {**(detail or {}), "asked": _now().isoformat()},
     )
 
 
-def take_asked(repo: Path, name: str) -> dict[str, Any] | None:
+def take_asked(
+    repo: Path, name: str, work_session_id: str | None = None
+) -> dict[str, Any] | None:
     """The mark of a question the check let through, or None; the mark is used up."""
-    path = state_dir(repo) / "asked" / f"{safe_name(name)}.json"
-    record = read_json(path)
     try:
+        path = _session_record_path(repo, "asked", name, work_session_id)
+        record = read_json(path)
         path.unlink()
     except OSError:
+        return None
+    except ValueError:
         return None
     return record if record is not None else {}
 

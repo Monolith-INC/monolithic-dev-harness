@@ -31,7 +31,7 @@ enforce the rules that must never depend on the model remembering them.
 Stacked Feature work (several Stories under one Feature) runs stage 3–4 per Story inside
 `feature-implementation`, then `merge-story-stack-into-feature` and `finish-feature-development`.
 
-## Before the first run in a repository
+## Complete onboarding, then select a project work session
 
 The plugin ships the `harness` command. Use `harness` from the shell path when available. If it is
 not available, run the sibling `bin/harness` executable using the absolute plugin path derived from
@@ -39,19 +39,42 @@ this skill's own location; do not ask the user to find the path, change their sh
 the plugin again. Report a missing command only if neither the shell command nor the bundled
 executable exists.
 
-Before routing the request, run `harness bootstrap --inspect` once. If `language_confirmed` is false,
-offer **English** and **Português (Brasil)** as clickable choices for this project, even if a
-different project saved a preference. Save the selected language with
-`harness preference language <en|pt-br> --repo .`. In the Codex editor or command line, call
-`request_user_input` when available; in the Codex desktop app, use `request_user_input_async` when
-that is the available control. Wait for a click selection. Never ask the user to type an option or
-answer in chat; if controls are unavailable, pause before the decision or any dependent write. Start the workflow with the user's
-original request before asking for setup details:
-`harness workflow start --request "<original request>"`. If a workflow is already active or paused,
-show its saved checkpoints and let the user resume or cancel it before starting another. If setup is
-missing or incomplete, guide the user through only the choices that are actually missing, prepare a
-reviewable settings proposal, apply it after the user's choice, verify it, and return to the original
-request in this same run. Do not ask the user to edit JSON or assume the bundled Azure example.
+Use the project path already supplied by the host or the user. Run
+`harness bootstrap --inspect --repo <project>` to read shared project settings and tracker status.
+Complete onboarding before routing, starting, or resuming a work session. Invoke the `bootstrap`
+skill when setup is incomplete, this project's language is unconfirmed, or `bmad_runtime.ready`
+is false. Language, settings,
+local tracker preparation, runtime setup, trust, and required sign-in are onboarding actions;
+none requires a work session or workflow. Preserve the original request while setup is pending.
+Verify setup and language confirmation, then run
+`harness work-session route --request "<exact user request>" --repo <project>` immediately before
+starting product or engineering work. The route
+command only reports candidates; it never starts or resumes a session. If it returns
+`continue_active`, use that exact session. If it returns `start_new`, create a session with
+`harness work-session start --request "<exact user request>" --repo <project>`. If it returns
+`ask_user`, show all unfinished project sessions from `candidates`, their requests and statuses,
+and **Start a new session** as clickable choices. This includes sessions for a different ticket:
+the human chooses whether to switch or keep the current work. A paused or stopped session requires
+the human to choose it before running
+`harness work-session resume <id> --repo <project>`. Never silently resume paused or stopped work.
+
+Keep the selected work-session ID as required context after onboarding. Every workflow command
+must include `--session-id <id>`, including `start`, `checkpoint`, `status`, `list`, `pause`,
+`resume`, `back`, `cancel`, `complete`, and discovery `render`. Session checkpoints are stored with that session.
+Project settings such as tracker and planning folder remain shared. Onboarding establishes the
+tracker and runtime before session creation. A project work session does not require Git, a project
+contract, or starting the checkout-bound implementation session.
+
+Use the selected session's exact saved request as the run context. Pass the project root, session
+ID, bundled command, isolated preferences environment, checkpoint, and next action to any delegated
+agent; do not make it rediscover the project or reset confirmed setup. Inspect is read-only. Pending
+questions and a suspended harness remain explicit; do not resume a stopped run or replace invalid
+saved progress automatically. Use the host adapter described in
+[human-decisions.md](../../references/human-decisions.md) for human decisions.
+Start the workflow with the selected session's exact original request:
+`harness workflow start --session-id <id> --request "<original request>" --repo <project>`. If that
+session already has a workflow, show its saved checkpoints and let the user resume or cancel it
+before starting another. Do not start a session or workflow to complete onboarding.
 Host trust and sign-in remain human actions where required. The selected tracker and its manifest
 provide the work-item capabilities for planning; do not start a second tracker or review-source
 setup during discovery, ideation, or backlog drafting. Mark the workflow complete when its
@@ -67,20 +90,57 @@ to type these actions. Include Back on a review screen when an earlier decision 
 Accept Pause at any point without asking a second question. Checkpoints never grant
 permission for an external write. Resume rechecks files, tracker, and approvals before work.
 
-Save a checkpoint after setup and at each material review point. Before a review question, record
+### Suspend harness checks on the human's request
+
+Only the human can suspend the harness: the hook records it when they send `harness suspend` as its
+own message, and no command lets an agent do it. When they want to continue ordinary work outside
+the harness, use `suspend-harness` to ask them to send it. It works before setup and with invalid
+settings or an unavailable tracker. Verify with `harness suspension status --repo <project>`; until
+it reports `"mode": "suspended"`, the checks still apply.
+
+While suspended, continue the human's ordinary work without harness workflow, tracker, branch,
+commit, review, decision-wait, or question-wording checks. Approval and decision clicks are still
+recorded, a pending decision is kept rather than answered, and direct edits to human-owned
+control/evidence records remain protected; host permissions and other plugins are independent.
+Preserve the existing workflow, settings, tracker, and evidence. Workflow/session pause and
+`skip-tracker` are different operations and do not suspend all checks.
+
+To restore enforcement, use `resume-harness` (`harness suspension resume --repo <project>`, or the
+human sends `harness resume`). Resume restores checks without opening an approval window or
+accepting old readiness evidence. Never ask the human to suspend the harness to get past a refusal.
+
+Once onboarding is complete and a work session has been selected, save its initial checkpoint
+with setup already verified and the original request as the next action. Save another checkpoint
+at each material review point. Before a review question, record
 the artifact path, pending decision, and next action; include `--artifact <path>` so the saved point
 captures its content digest. When the user says Pause, save any new progress first, then run
 `harness workflow pause`. On Resume, show `harness workflow list` and offer the current point and
 earlier review points in one choice. After revising an earlier point, rebuild only affected drafts
 and save a new checkpoint before asking for another decision.
 
+## Prepare each stage
+
+At the start of each stage, run
+`harness workflow prepare --route <route> --prepared-stage <stage> --request "<exact request>" --repo <project>`,
+adding `--available <tool>` for each tracker or SCM tool your host offers. Use what it returns: the
+project and harness references, recommended skills, operations, expected outputs, checks, and
+recovery. `harness workflow routes` lists the routes: `investigate-request` for a named request,
+`explore-idea` for ideation, `prepare-artifacts` for backlog and specification work,
+`implement-approved-item` for build and verify, `resume-work` to continue saved work, and
+`suspend-checks` when the user asks to work outside the harness. The step is `ready` only when its
+inputs are present and you confirmed every tool it needs; report anything missing instead of
+improvising around it. The stage sections below add what the prepared step does not cover.
+
 ## Stage 0: Technical discovery
 
-For an assigned ticket or request to change an existing product, follow
-[`technical-discovery.md`](references/technical-discovery.md). It is included in the plugin, so this
-stage does not prepare a project copy of BMad, render generated steps, install modules, or fetch
-dependencies. Do not offer the user choices about repairing or installing workflow infrastructure.
-Do not start implementation from this step. On approval, save the plan as a harness workflow
+For an assigned ticket or request to change an existing product, invoke `bmad-build`. It renders
+the bundled clarify-and-route and plan templates with this project's verified context and selected
+work-session ID. Follow only the returned absolute entry; the snapshot is pinned to the session
+and verified on resume. Onboarding prepares the BMad runtime (`_bmad/`). Do not install or fetch
+workflow infrastructure during discovery. For broad or risky
+work, BMad's `bmad-spec` (a capability contract) and `bmad-architecture` (decisions that keep
+separately built parts consistent) are available; `bmad-build` uses `bmad-prd` when the requested
+behavior is too unclear to investigate. Do not start implementation from this step. On approval, save the plan as a harness workflow
 checkpoint and pass it to Stage 1 as the source for work-item drafting. The Stage 0 approval does
 not publish tracker items; the normal backlog review and write gates still apply.
 
@@ -97,8 +157,9 @@ bundled local tracker or ask the user to initialize it during planning.
 
 Git is optional. Discovery, planning, local work-item drafts, and workflow checkpoints must continue
 when the folder has no Git metadata or has no commit yet. Do not request an initial commit, branch,
-or implementation session to read or save a plan. Session and commit rules apply only when the
-repository has a committed Git baseline and the workflow reaches governed code changes.
+or checkout-bound implementation session to read or save a plan. The selected project work
+session still owns those plans and checkpoints. Checkout-bound session and commit rules apply
+when the repository has a committed Git baseline and the workflow reaches governed code changes.
 
 Use `plan-initiative` when the user explicitly wants to explore what problem or product to pursue,
 or when the intended outcome is not yet identifiable. Its optional brainstorming, idea-forging,
@@ -123,10 +184,9 @@ point, ask this one structured question:
 - Option `Draft work items`: `Use the request as provided and prepare work items now.`
 - Option `Explore the idea`: `Shape or challenge the idea before planning the technical work.`
 
-Use the host's normal question UI (`AskUserQuestion` in Claude, `request_user_input` in the Codex
-editor, or `request_user_input_async` in the Codex desktop app). Do not add an `Other` option; the Codex question UI supplies its default free-text field.
+Use the host adapter's supported blocking presentation or chat-and-wait fallback. Do not add an `Other` option; the Codex question UI supplies its default free-text field.
 The existing `plain-questions` hook validates the question before display. Every listed option must
-be clickable; if the host cannot display a question control, pause before asking for a decision.
+be clickable; if the host cannot display a blocking control, ask in chat and end the turn.
 
 The choice is routing, not approval: it never opens an approval window. `Investigate first` invokes
 `bmad-build`; `Draft work items` enters Stage 1; `Explore the idea` invokes `plan-initiative`.
@@ -196,11 +256,11 @@ requests, threads, branches, `git push`) unless the user has opened an approval 
 1. Say in plain words what will be written: which items, with their titles, and what changes.
 2. Present the complete relevant artifact or batch through the best available host surface. Ask one
    question with two options, labelled exactly `Approve` and `Not now`. A working native control in
-   Claude or trusted Codex opens the window for `approvals.window_minutes` (default 20).
+   Claude or trusted Codex opens the window for `approvals.window_minutes` (default 20). The window
+   covers only the work session it was opened in; another session needs its own approval.
 3. Make only the writes you described. Anything new needs a new question.
 
-If the native approval control is unavailable, do not write. Leave the approval pending and report
-that the host needs to provide a clickable approval control. `harness revoke` closes a window early.
+If a blocking approval control is unavailable, show the complete review and ask in chat. End the turn and wait for the real human reply; do not write while approval is pending. `harness revoke` closes a window early.
 
 You cannot open the window yourself: approvals are recorded only from the user's own prompt or
 click, a question that arrives with answers already filled in is refused, and hook `human-owned`

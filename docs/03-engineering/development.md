@@ -14,7 +14,7 @@ must pass before a change is done.
 
 ## Prerequisites
 
-- Python 3.10+ (CI tests 3.10 and 3.12), `git`, Node.js.
+- Python 3.12+ (CI tests 3.12 and 3.13), `git`, Node.js.
 - Claude Code for local install checks; Cursor optional.
 
 ```bash

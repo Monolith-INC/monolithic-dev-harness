@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -19,7 +19,7 @@ def capture_hook_payload(
     output_dir = Path(capture_dir).expanduser()
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     timestamp = now.strftime("%Y%m%dT%H%M%S%f")
     output_path = output_dir / f"{timestamp}-{client}.json"
     output_path.write_text(

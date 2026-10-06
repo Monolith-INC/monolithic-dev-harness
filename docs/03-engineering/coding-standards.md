@@ -17,7 +17,7 @@ Keep the runtime small, predictable, and safe to run before every tool call.
 
 ## Authoritative Source Files
 
-- `pyproject.toml` — ruff configuration: Python 3.10 target; rules `E4 E7 E9 F I UP B SIM DTZ`.
+- `pyproject.toml` — ruff configuration: Python 3.12 target; rules `E4 E7 E9 F I UP B SIM DTZ`.
 - `.editorconfig` — whitespace and line endings.
 
 ## Generated Files
@@ -28,7 +28,7 @@ None.
 
 ### Python
 
-- Target Python 3.10; standard library only in anything a hook or the installer runs.
+- Target Python 3.12; standard library only in anything a hook or the installer runs.
 - `ruff check` and `ruff format` clean; no blanket `noqa` (a targeted one carries a reason).
 - Timezone-aware datetimes (`DTZ`); every subprocess call has a timeout.
 - A rule returns a `Decision`; it never raises for an expected condition and never performs the

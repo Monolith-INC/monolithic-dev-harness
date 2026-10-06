@@ -10,7 +10,15 @@ from pathlib import Path
 from typing import Any
 
 from core.result import Ok, Result, attempt, bind, err, fmap, require
-from harness import local_tracker, preferences, settings, state, workflow
+from harness import (
+    bmad,
+    decisions,
+    local_tracker,
+    preferences,
+    settings,
+    state,
+    workflow,
+)
 from integrations import registry, scm
 
 
@@ -82,7 +90,7 @@ def _repository_snapshot(repo: Path) -> dict[str, Any]:
     }
 
 
-def _workflow_snapshot(repo: Path) -> dict[str, str]:
+def _workflow_snapshot(repo: Path) -> dict[str, Any]:
     match workflow.load(repo):
         case Ok(current):
             return {
@@ -90,9 +98,57 @@ def _workflow_snapshot(repo: Path) -> dict[str, str]:
                 "request": current.request,
                 "stage": current.current.stage,
                 "pending": current.current.pending,
+                "point": current.current.id,
+                "label": current.current.label,
+                "next_action": current.current.next_action,
+                "artifacts": [
+                    {"path": str((repo / name).resolve()), "digest": digest}
+                    for name, digest in current.current.artifacts
+                ],
+                "stale_artifacts": list(
+                    workflow.stale_artifacts(repo, current.current)
+                ),
+            }
+        case _ if workflow.path(repo).exists():
+            return {
+                "status": "invalid",
+                "error": "saved workflow could not be loaded; inspect it before starting another",
             }
         case _:
             return {}
+
+
+def _handoff(
+    repo: Path, raw: dict[str, Any], current: dict[str, Any]
+) -> dict[str, Any]:
+    pending = decisions.record(repo)
+    return {
+        "project_root": str(repo.resolve()),
+        "working_directory": str(repo.resolve()),
+        "command": str(Path(__file__).resolve().parents[2] / "bin" / "harness"),
+        "paths": {
+            "settings": str(settings.path(repo).resolve()),
+            "workflow": str(workflow.path(repo).resolve()),
+            "preferences": str(preferences.path().resolve()),
+            "artifacts": str((repo / str(raw["artifacts_path"])).resolve())
+            if raw.get("artifacts_path")
+            else "",
+        },
+        "environment": {
+            "HARNESS_USER_STATE_DIR": str(preferences.path().resolve().parent)
+        },
+        "original_request": current.get("request", ""),
+        "next_action": current.get("next_action", ""),
+        "workflow_status": current.get("status", "absent"),
+        "harness_suspended": state.harness_mode(repo) == "suspended",
+        "waiting_for_answer": decisions.waiting(repo),
+        "pending_question": {
+            key: pending.get(key) for key in ("id", "question", "options", "transport")
+        }
+        if pending and decisions.waiting(repo)
+        else None,
+        "instruction": "Use this project and environment for every operation. Preserve the saved original request and current checkpoint. Do not repeat confirmed setup choices, restart an existing run, or advance while a question is unanswered. Report invalid saved state instead of replacing it. A suspended harness does not authorize automatically resuming the run.",
+    }
 
 
 def _selection(raw: Mapping[str, Any], name: str) -> dict[str, Any]:
@@ -123,61 +179,101 @@ def _missing(values: Mapping[str, str], keys: tuple[str, ...]) -> tuple[str, ...
     )
 
 
-def inspect(repo: Path) -> Result[dict[str, Any]]:
-    def describe(raw: dict[str, Any]) -> Result[dict[str, Any]]:
-        selected = _selection(raw, "tracker")
-        manifest = registry.find(
-            repo, str(selected.get("name", "")), str(selected.get("source", "shipped"))
-        )
-        tracker_missing = (
-            _missing(_values(selected), manifest.value.required_settings)
-            if isinstance(manifest, Ok)
-            else ("tracker",)
-        )
-        local_storage = (
-            local_tracker.describe(repo, manifest.value)
-            if isinstance(manifest, Ok) and selected.get("name") == "local"
-            else {}
-        )
-        current_scm = _selection(raw, "scm")
-        source = current_scm or {"name": "local", "values": {}}
-        scm_name = str(source.get("name", ""))
-        scm_missing = (
-            _missing(_values(source), scm.REQUIRED_VALUES[scm_name])
-            if scm_name in scm.REQUIRED_VALUES
+def _readiness(
+    repo: Path, raw: dict[str, Any]
+) -> tuple[dict[str, Any], dict[str, Any], dict[str, Any], tuple[str, ...]]:
+    """(selected tracker, current scm, local tracker storage, missing settings) for `raw`."""
+    selected = _selection(raw, "tracker")
+    manifest = registry.find(
+        repo, str(selected.get("name", "")), str(selected.get("source", "shipped"))
+    )
+    tracker_missing = (
+        _missing(_values(selected), manifest.value.required_settings)
+        if isinstance(manifest, Ok)
+        else ("tracker",)
+    )
+    local_storage = (
+        local_tracker.describe(repo, manifest.value)
+        if isinstance(manifest, Ok) and selected.get("name") == "local"
+        else {}
+    )
+    current_scm = _selection(raw, "scm")
+    source = current_scm or {"name": "local", "values": {}}
+    scm_name = str(source.get("name", ""))
+    scm_missing = (
+        _missing(_values(source), scm.REQUIRED_VALUES[scm_name])
+        if scm_name in scm.REQUIRED_VALUES
+        else ()
+        if scm_name == "local"
+        else ("scm",)
+    )
+    missing = (
+        *(f"tracker.{item}" for item in tracker_missing),
+        *(("tracker.storage",) if local_storage and not local_storage["ready"] else ()),
+        *(f"scm.{item}" for item in scm_missing),
+        *(
+            ("git.base_branch",)
+            if scm_name != "local"
+            and not _git_settings(raw).get("base_branch")
+            and not inferred_base(repo)
             else ()
-            if scm_name == "local"
-            else ("scm",)
-        )
-        missing = (
-            *(f"tracker.{item}" for item in tracker_missing),
-            *(
-                ("tracker.storage",)
-                if local_storage and not local_storage["ready"]
-                else ()
-            ),
-            *(f"scm.{item}" for item in scm_missing),
-            *(
-                ("git.base_branch",)
-                if scm_name != "local"
-                and not _git_settings(raw).get("base_branch")
-                and not inferred_base(repo)
-                else ()
-            ),
-            *(("artifacts_path",) if not raw.get("artifacts_path") else ()),
-        )
+        ),
+        *(("artifacts_path",) if not raw.get("artifacts_path") else ()),
+    )
+    return selected, current_scm, local_storage, missing
+
+
+def _status(raw: dict[str, Any], missing: tuple[str, ...]) -> str:
+    if not raw:
+        return "missing"
+    return (
+        "ready" if not missing and isinstance(settings.parse(raw), Ok) else "incomplete"
+    )
+
+
+def onboarding_status(repo: Path) -> Result[dict[str, Any]]:
+    """Only what starting project work needs, without the full inspection report."""
+    repo = repo.resolve()
+
+    def describe(raw: dict[str, Any]) -> Result[dict[str, Any]]:
+        selected, current_scm, _, missing = _readiness(repo, raw)
         return bind(
-            preferences.language(),
+            preferences.language_for(repo),
+            lambda language: fmap(
+                preferences.language_confirmed(repo),
+                lambda confirmed: {
+                    "status": _status(raw, missing),
+                    "language": language,
+                    "language_confirmed": confirmed,
+                    "waiting_for_answer": decisions.waiting(repo),
+                    "bmad_ready": bmad.ready(repo),
+                    "tracker": str(selected.get("name", "")),
+                    "scm": str((current_scm or {}).get("name", "local")),
+                },
+            ),
+        )
+
+    return bind(_raw(repo), describe)
+
+
+def inspect(repo: Path) -> Result[dict[str, Any]]:
+    repo = repo.resolve()
+    if not repo.is_dir():
+        return err("project_missing", f"project directory does not exist: {repo}")
+
+    def describe(raw: dict[str, Any]) -> Result[dict[str, Any]]:
+        current_workflow = _workflow_snapshot(repo)
+        selected, current_scm, local_storage, missing = _readiness(repo, raw)
+        return bind(
+            preferences.language_for(repo),
             lambda language: fmap(
                 preferences.language_confirmed(repo),
                 lambda language_confirmed: {
-                    "status": "ready"
-                    if raw and not missing and isinstance(settings.parse(raw), Ok)
-                    else "incomplete"
-                    if raw
-                    else "missing",
+                    "status": _status(raw, missing),
                     "language": language,
+                    "handoff": _handoff(repo, raw, current_workflow),
                     "language_confirmed": language_confirmed,
+                    "bmad_runtime": {"ready": bmad.ready(repo)},
                     "trackers": [
                         {
                             "name": item.name,
@@ -190,7 +286,7 @@ def inspect(repo: Path) -> Result[dict[str, Any]]:
                     "current_scm": current_scm,
                     "tracker_storage": local_storage,
                     "repository": _repository_snapshot(repo),
-                    "workflow": _workflow_snapshot(repo),
+                    "workflow": current_workflow,
                     "missing": list(missing),
                 },
             ),

@@ -37,6 +37,7 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
 from core.result import Err, Ok  # noqa: E402
 from harness import (  # noqa: E402
     adoption,
+    decisions,
     gitstate,
     globs,
     questions,
@@ -44,8 +45,15 @@ from harness import (  # noqa: E402
     settings,
     state,
     tracker_policy,
+    workflow,
 )
-from host_adapters import hook_bridge  # noqa: E402
+from host_adapters import hook_bridge, work_session_context  # noqa: E402
+from host_adapters.interactions import (  # noqa: E402
+    decision_exchange,
+    normalize_question,
+    prompt_answer,
+    question_transport,
+)
 
 # The hosts give the hook 15 seconds and treat a timeout as "no decision", which lets the call
 # through. The rules get less than that, and running out counts as a failure.
@@ -138,12 +146,28 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     call = _tool_call(host, event, payload)
     repo = _workspace(payload, host)
-    if not settings.governed(repo):
-        # Not a governed repository: the harness is opt-in per repo (bootstrap writes the settings).
-        _emit_decision(host, rules.Decision.allow())
+    entry = rules.rule_hook_entry(call)
+    if not entry.allowed:
+        _emit_decision(host, entry)
         return 0
     # The user released the checks from their own prompt; only their records stay protected.
     suspended = state.harness_mode(repo) == "suspended"
+    context = work_session_context.for_payload(repo, host, payload)
+    request = (
+        work_session_context.requested(call.command, Path(call.cwd or repo))
+        if call.kind == "shell"
+        else None
+    )
+    held = None if suspended else _held(repo, call, context, request)
+    if held is not None:
+        _emit_decision(host, held)
+        return 0
+    work_session_id = context.value if isinstance(context, Ok) else None
+    if not settings.governed(repo):
+        # Not a governed repository: the harness is opt-in per repo (bootstrap writes the settings).
+        _bind(repo, host, payload, work_session_id, request)
+        _emit_decision(host, rules.Decision.allow())
+        return 0
     timed = hasattr(signal, "SIGALRM")
     if timed:
         signal.signal(signal.SIGALRM, _out_of_time)
@@ -159,7 +183,11 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
                 )
             case False, Ok(chosen):
                 decision = rules.evaluate(
-                    call, repo, chosen, tracker_policy.build(repo, loaded)
+                    call,
+                    repo,
+                    chosen,
+                    tracker_policy.build(repo, loaded),
+                    work_session_id,
                 )
     except (Exception, _OutOfTime) as exc:
         # Any failure of the rules, including a crash or running out of time, blocks writes.
@@ -170,6 +198,8 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     finally:
         if timed:
             signal.setitimer(signal.ITIMER_REAL, 0)
+    if decision.allowed:
+        _bind(repo, host, payload, work_session_id, request)
     if not decision.allowed or suspended:
         _emit_decision(host, decision)
         return 0
@@ -177,6 +207,48 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
         return _delegate_to_workflow_policy(host, payload, call, repo)
     _emit_decision(host, decision)
     return 0
+
+
+def _held(
+    repo: Path,
+    call: rules.ToolCall,
+    context: Any,
+    request: tuple[str, str] | None,
+) -> rules.Decision | None:
+    """Why a write must wait: the conversation's session or a pending decision, checked once."""
+    if not rules.is_write_class(call):
+        return None
+    match context:
+        case Err(failure):
+            return rules.Decision.deny("work-session-context", failure.message)
+        case Ok(current):
+            pass
+    mismatch = work_session_context.mismatch(current, request)
+    if mismatch is not None:
+        return rules.Decision.deny("work-session-mismatch", mismatch.message)
+    if decisions.blocking(repo, current) and not decisions.status_command(
+        call.command, Path(call.cwd or repo)
+    ):
+        return rules.Decision.deny(
+            "decision-pending",
+            "Wait for the human's answer before continuing this run.",
+        )
+    return None
+
+
+def _bind(
+    repo: Path,
+    host: str,
+    payload: dict[str, Any],
+    current: str | None,
+    request: tuple[str, str] | None,
+) -> None:
+    """Bind the conversation to the session an allowed command chose; a failure binds nothing."""
+    from host_adapters import native_session_id
+
+    work_session_context.bind_requested(
+        repo, host, native_session_id(host, payload), current, request
+    )
 
 
 def _pin_approved_notes(repo: Path, approval_id: str) -> str:
@@ -195,6 +267,15 @@ def _pin_approved_notes(repo: Path, approval_id: str) -> str:
         f" It also covers {len(notes)} plan or spec note(s) marked approved, as they read now;"
         " editing one needs a new approval."
     )
+
+
+def _work_session(repo: Path, host: str, payload: dict[str, Any]) -> str | None:
+    """The work session this conversation is bound to; `None` when there is none to find."""
+    match work_session_context.for_payload(repo, host, payload):
+        case Ok(found):
+            return found
+        case Err():
+            return None
 
 
 def _window(repo: Path) -> int:
@@ -288,10 +369,26 @@ def _switch_harness(repo: Path, operation: str) -> str:
     )
 
 
+def _print_prompt(host: str, notes: list[str]) -> None:
+    if output := hook_bridge.format_prompt(host, notes):
+        print(output)
+
+
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     prompt = hook_bridge.prompt_text(payload)
     repo = _workspace(payload, host)
+    context = work_session_context.for_payload(repo, host, payload)
+    if isinstance(context, Err):
+        _print_prompt(host, [context.failure.message])
+        return 0
+    work_session_id = context.value
     notes: list[str] = []
+    pending = decisions.pending(repo, work_session_id)
+    # Only a reply that picks an offered option answers; anything else is an ordinary prompt.
+    reply = prompt_answer(host, prompt, pending) if pending else None
+    if pending is not None and reply is not None:
+        _print_prompt(host, _answer_decision(repo, pending, work_session_id, reply))
+        return 0
     if not settings.governed(repo):
         if output := hook_bridge.format_prompt(host, []):
             print(output)
@@ -308,7 +405,7 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
             f"[harness] revoked {state.revoke_approvals(repo)} open approval window(s)."
         )
     for approval_id in dict.fromkeys(m.upper() for m in APPROVE_RE.findall(prompt)):
-        state.open_approval(repo, approval_id, window)
+        state.open_approval(repo, approval_id, window, work_session_id=work_session_id)
         notes.append(
             f"[harness] approval {approval_id} recorded; tracker/SCM writes are open for {window} minutes."
             + _pin_approved_notes(repo, approval_id)
@@ -338,7 +435,27 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
     repo = _governed(payload, host)
     if repo is None:
         return 0
-    tool_input = hook_bridge.question_input(payload)
+    context = work_session_context.for_payload(repo, host, payload)
+    if isinstance(context, Err):
+        _emit_decision(
+            host, rules.Decision.deny("work-session-context", context.failure.message)
+        )
+        return 0
+    work_session_id = context.value
+    pending = decisions.pending(repo, work_session_id)
+    transport = question_transport(host, str(payload.get("tool_name", "")))
+    tool_input = normalize_question(host, hook_bridge.question_input(payload))
+    first = (tool_input.get("questions") or [{}])[0]
+    preparing = pending is not None and pending.matches_presentation(first, transport)
+    if decisions.blocking(repo, work_session_id) and not preparing:
+        _emit_decision(
+            host,
+            rules.Decision.deny(
+                "decision-pending",
+                "Answer the current question before presenting another.",
+            ),
+        )
+        return 0
     found = questions.problems(tool_input)
     # While suspended only the wording check is off: the checks below pin what a click approves.
     if found and state.harness_mode(repo) != "suspended":
@@ -390,9 +507,50 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
             pass
     detail = {**tracker_detail, **manual_detail, **adoption_detail}
     tool_use_id = hook_bridge.question_id(payload)
-    if tool_use_id:
-        state.mark_asked(repo, questions.marker_name(tool_use_id), detail)
+    if not tool_use_id:
+        return 0
+    question = str(first.get("question", ""))
+    options = tuple(
+        str(option.get("label", ""))
+        for option in first.get("options", ())
+        if isinstance(option, dict)
+    )
+    decision_scope = (
+        pending.scope if pending is not None and preparing else work_session_id
+    )
+    result = (
+        decisions.bind_question(
+            repo,
+            pending.id if pending is not None else "",
+            tool_use_id,
+            question,
+            options,
+            work_session_id=decision_scope,
+        )
+        if preparing
+        else decisions.begin(
+            repo,
+            tool_use_id,
+            question,
+            options,
+            transport,
+            _artifacts(repo, decision_scope),
+            work_session_id=decision_scope,
+        )
+    )
+    if isinstance(result, Err):
+        _emit_decision(
+            host, rules.Decision.deny("decision-invalid", result.failure.message)
+        )
+        return 0
+    state.mark_asked(repo, questions.marker_name(tool_use_id), detail, decision_scope)
     return 0
+
+
+def _artifacts(repo: Path, scope: str | None) -> tuple[tuple[str, str], ...]:
+    """The reviewed files of the current checkpoint, so a changed one cannot be approved."""
+    current = workflow.load(repo, scope)
+    return current.value.current.artifacts if isinstance(current, Ok) else ()
 
 
 def _tracker_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] | None:
@@ -472,20 +630,126 @@ def _adoption_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any]
 
 
 def handle_answer(host: str, payload: dict[str, Any]) -> int:
-    """After the user answers: an `Approve` click opens an approval window."""
+    """After the user answers a question: record the decision, then what the question pinned."""
     repo = _governed(payload, host)
     tool_use_id = hook_bridge.question_id(payload)
     if repo is None or not tool_use_id:
         return 0
-    asked = state.take_asked(repo, questions.marker_name(tool_use_id))
+    context = work_session_context.for_payload(repo, host, payload)
+    if isinstance(context, Err):
+        print(hook_bridge.format_answer_context(context.failure.message))
+        return 0
+    work_session_id = context.value
+    pending = decisions.pending(repo, work_session_id)
+    decision_scope = pending.scope if pending is not None else work_session_id
+    tool_input = normalize_question(host, hook_bridge.question_input(payload))
+    response = hook_bridge.answer_response(payload)
+    if pending is not None and pending.transport == "async":
+        return 0  # tool completion is delivery; the reply arrives later as a prompt
+    if pending is not None:
+        answered = questions.answer(tool_input, response)
+        if answered is None:
+            return 0  # delivery acknowledgment is not a human answer
+        chosen = next(
+            (
+                str(option)
+                for option in pending.options
+                if questions.choice_label(str(option)).casefold()
+                == questions.choice_label(answered).casefold()
+            ),
+            answered,
+        )
+        result = decisions.resolve(
+            repo,
+            tool_use_id,
+            chosen,
+            pending.transport,
+            work_session_id=decision_scope,
+        )
+        if isinstance(result, Err):
+            print(
+                hook_bridge.format_answer_context(
+                    f"[harness] decision not recorded: {result.failure.message}"
+                )
+            )
+            return 0
+    note = _apply_marker(
+        repo, tool_use_id, decision_scope, work_session_id, tool_input, response
+    )
+    if note:
+        print(hook_bridge.format_answer_context(note))
+    return 0
+
+
+def _answer_decision(
+    repo: Path,
+    pending: decisions.Pending,
+    conversation_scope: str | None,
+    reply: tuple[str, str, str],
+) -> list[str]:
+    """Record a typed or delayed reply, then what it approves; notes for the agent."""
+    key, answer, transport = reply
+    decision_scope = pending.scope
+    match decisions.resolve(
+        repo, key, answer, transport, work_session_id=decision_scope
+    ):
+        case Err(failure):
+            return [f"[harness] decision not recorded: {failure.message}"]
+        case Ok(found):
+            pass
+    notes = [f"[harness] human decision recorded: {found['answer']}"]
+    if transport == "async":
+        tool_input, response = decision_exchange(pending, answer)
+        note = _apply_marker(
+            repo, key, decision_scope, conversation_scope, tool_input, response
+        )
+        return notes + ([note] if note else [])
+    if (
+        found.get("approval")
+        and questions.choice_label(str(found["answer"])).casefold()
+        in questions.APPROVE_LABELS
+    ):
+        notes.append(
+            _open_approval(
+                repo,
+                questions.approval_id(str(found["id"])),
+                str(found.get("question", "")),
+                conversation_scope,
+            )
+        )
+    return notes
+
+
+def _open_approval(
+    repo: Path, approval_id: str, question: str, scope: str | None
+) -> str:
+    """Open a window for the conversation that approved; it covers only that work session."""
+    window = _window(repo)
+    state.open_approval(repo, approval_id, window, question, work_session_id=scope)
+    return (
+        f"[harness] the user approved; approval {approval_id} is open for {window} minutes. "
+        "Make only the writes the question described."
+        + _pin_approved_notes(repo, approval_id)
+    )
+
+
+def _apply_marker(
+    repo: Path,
+    marker_id: str,
+    decision_scope: str | None,
+    conversation_scope: str | None,
+    tool_input: dict[str, Any],
+    response: Any,
+) -> str | None:
+    """What an answered question pinned when it was asked: adoption, manual check, tracker, or approval."""
+    asked = state.take_asked(repo, questions.marker_name(marker_id), decision_scope)
     if asked is None:
-        return 0  # the question never passed the check, so its answer opens nothing
-    tool_input = hook_bridge.question_input(payload)
+        return None  # the question never passed the check, so its answer opens nothing
     match asked.get("adoption"):
         case dict() as plan:
             chosen = questions.adoption_choice(
                 tool_input,
-                hook_bridge.answer_response(payload),
+                response,
             )
             result = (
                 adoption.approve(
@@ -507,15 +771,14 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
                     note = f"[harness] adoption approval was NOT recorded: {failure.message}"
                 case None:
                     note = "[harness] the adoption plan was not approved."
-            print(hook_bridge.format_answer_context(note))
-            return 0
+            return note
         case _:
             pass
     match asked.get("manual"):
         case dict() as manual:
             chosen = questions.manual_choice(
                 tool_input,
-                hook_bridge.answer_response(payload),
+                response,
             )
             current = gitstate.index_tree(repo)
             recorded = chosen and current == manual.get("tree")
@@ -538,37 +801,26 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
                     )
                 case False:
                     note = "[harness] the guarded change was not approved."
-            print(hook_bridge.format_answer_context(note))
-            return 0
+            return note
         case _:
             pass
     if asked.get("tracker"):
         chosen = questions.tracker_choice(
             tool_input,
-            hook_bridge.answer_response(payload),
+            response,
         )
         note = (
             _tracker_act(repo, chosen, asked["tracker"], asked.get("digest", ""))
             if chosen is not None and chosen in asked.get("actions", ())
             else f"[harness] nothing changed for the {asked['tracker']} tracker."
         )
-        print(hook_bridge.format_answer_context(note))
-        return 0
-    approved = questions.approval(tool_input, hook_bridge.answer_response(payload))
+        return note
+    approved = questions.approval(tool_input, response)
     if approved is None:
-        return 0
-    window = _window(repo)
-    approval_id = questions.approval_id(tool_use_id)
-    state.open_approval(repo, approval_id, window, question=approved[0])
-    pinned = _pin_approved_notes(repo, approval_id)
-    print(
-        hook_bridge.format_answer_context(
-            f"[harness] the user approved; approval {approval_id} is open "
-            f"for {window} minutes. Make only the writes the question described."
-            + pinned
-        )
+        return None
+    return _open_approval(
+        repo, questions.approval_id(marker_id), approved[0], conversation_scope
     )
-    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -587,7 +839,11 @@ def main(argv: list[str] | None = None) -> int:
     if not isinstance(payload, dict):
         payload = {}
     if args.event == "prompt":
-        return handle_prompt(args.host, payload)
+        try:
+            return handle_prompt(args.host, payload)
+        except Exception:
+            # Prompts only record what the user typed; a broken record must not drop the message.
+            return 0
     if args.event in ("ask", "answer"):
         try:
             return (

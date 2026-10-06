@@ -5,7 +5,8 @@ harness version
 harness doctor [--repo <dir>] [--tools]
 harness bootstrap --repo <dir> [--inspect | --propose | --apply-digest <hash>]
 harness session start <work item> [--workflow <name>] | status | pause | resume | close
-harness workflow start | checkpoint | list | status | back | pause | resume | cancel | complete
+harness work-session route --request <text> | start --request <text> | list | select <id> | pause|stop|resume|complete <id>
+harness workflow start | render | checkpoint | list | status | routes | prepare | back | pause | resume | cancel | complete --session-id <id>
 harness preference show | language <en|pt-br>
 harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...]
 harness adoption assess | plan | status | materialize ...
@@ -38,6 +39,8 @@ from core.result import (  # noqa: E402
 )
 from harness import (  # noqa: E402
     adoption,
+    bmad,
+    cli_workflow,  # noqa: E402
     gitstate,
     knowledge,
     local_tracker,
@@ -45,8 +48,8 @@ from harness import (  # noqa: E402
     sessions,
     settings,
     state,
-    workflow,
 )
+from harness.cli_common import pairs, print_result, resolve_repo  # noqa: E402
 from integrations import (  # noqa: E402
     branches,
     onboarding,
@@ -90,9 +93,9 @@ def doctor(args: argparse.Namespace) -> int:
     print("Tools")
     py = sys.version_info
     report.line(
-        "ok" if py >= (3, 10) else "FAIL",
-        "python3",
-        f"{py.major}.{py.minor} (3.10+ required)",
+        "ok" if py >= (3, 12) else "FAIL",
+        "python",
+        f"{py.major}.{py.minor} at {sys.executable} (3.12+ required)",
     )
     for tool, why in (
         ("git", "needed only for versioned delivery"),
@@ -158,6 +161,13 @@ def doctor(args: argparse.Namespace) -> int:
 
 def _repository(report: Report, repo: Path, args: argparse.Namespace) -> None:
     loaded = settings.load(repo)
+    report.line(
+        "ok" if bmad.ready(repo) else "warn",
+        "bmad",
+        "set up (_bmad/config.toml)"
+        if bmad.ready(repo)
+        else "not set up; run `harness bootstrap` again to prepare it",
+    )
     if state.harness_mode(repo) == "suspended":
         report.line(
             "warn",
@@ -243,27 +253,13 @@ def bootstrap(extra: list[str]) -> int:
     return subprocess.call([sys.executable, str(script), *args])
 
 
-def _print(result: Result[str]) -> int:
-    match result:
-        case Ok(text):
-            print(text)
-            return 0
-        case Err(failure):
-            print(failure.message, file=sys.stderr)
-            return 2
-
-
-def _repo(value: str) -> Path:
-    return gitstate.repo_root(Path(value)) or Path(value).resolve()
-
-
 def session_command(args: argparse.Namespace) -> int:
-    repo = _repo(args.repo)
+    repo = resolve_repo(args.repo)
     match args.operation:
         case "status":
-            return _print(Ok(sessions.describe(sessions.resolve(repo))))
+            return print_result(Ok(sessions.describe(sessions.resolve(repo))))
         case "start":
-            return _print(
+            return print_result(
                 fmap(
                     bind(
                         _startable(
@@ -286,7 +282,7 @@ def session_command(args: argparse.Namespace) -> int:
                 )
             )
         case operation:
-            return _print(
+            return print_result(
                 fmap(
                     sessions.transition(repo, operation),
                     lambda session: f"{session.id}: {session.phase.value}",
@@ -408,7 +404,7 @@ def _failure(message: str) -> Failure:
 
 
 def tracker_command(args: argparse.Namespace) -> int:
-    repo = _repo(args.repo)
+    repo = resolve_repo(args.repo)
     match args.operation:
         case "list":
             usable = "\n".join(
@@ -418,14 +414,16 @@ def tracker_command(args: argparse.Namespace) -> int:
             broken = "\n".join(
                 f"not usable: {problem.message}" for problem in registry.problems(repo)
             )
-            return _print(Ok("\n".join(part for part in (usable, broken) if part)))
+            return print_result(
+                Ok("\n".join(part for part in (usable, broken) if part))
+            )
         case "show":
-            return _print(onboarding.show(repo, args.target or ""))
+            return print_result(onboarding.show(repo, args.target or ""))
         case "stage":
-            return _print(
+            return print_result(
                 bind(
                     onboarding.stage(
-                        repo, Path(args.target or ""), dict(_pairs(args.value))
+                        repo, Path(args.target or ""), dict(pairs(args.value))
                     ),
                     lambda folder: onboarding.show(repo, folder.name),
                 )
@@ -463,7 +461,7 @@ def _tracker_preflight(repo: Path) -> int:
 
 
 def adoption_command(args: argparse.Namespace) -> int:
-    repo = _repo(args.repo)
+    repo = resolve_repo(args.repo)
     match args.operation:
         case "assess":
             result = _adoption_assessment(repo, args.target or "", args.base_ref or "")
@@ -480,7 +478,7 @@ def adoption_command(args: argparse.Namespace) -> int:
             result = adoption.materialize(repo, args.target or "")
         case _:
             return 2
-    return _print(
+    return print_result(
         fmap(result, lambda value: json.dumps(value, indent=2, sort_keys=True))
     )
 
@@ -506,19 +504,14 @@ def _adoption_assessment(
     )
 
 
-def _pairs(values: list[str] | None) -> tuple[tuple[str, str], ...]:
-    return tuple(
-        (key.strip(), value.strip())
-        for key, _, value in (item.partition("=") for item in values or ())
-    )
-
-
 def preference_command(args: argparse.Namespace) -> int:
     match args.operation:
         case "show":
-            return _print(fmap(preferences.language(), lambda value: value or "unset"))
+            return print_result(
+                fmap(preferences.language(), lambda value: value or "unset")
+            )
         case "language":
-            return _print(
+            return print_result(
                 fmap(
                     preferences.set_language(
                         args.value or "",
@@ -527,204 +520,6 @@ def preference_command(args: argparse.Namespace) -> int:
                     lambda _: f"preferred language: {args.value}",
                 )
             )
-        case _:
-            return 2
-
-
-def suspension_command(args: argparse.Namespace) -> int:
-    """Status and resume only: suspending is recorded from the user's own prompt."""
-    if not Path(args.repo).is_dir():
-        print(f"{args.repo} is not a directory", file=sys.stderr)
-        return 2
-    repo = _repo(args.repo)
-    changed = (
-        attempt(
-            lambda: state.set_harness_mode(repo, "active"),
-            "state_unwritable",
-            "harness mode",
-            OSError,
-        )
-        if args.operation == "resume"
-        else Ok(None)
-    )
-    return _print(
-        fmap(changed, lambda _: json.dumps({"mode": state.harness_mode(repo)}))
-    )
-
-
-def _workflow_result(repo: Path, result: Result[workflow.Workflow]) -> int:
-    return _print(
-        bind(
-            result,
-            lambda current: fmap(
-                workflow.save(repo, current),
-                lambda _: json.dumps(asdict(current), indent=2, sort_keys=True),
-            ),
-        )
-    )
-
-
-def _workflow_point(repo: Path, args: argparse.Namespace) -> Result[workflow.Workflow]:
-    return bind(
-        workflow.load(repo),
-        lambda current: bind(
-            _workflow_artifacts(repo, args.artifact),
-            lambda artifacts: workflow.add_point(
-                current,
-                args.label or "",
-                args.stage or "",
-                artifacts,
-                _pairs(args.decision),
-                args.pending or "",
-                args.next_action or "",
-                tuple(args.write_id or ()),
-            ),
-        ),
-    )
-
-
-def _workflow_artifacts(
-    repo: Path, names: list[str] | None
-) -> Result[tuple[tuple[str, str], ...]]:
-    from core.result import sequence
-
-    return sequence(_workflow_artifact(repo, name) for name in names or ())
-
-
-def _workflow_artifact(repo: Path, name: str) -> Result[tuple[str, str]]:
-    target = (repo / name).resolve()
-    return bind(
-        require(
-            target.is_relative_to(repo.resolve()),
-            "invalid_workflow",
-            "artifact must be inside this repository",
-        ),
-        lambda _: fmap(workflow.file_digest(target), lambda digest: (name, digest)),
-    )
-
-
-def _workflow_resume(repo: Path, point_id: int | None) -> Result[workflow.Workflow]:
-    def checked(current: workflow.Workflow) -> Result[workflow.Workflow]:
-        return bind(
-            workflow.resume(current, point_id),
-            lambda selected: bind(
-                require(
-                    not workflow.stale_artifacts(repo, selected.current),
-                    "stale_workflow",
-                    "a reviewed document changed; go Back and review its new revision",
-                ),
-                lambda _: (
-                    fmap(
-                        registry.selected(repo, settings.load(repo)),
-                        lambda _: selected,
-                    )
-                    if selected.current.stage != "setup"
-                    else Ok(selected)
-                ),
-            ),
-        )
-
-    return bind(workflow.load(repo), checked)
-
-
-def _workflow_start(repo: Path, request: str) -> Result[workflow.Workflow]:
-    def begin(_: object) -> Result[workflow.Workflow]:
-        return bind(
-            preferences.language(),
-            lambda language: bind(
-                require(
-                    bool(language),
-                    "language_unset",
-                    "choose English or Português (Brasil) before starting",
-                ),
-                lambda _: workflow.start(request, language),
-            ),
-        )
-
-    match workflow.load(repo):
-        case Ok(current) if current.status in workflow.TERMINAL_STATUSES:
-            return bind(workflow.archive_terminal(repo), begin)
-        case Ok():
-            return Err(Failure("workflow_exists", "a workflow is already saved"))
-        case Err(failure) if failure.code == "workflow_absent":
-            return begin(None)
-        case Err() as failure:
-            return failure
-
-
-def workflow_command(args: argparse.Namespace) -> int:
-    repo = _repo(args.repo)
-    match args.operation:
-        case "status":
-            return _print(
-                fmap(
-                    workflow.load(repo),
-                    lambda current: json.dumps(
-                        asdict(current), indent=2, sort_keys=True
-                    ),
-                )
-            )
-        case "list":
-            return _print(
-                fmap(
-                    workflow.load(repo),
-                    lambda current: json.dumps(
-                        {
-                            "current_point": current.current.id,
-                            "status": current.status,
-                            "checkpoints": [
-                                {
-                                    "id": point.id,
-                                    "label": point.label,
-                                    "stage": point.stage,
-                                    "current": index == current.cursor,
-                                    "pending": point.pending,
-                                    "next_action": point.next_action,
-                                    "artifacts": [name for name, _ in point.artifacts],
-                                }
-                                for index, point in enumerate(current.points)
-                            ],
-                        },
-                        indent=2,
-                        sort_keys=True,
-                    ),
-                )
-            )
-        case "start":
-            return _workflow_result(repo, _workflow_start(repo, args.request or ""))
-        case "checkpoint":
-            return _workflow_result(repo, _workflow_point(repo, args))
-        case "pause":
-            return _workflow_result(repo, bind(workflow.load(repo), workflow.pause))
-        case "back":
-            result = bind(
-                workflow.load(repo),
-                lambda current: workflow.navigate(current, args.point),
-            )
-            match result:
-                case Ok():
-                    state.revoke_approvals(repo)
-                case _:
-                    pass
-            return _workflow_result(repo, result)
-        case "resume":
-            result = _workflow_resume(repo, args.point)
-            match result:
-                case Ok():
-                    state.revoke_approvals(repo)
-                case _:
-                    pass
-            return _workflow_result(repo, result)
-        case "cancel":
-            result = bind(workflow.load(repo), workflow.cancel)
-            match result:
-                case Ok():
-                    state.revoke_approvals(repo)
-                case _:
-                    pass
-            return _workflow_result(repo, result)
-        case "complete":
-            return _workflow_result(repo, bind(workflow.load(repo), workflow.complete))
         case _:
             return 2
 
@@ -788,33 +583,6 @@ def main(argv: list[str] | None = None) -> int:
         help="required for feature-implementation: Feature branch this Story branch descends from",
     )
     session_parser.add_argument("--repo", default=".")
-    workflow_parser = sub.add_parser(
-        "workflow", help="save, navigate, pause, resume, cancel, or complete a workflow"
-    )
-    workflow_parser.add_argument(
-        "operation",
-        choices=(
-            "start",
-            "checkpoint",
-            "status",
-            "list",
-            "back",
-            "pause",
-            "resume",
-            "cancel",
-            "complete",
-        ),
-    )
-    workflow_parser.add_argument("--repo", default=".")
-    workflow_parser.add_argument("--request")
-    workflow_parser.add_argument("--point", type=int)
-    workflow_parser.add_argument("--stage", choices=workflow.STAGES)
-    workflow_parser.add_argument("--label")
-    workflow_parser.add_argument("--artifact", action="append")
-    workflow_parser.add_argument("--decision", action="append")
-    workflow_parser.add_argument("--pending")
-    workflow_parser.add_argument("--next-action")
-    workflow_parser.add_argument("--write-id", action="append")
     preference_parser = sub.add_parser(
         "preference", help="show or set user-level preferences"
     )
@@ -856,12 +624,7 @@ def main(argv: list[str] | None = None) -> int:
         "--destination", help="new recovery worktree path (plan)"
     )
     adoption_parser.add_argument("--repo", default=".")
-    suspension_parser = sub.add_parser(
-        "suspension",
-        help="show or end a suspension of the harness checks (type `harness suspend` to start one)",
-    )
-    suspension_parser.add_argument("operation", choices=("status", "resume"))
-    suspension_parser.add_argument("--repo", default=".")
+    cli_workflow.add_parsers(sub)
     knowledge_parser = sub.add_parser(
         "knowledge", help="query or refresh a harness-owned immutable knowledge store"
     )
@@ -874,6 +637,13 @@ def main(argv: list[str] | None = None) -> int:
     knowledge_parser.add_argument("--repo", default=".")
     knowledge_parser.add_argument("--store", default="project")
     args, extra = parser.parse_known_args(argv)
+    match args.command, extra:
+        case "workflow", [*unknown] if unknown:
+            parser.error("unrecognized workflow arguments: " + " ".join(unknown))
+        case _:
+            pass
+    if args.command in cli_workflow.COMMANDS:
+        return cli_workflow.run(args)
     if args.command == "version":
         print(version())
         return 0
@@ -883,16 +653,12 @@ def main(argv: list[str] | None = None) -> int:
         return knowledge_command(args)
     if args.command == "session":
         return session_command(args)
-    if args.command == "workflow":
-        return workflow_command(args)
     if args.command == "preference":
         return preference_command(args)
     if args.command == "tracker":
         return tracker_command(args)
     if args.command == "adoption":
         return adoption_command(args)
-    if args.command == "suspension":
-        return suspension_command(args)
     return bootstrap(extra)
 
 

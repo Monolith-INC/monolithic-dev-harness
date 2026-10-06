@@ -30,7 +30,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
 
 from core.result import Err, Failure, Ok, Result, attempt, bind, fmap  # noqa: E402
-from harness import gitstate, settings, setup, state  # noqa: E402
+from harness import bmad, gitstate, settings, setup, state  # noqa: E402
 from integrations import registry  # noqa: E402
 
 
@@ -152,6 +152,7 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--inspect", action="store_true")
     parser.add_argument("--prepare-local-tracker", action="store_true")
+    parser.add_argument("--prepare-runtime", action="store_true")
     parser.add_argument("--propose", action="store_true")
     parser.add_argument("--apply-digest")
     parser.add_argument("--source-digest")
@@ -181,16 +182,24 @@ def main(argv: list[str] | None = None) -> int:
         args.propose,
         args.apply_digest,
         args.prepare_local_tracker,
+        args.prepare_runtime,
     ):
-        case None, False, None, True:
+        case None, False, None, False, True:
+            return _report(
+                bind(
+                    settings.load(repo),
+                    lambda chosen: bmad.prepare(repo, chosen.artifacts_path),
+                )
+            )
+        case None, False, None, True, False:
             return _report(setup.prepare_local_tracker(repo))
-        case None, False, None, False:
+        case None, False, None, False, False:
             return _report(setup.inspect(repo))
-        case None, True, None, False:
+        case None, True, None, False, False:
             return _report(setup.review(repo, **choices))
-        case None, _, str() as approved, False:
+        case None, _, str() as approved, False, False:
             return _apply_reviewed(repo, choices, approved, args.source_digest or "")
-        case str() as source, False, None, False:
+        case str() as source, False, None, False, False:
             return _legacy_install(repo, Path(source))
         case _:
             print("choose one bootstrap operation", file=sys.stderr)
@@ -273,6 +282,14 @@ def _finish(repo: Path) -> int:
                     pass
         case _:
             pass
+    match bmad.prepare(repo, chosen.value.artifacts_path):
+        case Err(failure):
+            print(
+                f"warning: {failure.message}; BMad planning skills need it",
+                file=sys.stderr,
+            )
+        case Ok(report):
+            print(f"bmad: setup {report['setup']}, output folder {report['output']}")
     match _ensure_codex_config(repo):
         case Err(failure):
             print(

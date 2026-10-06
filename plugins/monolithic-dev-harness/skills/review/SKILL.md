@@ -35,7 +35,7 @@ the pass that produced each fixed finding. Any new commit invalidates an earlier
 With a clean tree, record the verdict for HEAD:
 
 ```bash
-python3 "<plugin root>/scripts/harness/review_verdict.py" --verdict ready --summary "<one line>"
+sh "<plugin root>/bin/harness-python" "<plugin root>/scripts/harness/review_verdict.py" --verdict ready --summary "<one line>"
 ```
 
 Use `--verdict blocked` when something must go back to the backlog or the spec: an acceptance

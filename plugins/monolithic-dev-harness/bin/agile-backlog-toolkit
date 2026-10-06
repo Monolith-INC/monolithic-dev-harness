@@ -3,4 +3,4 @@
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 export PYTHONPATH="${ROOT}/runtime${PYTHONPATH:+:$PYTHONPATH}"
-exec python3 -m orchestrator_core "$@"
+exec sh "${ROOT}/bin/harness-python" -m orchestrator_core "$@"

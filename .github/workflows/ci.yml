@@ -45,14 +45,14 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python: ["3.10", "3.12"]
+        python: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python }}
-      - name: Install pytest
-        run: pip install pytest
+      - name: Install test and runtime dependencies
+        run: pip install pytest -r plugins/monolithic-dev-harness/requirements-runtime.txt
       - name: Git identity for test repositories
         run: |
           git config --global user.name "ci"

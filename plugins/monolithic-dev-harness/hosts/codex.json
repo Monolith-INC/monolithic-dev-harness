@@ -1,0 +1,45 @@
+{
+  "host": "codex",
+  "product": "Codex (CLI and desktop)",
+  "verified_on": "2026-10-06",
+  "subagents": {
+    "start": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "Codex runs subagents inside its own runtime. No transport that lets the harness start one from its own process, and hand back a handle, has been verified."
+      }
+    },
+    "status": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "No way for the harness to read a running subagent's state has been verified."
+      }
+    },
+    "follow_up": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "No way for the harness to send a message to a running subagent has been verified."
+      }
+    },
+    "cancel": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "No way for the harness to stop a running subagent has been verified."
+      }
+    },
+    "events": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "Subagent lifecycle hooks have not been verified as an event stream the harness can read."
+      }
+    }
+  },
+  "notes": [
+    "A `codex exec` process is a separate session, not a subagent of the current one; it is not a substitute for `start`."
+  ]
+}

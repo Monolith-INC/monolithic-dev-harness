@@ -8,4 +8,4 @@ while [[ -L "$SOURCE" ]]; do
   [[ "$SOURCE" != /* ]] && SOURCE="$DIR/$SOURCE"
 done
 ROOT="$(cd -P "$(dirname "$SOURCE")/.." && pwd)"
-exec python3 "$ROOT/scripts/harness/cli.py" "$@"
+exec sh "$ROOT/bin/harness-python" "$ROOT/scripts/harness/cli.py" "$@"

@@ -289,6 +289,7 @@ class TestHumanOwned(HookTestCase):
         )
         for path in (
             ".harness/state/sessions/HS-1/events/0002-closed.json",
+            ".harness/state/work_sessions/WS-1/session.json",
             ".harness/state/trackers/x.json",
             ".harness/state/tracking.json",
             ".harness/state/adoptions/HA-0123456789/approval.json",
@@ -303,6 +304,7 @@ class TestHumanOwned(HookTestCase):
             "sed -i 's/4007//' .harness/settings.json",
             "python3 -c \"open('.harness/settings.json', 'w').write('{}')\"",
             "echo '{}' | tee .harness/state/approvals/HB-1.json",
+            "echo '{}' > .harness/state/work_sessions/WS-1/session.json",
             "cd .harness/state/approvals && echo '{}' > HB-2.json",
             "ls 2>/dev/null; echo x >> .harness/settings.json",
             # A second line is a second command, not more arguments to the first.

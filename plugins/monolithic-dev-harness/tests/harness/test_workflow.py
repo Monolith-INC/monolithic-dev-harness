@@ -12,6 +12,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from core.result import Err, Ok
+from harness import bmad, setup, work_sessions
 from scripts.harness import preferences, workflow
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
@@ -84,7 +85,7 @@ class WorkflowTests(unittest.TestCase):
 
         def call(*args: str) -> subprocess.CompletedProcess[str]:
             return subprocess.run(
-                [sys.executable, str(CLI), *args],
+                [sys.executable, str(CLI), *args, "--repo", str(self.repo)],
                 cwd=self.repo,
                 capture_output=True,
                 text=True,
@@ -92,15 +93,43 @@ class WorkflowTests(unittest.TestCase):
                 timeout=30,
             )
 
+        (self.repo / ".harness").mkdir(exist_ok=True)
+        (self.repo / ".harness/settings.json").write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "tracker": {"name": "local"},
+                    "scm": {"name": "local"},
+                    "branch_template": "{key}-{slug}",
+                    "artifacts_path": "docs/planning",
+                }
+            )
+        )
+        self.assertIsInstance(setup.prepare_local_tracker(self.repo), Ok)
+        self.assertIsInstance(bmad.prepare(self.repo, "docs/planning"), Ok)
         self.assertEqual(call("preference", "language", "en").returncode, 0)
-        started = call("workflow", "start", "--request", "Build a route guard")
+        session = work_sessions.start(self.repo, "Build a route guard").value
+        started = call(
+            "workflow",
+            "start",
+            "--request",
+            session.request,
+            "--session-id",
+            session.id,
+        )
         self.assertEqual(started.returncode, 0, started.stderr)
-        self.assertEqual(call("workflow", "pause").returncode, 0)
-        resumed = call("workflow", "resume")
+        self.assertEqual(
+            call("workflow", "pause", "--session-id", session.id).returncode, 0
+        )
+        resumed = call("workflow", "resume", "--session-id", session.id)
         self.assertEqual(resumed.returncode, 0, resumed.stderr)
         self.assertEqual(json.loads(resumed.stdout)["status"], "active")
-        self.assertEqual(call("workflow", "cancel").returncode, 0)
-        self.assertNotEqual(call("workflow", "resume").returncode, 0)
+        self.assertEqual(
+            call("workflow", "cancel", "--session-id", session.id).returncode, 0
+        )
+        self.assertNotEqual(
+            call("workflow", "resume", "--session-id", session.id).returncode, 0
+        )
 
 
 if __name__ == "__main__":

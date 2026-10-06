@@ -6,6 +6,64 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-06
+
+### Added
+
+- Project work sessions: several tickets can be in flight in one project, each bound to its own
+  host conversation, with `harness work-session` lifecycle commands (start, list, route, select,
+  status, pause, stop, resume, complete), per-session workflow checkpoints, and routing that keeps
+  the user's original request. A conversation binds to a session through its first session-scoped
+  command and switches only with an exact `harness work-session select|resume <id>`, never while a
+  decision is pending; a command naming another session is refused.
+- The `hook-entry` rule refuses shell commands that run or copy the harness's own hook entry
+  points, so an agent cannot answer or approve for the user by feeding them a payload.
+- Human decisions: a question shown to the user is recorded as pending, and only a reply that picks
+  one of its offered options, read by the prompt and answer hooks, resolves it; other messages stay
+  ordinary prompts, so `harness revoke`, `harness suspend`, and typed approvals keep working. One
+  gate holds work while a decision is pending: a project-wide decision holds everyone, a session's
+  decision holds that session, and work with no session (an unbound conversation, or Cursor) is
+  held by any pending decision. `harness decision status` reports it.
+- Prepared workflows: a catalog of routes and steps (`config/prepared-workflows.json`) that hands
+  each step its references, skills, operations, outputs, checks, and recovery.
+- A subagent contract for agent hosts: `SubagentOps` (start, status, follow-up, cancel, events)
+  with typed requests, handles, and statuses. Each host declares in `hosts/<host>.json`, checked
+  against `config/host.schema.json`, which operations it supports and where that claim comes
+  from. An undeclared operation returns `unsupported_capability`; a malformed answer or a crash
+  returns `invalid_host_result`. No host supports any operation yet.
+- Test-run tooling for harness acceptance trials: `scripts/acceptance_trial.py`, the
+  `tools/project_fixture.py` test-project factory, and the `run-test-project` skill.
+
+### Changed
+
+- The harness now requires Python 3.12 or newer. Hooks, MCP servers, and the `harness` command
+  start through `bin/harness-python`, which picks the first Python 3.12+ on the machine
+  (`HARNESS_PYTHON`, then `python3.15` down to `python3.12`, then `python3`), so they work where the
+  default `python3` is older. The installer and `harness doctor` check for it. CI tests 3.12 and 3.13.
+- The installer installs Jinja2 into the plugin's own `runtime/python` folder
+  (`requirements-runtime.txt`), never into the user's Python; a failure there is a warning, since
+  only `harness workflow render` needs it. It also records the Python it found, which
+  `bin/harness-python` tries first, so hosts started from the desktop find it. Without any Python
+  3.12+, prompt and question hooks let the user's message through; tool calls fail closed.
+- `/check` and `/review` run their scripts through `bin/harness-python`.
+- An approval window now covers only the work session it was opened in. A write from another
+  session needs its own approval; a window opened without a session (Cursor, or no session bound)
+  covers only writes without one. `harness revoke` still closes every window; workflow back,
+  resume, and cancel close only their session's.
+
+### Fixed
+
+- BMad is hooked back in. Stage 0 runs BMad Build's own clarify and plan steps instead of a
+  hand-written checklist: `harness workflow render` renders them for the project after onboarding
+  and pins the snapshot to the work session. `harness bootstrap` runs BMad's bundled setup and
+  points its output folder at `artifacts_path`; BMad skills run their unchanged scripts through
+  `bin/harness-python` instead of `uv`; the module record ships beside the skills, and BMad's
+  ticket script is installed again. A pinned discovery snapshot is rendered again when only the setup
+  around the run changed (Python, plugin path, settings); a change to the run's request, language,
+  BMad configuration, or the discovery steps keeps the run on its snapshot.
+- Approving through a pending decision now opens the window for `approvals.window_minutes`
+  instead of a fixed 20 minutes.
+
 ## [0.5.4] - 2026-10-06
 
 ### Added
@@ -529,7 +587,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.4...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.1...v0.5.2

@@ -11,7 +11,7 @@ last_reviewed: 2026-09-30
 | --- | --- |
 | Adapter | A tracker folder's `adapter.py`: pure translation between the harness's contract and one provider, exporting `adapter(context) -> TrackerOps`. |
 | Approval batch | The exact set of tracker/SCM writes the agent proposes, labeled with a batch id such as `HB-7Q2K`. |
-| Approval window | A time-limited permission (default 20 minutes, `approvals.window_minutes`) to perform tracker/SCM writes, opened only by the user: a click on `Approve`, or a typed `approve HB-…`. |
+| Approval window | A time-limited permission (default 20 minutes, `approvals.window_minutes`) to perform tracker/SCM writes, opened only by the user: a click on `Approve`, or a typed `approve HB-…`. It covers only the work session it was opened in; one opened without a session covers only writes without one. |
 | Artifacts path | The repository folder where backlog drafts, plans, and reports are written (`artifacts_path` in the settings). The plugin never creates it. |
 | Check evidence | The recorded result of the repository's configured checks for one git tree. |
 | Checkout | One working copy on one branch: its worktree folder, its git directory, and its branch. A session binds to exactly one. |
@@ -26,6 +26,7 @@ last_reviewed: 2026-09-30
 | Governed repository | A repository with `.harness/settings.json`; only these are subject to the rules. |
 | Guarded path | A path whose commits need specific evidence (`check:<name>` or `manual:<name>`). |
 | Hook runtime | `scripts/harness/hook.py` plus the workflow policy runtime; runs before every governed tool call. |
+| Host declaration | `hosts/<host>.json`, checked against `config/host.schema.json`: which subagent operations the harness can ask of one host, each with its source. A supported claim needs a source; the adapter must behave as declared. |
 | Manual check | Evidence that a person validated a guarded change by hand, recorded from their own prompt or their click on **Approve change** for the exact staged tree. |
 | Onboarded tracker | A tracker folder under `.harness/trackers/<name>/` that the repository brought in; it counts only while the user trusts it as it reads now. |
 | Adoption | Taking over implementation that predates a session: `harness adoption` assesses it, the user approves one exact plan with **Approve adoption**, and the verified delta is staged on the approved base in a separate worktree. |
@@ -37,6 +38,7 @@ last_reviewed: 2026-09-30
 | Session | A binding of one work item to one checkout (`harness session start`); governed code changes need an active one, and the workflow checks its work item. Phases: active, paused, closed. |
 | Settings | `.harness/settings.json`, the repository's only settings file: tracker, SCM, branch template, rules. Human-owned: the harness changes only its `tracker` section, when the user chooses a tracker. |
 | Stacked branches | Story branches based on a Feature branch, landed into it in order. |
+| Subagent contract | `SubagentOps` in `scripts/host_adapters/subagents.py`: start, status, follow-up, cancel, and events for subagents on a host. An operation a host does not declare returns `unsupported_capability`; a malformed answer returns `invalid_host_result`. |
 | Suspension | The user's own `harness suspend` message turns off every harness check in one repository except `human-owned`; `harness resume` (or `harness suspension resume`) restores them. Kept in `.harness/state/suspension.json`. |
 | Tracker contract | What every tracker meets: `tracker.json` checked against `config/tracker.schema.json`, and an adapter returning `TrackerOps`. |
 | Tracker manifest | A tracker folder's `tracker.json`: kinds, states, hierarchy, id formats, which tools write, how to connect, which settings it needs. |

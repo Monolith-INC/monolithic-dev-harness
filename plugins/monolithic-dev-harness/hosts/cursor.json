@@ -1,0 +1,45 @@
+{
+  "host": "cursor",
+  "product": "Cursor (editor agent)",
+  "verified_on": "2026-10-06",
+  "subagents": {
+    "start": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "No way for the harness to start a Cursor subagent has been verified."
+      }
+    },
+    "status": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "No way for the harness to read a running subagent's state has been verified."
+      }
+    },
+    "follow_up": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "No way for the harness to send a message to a running subagent has been verified."
+      }
+    },
+    "cancel": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "No way for the harness to stop a running subagent has been verified."
+      }
+    },
+    "events": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "No subagent event stream has been verified."
+      }
+    }
+  },
+  "notes": [
+    "Cursor hook payloads give the adapter no session id (`cursor_adapter.cursor_session_id`), so a handle could not yet be tied to the conversation that asked for it."
+  ]
+}

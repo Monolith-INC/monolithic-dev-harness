@@ -32,3 +32,4 @@ class CanonicalToolEvent:
     arguments: dict[str, Any] | None = None
     workspace_root: str = ""
     branch: str = ""
+    host_session_id: str = ""

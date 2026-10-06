@@ -5,15 +5,12 @@ description: Use on first harness activation or when repository setup is absent,
 
 # Guided bootstrap
 
+Onboarding does not require a work session, workflow, or checkout-bound implementation session.
+Do not start or resume one to configure the project. Complete and verify setup first; select a
+project work session only when the user proceeds to actual product or engineering work.
+
 The harness is opt-in per repository. Before any planning or backlog stage, inspect setup. Preserve
-the user's original request and return to it as soon as setup is usable. Drive every decision and
-approval through clickable choices in the host's question controls. In the Codex editor or command
-line, call `request_user_input` when it is available. In the Codex desktop app, call
-`request_user_input_async` when that is the available control. Use `AskUserQuestion` in Claude Code.
-Wait for the user's click before proceeding. Never ask the
-user to type an option, command, or free-text answer. If a required value cannot be discovered or
-offered as a clickable choice, stop before asking or applying changes and report that setup is waiting
-for an interactive control. The user never needs to edit settings JSON by hand.
+the user's original request and return to it as soon as setup is usable. Use the host adapter interaction contract in `references/human-decisions.md` for every decision. Prefer a supported blocking control; otherwise use adapter-supported buttons and follow its waiting instructions. Use chat and end the turn when no button tool is available. When the adapter uses asynchronous buttons, keep the turn open with interruptible waits until the actual answer. Accept a direct human reply when a blocking control is unavailable. The host adapter chooses a supported button tool; delivery must never advance setup. The user never needs to edit settings JSON by hand.
 
 ## 1. Inspect once
 
@@ -31,6 +28,11 @@ tracker's state, artifact, and capacity folders. It is routine local setup, need
 and preserves existing records. The local tracker is shipped with the plugin; `harness tracker stage`
 is for adding a new tracker provider and must never be used to initialize it. If preparation fails,
 report the concrete file access problem; do not ask the user to diagnose tracker internals.
+
+Once settings are configured, if `bmad_runtime.ready` is false, run
+`harness bootstrap --prepare-runtime --repo <project>` and inspect again. This prepares or repairs
+the bundled runtime locally without a session, installation, download, or extra human choice.
+Preserve existing configuration. If preparation fails, report its actual output and stop.
 
 If `language_confirmed` is false, always ask which language this project should use, even when a
 different project previously saved a user-level preference. Offer **English** and **Português
@@ -64,8 +66,7 @@ settings are preserved. If proposal validation fails, use its error to correct t
 do not inspect implementation files to second-guess the command. Summarize only user-facing choices:
 the selected work-item tracker and artifact destination. Do not show raw settings, inferred remote,
 branch, or source-control fields. Then offer **Apply setup** or **Change choices** as clickable
-choices. Do not provide a typed reply as a fallback. If the controls are unavailable or fail, leave
-the proposal unapplied and report that approval is waiting for an interactive host. A selection to
+choices. Do not provide a typed reply as a fallback. If a blocking control is unavailable, present the complete proposal in chat and end the turn; leave it unapplied until the real human answers. A selection to
 apply authorizes only this exact local proposal; it does not authorize tracker or source-control
 writes.
 
@@ -95,11 +96,20 @@ clicked choice or the text entered through **Other** and continue in this same r
 user to invoke the harness again.
 
 The next route starts product or engineering work. A named project file can be read directly; it is
-not required to be a tracker-issued item before discovery. Do not ask for a commit, branch, session,
-or local-tracker initialization while planning. At every later decision, including permission to
-create a branch or commit, use a clickable question control. Never replace a failed control with a
-plain-text question.
+not required to be a tracker-issued item before discovery. At this boundary, return to the harness
+entry skill to select the project work session and start its workflow. Do not ask for a commit,
+branch, checkout-bound implementation session, or local-tracker initialization while planning.
+At every later decision, including permission to
+create a branch or commit, use a clickable question control. Use the adapter's chat-and-wait fallback when a blocking control is unavailable.
 
 Repository settings are human-owned. Existing custom checks, paths, and host configuration survive
 setup. The user-level language preference and clone-local workflow checkpoints are separate from
 shared repository settings.
+
+## Hand the saved context back to the run
+
+After setup, use `harness bootstrap --inspect --repo <project>` and preserve its `handoff`:
+absolute project and artifact paths, bundled command, preferences environment, original request,
+current workflow status, next action, and pending human question. Reuse this context across steps
+and delegation. Do not bootstrap again or ask confirmed setup choices again within this project.
+An invalid workflow is a recovery blocker, not permission to silently start over.

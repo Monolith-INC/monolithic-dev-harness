@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Run every suite. Needs Python 3.10+ with pytest (e.g. `python3 -m venv .venv && .venv/bin/pip install pytest`).
+# Run every suite. Needs Python 3.12+ and the repository's requirements-dev.txt.
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-PY="${PYTHON:-python3}"
+PY="${PYTHON:-$ROOT/bin/harness-python}"
 if [[ "$PY" == */* && "$PY" != /* ]]; then
   PY="$(cd "$(dirname "$PY")" && pwd)/$(basename "$PY")"
 fi

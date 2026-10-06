@@ -14,7 +14,7 @@ Branch creation belongs to implementation after the user has reviewed the plan a
 exists. Do not create a branch or start a session during bootstrap, discovery, or ideation. If a
 decision or approval is needed, use the host's clickable question control. In the Codex editor,
 call `request_user_input` with selectable options; in the desktop app use
-`request_user_input_async` when available. Never fall back to a plain-text question.
+the adapter's asynchronous buttons with the turn kept open while waiting when blocking controls are unavailable; use chat when no button tool is available. For Codex asynchronous buttons, keep the turn open with interruptible waits until the actual answer.
 
 1. The working tree is clean, or its changes are explicitly handled.
 2. Branch name: the repository's convention from `.harness/settings.json` →

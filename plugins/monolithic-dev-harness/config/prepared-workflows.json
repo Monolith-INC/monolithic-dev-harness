@@ -1,0 +1,122 @@
+{
+  "version": 1,
+  "stages": {
+    "setup": {
+      "title": "Select a project and work session",
+      "knowledge": ["references/workflow-storyboard.md", "references/project-config.md"],
+      "operations": ["harness.bootstrap.inspect", "harness.work-session.route", "harness.work-session.start", "harness.work-session.resume", "harness.doctor"],
+      "skills": [
+        {"name": "bootstrap", "when": "Inspect or apply project setup once."},
+        {"name": "review-setup", "when": "Review or repair optional code review setup."}
+      ],
+      "outputs": ["project handoff with root and shared settings", "selected work-session id with original request and scoped checkpoint"],
+      "checks": ["project root exists", "session route is read-only", "unfinished sessions require a human choice when the request is new or ambiguous", "workflow commands keep the selected session id", "related legacy workflow is surfaced and never silently replaced"],
+      "recovery": ["preserve existing settings and evidence; report unreadable state", "never attach a legacy project workflow to a new session automatically"]
+    },
+    "discover": {
+      "title": "Investigate the named request",
+      "required_inputs": ["original_request"],
+      "knowledge": ["references/workflow-storyboard.md", "skills/bmad-build/SKILL.md"],
+      "operations": ["harness.bootstrap.inspect", "harness.knowledge.find", "harness.knowledge.fetch", "tracker_describe", "tracker_search_work_items", "tracker_get_work_item"],
+      "skills": [
+        {"name": "knowledge-acquire", "when": "Before analysis, find source-backed project notes related to the exact request."},
+        {"name": "bmad-build", "when": "Investigate the request and prepare the reviewed plan with BMad Build's clarify and plan steps."}
+      ],
+      "outputs": ["discovery findings", "code or artifact map", "open questions", "proposed next route"],
+      "checks": ["carry the exact request and selected project into the step", "inspect the matching source or work item and cite file paths", "separate observed facts, assumptions, and open questions"],
+      "recovery": ["if a knowledge or tracker tool is unavailable, record that exact gap and continue only from project files actually inspected"]
+    },
+    "ideate": {
+      "title": "Explore and shape an idea",
+      "knowledge": ["references/workflow-storyboard.md", "references/planning-artifacts.md"],
+      "operations": ["harness.knowledge.find", "harness.knowledge.fetch"],
+      "skills": [
+        {"name": "brainstorm-ideas", "when": "Generate a broad set of options."},
+        {"name": "forge-idea", "when": "Pressure-test a chosen direction."},
+        {"name": "research-decision", "when": "Resolve a material unknown with evidence."},
+        {"name": "product-brief", "when": "Capture a promising direction as a brief."},
+        {"name": "product-spec", "when": "After a direction is chosen, record stable product behavior as a contract."}
+      ],
+      "outputs": ["decision record", "selected direction", "brief or product contract when requested"],
+      "checks": ["keep ideas distinct from accepted requirements", "record unresolved choices"],
+      "recovery": ["save the current idea record and return to the last human choice"]
+    },
+    "backlog": {
+      "title": "Prepare and validate work items",
+      "knowledge": ["references/workflow-storyboard.md", "references/decomposition-rules.md", "references/ticket-structure.md"],
+      "operations": ["tracker_describe", "tracker_search_work_items", "tracker_get_work_item", "tracker_list_children", "tracker_create_work_item"],
+      "skills": [
+        {"name": "generate-work-item", "when": "Draft a work item from an accepted request."},
+        {"name": "enrich-work-item", "when": "Add missing detail and acceptance checks."},
+        {"name": "decompose-backlog", "when": "Split work that is too large or mixed."},
+        {"name": "generate-breakdown-work-items", "when": "Create linked child Tasks from an approved Story."},
+        {"name": "validate-artifact", "when": "Check the complete draft set before review."}
+      ],
+      "outputs": ["reviewable work-item batch", "parent-child links", "implementation plan"],
+      "checks": ["use tracker adapter rules", "verify links and required fields before publication"],
+      "recovery": ["keep drafts local when the tracker is unavailable"]
+    },
+    "technical-plan": {
+      "title": "Prepare the technical approach",
+      "knowledge": ["references/workflow-storyboard.md", "references/planning-artifacts.md"],
+      "operations": ["harness.workflow.status", "harness.workflow.checkpoint", "tracker_get_work_item", "tracker_list_artifacts"],
+      "skills": [
+        {"name": "architect", "when": "Compare system designs and tradeoffs."},
+        {"name": "sequence-verifiable-units", "when": "Break delivery into independently testable blocks."},
+        {"name": "validate-artifact", "when": "Check that the plan covers scope and acceptance."}
+      ],
+      "outputs": ["approved implementation plan", "ordered work blocks", "focused checks"],
+      "checks": ["state assumptions and affected areas", "identify one focused live test per block", "validate the complete plan before asking for review"],
+      "recovery": ["revise only the affected plan section and invalidate dependent approvals"]
+    },
+    "build": {
+      "title": "Implement one approved work item",
+      "knowledge": ["references/workflow-storyboard.md", "references/decomposition-rules.md"],
+      "operations": ["harness.workflow.status", "tracker_get_work_item", "tracker_transition_work_item", "tracker_list_artifacts", "harness.bootstrap.inspect"],
+      "skills": [
+        {"name": "start-ticket", "when": "Prepare the selected tracker item and checkout."},
+        {"name": "write-spec", "when": "Create or revise an approved item specification."},
+        {"name": "implement-story", "when": "Implement a ready Story in small steps."},
+        {"name": "tdd", "when": "Use a test-first loop for code changes."},
+        {"name": "automated-tests", "when": "Create or run relevant automated tests."},
+        {"name": "check", "when": "Run the project's prescribed checks."}
+      ],
+      "outputs": ["scoped source change", "focused tests", "work log"],
+      "checks": ["confirm approved plan, linked Tasks, and item-local specification", "verify each meaningful block"],
+      "recovery": ["preserve unfinished edits and checkpoint; do not mix another ticket into this run"]
+    },
+    "verify": {
+      "title": "Verify and report the result",
+      "knowledge": ["references/workflow-storyboard.md", "references/audit-checklist.md"],
+      "operations": ["harness.doctor", "harness.workflow.status", "tracker_get_work_item", "harness.bootstrap.inspect"],
+      "skills": [
+        {"name": "prove-it-works", "when": "Gather evidence that the change works."},
+        {"name": "verify-this", "when": "Check a specific claim or result."},
+        {"name": "review", "when": "Review the completed change for defects."},
+        {"name": "finish-feature-development", "when": "Close a completed feature workflow."}
+      ],
+      "outputs": ["test and check evidence", "review result", "remaining risks or follow-up"],
+      "checks": ["report only checks that actually ran", "separate local, installed, and live-host evidence"],
+      "recovery": ["keep the item open and record the exact failed or unavailable check"]
+    },
+    "suspend": {
+      "title": "Help the user suspend harness checks and continue ordinary work",
+      "knowledge": ["references/workflow-storyboard.md", "skills/harness/SKILL.md"],
+      "operations": ["harness.suspension.status", "harness.bootstrap.inspect"],
+      "skills": [
+        {"name": "suspend-harness", "when": "Ask the user to send `harness suspend` as its own message; never suspend for them."}
+      ],
+      "outputs": ["suspension status", "preserved workflow and project settings"],
+      "checks": ["after the user sends `harness suspend`, verify with `harness suspension status`", "confirm ordinary work can continue"],
+      "recovery": ["report persistence failure; do not claim checks are suspended"]
+    }
+  },
+  "routes": {
+    "investigate-request": ["setup", "discover"],
+    "explore-idea": ["setup", "ideate"],
+    "prepare-artifacts": ["setup", "discover", "backlog", "technical-plan"],
+    "implement-approved-item": ["setup", "build", "verify"],
+    "resume-work": ["setup", "discover", "backlog", "technical-plan", "build", "verify"],
+    "suspend-checks": ["suspend"]
+  }
+}

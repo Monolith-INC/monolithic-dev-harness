@@ -5,7 +5,7 @@ import os
 import re
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -46,7 +46,7 @@ _MUTATING_GIT = frozenset(
 def log_debug(message: str) -> None:
     try:
         with open(LOG_FILE, "a", encoding="utf-8") as file:
-            file.write(f"{datetime.now(timezone.utc).isoformat()} - {message}\n")
+            file.write(f"{datetime.now(UTC).isoformat()} - {message}\n")
     except OSError:
         pass
 
@@ -100,6 +100,7 @@ def run(client: str, input_data: dict[str, Any], project_root: str = "") -> int:
 
 
 def evaluate_event(event: CanonicalToolEvent) -> PolicyDecision:
+    # The decision gate and work-session binding run once, in harness/hook.py, before this.
     command = event.command or ""
     if event.kind == "shell":
         branch_decision = evaluate_git_branch_guard(command, event.workspace_root)

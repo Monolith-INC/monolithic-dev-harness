@@ -25,9 +25,9 @@ The lens set is whatever `{workflow.lenses}` resolves to, not a fixed list — o
 
 ## Execution
 
-1. **Resolve customization:** `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow`.
+1. **Resolve customization:** `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow`.
    - Script not found: Prepare the project runtime using the setup script bundled with this harness, then retry once. Do not fetch BMad files from another repository. The bundled setup command is:
-   `uv run --no-cache "{skill-root}/../../vendor/bmad/skills/bmad/scripts/setup.py" --project-root "{project-root}" --skill "{skill-root}/../../vendor/bmad/skills/bmad" --root "{skill-root}/.." --root "{skill-root}/../../vendor/bmad/skills"`.
+   `sh "{skill-root}/../../bin/harness-python" "{skill-root}/../../vendor/bmad/skills/bmad/scripts/setup.py" --project-root "{project-root}" --skill "{skill-root}/../../vendor/bmad/skills/bmad" --root "{skill-root}/.." --root "{skill-root}/../../vendor/bmad/skills"`.
    - Any other failure: read `{skill-root}/customize.toml` directly and use defaults.
 
    **Forwarded activation:** if a caller invoked you with pre-resolved customization fields (e.g. the `bmad-editorial-review` shim), honor them verbatim for those named fields — they already carry the user's overrides — and resolve only the remaining fields from your own `customize.toml`. Then execute each `{workflow.activation_steps_prepend}` entry in order, hold `{workflow.persistent_facts}` as standing context for the session, and treat `{workflow.review_guidance}` entries as standing review directives for every lens.

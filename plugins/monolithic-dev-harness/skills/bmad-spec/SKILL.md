@@ -18,13 +18,13 @@ Multiple skills may call to update the same spec over time.
 
 ## On Activation
 
-1. Resolve customization: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow`.
+1. Resolve customization: `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow`.
    - Script not found: prepare the project runtime from the harness-bundled BMad files, then run the command again:
-     `uv run --no-cache "{skill-root}/../../vendor/bmad/skills/bmad/scripts/setup.py" --project-root "{project-root}" --skill "{skill-root}/../../vendor/bmad/skills/bmad" --root "{skill-root}/.." --root "{skill-root}/../../vendor/bmad/skills"`.
+     `sh "{skill-root}/../../bin/harness-python" "{skill-root}/../../vendor/bmad/skills/bmad/scripts/setup.py" --project-root "{project-root}" --skill "{skill-root}/../../vendor/bmad/skills/bmad" --root "{skill-root}/.." --root "{skill-root}/../../vendor/bmad/skills"`.
      If setup fails, report its output and stop. Do not install or fetch BMad from another repository.
    - Any other failure: read `{skill-root}/customize.toml` directly.
 2. Run `{workflow.activation_steps_prepend}`. Treat `{workflow.persistent_facts}` as foundational context (`file:` entries are loaded).
-3. Resolve config: `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key core.output_folder --key core.active_initiative`. `{date}` is the current system datetime.
+3. Resolve config: `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key core.output_folder --key core.active_initiative`. `{date}` is the current system datetime.
    - Script not found, or no `output_folder`: prepare the project runtime using the bundled setup command above, then retry once. If it still fails, report the error and stop; do not install or fetch BMad from another repository.
    - No `active_initiative`: ask once whether this work belongs to a named initiative or is standalone. Use the answer for this run only; do not invoke an unbundled skill or write project configuration. For standalone work, use the configured output folder directly.
 4. Detect mode. **Headless** when any of: no TTY, programmatic caller (another skill or non-interactive runner), or the first message pre-supplies all inputs and asks for an artifact path back. **Interactive** otherwise. In interactive mode, greet the user and mention that the bundled `bmad-party-mode` and `bmad-advanced-elicitation` skills are available for additional perspectives or deeper challenge.
@@ -63,8 +63,8 @@ Deriving the contract from a living log instead of editing the contract in place
 
 Writes go through the shared script — `{project-root}/_bmad/scripts/memlog.py`, the same location as `resolve_customization.py` (atomic; never read it back except to resume):
 
-- `uv run {project-root}/_bmad/scripts/memlog.py init --workspace {spec-folder} --field topic="<what is being specced>"` — once, at create.
-- `uv run {project-root}/_bmad/scripts/memlog.py append --workspace {spec-folder} --type <decision|constraint|capability|assumption|question|direction|note|event> --text "<one-line gist, reason included>"` — as each lands.
+- `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/memlog.py init --workspace {spec-folder} --field topic="<what is being specced>"` — once, at create.
+- `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/memlog.py append --workspace {spec-folder} --type <decision|constraint|capability|assumption|question|direction|note|event> --text "<one-line gist, reason included>"` — as each lands.
 - Terminal moments (a validation verdict, "spec finalized") are `--type event` entries; the memlog carries no status field.
 
 ## The Operation

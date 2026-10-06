@@ -9,7 +9,7 @@ and no hours, so planning reports that and names no hour fields.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from core.result import Ok, Result, bind, err, fmap, require
@@ -208,7 +208,7 @@ def _cycle(reply: Any, iteration_ref: str) -> IterationReading:
 
 def _active(cycles: tuple[Mapping[str, Any], ...]) -> Mapping[str, Any] | None:
     """The cycle Linear marks active, else the one running today."""
-    today = datetime.now(timezone.utc).date()
+    today = datetime.now(UTC).date()
     return next(
         (cycle for cycle in cycles if cycle.get("isActive") is True),
         next(

@@ -34,7 +34,7 @@ tests), `README.md`, `CHANGELOG.md`, and `THIRD_PARTY_NOTICES.md`.
 Automated (CI, required before tagging):
 
 - lint, format, shellcheck, JSON and schema validation;
-- all test suites on Python 3.10 and 3.12;
+- all test suites on Python 3.12 and 3.13;
 - `claude plugin validate` for the plugin and the marketplace;
 - the built archive installs into sandboxed Claude Code and Codex profiles and a Cursor directory;
   both plugin registrations, the Codex custom agents, and `harness doctor` are checked;

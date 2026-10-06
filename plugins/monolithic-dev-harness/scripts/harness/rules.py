@@ -255,12 +255,15 @@ _OWNED_FILES = (
     (".harness", "settings.json"),
     (".harness", "state", "tracking.json"),
     (".harness", "state", "suspension.json"),
+    (".harness", "state", "decision.json"),
 )
 _OWNED_DIRS = (
     (".harness", "state", "approvals"),
     (".harness", "state", "manual"),
     (".harness", "state", "asked"),
     (".harness", "state", "sessions"),
+    (".harness", "state", "work_sessions"),
+    (".harness", "state", "host_sessions"),
     (".harness", "state", "trackers"),
     (".harness", "state", "adoptions"),
 )
@@ -336,6 +339,34 @@ def shell_writes_matching(
     return None
 
 
+_HOOK_SCRIPT = re.compile(r"(?:^|[\s/'\"=])(?:hook|hook_runtime)\.py\b")
+_HOOK_MODULE = re.compile(
+    r"\bhook_runtime\b|\bharness\.hook\b|\bharness\s+import\s+.*\bhook\b"
+)
+
+
+def runs_harness_hook(command: str) -> bool:
+    """Whether a shell command runs (or copies) the harness's own hook entry points.
+
+    The prompt and answer hooks record the user's answers and approvals from what they read on
+    stdin, so an agent that pipes a payload into them could answer for the user.
+    """
+    return bool(_HOOK_MODULE.search(command)) or (
+        bool(_HOOK_SCRIPT.search(command)) and "harness" in command
+    )
+
+
+def rule_hook_entry(call: ToolCall) -> Decision:
+    """Only the host runs the harness hooks; a shell command that runs them is refused."""
+    if call.kind == "shell" and runs_harness_hook(call.command):
+        return Decision.deny(
+            "hook-entry",
+            "Only the host runs the harness hooks. Running them yourself could record an answer "
+            "or approval the user never gave, so this command is refused.",
+        )
+    return Decision.allow()
+
+
 def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
     """The settings, approvals, manual checks, sessions, and tracker trust are written by people or the harness."""
     if call.kind == "edit":
@@ -350,7 +381,8 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
                 return Decision.deny(
                     "human-owned",
                     f"{_relative(repo, path)} is human-owned. Approvals, manual checks, and tracker trust are "
-                    "recorded from the user's own prompt; sessions change through `harness session`; the "
+                    "recorded from the user's own prompt; checkout sessions change through `harness session`, "
+                    "and work sessions through `harness work-session`; the "
                     "settings are edited by a person (or created once by bootstrap).",
                 )
     if call.kind == "shell":
@@ -563,7 +595,10 @@ def _branch_paths(repo: Path, base: str) -> list[str]:
 
 
 def rule_approval_required(
-    call: ToolCall, repo: Path, policy: TrackerPolicy
+    call: ToolCall,
+    repo: Path,
+    policy: TrackerPolicy,
+    work_session_id: str | None = None,
 ) -> Decision:
     return (
         Decision.deny(
@@ -574,7 +609,8 @@ def rule_approval_required(
             "batch an id such as HB-7Q2K and ask them to reply `approve HB-7Q2K`. You cannot open the "
             "window yourself.",
         )
-        if is_remote_write(call, policy) and state.active_approval(repo) is None
+        if is_remote_write(call, policy)
+        and state.active_approval(repo, work_session_id) is None
         else Decision.allow()
     )
 
@@ -765,7 +801,11 @@ def rule_history_preserved(call: ToolCall) -> Decision:
 
 
 def evaluate(
-    call: ToolCall, repo: Path, settings: Settings, policy: TrackerPolicy
+    call: ToolCall,
+    repo: Path,
+    settings: Settings,
+    policy: TrackerPolicy,
+    work_session_id: str | None = None,
 ) -> Decision:
     """The first rule that denies the call, or allow. A write that passes is logged to its approval."""
     decision = next(
@@ -778,7 +818,7 @@ def evaluate(
                 lambda: rule_feature_branch(call, repo),
                 lambda: rule_draft_reviewed_prs(call, repo, settings),
                 lambda: rule_history_preserved(call),
-                lambda: rule_approval_required(call, repo, policy),
+                lambda: rule_approval_required(call, repo, policy, work_session_id),
                 lambda: rule_generated_files(call, repo, settings),
                 lambda: commit_rules(call, repo, settings),
             )
@@ -787,7 +827,7 @@ def evaluate(
         Decision.allow(),
     )
     approval = (
-        state.active_approval(repo)
+        state.active_approval(repo, work_session_id)
         if decision.allowed and is_remote_write(call, policy)
         else None
     )

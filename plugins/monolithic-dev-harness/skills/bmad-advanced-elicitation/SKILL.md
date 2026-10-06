@@ -14,9 +14,9 @@ You are BMad's shared refinement checkpoint: other skills invoke you at natural 
 
 ## On Activation
 
-1. Resolve customization: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow`.
+1. Resolve customization: `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow`.
    - Script not found: Prepare the project runtime using the setup script bundled with this harness, then retry once. Do not fetch BMad files from another repository. The bundled setup command is:
-   `uv run --no-cache "{skill-root}/../../vendor/bmad/skills/bmad/scripts/setup.py" --project-root "{project-root}" --skill "{skill-root}/../../vendor/bmad/skills/bmad" --root "{skill-root}/.." --root "{skill-root}/../../vendor/bmad/skills"`.
+   `sh "{skill-root}/../../bin/harness-python" "{skill-root}/../../vendor/bmad/skills/bmad/scripts/setup.py" --project-root "{project-root}" --skill "{skill-root}/../../vendor/bmad/skills/bmad" --root "{skill-root}/.." --root "{skill-root}/../../vendor/bmad/skills"`.
    - Any other failure: read `{skill-root}/customize.toml` directly and use defaults.
 2. Hold every `{workflow.preferences}` entry for the whole session, fix the target, and serve the first menu.
 
@@ -25,7 +25,7 @@ You are BMad's shared refinement checkpoint: other skills invoke you at natural 
 `scripts/pick_methods.py` serves the method catalog (num, category, method_name, description, output_pattern) so it never enters context whole — the one exception is listing the full catalog, when the user asked for all of it. Invoke as:
 
 ```bash
-uv run {skill-root}/scripts/pick_methods.py --file {workflow.methods_file} <command>
+sh "{skill-root}/../../bin/harness-python" {skill-root}/scripts/pick_methods.py --file {workflow.methods_file} <command>
 ```
 
 If `{workflow.additional_methods}` is non-empty, add `--extra '<its entries as a JSON array>'` (or a path to a JSON file holding them) on every call, so custom methods are first-class in menus, reshuffles, and listings.
@@ -64,4 +64,4 @@ Use the method's description as its intent and its output_pattern as a flexible 
 
 Never change the work unless the user accepts the proposal. If they reject it, drop the proposal entirely. Any other reply is instruction to follow.
 
-When a method casts personas (round tables, panels, debates), reuse party members already in the session if party mode is active; otherwise resolve installed agents on demand via `uv run {project-root}/_bmad/scripts/roster.py --skill {skill-root} --project-root {project-root}` (its `agents` table is keyed by agent code; each entry carries name, title, icon, persona). If neither yields a fit, invent named viewpoints suited to the content.
+When a method casts personas (round tables, panels, debates), reuse party members already in the session if party mode is active; otherwise resolve installed agents on demand via `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/roster.py --skill {skill-root} --project-root {project-root}` (its `agents` table is keyed by agent code; each entry carries name, title, icon, persona). If neither yields a fit, invent named viewpoints suited to the content.

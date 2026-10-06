@@ -7,18 +7,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event pre-tool",
+            "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event pre-tool",
             "timeout": 15,
             "statusMessage": "Checking harness policy"
           }
         ]
       },
       {
-        "matcher": "^request_user_input$",
+        "matcher": "^request_user_input(_async)?$",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event ask",
+            "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event ask",
             "timeout": 10
           }
         ]
@@ -26,11 +26,11 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "^request_user_input$",
+        "matcher": "^request_user_input(_async)?$",
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event answer",
+            "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event answer",
             "timeout": 10
           }
         ]
@@ -41,7 +41,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python3 \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event prompt",
+            "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event prompt",
             "timeout": 10
           }
         ]

@@ -65,6 +65,9 @@ committed; `.harness/state/` ignored by git).
 - The repository settings: `plugins/monolithic-dev-harness/config/settings.schema.json`.
 - The tracker contract: `plugins/monolithic-dev-harness/config/tracker.schema.json` and
   `plugins/monolithic-dev-harness/scripts/integrations/contracts.py`.
+- The subagent contract: `plugins/monolithic-dev-harness/config/host.schema.json`,
+  `plugins/monolithic-dev-harness/hosts/*.json`, and
+  `plugins/monolithic-dev-harness/scripts/host_adapters/subagents.py`.
 - Host hook payloads: Claude `PreToolUse` / `UserPromptSubmit`; Cursor `preToolUse`,
   `beforeShellExecution`, `beforeMCPExecution`, `beforeSubmitPrompt`.
 - Azure DevOps calls: provider-neutral `tracker_*` and `scm_*` tools from `workflow-integrations` (`skills/azure-devops/references/tool-map.md`).

@@ -57,7 +57,7 @@ The gate in [development.md](development.md#full-outcome-gate), which CI runs on
 
 ## Definition of Done
 
-All suites green on Python 3.10 and 3.12; no skipped rule tests.
+All suites green on Python 3.12 and 3.13; no skipped rule tests.
 
 ## Common Failure Modes
 

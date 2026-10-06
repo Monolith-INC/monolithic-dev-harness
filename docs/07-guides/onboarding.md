@@ -17,7 +17,7 @@ Engineers changing the harness itself. To use the harness, see [user-guide.md](u
 
 ## Prerequisites
 
-Python 3.10+, git, Node.js, Claude Code, and access to the repository.
+Python 3.12+, git, Node.js, Claude Code, and access to the repository.
 
 ## Procedure
 

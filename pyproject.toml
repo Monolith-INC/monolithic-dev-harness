@@ -2,14 +2,16 @@
 # plugin manifests (see CONTRIBUTING.md → Releasing).
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py312"
 extend-exclude = ["AI_Codex", "plugins/monolithic-dev-harness/vendor"]
 
 [tool.ruff.lint]
 # pycodestyle errors, pyflakes, import order, pyupgrade, bugbear, simplify, timezone-aware datetimes
 select = ["E4", "E7", "E9", "F", "I", "UP", "B", "SIM", "DTZ"]
 # the runtime adds its own directories to sys.path before importing siblings
-ignore = ["E402"]
+# UP042: StrEnum changes what str(member) returns, which stored and displayed values rely on.
+# UP046/UP047: moving TypeVar generics to the 3.12 syntax is a separate clean-up.
+ignore = ["E402", "UP042", "UP046", "UP047"]
 
 [tool.ruff.lint.isort]
 # The runtime puts scripts/ and runtime/ on sys.path itself; declare its packages so import order
