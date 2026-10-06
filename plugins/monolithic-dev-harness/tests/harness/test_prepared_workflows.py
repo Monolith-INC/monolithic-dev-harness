@@ -41,7 +41,9 @@ class PreparedWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(prepared.stage_ids("suspend-checks"), ("suspend",))
 
-    def test_every_route_stage_has_resolved_knowledge_skills_and_operations(self) -> None:
+    def test_every_route_stage_has_resolved_knowledge_skills_and_operations(
+        self,
+    ) -> None:
         packages = tuple(
             prepared.prepare_stage(self.project, route_id, stage_id)
             for route_id, stage_ids in prepared.routes().items()
@@ -54,7 +56,10 @@ class PreparedWorkflowTests(unittest.TestCase):
 
     def test_prepare_returns_project_bound_complete_handoff(self) -> None:
         package = prepared.prepare_stage(
-            self.project, "implement-approved-item", "build", original_request="Implement item X"
+            self.project,
+            "implement-approved-item",
+            "build",
+            original_request="Implement item X",
         )
         self.assertEqual(package["project_root"], str(self.project.resolve()))
         self.assertEqual(package["route"]["stages"], ["setup", "build", "verify"])
@@ -66,7 +71,9 @@ class PreparedWorkflowTests(unittest.TestCase):
         self.assertEqual(package["original_request"], "Implement item X")
 
     def test_project_guidance_is_attached_with_digest(self) -> None:
-        package = prepared.prepare_stage(self.project, "investigate-request", "discover")
+        package = prepared.prepare_stage(
+            self.project, "investigate-request", "discover"
+        )
         project_files = {
             Path(item["path"]).relative_to(self.project.resolve()).as_posix(): item
             for item in package["project_knowledge"]
@@ -80,19 +87,32 @@ class PreparedWorkflowTests(unittest.TestCase):
     def test_project_readme_local_links_are_preloaded_once(self) -> None:
         (self.project / "docs").mkdir()
         (self.project / "backlog").mkdir()
-        (self.project / "docs" / "README.md").write_text("Product context\n", encoding="utf-8")
-        (self.project / "backlog" / "README.md").write_text("Backlog context\n", encoding="utf-8")
+        (self.project / "docs" / "README.md").write_text(
+            "Product context\n", encoding="utf-8"
+        )
+        (self.project / "backlog" / "README.md").write_text(
+            "Backlog context\n", encoding="utf-8"
+        )
         (self.project / "README.md").write_text(
             "See [product](docs/) and [backlog](backlog/).\n", encoding="utf-8"
         )
-        package = prepared.prepare_stage(self.project, "investigate-request", "discover")
+        package = prepared.prepare_stage(
+            self.project, "investigate-request", "discover"
+        )
         project_files = {
             Path(item["path"]).relative_to(self.project.resolve()).as_posix(): item
             for item in package["project_knowledge"]
         }
-        self.assertEqual(set(project_files), {"README.md", "AGENTS.md", "docs/README.md", "backlog/README.md"})
-        self.assertEqual(project_files["docs/README.md"]["content"], "Product context\n")
-        self.assertEqual(project_files["backlog/README.md"]["content"], "Backlog context\n")
+        self.assertEqual(
+            set(project_files),
+            {"README.md", "AGENTS.md", "docs/README.md", "backlog/README.md"},
+        )
+        self.assertEqual(
+            project_files["docs/README.md"]["content"], "Product context\n"
+        )
+        self.assertEqual(
+            project_files["backlog/README.md"]["content"], "Backlog context\n"
+        )
 
     def test_recommended_skill_is_resolved_even_without_manifest(self) -> None:
         package = prepared.prepare_stage(self.project, "explore-idea", "ideate")
@@ -105,12 +125,18 @@ class PreparedWorkflowTests(unittest.TestCase):
 
     def test_block_description_is_readable_from_skill_frontmatter(self) -> None:
         package = prepared.prepare_stage(self.project, "prepare-artifacts", "backlog")
-        skill = next(item for item in package["recommended_skills"] if item["name"] == "validate-artifact")
+        skill = next(
+            item
+            for item in package["recommended_skills"]
+            if item["name"] == "validate-artifact"
+        )
         self.assertIn("Validate a single agile artifact", skill["description"])
         self.assertNotEqual(skill["description"], ">")
 
     def test_harness_knowledge_references_are_resolved_with_digests(self) -> None:
-        package = prepared.prepare_stage(self.project, "investigate-request", "discover")
+        package = prepared.prepare_stage(
+            self.project, "investigate-request", "discover"
+        )
         references = {Path(item["path"]).name for item in package["harness_knowledge"]}
         self.assertEqual(
             references,
@@ -132,17 +158,23 @@ class PreparedWorkflowTests(unittest.TestCase):
         )
 
     def test_handoff_does_not_claim_host_tool_availability(self) -> None:
-        package = prepared.prepare_stage(self.project, "implement-approved-item", "build")
+        package = prepared.prepare_stage(
+            self.project, "implement-approved-item", "build"
+        )
         self.assertIn("active host must confirm", package["host_tool_check"])
         self.assertFalse(package["host_tools_checked"])
         self.assertFalse(package["ready"])
 
     def test_discovery_requires_exact_original_request(self) -> None:
-        package = prepared.prepare_stage(self.project, "investigate-request", "discover")
+        package = prepared.prepare_stage(
+            self.project, "investigate-request", "discover"
+        )
         self.assertEqual(package["missing_inputs"], ["original_request"])
         self.assertFalse(package["ready"])
 
-    def test_step_is_ready_only_after_host_confirms_each_adapter_operation(self) -> None:
+    def test_step_is_ready_only_after_host_confirms_each_adapter_operation(
+        self,
+    ) -> None:
         route, stage = "investigate-request", "discover"
         package = prepared.prepare_stage(
             self.project,
@@ -170,17 +202,30 @@ class PreparedWorkflowTests(unittest.TestCase):
 
     def test_missing_project_returns_a_clear_error(self) -> None:
         with self.assertRaisesRegex(prepared.PreparedWorkflowError, "does not exist"):
-            prepared.prepare_stage(self.root / "missing", "investigate-request", "discover")
+            prepared.prepare_stage(
+                self.root / "missing", "investigate-request", "discover"
+            )
 
     def test_unknown_route_and_stage_are_rejected(self) -> None:
-        with self.assertRaisesRegex(prepared.PreparedWorkflowError, "unknown prepared route"):
+        with self.assertRaisesRegex(
+            prepared.PreparedWorkflowError, "unknown prepared route"
+        ):
             prepared.prepare_stage(self.project, "invented", "discover")
-        with self.assertRaisesRegex(prepared.PreparedWorkflowError, "not part of route"):
+        with self.assertRaisesRegex(
+            prepared.PreparedWorkflowError, "not part of route"
+        ):
             prepared.prepare_stage(self.project, "explore-idea", "build")
 
     def test_route_listing_is_read_only_even_with_no_project_setup(self) -> None:
         result = subprocess.run(
-            [sys.executable, str(CLI), "workflow", "routes", "--repo", str(self.project)],
+            [
+                sys.executable,
+                str(CLI),
+                "workflow",
+                "routes",
+                "--repo",
+                str(self.project),
+            ],
             capture_output=True,
             text=True,
             timeout=30,
@@ -213,9 +258,16 @@ class PreparedWorkflowTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         package = json.loads(result.stdout)
-        self.assertIn("knowledge-acquire", {skill["name"] for skill in package["recommended_skills"]})
-        self.assertIn("tracker_describe", {tool["name"] for tool in package["operations"]})
-        self.assertEqual(package["original_request"], "Investigate DAY-001 and prepare its plan")
+        self.assertIn(
+            "knowledge-acquire",
+            {skill["name"] for skill in package["recommended_skills"]},
+        )
+        self.assertIn(
+            "tracker_describe", {tool["name"] for tool in package["operations"]}
+        )
+        self.assertEqual(
+            package["original_request"], "Investigate DAY-001 and prepare its plan"
+        )
         self.assertFalse((self.project / ".harness").exists())
 
     def _fixture_plugin(self, catalog: dict[str, object]) -> Path:
@@ -256,28 +308,40 @@ class PreparedWorkflowTests(unittest.TestCase):
         catalog["stages"]["sample-stage"]["skills"][0]["name"] = "missing"  # type: ignore[index]
         plugin = self._fixture_plugin(catalog)
         with self.assertRaisesRegex(prepared.PreparedWorkflowError, "has no SKILL.md"):
-            prepared.prepare_stage(self.project, "sample-route", "sample-stage", plugin_root=plugin)
+            prepared.prepare_stage(
+                self.project, "sample-route", "sample-stage", plugin_root=plugin
+            )
 
     def test_missing_knowledge_blocks_preparation(self) -> None:
         catalog = self._fixture_catalog()
         catalog["stages"]["sample-stage"]["knowledge"] = ["references/missing.md"]  # type: ignore[index]
         plugin = self._fixture_plugin(catalog)
-        with self.assertRaisesRegex(prepared.PreparedWorkflowError, "knowledge is missing"):
-            prepared.prepare_stage(self.project, "sample-route", "sample-stage", plugin_root=plugin)
+        with self.assertRaisesRegex(
+            prepared.PreparedWorkflowError, "knowledge is missing"
+        ):
+            prepared.prepare_stage(
+                self.project, "sample-route", "sample-stage", plugin_root=plugin
+            )
 
     def test_escaping_knowledge_reference_is_rejected(self) -> None:
         catalog = self._fixture_catalog()
         catalog["stages"]["sample-stage"]["knowledge"] = ["../../outside.md"]  # type: ignore[index]
         plugin = self._fixture_plugin(catalog)
         with self.assertRaisesRegex(prepared.PreparedWorkflowError, "escapes"):
-            prepared.prepare_stage(self.project, "sample-route", "sample-stage", plugin_root=plugin)
+            prepared.prepare_stage(
+                self.project, "sample-route", "sample-stage", plugin_root=plugin
+            )
 
     def test_unknown_operation_blocks_preparation(self) -> None:
         catalog = self._fixture_catalog()
         catalog["stages"]["sample-stage"]["operations"] = ["made_up_tool"]  # type: ignore[index]
         plugin = self._fixture_plugin(catalog)
-        with self.assertRaisesRegex(prepared.PreparedWorkflowError, "unknown operation"):
-            prepared.prepare_stage(self.project, "sample-route", "sample-stage", plugin_root=plugin)
+        with self.assertRaisesRegex(
+            prepared.PreparedWorkflowError, "unknown operation"
+        ):
+            prepared.prepare_stage(
+                self.project, "sample-route", "sample-stage", plugin_root=plugin
+            )
 
     def test_bad_route_stage_mapping_is_reported(self) -> None:
         catalog = self._fixture_catalog()
@@ -289,7 +353,10 @@ class PreparedWorkflowTests(unittest.TestCase):
     def test_suspension_route_is_standalone_and_reads_suspension_status(self) -> None:
         package = prepared.prepare_stage(self.project, "suspend-checks", "suspend")
         self.assertEqual(package["route"]["stages"], ["suspend"])
-        self.assertIn("harness.suspension.status", {tool["name"] for tool in package["operations"]})
+        self.assertIn(
+            "harness.suspension.status",
+            {tool["name"] for tool in package["operations"]},
+        )
 
 
 if __name__ == "__main__":

@@ -55,7 +55,9 @@ def path(repo: Path, session_id: str | None = None) -> Path:
         case identifier:
             from harness import work_sessions
 
-            return work_sessions.root(repo) / state.safe_name(identifier) / "workflow.json"
+            return (
+                work_sessions.root(repo) / state.safe_name(identifier) / "workflow.json"
+            )
 
 
 def archive_terminal(repo: Path, session_id: str | None = None) -> Result[Path]:
@@ -306,15 +308,15 @@ def _load_file(file: Path) -> Result[Workflow]:
             return from_dict(state.read_json(file))
 
 
-def save(
-    repo: Path, workflow: Workflow, session_id: str | None = None
-) -> Result[Path]:
+def save(repo: Path, workflow: Workflow, session_id: str | None = None) -> Result[Path]:
     if session_id is not None:
         from harness import work_sessions
 
         return bind(
             work_sessions.require_active(repo, session_id),
-            lambda selected: _save_scoped(repo, workflow, selected.folder / "workflow.json"),
+            lambda selected: _save_scoped(
+                repo, workflow, selected.folder / "workflow.json"
+            ),
         )
     return _save_scoped(repo, workflow, path(repo))
 

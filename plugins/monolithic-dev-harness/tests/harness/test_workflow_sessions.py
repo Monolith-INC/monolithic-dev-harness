@@ -36,10 +36,16 @@ class WorkflowSessionTest(unittest.TestCase):
         self.assertNotEqual(first_path, second_path)
         self.assertEqual(first_path, first.folder / "workflow.json")
         self.assertEqual(second_path, second.folder / "workflow.json")
-        self.assertEqual(workflow.load(self.project, first.id).value.request, "Investigate DAY-001")
-        self.assertEqual(workflow.load(self.project, second.id).value.request, "Investigate DAY-002")
+        self.assertEqual(
+            workflow.load(self.project, first.id).value.request, "Investigate DAY-001"
+        )
+        self.assertEqual(
+            workflow.load(self.project, second.id).value.request, "Investigate DAY-002"
+        )
 
-    def test_missing_session_workflow_never_falls_back_to_legacy_project_workflow(self) -> None:
+    def test_missing_session_workflow_never_falls_back_to_legacy_project_workflow(
+        self,
+    ) -> None:
         session = self.start_session("Investigate DAY-001")
         legacy = workflow.start("Legacy request", "en").value
         workflow.save(self.project, legacy)
@@ -62,11 +68,17 @@ class WorkflowSessionTest(unittest.TestCase):
         self.assertEqual(legacy_path.read_bytes(), original)
 
     def test_unknown_session_cannot_read_or_create_checkpoints(self) -> None:
-        result = workflow.save(self.project, workflow.start("request", "en").value, "WS-MISSING")
+        result = workflow.save(
+            self.project, workflow.start("request", "en").value, "WS-MISSING"
+        )
 
         self.assertIsInstance(result, Err)
         self.assertEqual(result.failure.code, "session_not_found")
-        self.assertFalse((self.project / ".harness" / "state" / "work_sessions" / "WS-MISSING").exists())
+        self.assertFalse(
+            (
+                self.project / ".harness" / "state" / "work_sessions" / "WS-MISSING"
+            ).exists()
+        )
 
     def test_stopped_session_can_be_inspected_but_not_advanced(self) -> None:
         session = self.start_session("Investigate DAY-001")
@@ -74,7 +86,9 @@ class WorkflowSessionTest(unittest.TestCase):
         workflow.save(self.project, saved, session.id)
         work_sessions.transition(self.project, session.id, "stop")
 
-        self.assertEqual(workflow.load(self.project, session.id).value.request, session.request)
+        self.assertEqual(
+            workflow.load(self.project, session.id).value.request, session.request
+        )
         refused = workflow.save(self.project, saved, session.id)
         self.assertIsInstance(refused, Err)
         self.assertEqual(refused.failure.code, "session_not_active")
@@ -97,12 +111,21 @@ class WorkflowSessionTest(unittest.TestCase):
 
         session = self.start_session("Investigate DAY-001")
         self.assertEqual(run("preference", "language", "en").returncode, 0)
-        started = run("workflow", "start", "--request", session.request, "--session-id", session.id)
+        started = run(
+            "workflow",
+            "start",
+            "--request",
+            session.request,
+            "--session-id",
+            session.id,
+        )
         self.assertEqual(started.returncode, 0, started.stderr)
         loaded = run("workflow", "status", "--session-id", session.id)
         self.assertEqual(loaded.returncode, 0, loaded.stderr)
         self.assertEqual(json.loads(loaded.stdout)["request"], session.request)
-        self.assertFalse((self.project / ".harness" / "state" / "workflow.json").exists())
+        self.assertFalse(
+            (self.project / ".harness" / "state" / "workflow.json").exists()
+        )
 
 
 if __name__ == "__main__":

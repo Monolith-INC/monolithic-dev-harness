@@ -209,7 +209,9 @@ def set_harness_mode(repo: Path, mode: str) -> str:
 # --- questions shown to the user (approval by click) ------------------------------------------
 
 
-def _session_record_path(repo: Path, folder: str, name: str, work_session_id: str | None) -> Path:
+def _session_record_path(
+    repo: Path, folder: str, name: str, work_session_id: str | None
+) -> Path:
     if work_session_id is None:
         return state_dir(repo) / folder / f"{safe_name(name)}.json"
     from harness import work_sessions

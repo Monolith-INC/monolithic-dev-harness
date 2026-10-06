@@ -47,7 +47,12 @@ def create_test_project(configuration_file: str | Path) -> Result[Path]:
                                 kind="run",
                             )
                         )
-                    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as failure:
+                    except (
+                        OSError,
+                        ValueError,
+                        RuntimeError,
+                        subprocess.SubprocessError,
+                    ) as failure:
                         return err(
                             "fixture_creation_failed",
                             f"could not create the configured test project: {failure}",

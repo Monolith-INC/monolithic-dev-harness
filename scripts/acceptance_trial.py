@@ -63,7 +63,9 @@ def prepare(
     runner_temp = trial_root / "runner-tmp"
     preference_home = trial_root / "preferences"
     codex_home = trial_root / "codex-home"
-    auth_source = Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "auth.json"
+    auth_source = (
+        Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "auth.json"
+    )
     try:
         runner_temp.mkdir(mode=0o700)
         preference_home.mkdir(mode=0o700)
@@ -211,9 +213,7 @@ def cleanup_abandoned_runs() -> tuple[Path, ...]:
             ):
                 continue
             pid = marker.get("process_id")
-            if (
-                not isinstance(pid, int)
-            ):
+            if not isinstance(pid, int):
                 continue
             try:
                 os.kill(pid, 0)
@@ -231,9 +231,7 @@ def run_trial(profile: str, settings_override: dict | None, command: list[str]) 
     if not command:
         raise ValueError("Provide the trial command after --.")
     cleanup_abandoned_runs()
-    project = prepare(
-        profile, settings_override, root_prefix=RUN_PREFIX, kind="run"
-    )
+    project = prepare(profile, settings_override, root_prefix=RUN_PREFIX, kind="run")
     try:
         completed = subprocess.run(
             command,
@@ -261,7 +259,9 @@ def summarize_transcript(transcript_path: str) -> dict:
     reads: list[str] = []
     item_types: Counter[str] = Counter()
     invalid_json_lines = 0
-    for line_number, line in enumerate(source.read_text(encoding="utf-8").splitlines(), 1):
+    for line_number, line in enumerate(
+        source.read_text(encoding="utf-8").splitlines(), 1
+    ):
         if not line.strip():
             continue
         try:
@@ -308,7 +308,9 @@ def summarize_transcript(transcript_path: str) -> dict:
             for item in commands.values()
         ),
         "explicit_file_read_requests": len(reads),
-        "unique_read_paths": len({path for path in reads if path != "(path not recorded)"}),
+        "unique_read_paths": len(
+            {path for path in reads if path != "(path not recorded)"}
+        ),
         "non_json_lines": invalid_json_lines,
         "simple_shell_read_requests": len(shell_reads),
         "simple_shell_read_paths": list(shell_reads),
@@ -345,7 +347,9 @@ def _simple_shell_read_paths(command: str) -> tuple[str, ...]:
     if not tokens:
         return ()
     commands = _shell_segments(tokens)
-    return tuple(path for segment in commands for path in _display_command_paths(segment))
+    return tuple(
+        path for segment in commands for path in _display_command_paths(segment)
+    )
 
 
 def _shell_segments(tokens: list[str]) -> tuple[tuple[str, ...], ...]:
@@ -373,14 +377,20 @@ def _display_command_paths(segment: tuple[str, ...]) -> tuple[str, ...]:
     match name:
         case "cat" | "bat" | "less" | "more":
             operands = tuple(
-                token for token in segment[1:] if not token.startswith("-") and token != "-"
+                token
+                for token in segment[1:]
+                if not token.startswith("-") and token != "-"
             )
             return operands
         case "head" | "tail":
             operands = _without_option_arguments(
                 segment[1:], {"-n", "--lines", "-c", "--bytes"}
             )
-            return tuple(token for token in operands if not token.startswith("-") and token != "-")
+            return tuple(
+                token
+                for token in operands
+                if not token.startswith("-") and token != "-"
+            )
         case "sed":
             operands = _without_option_arguments(
                 segment[1:], {"-e", "--expression", "-f", "--file"}
@@ -405,6 +415,8 @@ def _without_option_arguments(
             case False, False:
                 result.append(token)
     return tuple(result)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="operation", required=True)
@@ -432,11 +444,14 @@ def main() -> int:
     run_parser = commands.add_parser(
         "run", help="run a command in a disposable project and clean it up afterwards"
     )
-    run_parser.add_argument("--profile", choices=tuple(PROFILES), default="unconfigured")
+    run_parser.add_argument(
+        "--profile", choices=tuple(PROFILES), default="unconfigured"
+    )
     run_parser.add_argument("--settings")
     run_parser.add_argument("run_command", nargs=argparse.REMAINDER)
     summary_parser = commands.add_parser(
-        "summarize", help="count explicit file reads and command items in a JSONL transcript"
+        "summarize",
+        help="count explicit file reads and command items in a JSONL transcript",
     )
     summary_parser.add_argument("transcript_path")
     args = parser.parse_args()

@@ -24,18 +24,16 @@ class AcceptanceTrialTests(unittest.TestCase):
             self.assertEqual(settings["artifacts_path"], "docs/planning")
             self.assertTrue((project / ".harness/tracker/backlog").is_dir())
             environment = acceptance_trial.runner_environment(str(project))
-            self.assertEqual(
-                Path(environment["TMPDIR"]).stat().st_mode & 0o777, 0o700
-            )
+            self.assertEqual(Path(environment["TMPDIR"]).stat().st_mode & 0o777, 0o700)
             self.assertEqual(
                 Path(environment["HARNESS_USER_STATE_DIR"]).stat().st_mode & 0o777,
                 0o700,
             )
             codex_home = Path(environment["CODEX_HOME"])
             self.assertEqual(codex_home.stat().st_mode & 0o777, 0o700)
-            auth_source = Path(
-                os.environ.get("CODEX_HOME", Path.home() / ".codex")
-            ) / "auth.json"
+            auth_source = (
+                Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "auth.json"
+            )
             if auth_source.is_file():
                 self.assertTrue((codex_home / "auth.json").is_symlink())
         finally:
@@ -133,7 +131,11 @@ class AcceptanceTrialTests(unittest.TestCase):
             events = (
                 {
                     "type": "item.started",
-                    "item": {"id": "cmd-1", "type": "command_execution", "command": "cat README.md"},
+                    "item": {
+                        "id": "cmd-1",
+                        "type": "command_execution",
+                        "command": "cat README.md",
+                    },
                 },
                 {
                     "type": "item.completed",
@@ -145,8 +147,14 @@ class AcceptanceTrialTests(unittest.TestCase):
                         "exit_code": 0,
                     },
                 },
-                {"type": "item.completed", "item": {"type": "file_read", "path": "docs/plan.md"}},
-                {"type": "item.completed", "item": {"type": "file_read", "path": "docs/plan.md"}},
+                {
+                    "type": "item.completed",
+                    "item": {"type": "file_read", "path": "docs/plan.md"},
+                },
+                {
+                    "type": "item.completed",
+                    "item": {"type": "file_read", "path": "docs/plan.md"},
+                },
             )
             transcript.write_text("\n".join(json.dumps(event) for event in events))
             summary = acceptance_trial.summarize_transcript(str(transcript))
@@ -210,7 +218,10 @@ class AcceptanceTrialTests(unittest.TestCase):
             transcript.write_text(
                 "runner warning\n"
                 + json.dumps(
-                    {"type": "item.completed", "item": {"type": "file_read", "path": "README.md"}}
+                    {
+                        "type": "item.completed",
+                        "item": {"type": "file_read", "path": "README.md"},
+                    }
                 )
             )
             summary = acceptance_trial.summarize_transcript(str(transcript))
