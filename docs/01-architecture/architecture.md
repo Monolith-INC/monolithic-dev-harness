@@ -64,7 +64,7 @@ contracts, evidence), and routes every provider call through a place the runtime
 | --- | --- |
 | Skills | Stage procedures. Conductors (`harness`, `implement-story`, `review`) sequence the others. |
 | Reviewer agents | `thermo-nuclear-review-subagent`, `thermo-nuclear-code-quality-review-subagent`; no file-edit tools, pinned to `opus`. |
-| `scripts/host_adapters/` | Translates each host's payload keys, tool names, patch syntax, workspace hints, and response JSON into and out of the generic hook contract. |
+| `scripts/host_adapters/` | Translates each host's payload keys, tool names, patch syntax, workspace hints, and response JSON into and out of the generic hook contract. Each adapter also implements the subagent contract (`subagents.py`), held to its `hosts/<host>.json` declaration. |
 | `scripts/harness/hook.py` | Host-neutral hook orchestration: evaluates the normalized call, then delegates to the workflow policy runtime. |
 | `scripts/harness/rules.py` | The nine named rules; consumes normalized tool kind, command, paths, and arguments. |
 | `scripts/harness/settings.py` | Reads `.harness/settings.json` once per process into a value nothing can change; holds the defaults for omitted sections. |
@@ -157,6 +157,7 @@ Details: [data-model.md](data-model.md).
 
 - `config/settings.schema.json`: the repository settings.
 - `config/tracker.schema.json` and `scripts/integrations/contracts.py`: the tracker contract.
+- `config/host.schema.json` and `scripts/host_adapters/subagents.py`: the subagent contract.
 - `skills/*/manifest.json` — orchestrated skills' input and output schemas.
 - `common/artifact-schema.json` — backlog draft frontmatter.
 - Command contracts: [../02-design/api.md](../02-design/api.md).

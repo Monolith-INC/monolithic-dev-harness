@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://monolithic-dev-harness/config/host.schema.json",
+  "title": "Host declaration",
+  "description": "What the harness can do with subagents on one agent host (`hosts/<host>.json`). The host adapter must behave exactly as declared: an operation declared unsupported returns `unsupported_capability`, and one that answers anyway is refused as an invalid host result. Every claim carries where it came from, and a supported claim must rest on a source, never on an assumption.",
+  "type": "object",
+  "required": ["host", "product", "verified_on", "subagents"],
+  "additionalProperties": false,
+  "properties": {
+    "host": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "The host name the hooks and adapters use; it must match the file name."
+    },
+    "product": {
+      "type": "string",
+      "minLength": 1,
+      "description": "The product and surface every claim applies to."
+    },
+    "verified_on": {
+      "$ref": "#/$defs/date",
+      "description": "When the claims were last checked as a whole. Each claim also carries its own date."
+    },
+    "subagents": {
+      "type": "object",
+      "description": "Each subagent operation the harness can ask of this host.",
+      "required": ["start", "status", "follow_up", "cancel", "events"],
+      "additionalProperties": false,
+      "properties": {
+        "start": {"$ref": "#/$defs/claim"},
+        "status": {"$ref": "#/$defs/claim"},
+        "follow_up": {"$ref": "#/$defs/claim"},
+        "cancel": {"$ref": "#/$defs/claim"},
+        "events": {"$ref": "#/$defs/claim"}
+      }
+    },
+    "notes": {
+      "type": "array",
+      "description": "Prose that fits no field. Nothing reads it.",
+      "items": {"type": "string", "minLength": 1}
+    }
+  },
+  "$defs": {
+    "date": {
+      "type": "string",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"
+    },
+    "claim": {
+      "description": "Whether the harness can do this on the host, and why we believe it. Supported claims need a source; an unsupported one may be unsourced, which means nobody has shown it works, not that the host lacks it.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["supported", "provenance"],
+          "additionalProperties": false,
+          "properties": {
+            "supported": {"const": true},
+            "provenance": {"$ref": "#/$defs/sourced"}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["supported", "provenance"],
+          "additionalProperties": false,
+          "properties": {
+            "supported": {"const": false},
+            "provenance": {
+              "oneOf": [{"$ref": "#/$defs/sourced"}, {"$ref": "#/$defs/unsourced"}]
+            }
+          }
+        }
+      ]
+    },
+    "sourced": {
+      "description": "Ordered by strength: the vendor's documentation or code, then what this project observed on the host. A vendor claim quotes its source verbatim, because a paraphrase is where guessing comes back in.",
+      "oneOf": [
+        {
+          "type": "object",
+          "required": ["level", "source", "retrieved", "quote"],
+          "additionalProperties": false,
+          "properties": {
+            "level": {"enum": ["first-party-doc", "first-party-source"]},
+            "source": {"type": "string", "minLength": 1},
+            "retrieved": {"$ref": "#/$defs/date"},
+            "quote": {"type": "string", "minLength": 1},
+            "caveat": {"type": "string", "minLength": 1}
+          }
+        },
+        {
+          "type": "object",
+          "required": ["level", "source", "retrieved"],
+          "additionalProperties": false,
+          "properties": {
+            "level": {"const": "empirically-verified"},
+            "source": {
+              "type": "string",
+              "minLength": 1,
+              "description": "The test, trial record, or command whose result shows it."
+            },
+            "retrieved": {"$ref": "#/$defs/date"},
+            "caveat": {"type": "string", "minLength": 1}
+          }
+        }
+      ]
+    },
+    "unsourced": {
+      "type": "object",
+      "required": ["level", "caveat"],
+      "additionalProperties": false,
+      "properties": {
+        "level": {"const": "unsourced"},
+        "caveat": {
+          "type": "string",
+          "minLength": 1,
+          "description": "What is missing before this could be claimed."
+        }
+      }
+    }
+  }
+}

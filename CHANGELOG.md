@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- A subagent contract for agent hosts: `SubagentOps` (start, status, follow-up, cancel, events)
+  with typed requests, handles, and statuses. Each host declares in `hosts/<host>.json`, checked
+  against `config/host.schema.json`, which operations it supports and where that claim comes
+  from. Every answer is checked against the declaration and the contract: an undeclared
+  operation returns `unsupported_capability`, and a malformed answer or a crash returns
+  `invalid_host_result`. No host supports any operation yet; each is unsupported until verified.
+
 ## [0.5.4] - 2026-10-06
 
 ### Added

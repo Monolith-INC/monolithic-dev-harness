@@ -8,6 +8,7 @@ from typing import Any
 from policy.events import CanonicalToolEvent, PolicyDecision
 
 from .hook_bridge import parse_policy_event
+from .subagents import SubagentOps, unsupported_ops
 
 
 def parse_codex_payload(
@@ -34,3 +35,8 @@ def format_codex_decision(decision: PolicyDecision) -> dict[str, Any]:
             ),
         }
     }
+
+
+def subagents() -> SubagentOps:
+    """Nothing verified yet (see `hosts/codex.json`), so every operation is unsupported."""
+    return unsupported_ops("codex")

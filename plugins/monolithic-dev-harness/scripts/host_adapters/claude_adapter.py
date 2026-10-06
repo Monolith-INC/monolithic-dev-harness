@@ -6,6 +6,7 @@ from typing import Any
 from policy.events import CanonicalToolEvent, PolicyDecision
 
 from .hook_bridge import parse_policy_event
+from .subagents import SubagentOps, unsupported_ops
 
 
 def parse_claude_payload(
@@ -28,3 +29,8 @@ def format_claude_decision(decision: PolicyDecision) -> dict[str, Any]:
     if decision.is_denied() and decision.reason:
         hook_output["permissionDecisionReason"] = decision.reason
     return {"hookSpecificOutput": hook_output}
+
+
+def subagents() -> SubagentOps:
+    """Nothing verified yet (see `hosts/claude.json`), so every operation is unsupported."""
+    return unsupported_ops("claude")

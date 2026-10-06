@@ -5,6 +5,7 @@ from typing import Any
 from policy.events import CanonicalToolEvent, PolicyDecision
 
 from .hook_bridge import parse_policy_event
+from .subagents import SubagentOps, unsupported_ops
 
 
 def parse_cursor_payload(
@@ -25,3 +26,8 @@ def format_cursor_decision(decision: PolicyDecision) -> dict[str, Any]:
             response["user_message"] = decision.reason
         return response
     return {"permission": "allow"}
+
+
+def subagents() -> SubagentOps:
+    """Nothing verified yet (see `hosts/cursor.json`), so every operation is unsupported."""
+    return unsupported_ops("cursor")
