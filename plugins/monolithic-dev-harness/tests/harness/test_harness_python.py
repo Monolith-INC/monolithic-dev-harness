@@ -93,3 +93,13 @@ def test_cli_wrappers_start_through_the_launcher(wrapper: str) -> None:
     text = (PLUGIN / "bin" / wrapper).read_text()
     assert "bin/harness-python" in text
     assert "exec python3" not in text
+
+
+def test_no_skill_runs_plugin_scripts_with_bare_python() -> None:
+    offenders = [
+        f"{path.relative_to(PLUGIN)}:{number}"
+        for path in (PLUGIN / "skills").glob("*/SKILL.md")
+        for number, line in enumerate(path.read_text().splitlines(), 1)
+        if "<plugin root>/scripts/" in line and "harness-python" not in line
+    ]
+    assert offenders == []

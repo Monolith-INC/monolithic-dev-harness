@@ -14,9 +14,9 @@ come from `.harness/settings.json` → `checks`, where each entry has a `name`, 
 From the repository root:
 
 ```bash
-python3 "<plugin root>/scripts/harness/checks.py"            # committed HEAD (clean tree required)
-python3 "<plugin root>/scripts/harness/checks.py" --staged   # index, only when working files match it exactly
-python3 "<plugin root>/scripts/harness/checks.py" --only <name> ...
+sh "<plugin root>/bin/harness-python" "<plugin root>/scripts/harness/checks.py"            # committed HEAD (clean tree required)
+sh "<plugin root>/bin/harness-python" "<plugin root>/scripts/harness/checks.py" --staged   # index, only when working files match it exactly
+sh "<plugin root>/bin/harness-python" "<plugin root>/scripts/harness/checks.py" --only <name> ...
 ```
 
 The script runs every applicable check, prints each exit code, and writes evidence to

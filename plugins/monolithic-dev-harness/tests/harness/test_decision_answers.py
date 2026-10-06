@@ -25,7 +25,9 @@ def type_prompt(repo: Path, prompt: str, host: str = "codex", session: str = "")
     return run_hook(repo, "prompt", payload, host=host)
 
 
-def chat_decision(repo: Path, session: str | None = None, approval: bool = False) -> None:
+def chat_decision(
+    repo: Path, session: str | None = None, approval: bool = False
+) -> None:
     decisions.begin(
         repo,
         "d1",
