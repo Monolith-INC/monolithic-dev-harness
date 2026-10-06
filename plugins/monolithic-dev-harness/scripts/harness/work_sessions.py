@@ -14,7 +14,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
+from core.result import Ok, Result, attempt, bind, err, fmap, require
 
 from . import state
 
@@ -176,8 +176,6 @@ def list_sessions(project: Path) -> Result[tuple[Session, ...]]:
 
 def route(project: Path, request: str) -> Result[dict[str, Any]]:
     """Return exact-request candidates without changing session state."""
-    from . import workflow
-
     normalized = " ".join(request.split()).casefold()
     return bind(
         require(
@@ -187,9 +185,7 @@ def route(project: Path, request: str) -> Result[dict[str, Any]]:
         ),
         lambda _: bind(
             list_sessions(project),
-            lambda sessions: Ok(
-                _route(request, normalized, sessions, workflow.load(project))
-            ),
+            lambda sessions: Ok(_route(request, normalized, sessions)),
         ),
     )
 
@@ -198,7 +194,6 @@ def _route(
     request: str,
     normalized_request: str,
     sessions: tuple[Session, ...],
-    legacy: Result[Any],
 ) -> dict[str, Any]:
     matches = tuple(
         session
@@ -210,18 +205,14 @@ def _route(
         for session in sessions
         if session.status in (Status.ACTIVE, Status.PAUSED, Status.STOPPED)
     )
-    legacy_workflow = _legacy_summary(legacy)
-    match legacy_workflow, matches, candidates:
-        case dict(), _, _:
-            action = "review_legacy"
-            selected = None
-        case None, (session,), _ if session.status == Status.ACTIVE:
+    match matches, candidates:
+        case (session,), _ if session.status == Status.ACTIVE:
             action = "continue_active"
             selected = session.id
-        case None, _, ():
+        case _, ():
             action = "start_new"
             selected = None
-        case None, _, _:
+        case _:
             action = "ask_user"
             selected = None
     return {
@@ -230,30 +221,7 @@ def _route(
         "session_id": selected,
         "matches": [as_json(session) for session in matches],
         "candidates": [as_json(session) for session in candidates],
-        "legacy_workflow": legacy_workflow,
     }
-
-
-def _legacy_summary(result: Result[Any]) -> dict[str, Any] | None:
-    match result:
-        case Ok(current) if current.status not in ("completed", "cancelled"):
-            point = current.current
-            return {
-                "status": current.status,
-                "request": current.request,
-                "point": {
-                    "id": point.id,
-                    "label": point.label,
-                    "stage": point.stage,
-                    "next_action": point.next_action,
-                },
-            }
-        case Err(failure) if failure.code == "workflow_absent":
-            return None
-        case Err(failure):
-            return {"error": failure.code, "message": failure.message}
-        case _:
-            return None
 
 
 def _read_many(project: Path, folders: tuple[Path, ...]) -> Result[tuple[Session, ...]]:

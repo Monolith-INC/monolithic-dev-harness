@@ -57,9 +57,6 @@ and **Start a new session** as clickable choices. This includes sessions for a d
 the human chooses whether to switch or keep the current work. A paused or stopped session requires
 the human to choose it before running
 `harness work-session resume <id> --repo <project>`. Never silently resume paused or stopped work.
-If the route returns `review_legacy`, show its saved request, stage, and next action. If it may be
-the same work, stop before starting or resuming a session; the user must choose how to handle the
-unbound workflow first. A corrupt legacy record is also a blocker and must be preserved for review.
 
 Keep the selected work-session ID as required context after onboarding. Every workflow command
 must include `--session-id <id>`, including `start`, `checkpoint`, `status`, `list`, `pause`,
@@ -67,10 +64,6 @@ must include `--session-id <id>`, including `start`, `checkpoint`, `status`, `li
 Project settings such as tracker and planning folder remain shared. Onboarding establishes the
 tracker and runtime before session creation. A project work session does not require Git, a project
 contract, or starting the checkout-bound implementation session.
-Never attach an older project-wide workflow to a new session automatically; show it as legacy state
-and keep its checkpoints untouched. If that legacy workflow appears related to the user's request,
-stop before creating another session: the current commands do not yet provide a safe way to choose
-or migrate that unbound workflow.
 
 Use the selected session's exact saved request as the run context. Pass the project root, session
 ID, bundled command, isolated preferences environment, checkpoint, and next action to any delegated

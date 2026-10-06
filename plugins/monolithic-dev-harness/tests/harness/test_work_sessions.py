@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 
 from core.result import Err, Ok
-from harness import work_sessions, workflow
+from harness import work_sessions
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 CLI = PLUGIN_ROOT / "scripts" / "harness" / "cli.py"
@@ -145,42 +145,6 @@ class WorkSessionTest(unittest.TestCase):
         self.assertEqual(result["action"], "start_new")
         self.assertIsNone(result["session_id"])
         self.assertEqual(result["candidates"], [])
-
-    def test_route_surfaces_active_legacy_workflow_instead_of_starting_over(
-        self,
-    ) -> None:
-        previous = workflow.start("Investigate DAY-001", "en").value
-        legacy_path = workflow.save(self.project, previous).value
-        original = legacy_path.read_text(encoding="utf-8")
-
-        result = work_sessions.route(self.project, "Continue DAY-001").value
-
-        self.assertEqual(result["action"], "review_legacy")
-        self.assertEqual(result["request"], "Continue DAY-001")
-        self.assertEqual(
-            result["legacy_workflow"],
-            {
-                "status": "active",
-                "request": "Investigate DAY-001",
-                "point": {
-                    "id": 1,
-                    "label": "First request",
-                    "stage": "discover",
-                    "next_action": "Continue original request",
-                },
-            },
-        )
-        self.assertEqual(legacy_path.read_text(encoding="utf-8"), original)
-
-    def test_route_reports_corrupt_legacy_workflow_as_a_review_blocker(self) -> None:
-        legacy_path = self.project / ".harness" / "state" / "workflow.json"
-        legacy_path.parent.mkdir(parents=True)
-        legacy_path.write_text("{broken", encoding="utf-8")
-
-        result = work_sessions.route(self.project, "Investigate DAY-001").value
-
-        self.assertEqual(result["action"], "review_legacy")
-        self.assertEqual(result["legacy_workflow"]["error"], "invalid_workflow")
 
     def test_route_requires_human_choice_for_paused_or_stopped_exact_match(
         self,
