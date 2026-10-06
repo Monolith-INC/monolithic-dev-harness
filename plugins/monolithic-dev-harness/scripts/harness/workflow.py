@@ -48,35 +48,52 @@ class Workflow:
         return self.points[self.cursor]
 
 
-def path(repo: Path) -> Path:
-    return repo / RELATIVE_PATH
+def path(repo: Path, session_id: str | None = None) -> Path:
+    match session_id:
+        case None:
+            return repo / RELATIVE_PATH
+        case identifier:
+            from harness import work_sessions
+
+            return work_sessions.root(repo) / state.safe_name(identifier) / "workflow.json"
 
 
-def archive_terminal(repo: Path) -> Result[Path]:
+def archive_terminal(repo: Path, session_id: str | None = None) -> Result[Path]:
     """Retain a finished run before a new run replaces the current pointer."""
     return bind(
-        load(repo),
+        load(repo, session_id),
         lambda current: bind(
             require(
                 current.status in TERMINAL_STATUSES,
                 "workflow_active",
                 "only a completed or cancelled workflow can be archived",
             ),
-            lambda _: attempt(
-                lambda: _archive(repo, current),
-                "workflow_unwritable",
-                str(path(repo)),
-                OSError,
-            ),
+            lambda _: _archive_if_active(repo, current, session_id),
         ),
     )
 
 
-def _archive(repo: Path, current: Workflow) -> Path:
-    source = path(repo)
-    destination = (
-        repo / ".harness" / "state" / "workflows" / f"{secrets.token_hex(8)}.json"
+def _archive_if_active(
+    repo: Path, current: Workflow, session_id: str | None
+) -> Result[Path]:
+    from harness import work_sessions
+
+    return bind(
+        Ok(None)
+        if session_id is None
+        else fmap(work_sessions.require_active(repo, session_id), lambda _: None),
+        lambda _: attempt(
+            lambda: _archive(repo, current, session_id),
+            "workflow_unwritable",
+            str(path(repo, session_id)),
+            OSError,
+        ),
     )
+
+
+def _archive(repo: Path, current: Workflow, session_id: str | None = None) -> Path:
+    source = path(repo, session_id)
+    destination = source.parent / "workflows" / f"{secrets.token_hex(8)}.json"
     state.write_json(destination, asdict(current))
     source.unlink()
     return destination
@@ -270,8 +287,18 @@ def _point(raw: Any) -> Result[Point]:
             return err("invalid_workflow", "saved review point is invalid")
 
 
-def load(repo: Path) -> Result[Workflow]:
-    file = path(repo)
+def load(repo: Path, session_id: str | None = None) -> Result[Workflow]:
+    if session_id is not None:
+        from harness import work_sessions
+
+        return bind(
+            work_sessions.select(repo, session_id),
+            lambda selected: _load_file(selected.folder / "workflow.json"),
+        )
+    return _load_file(path(repo))
+
+
+def _load_file(file: Path) -> Result[Workflow]:
     match file.is_file():
         case False:
             return err("workflow_absent", "no workflow has been saved")
@@ -279,7 +306,20 @@ def load(repo: Path) -> Result[Workflow]:
             return from_dict(state.read_json(file))
 
 
-def save(repo: Path, workflow: Workflow) -> Result[Path]:
+def save(
+    repo: Path, workflow: Workflow, session_id: str | None = None
+) -> Result[Path]:
+    if session_id is not None:
+        from harness import work_sessions
+
+        return bind(
+            work_sessions.require_active(repo, session_id),
+            lambda selected: _save_scoped(repo, workflow, selected.folder / "workflow.json"),
+        )
+    return _save_scoped(repo, workflow, path(repo))
+
+
+def _save_scoped(repo: Path, workflow: Workflow, destination: Path) -> Result[Path]:
     return bind(
         attempt(
             lambda: state.ensure_local_exclude(repo),
@@ -289,17 +329,17 @@ def save(repo: Path, workflow: Workflow) -> Result[Path]:
             subprocess.TimeoutExpired,
         ),
         lambda _: attempt(
-            lambda: _save(repo, workflow),
+            lambda: _save(destination, workflow),
             "workflow_unwritable",
-            str(path(repo)),
+            str(destination),
             OSError,
         ),
     )
 
 
-def _save(repo: Path, workflow: Workflow) -> Path:
-    state.write_json(path(repo), asdict(workflow))
-    return path(repo)
+def _save(destination: Path, workflow: Workflow) -> Path:
+    state.write_json(destination, asdict(workflow))
+    return destination
 
 
 def file_digest(file: Path) -> Result[str]:

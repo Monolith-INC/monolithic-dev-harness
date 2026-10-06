@@ -255,12 +255,16 @@ _OWNED_FILES = (
     (".harness", "settings.json"),
     (".harness", "state", "tracking.json"),
     (".harness", "state", "suspension.json"),
+    (".harness", "state", "policies.json"),
+    (".harness", "state", "decision.json"),
 )
 _OWNED_DIRS = (
     (".harness", "state", "approvals"),
     (".harness", "state", "manual"),
     (".harness", "state", "asked"),
     (".harness", "state", "sessions"),
+    (".harness", "state", "work_sessions"),
+    (".harness", "state", "host_sessions"),
     (".harness", "state", "trackers"),
     (".harness", "state", "adoptions"),
 )
@@ -350,7 +354,8 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
                 return Decision.deny(
                     "human-owned",
                     f"{_relative(repo, path)} is human-owned. Approvals, manual checks, and tracker trust are "
-                    "recorded from the user's own prompt; sessions change through `harness session`; the "
+                    "recorded from the user's own prompt; checkout sessions change through `harness session`, "
+                    "and work sessions through `harness work-session`; the "
                     "settings are edited by a person (or created once by bootstrap).",
                 )
     if call.kind == "shell":

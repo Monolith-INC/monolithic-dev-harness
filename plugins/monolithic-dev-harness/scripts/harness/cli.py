@@ -5,7 +5,8 @@ harness version
 harness doctor [--repo <dir>] [--tools]
 harness bootstrap --repo <dir> [--inspect | --propose | --apply-digest <hash>]
 harness session start <work item> [--workflow <name>] | status | pause | resume | close
-harness workflow start | checkpoint | list | status | back | pause | resume | cancel | complete
+harness work-session route --request <text> | start --request <text> | list | select <id> | pause|stop|resume|complete <id>
+harness workflow start | checkpoint | list | status | routes | prepare | back | pause | resume | cancel | complete [--session-id <id>]
 harness preference show | language <en|pt-br>
 harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...]
 harness adoption assess | plan | status | materialize ...
@@ -17,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import secrets
 import shutil
 import subprocess
 import sys
@@ -38,15 +40,20 @@ from core.result import (  # noqa: E402
 )
 from harness import (  # noqa: E402
     adoption,
+    decisions,
     gitstate,
     knowledge,
     local_tracker,
+    policies,
     preferences,
+    prepared_workflows,
     sessions,
     settings,
     state,
+    work_sessions,
     workflow,
 )
+from host_adapters.interactions import present  # noqa: E402
 from integrations import (  # noqa: E402
     branches,
     onboarding,
@@ -292,6 +299,41 @@ def session_command(args: argparse.Namespace) -> int:
                     lambda session: f"{session.id}: {session.phase.value}",
                 )
             )
+
+
+def work_session_command(args: argparse.Namespace) -> int:
+    project = Path(args.repo).resolve()
+    match args.operation:
+        case "start":
+            result = fmap(
+                work_sessions.start(project, args.request or ""), work_sessions.as_json
+            )
+        case "list":
+            result = fmap(
+                work_sessions.list_sessions(project),
+                lambda sessions: [
+                    work_sessions.as_json(session) for session in sessions
+                ],
+            )
+        case "route":
+            result = work_sessions.route(project, args.request or "")
+        case "select" | "status":
+            result = fmap(
+                work_sessions.select(project, args.session_id or ""),
+                work_sessions.as_json,
+            )
+        case "pause" | "stop" | "resume" | "complete":
+            result = fmap(
+                work_sessions.transition(
+                    project, args.session_id or "", args.operation
+                ),
+                work_sessions.as_json,
+            )
+        case _:
+            return 2
+    return _print(
+        fmap(result, lambda value: json.dumps(value, ensure_ascii=False, indent=2))
+    )
 
 
 def _started(session: sessions.Session) -> str:
@@ -552,12 +594,72 @@ def suspension_command(args: argparse.Namespace) -> int:
     )
 
 
-def _workflow_result(repo: Path, result: Result[workflow.Workflow]) -> int:
+def policies_command(args: argparse.Namespace) -> int:
+    repo = Path(args.repo).resolve()
+    match args.operation:
+        case "status":
+            print(json.dumps(policies.status(repo)))
+            return 0
+        case "suspend" | "resume":
+            return _print(fmap(policies.change(repo, args.operation), json.dumps))
+        case _:
+            return 2
+
+
+def decision_command(args: argparse.Namespace) -> int:
+    repo = Path(args.repo).resolve()
+    match args.operation:
+        case "status":
+            print(decisions.status(repo, args.session_id))
+            return 0
+        case "present":
+            key = "HD-" + secrets.token_hex(8)
+            shown = present(
+                {
+                    "id": key,
+                    "header": "Review",
+                    "question": args.question or "",
+                    "options": [
+                        {"label": option, "description": ""}
+                        for option in args.option or ()
+                    ],
+                },
+                args.host,
+                args.blocking_available,
+                args.async_available,
+            )
+            return _print(
+                bind(
+                    _workflow_artifacts(repo, args.artifact),
+                    lambda artifacts: fmap(
+                        decisions.begin(
+                            repo,
+                            key,
+                            args.question or "",
+                            tuple(args.option or ()),
+                            shown["transport"],
+                            artifacts,
+                            args.approval,
+                            work_session_id=args.session_id,
+                        ),
+                        lambda _: json.dumps(
+                            {**shown, "decision_id": key, "state": "waiting_for_human"}
+                        ),
+                    ),
+                )
+            )
+        case _:
+            return 2
+
+
+def _workflow_result(
+    repo: Path, result: Result[workflow.Workflow], session_id: str | None = None
+) -> int:
     return _print(
         bind(
             result,
             lambda current: fmap(
-                workflow.save(repo, current),
+                workflow.save(repo, current, session_id),
                 lambda _: json.dumps(asdict(current), indent=2, sort_keys=True),
             ),
         )
@@ -565,8 +667,15 @@ def _workflow_result(repo: Path, result: Result[workflow.Workflow]) -> int:
 
 
 def _workflow_point(repo: Path, args: argparse.Namespace) -> Result[workflow.Workflow]:
+    if decisions.waiting(repo, args.session_id):
+        return Err(
+            Failure(
+                "decision_pending",
+                "wait for the human's answer before advancing the workflow",
+            )
+        )
     return bind(
-        workflow.load(repo),
+        workflow.load(repo, args.session_id),
         lambda current: bind(
             _workflow_artifacts(repo, args.artifact),
             lambda artifacts: workflow.add_point(
@@ -603,7 +712,9 @@ def _workflow_artifact(repo: Path, name: str) -> Result[tuple[str, str]]:
     )
 
 
-def _workflow_resume(repo: Path, point_id: int | None) -> Result[workflow.Workflow]:
+def _workflow_resume(
+    repo: Path, point_id: int | None, session_id: str | None = None
+) -> Result[workflow.Workflow]:
     def checked(current: workflow.Workflow) -> Result[workflow.Workflow]:
         return bind(
             workflow.resume(current, point_id),
@@ -624,10 +735,12 @@ def _workflow_resume(repo: Path, point_id: int | None) -> Result[workflow.Workfl
             ),
         )
 
-    return bind(workflow.load(repo), checked)
+    return bind(workflow.load(repo, session_id), checked)
 
 
-def _workflow_start(repo: Path, request: str) -> Result[workflow.Workflow]:
+def _workflow_start(
+    repo: Path, request: str, session_id: str | None = None
+) -> Result[workflow.Workflow]:
     def begin(_: object) -> Result[workflow.Workflow]:
         return bind(
             preferences.language(),
@@ -641,24 +754,73 @@ def _workflow_start(repo: Path, request: str) -> Result[workflow.Workflow]:
             ),
         )
 
-    match workflow.load(repo):
+    match workflow.load(repo, session_id):
         case Ok(current) if current.status in workflow.TERMINAL_STATUSES:
-            return bind(workflow.archive_terminal(repo), begin)
+            return bind(workflow.archive_terminal(repo, session_id), begin)
         case Ok():
             return Err(Failure("workflow_exists", "a workflow is already saved"))
         case Err(failure) if failure.code == "workflow_absent":
-            return begin(None)
+            if session_id is None:
+                return begin(None)
+            return bind(
+                work_sessions.select(repo, session_id),
+                lambda session: bind(
+                    require(
+                        not request or request.strip() == session.request,
+                        "invalid_workflow",
+                        "the workflow request must match its work session",
+                    ),
+                    begin,
+                ),
+            )
         case Err() as failure:
             return failure
 
 
 def workflow_command(args: argparse.Namespace) -> int:
     repo = _repo(args.repo)
+    if decisions.waiting(repo, args.session_id) and args.operation not in (
+        "status",
+        "list",
+        "pause",
+        "cancel",
+        "back",
+        "routes",
+        "prepare",
+    ):
+        return _print(
+            Err(
+                Failure(
+                    "decision_pending",
+                    "wait for the human's answer before advancing the workflow",
+                )
+            )
+        )
     match args.operation:
+        case "routes":
+            try:
+                print(json.dumps(prepared_workflows.routes(), indent=2, sort_keys=True))
+                return 0
+            except prepared_workflows.PreparedWorkflowError as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
+        case "prepare":
+            try:
+                package = prepared_workflows.prepare_stage(
+                    repo,
+                    args.route or "",
+                    args.prepared_stage or "",
+                    original_request=args.request or "",
+                )
+            except prepared_workflows.PreparedWorkflowError as exc:
+                print(str(exc), file=sys.stderr)
+                return 2
+            print(json.dumps(package, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
         case "status":
             return _print(
                 fmap(
-                    workflow.load(repo),
+                    workflow.load(repo, args.session_id),
                     lambda current: json.dumps(
                         asdict(current), indent=2, sort_keys=True
                     ),
@@ -667,7 +829,7 @@ def workflow_command(args: argparse.Namespace) -> int:
         case "list":
             return _print(
                 fmap(
-                    workflow.load(repo),
+                    workflow.load(repo, args.session_id),
                     lambda current: json.dumps(
                         {
                             "current_point": current.current.id,
@@ -691,14 +853,22 @@ def workflow_command(args: argparse.Namespace) -> int:
                 )
             )
         case "start":
-            return _workflow_result(repo, _workflow_start(repo, args.request or ""))
+            return _workflow_result(
+                repo,
+                _workflow_start(repo, args.request or "", args.session_id),
+                args.session_id,
+            )
         case "checkpoint":
-            return _workflow_result(repo, _workflow_point(repo, args))
+            return _workflow_result(repo, _workflow_point(repo, args), args.session_id)
         case "pause":
-            return _workflow_result(repo, bind(workflow.load(repo), workflow.pause))
+            return _workflow_result(
+                repo,
+                bind(workflow.load(repo, args.session_id), workflow.pause),
+                args.session_id,
+            )
         case "back":
             result = bind(
-                workflow.load(repo),
+                workflow.load(repo, args.session_id),
                 lambda current: workflow.navigate(current, args.point),
             )
             match result:
@@ -706,25 +876,29 @@ def workflow_command(args: argparse.Namespace) -> int:
                     state.revoke_approvals(repo)
                 case _:
                     pass
-            return _workflow_result(repo, result)
+            return _workflow_result(repo, result, args.session_id)
         case "resume":
-            result = _workflow_resume(repo, args.point)
+            result = _workflow_resume(repo, args.point, args.session_id)
             match result:
                 case Ok():
                     state.revoke_approvals(repo)
                 case _:
                     pass
-            return _workflow_result(repo, result)
+            return _workflow_result(repo, result, args.session_id)
         case "cancel":
-            result = bind(workflow.load(repo), workflow.cancel)
+            result = bind(workflow.load(repo, args.session_id), workflow.cancel)
             match result:
                 case Ok():
                     state.revoke_approvals(repo)
                 case _:
                     pass
-            return _workflow_result(repo, result)
+            return _workflow_result(repo, result, args.session_id)
         case "complete":
-            return _workflow_result(repo, bind(workflow.load(repo), workflow.complete))
+            return _workflow_result(
+                repo,
+                bind(workflow.load(repo, args.session_id), workflow.complete),
+                args.session_id,
+            )
         case _:
             return 2
 
@@ -788,6 +962,29 @@ def main(argv: list[str] | None = None) -> int:
         help="required for feature-implementation: Feature branch this Story branch descends from",
     )
     session_parser.add_argument("--repo", default=".")
+    work_session_parser = sub.add_parser(
+        "work-session",
+        help="start, choose, pause, stop, or resume project work sessions",
+    )
+    work_session_parser.add_argument(
+        "operation",
+        choices=(
+            "start",
+            "list",
+            "route",
+            "select",
+            "status",
+            "pause",
+            "stop",
+            "resume",
+            "complete",
+        ),
+    )
+    work_session_parser.add_argument("session_id", nargs="?")
+    work_session_parser.add_argument(
+        "--request", help="the exact request for a new work session"
+    )
+    work_session_parser.add_argument("--repo", default=".")
     workflow_parser = sub.add_parser(
         "workflow", help="save, navigate, pause, resume, cancel, or complete a workflow"
     )
@@ -798,6 +995,8 @@ def main(argv: list[str] | None = None) -> int:
             "checkpoint",
             "status",
             "list",
+            "routes",
+            "prepare",
             "back",
             "pause",
             "resume",
@@ -806,7 +1005,13 @@ def main(argv: list[str] | None = None) -> int:
         ),
     )
     workflow_parser.add_argument("--repo", default=".")
-    workflow_parser.add_argument("--request")
+    workflow_parser.add_argument(
+        "--session-id", help="save or load this project's independent work session"
+    )
+    workflow_parser.add_argument(
+        "--request",
+        help="start a workflow or include the exact request in a prepared handoff",
+    )
     workflow_parser.add_argument("--point", type=int)
     workflow_parser.add_argument("--stage", choices=workflow.STAGES)
     workflow_parser.add_argument("--label")
@@ -815,6 +1020,30 @@ def main(argv: list[str] | None = None) -> int:
     workflow_parser.add_argument("--pending")
     workflow_parser.add_argument("--next-action")
     workflow_parser.add_argument("--write-id", action="append")
+    workflow_parser.add_argument("--route", help="prepared route to inspect")
+    workflow_parser.add_argument(
+        "--prepared-stage", help="stage within a prepared route to inspect"
+    )
+    decision_parser = sub.add_parser(
+        "decision", help="present a host-adapted decision and wait for the human"
+    )
+    decision_parser.add_argument("operation", choices=("present", "status"))
+    decision_parser.add_argument("--repo", default=".")
+    decision_parser.add_argument("--session-id", help="scope the question to a project work session")
+    decision_parser.add_argument(
+        "--host", choices=("codex", "claude", "cursor", "text"), default="text"
+    )
+    decision_parser.add_argument("--blocking-available", action="store_true")
+    decision_parser.add_argument("--async-available", action="store_true")
+    decision_parser.add_argument("--question")
+    decision_parser.add_argument("--option", action="append")
+    decision_parser.add_argument("--artifact", action="append")
+    decision_parser.add_argument("--approval", action="store_true")
+    policies_parser = sub.add_parser(
+        "policies", help="suspend or restore harness checks on the human's request"
+    )
+    policies_parser.add_argument("operation", choices=("suspend", "resume", "status"))
+    policies_parser.add_argument("--repo", default=".")
     preference_parser = sub.add_parser(
         "preference", help="show or set user-level preferences"
     )
@@ -883,10 +1112,16 @@ def main(argv: list[str] | None = None) -> int:
         return knowledge_command(args)
     if args.command == "session":
         return session_command(args)
+    if args.command == "work-session":
+        return work_session_command(args)
     if args.command == "workflow":
         return workflow_command(args)
     if args.command == "preference":
         return preference_command(args)
+    if args.command == "policies":
+        return policies_command(args)
+    if args.command == "decision":
+        return decision_command(args)
     if args.command == "tracker":
         return tracker_command(args)
     if args.command == "adoption":

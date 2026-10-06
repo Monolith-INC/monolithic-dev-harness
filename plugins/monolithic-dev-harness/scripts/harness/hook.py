@@ -37,15 +37,23 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
 from core.result import Err, Ok  # noqa: E402
 from harness import (  # noqa: E402
     adoption,
+    decisions,
     gitstate,
     globs,
+    policies,
     questions,
     rules,
     settings,
     state,
     tracker_policy,
 )
-from host_adapters import hook_bridge  # noqa: E402
+from host_adapters import hook_bridge, work_session_context  # noqa: E402
+from host_adapters.interactions import (
+    normalize_question,
+    prompt_answer,
+    question_transport,
+    reply_payload,
+)  # noqa: E402
 
 # The hosts give the hook 15 seconds and treat a timeout as "no decision", which lets the call
 # through. The rules get less than that, and running out counts as a failure.
@@ -138,6 +146,23 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     call = _tool_call(host, event, payload)
     repo = _workspace(payload, host)
+    if policies.control_command(
+        call.command, repo, call.cwd
+    ) or decisions.status_command(call.command, repo, call.cwd):
+        _emit_decision(host, rules.Decision.allow())
+        return 0
+    if policies.suspended(repo):
+        _emit_decision(host, rules.rule_human_owned(call, repo))
+        return 0
+    if decisions.waiting(repo) and rules.is_write_class(call):
+        _emit_decision(
+            host,
+            rules.Decision.deny(
+                "decision-pending",
+                "Wait for the human's answer before continuing this run.",
+            ),
+        )
+        return 0
     if not settings.governed(repo):
         # Not a governed repository: the harness is opt-in per repo (bootstrap writes the settings).
         _emit_decision(host, rules.Decision.allow())
@@ -291,7 +316,49 @@ def _switch_harness(repo: Path, operation: str) -> str:
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     prompt = hook_bridge.prompt_text(payload)
     repo = _workspace(payload, host)
+    context = work_session_context.for_payload(repo, host, payload)
+    if isinstance(context, Err):
+        if output := hook_bridge.format_prompt(host, [context.failure.message]):
+            print(output)
+        return 0
+    work_session_id = context.value
     notes: list[str] = []
+    pending, decision_session_id = decisions.pending_scope(repo, work_session_id)
+    pending = pending or {}
+    reply = (
+        prompt_answer(host, prompt, pending)
+        if pending.get("status") == "pending"
+        else None
+    )
+    if reply is not None and reply[2] == "async":
+        return handle_answer(
+            host,
+            reply_payload(
+                str(repo), pending, reply, str(payload.get("session_id") or "")
+            ),
+            delayed=True,
+        )
+    if reply is not None:
+        result = decisions.resolve(
+            repo,
+            *reply,
+            work_session_id=decision_session_id,
+        )
+        match result:
+            case Ok(found):
+                notes.append(f"[harness] human decision recorded: {found['answer']}")
+                if (
+                    found.get("approval")
+                    and str(found["answer"]).casefold() in questions.APPROVE_LABELS
+                ):
+                    approval_id = questions.approval_id(str(found["id"]))
+                    state.open_approval(repo, approval_id, DEFAULT_WINDOW_MINUTES)
+                    notes.append(_pin_approved_notes(repo, approval_id))
+            case Err(failure):
+                notes.append(f"[harness] decision not recorded: {failure.message}")
+        if output := hook_bridge.format_prompt(host, notes):
+            print(output)
+        return 0
     if not settings.governed(repo):
         if output := hook_bridge.format_prompt(host, []):
             print(output)
@@ -338,7 +405,47 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
     repo = _governed(payload, host)
     if repo is None:
         return 0
-    tool_input = hook_bridge.question_input(payload)
+    if policies.suspended(repo):
+        return 0
+    context = work_session_context.for_payload(repo, host, payload)
+    if isinstance(context, Err):
+        _emit_decision(
+            host, rules.Decision.deny("work-session-context", context.failure.message)
+        )
+        return 0
+    work_session_id = context.value
+    pending, pending_session_id = decisions.pending_scope(repo, work_session_id)
+    pending = pending or {}
+    tool_input = normalize_question(host, hook_bridge.question_input(payload))
+    first = (tool_input.get("questions") or [{}])[0]
+    preparing = (
+        pending.get("transport") in ("blocking", "async")
+        and pending.get("transport")
+        == question_transport(host, str(payload.get("tool_name", "")))
+        and (
+            first.get("id") == pending.get("id")
+            or (
+                pending.get("transport") == "async"
+                and first.get("question") == pending.get("question")
+            )
+        )
+        and not pending.get("presentation_id")
+    )
+    decision_session_id = pending_session_id if preparing else work_session_id
+    if (
+        decisions.waiting(repo, work_session_id)
+        if work_session_id is not None
+        else decisions.any_waiting(repo)
+    ) and not preparing:
+        _emit_decision(
+            host,
+            rules.Decision.deny(
+                "decision-pending",
+                "Answer the current question before presenting another.",
+            ),
+        )
+        return 0
+    tool_input = normalize_question(host, hook_bridge.question_input(payload))
     found = questions.problems(tool_input)
     # While suspended only the wording check is off: the checks below pin what a click approves.
     if found and state.harness_mode(repo) != "suspended":
@@ -391,7 +498,50 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
     detail = {**tracker_detail, **manual_detail, **adoption_detail}
     tool_use_id = hook_bridge.question_id(payload)
     if tool_use_id:
-        state.mark_asked(repo, questions.marker_name(tool_use_id), detail)
+        first = (tool_input.get("questions") or [{}])[0]
+        from harness import workflow
+
+        current = workflow.load(repo, decision_session_id)
+        artifacts = current.value.current.artifacts if isinstance(current, Ok) else ()
+        result = (
+            decisions.bind_question(
+                repo,
+                str(pending.get("id", "")),
+                tool_use_id,
+                str(first.get("question", "")),
+                tuple(
+                    str(option.get("label", ""))
+                    for option in first.get("options", ())
+                    if isinstance(option, dict)
+                ),
+                work_session_id=decision_session_id,
+            )
+            if preparing
+            else decisions.begin(
+                repo,
+                tool_use_id,
+                str(first.get("question", "")),
+                tuple(
+                    str(option.get("label", ""))
+                    for option in first.get("options", ())
+                    if isinstance(option, dict)
+                ),
+                question_transport(host, str(payload.get("tool_name", ""))),
+                artifacts,
+                work_session_id=work_session_id,
+            )
+        )
+        if isinstance(result, Err):
+            _emit_decision(
+                host, rules.Decision.deny("decision-invalid", result.failure.message)
+            )
+            return 0
+        state.mark_asked(
+            repo,
+            questions.marker_name(tool_use_id),
+            detail,
+            decision_session_id or work_session_id,
+        )
     return 0
 
 
@@ -471,16 +621,55 @@ def _adoption_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any]
                     return None
 
 
-def handle_answer(host: str, payload: dict[str, Any]) -> int:
+def handle_answer(host: str, payload: dict[str, Any], *, delayed: bool = False) -> int:
     """After the user answers: an `Approve` click opens an approval window."""
     repo = _governed(payload, host)
     tool_use_id = hook_bridge.question_id(payload)
     if repo is None or not tool_use_id:
         return 0
-    asked = state.take_asked(repo, questions.marker_name(tool_use_id))
+    context = work_session_context.for_payload(repo, host, payload)
+    if isinstance(context, Err):
+        print(hook_bridge.format_answer_context(context.failure.message))
+        return 0
+    work_session_id = context.value
+    pending, decision_session_id = decisions.pending_scope(repo, work_session_id)
+    pending = pending or {}
+    if pending.get("transport") == "async" and not delayed:
+        return 0  # asynchronous tool completion is delivery, never a human reply
+    if pending.get("status") == "pending":
+        tool_input = normalize_question(host, hook_bridge.question_input(payload))
+        response = questions.answer(tool_input, hook_bridge.answer_response(payload))
+        if response is None:
+            return 0  # delivery acknowledgment is not a human answer
+        chosen = next(
+            (
+                str(option)
+                for option in pending.get("options", ())
+                if questions._choice_label(str(option)).casefold()
+                == questions._choice_label(response).casefold()
+            ),
+            response,
+        )
+        result = decisions.resolve(
+            repo,
+            tool_use_id,
+            chosen,
+            str(pending.get("transport")),
+            work_session_id=pending.get("work_session_id") or None,
+        )
+        if isinstance(result, Err):
+            print(
+                hook_bridge.format_answer_context(
+                    f"[harness] decision not recorded: {result.failure.message}"
+                )
+            )
+            return 0
+    asked = state.take_asked(
+        repo, questions.marker_name(tool_use_id), decision_session_id
+    )
     if asked is None:
         return 0  # the question never passed the check, so its answer opens nothing
-    tool_input = hook_bridge.question_input(payload)
+    tool_input = normalize_question(host, hook_bridge.question_input(payload))
     match asked.get("adoption"):
         case dict() as plan:
             chosen = questions.adoption_choice(

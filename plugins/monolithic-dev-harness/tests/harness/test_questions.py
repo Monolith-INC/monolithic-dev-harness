@@ -142,8 +142,8 @@ class ChoiceContractTests(unittest.TestCase):
         fallback = questions.render_choice(choice, "pt-br", "text", False)
         self.assertEqual(codex["questions"][0]["id"], "language")
         self.assertEqual(codex["questions"][0]["options"][0]["label"], "Inglês")
-        self.assertIn("error", fallback)
-        self.assertNotIn("text", fallback)
+        self.assertEqual(fallback["transport"], "chat")
+        self.assertIn("end the turn", fallback["instruction"])
         self.assertEqual(questions.problems(codex), [])
 
     def test_approval_requires_clickable_control(self) -> None:
@@ -175,7 +175,9 @@ class ChoiceContractTests(unittest.TestCase):
         self.assertNotIn("text", fallback)
         self.assertNotIn("questions", fallback)
         self.assertIn("questions", questions.render_choice(choice, "en", "codex", True))
-        self.assertIn("error", questions.render_choice(choice, "en", "text", False))
+        self.assertEqual(
+            questions.render_choice(choice, "en", "text", False)["transport"], "chat"
+        )
 
 
 class ApprovalByClickTests(unittest.TestCase):

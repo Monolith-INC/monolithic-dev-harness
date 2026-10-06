@@ -18,8 +18,8 @@ from typing import Any
 
 from core.result import Err, Ok, Result, attempt, bind, err, fmap
 from core.schema import validate
+from harness import decisions, policies, state
 from harness import settings as repo_settings
-from harness import state
 from harness.settings import Settings
 
 from . import artifacts, registry, scm
@@ -206,6 +206,19 @@ def _known(name: str) -> Result[Mapping[str, Any]]:
 def _route(
     name: str, args: Mapping[str, Any], root: Path, loaded: Result[Settings]
 ) -> Result[Any]:
+    if not policies.suspended(root) and decisions.waiting(root) and name not in {
+        "tracker_describe",
+        "tracker_get_work_item",
+        "tracker_search_work_items",
+        "tracker_list_children",
+        "tracker_list_artifacts",
+        "scm_get_pull_request",
+        "scm_list_review_threads",
+        "workflow_tracking_status",
+    }:
+        return err(
+            "decision_pending", "wait for the human's answer before continuing this run"
+        )
     match name.split("_", 1)[0]:
         case "workflow":
             return _workflow(name, root)

@@ -14,7 +14,7 @@
         ]
       },
       {
-        "matcher": "^request_user_input$",
+        "matcher": "^request_user_input(_async)?$",
         "hooks": [
           {
             "type": "command",
@@ -26,7 +26,7 @@
     ],
     "PostToolUse": [
       {
-        "matcher": "^request_user_input$",
+        "matcher": "^request_user_input(_async)?$",
         "hooks": [
           {
             "type": "command",

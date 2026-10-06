@@ -24,6 +24,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from host_adapters.interactions import present
+
 MAX_QUESTION_WORDS = 50
 MAX_DESCRIPTION_WORDS = 25
 APPROVE_LABELS = frozenset({"approve", "aprovar", "aprovo"})
@@ -58,8 +60,9 @@ def render_choice(
     language: str,
     host: str,
     native_available: bool,
+    async_available: bool = False,
 ) -> dict[str, Any]:
-    """One decision contract, shown only through a clickable native control."""
+    """Localize the shared decision; the host adapter owns its presentation."""
     portuguese = language == "pt-br"
     options = tuple(
         {
@@ -73,34 +76,35 @@ def render_choice(
     )
     question = choice.question_pt_br if portuguese else choice.question_en
     header = choice.header_pt_br if portuguese else choice.header_en
-    match native_available, len(options) <= 3, choice.approval:
-        case True, True, _ if not choice.approval or any(
-            item["label"].strip().lower() in APPROVE_LABELS for item in options
-        ):
-            return {
-                "host": host,
-                **({"isBlocking": True} if host == "codex" else {}),
-                "questions": [
-                    {
-                        **(
-                            {"id": choice.id}
-                            if host == "codex"
-                            else {"multiSelect": False}
-                        ),
-                        "header": header,
-                        "question": question,
-                        "options": [
-                            {"label": item["label"], "description": item["description"]}
-                            for item in options
-                        ],
-                    }
-                ],
-            }
-        case _:
-            return {
-                "host": host,
-                "error": "a working clickable question control is required",
-            }
+    if len(options) > 3 or (
+        choice.approval
+        and not any(item["label"].strip().lower() in APPROVE_LABELS for item in options)
+    ):
+        return {
+            "host": host,
+            "error": "the decision needs at most three options and an explicit approval choice when it authorizes writes",
+        }
+    return present(
+        {
+            "id": choice.id,
+            "header": header,
+            "question": question,
+            "options": [
+                {"label": item["label"], "description": item["description"]}
+                for item in options
+            ],
+        },
+        host,
+        native_available,
+        async_available,
+    )
+
+
+def answer(tool_input: dict[str, Any], response: Any) -> str | None:
+    return _answer_for(
+        _first_question(tool_input),
+        response.get("answers") if isinstance(response, dict) else None,
+    )
 
 
 _RULE_NAMES = (

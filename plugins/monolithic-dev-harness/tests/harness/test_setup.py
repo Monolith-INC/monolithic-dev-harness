@@ -29,6 +29,61 @@ class SetupTests(unittest.TestCase):
             "HARNESS_USER_STATE_DIR": str(Path(self.temp.name) / "user")
         }
 
+    def test_handoff_preserves_project_language_request_and_wait(self) -> None:
+        from scripts.harness import decisions, policies, preferences, state
+
+        with patch.dict(os.environ, self.preference_env):
+            preferences.set_language("pt-br")
+            state.write_json(self.repo / preferences.LANGUAGE_STATE, {"language": "en"})
+            current = workflow.add_point(
+                workflow.start("Continue DAY-001 task counts", "en").value,
+                "Review the plan",
+                "discover",
+                pending="Plan review",
+                next_action="Present the saved plan",
+            ).value
+            workflow.save(self.repo, current)
+            decisions.begin(
+                self.repo, "q1", "Review this plan?", ("Approve", "Revise"), "async"
+            )
+            policies.change(self.repo, "suspend")
+            inspected = setup.inspect(self.repo).value
+        self.assertEqual(inspected["language"], "en")
+        context = inspected["handoff"]
+        self.assertEqual(context["project_root"], str(self.repo.resolve()))
+        self.assertEqual(
+            context["environment"]["HARNESS_USER_STATE_DIR"],
+            self.preference_env["HARNESS_USER_STATE_DIR"],
+        )
+        self.assertEqual(context["original_request"], "Continue DAY-001 task counts")
+        self.assertEqual(context["next_action"], "Present the saved plan")
+        self.assertTrue(context["waiting_for_answer"])
+        self.assertEqual(context["pending_question"]["id"], "q1")
+        self.assertTrue(context["policies_suspended"])
+
+    def test_invalid_workflow_is_reported_without_replacement(self) -> None:
+        target = workflow.path(self.repo)
+        target.parent.mkdir(parents=True)
+        target.write_text('{"broken": true}')
+        with patch.dict(os.environ, self.preference_env):
+            inspected = setup.inspect(self.repo).value
+        self.assertEqual(inspected["handoff"]["workflow_status"], "invalid")
+        self.assertEqual(target.read_text(), '{"broken": true}')
+
+    def test_damaged_project_language_is_not_replaced_by_user_default(self) -> None:
+        from scripts.harness import preferences
+
+        with patch.dict(os.environ, self.preference_env):
+            preferences.set_language("en")
+            target = self.repo / preferences.LANGUAGE_STATE
+            target.parent.mkdir(parents=True)
+            target.write_text("broken")
+            self.assertIsInstance(setup.inspect(self.repo), Err)
+        self.assertEqual(target.read_text(), "broken")
+
+    def test_missing_project_is_not_a_new_setup(self) -> None:
+        self.assertIsInstance(setup.inspect(self.repo / "missing"), Err)
+
     def choices(self) -> dict:
         return {
             "tracker_name": "linear",

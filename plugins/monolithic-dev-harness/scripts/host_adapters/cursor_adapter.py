@@ -13,6 +13,10 @@ def parse_cursor_payload(
     return parse_policy_event("cursor", payload, project_root)
 
 
+def cursor_session_id(_payload: dict[str, Any]) -> str:
+    return ""
+
+
 def format_cursor_decision(decision: PolicyDecision) -> dict[str, Any]:
     if decision.is_denied():
         response: dict[str, Any] = {"permission": "deny"}

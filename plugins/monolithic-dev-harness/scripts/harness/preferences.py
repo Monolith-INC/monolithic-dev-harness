@@ -60,6 +60,23 @@ def language() -> Result[str]:
     )
 
 
+def language_for(repo: Path) -> Result[str]:
+    """A confirmed project choice takes precedence over another project's user preference."""
+    match (state.read_json(repo / LANGUAGE_STATE) or {}).get("language"):
+        case "en" | "pt-br" as chosen:
+            return Ok(chosen)
+        case None if (repo / LANGUAGE_STATE).exists():
+            return err(
+                "invalid_preferences", "saved project language could not be read"
+            )
+        case None:
+            return language()
+        case _:
+            return err(
+                "invalid_preferences", "saved project language must be en or pt-br"
+            )
+
+
 def language_confirmed(repo: Path) -> Result[bool]:
     chosen = state.read_json(repo / LANGUAGE_STATE)
     return Ok(bool(chosen and chosen.get("language") in LANGUAGES))

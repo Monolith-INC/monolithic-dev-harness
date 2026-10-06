@@ -14,6 +14,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from core.result import Err, Ok
+
 STATE_RELATIVE_PATH = Path(".harness") / "state"
 # Harness state and local tracker records belong to one clone: never committed, shared, or adopted.
 LOCAL_ONLY_PATHS = (".harness/state/", ".harness/tracker/")
@@ -207,21 +209,42 @@ def set_harness_mode(repo: Path, mode: str) -> str:
 # --- questions shown to the user (approval by click) ------------------------------------------
 
 
-def mark_asked(repo: Path, name: str, detail: dict[str, Any] | None = None) -> None:
+def _session_record_path(repo: Path, folder: str, name: str, work_session_id: str | None) -> Path:
+    if work_session_id is None:
+        return state_dir(repo) / folder / f"{safe_name(name)}.json"
+    from harness import work_sessions
+
+    match work_sessions.select(repo, work_session_id):
+        case Ok(session):
+            return session.folder / folder / f"{safe_name(name)}.json"
+        case Err(failure):
+            raise ValueError(failure.message)
+
+
+def mark_asked(
+    repo: Path,
+    name: str,
+    detail: dict[str, Any] | None = None,
+    work_session_id: str | None = None,
+) -> None:
     """Mark a question the check let through, with what the hook pinned when it was shown."""
     write_json(
-        state_dir(repo) / "asked" / f"{safe_name(name)}.json",
+        _session_record_path(repo, "asked", name, work_session_id),
         {**(detail or {}), "asked": _now().isoformat()},
     )
 
 
-def take_asked(repo: Path, name: str) -> dict[str, Any] | None:
+def take_asked(
+    repo: Path, name: str, work_session_id: str | None = None
+) -> dict[str, Any] | None:
     """The mark of a question the check let through, or None; the mark is used up."""
-    path = state_dir(repo) / "asked" / f"{safe_name(name)}.json"
-    record = read_json(path)
     try:
+        path = _session_record_path(repo, "asked", name, work_session_id)
+        record = read_json(path)
         path.unlink()
     except OSError:
+        return None
+    except ValueError:
         return None
     return record if record is not None else {}
 
