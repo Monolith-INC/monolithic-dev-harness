@@ -13,7 +13,7 @@ from pathlib import Path
 import pytest
 
 from core.result import Err
-from harness import decisions, state, work_sessions
+from harness import decisions, rules, state, work_sessions
 from host_adapters import work_session_context
 from integrations import gateway
 from tests.settings_fixture import write_settings
@@ -21,6 +21,66 @@ from tests.settings_fixture import write_settings
 PLUGIN = Path(__file__).resolve().parents[2]
 HOOK = PLUGIN / "scripts" / "harness" / "hook.py"
 HARNESS = PLUGIN / "bin" / "harness"
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        f"cat {HOOK}",
+        f"sed -n '1,80p' {HOOK}",
+        f"rg 'harness.hook' {HOOK}",
+        f"cat {HOOK}; sed -n '1,80p' {HOOK}",
+    ),
+)
+def test_reading_hook_source_is_allowed(command: str) -> None:
+    assert not rules.runs_harness_hook(command)
+
+
+def test_reader_does_not_hide_hook_execution() -> None:
+    assert rules.runs_harness_hook(f"cat {HOOK}; python3 {HOOK} --event prompt")
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "cat notes.txt",
+        "sed -n '1,80p' notes.txt",
+        "rg 'capture' notes.txt",
+        f"cat {HOOK}",
+        f"{HARNESS} suspension status",
+    ),
+)
+def test_pending_decision_allows_diagnostics(project, command: str) -> None:
+    assert "decision-pending" not in bash(project[0], command)
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "cat notes.txt > copied.txt",
+        "sed -i 's/a/b/' notes.txt",
+        "cat notes.txt; touch changed.txt",
+        f"{HARNESS} suspension status; touch changed.txt",
+    ),
+)
+def test_pending_decision_still_blocks_diagnostic_writes(project, command: str) -> None:
+    assert "decision-pending" in bash(project[0], command)
+
+
+def test_prompt_failure_is_reported_without_exposing_payload(
+    monkeypatch, capsys
+) -> None:
+    from io import StringIO
+
+    from harness import hook
+
+    monkeypatch.setattr(sys, "stdin", StringIO('{"prompt": "private reply"}'))
+    monkeypatch.setattr(hook, "handle_prompt", lambda *_: {}["private error"])
+    assert hook.main(["--host", "codex", "--event", "prompt"]) == 0
+    assert (
+        "human reply capture failed (codex, prompt): KeyError"
+        in capsys.readouterr().err
+    )
 
 
 def run_hook(repo: Path, event: str, payload: dict, host: str = "codex") -> str:

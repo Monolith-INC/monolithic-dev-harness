@@ -321,13 +321,13 @@ def status(repo: Path, work_session_id: str | None = None) -> str:
 
 
 def status_command(command: str, cwd: Path) -> bool:
-    """Whether a shell command only reads the pending decision.
+    """Whether a shell command only reads decision or suspension status.
 
     The decision gate lets it run so the agent can see what it is waiting for; it never skips
-    the rules. Anything but exactly one `harness decision status` run disqualifies it.
+    the rules. Anything but exactly one status invocation disqualifies it.
     """
     match commands.harness_args(command, cwd):
-        case ("decision", "status", *options):
+        case ("decision" | "suspension", "status", *options):
             return len(options) % 2 == 0 and all(
                 flag in ("--repo", "--session-id") for flag in options[::2]
             )

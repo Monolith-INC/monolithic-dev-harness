@@ -47,6 +47,31 @@ def test_other_messages_leave_the_decision_pending(repo: Path) -> None:
     assert (decisions.record(repo) or {}).get("answer") == "Continue"
 
 
+def test_suspension_works_before_project_setup(tmp_path: Path) -> None:
+    decisions.begin(tmp_path, "language", "Language?", ("English",), "async")
+    type_prompt(tmp_path, "harness suspend")
+    assert state.harness_mode(tmp_path) == "suspended"
+    assert decisions.waiting(tmp_path)
+
+
+def test_typed_choice_answers_async_question(repo: Path) -> None:
+    decisions.begin(repo, "language", "Language?", ("English",), "async")
+    type_prompt(repo, "english")
+    assert (decisions.record(repo) or {}).get("answer") == "English"
+    assert not decisions.waiting(repo)
+
+
+def test_suspension_works_with_a_broken_conversation_link(repo: Path) -> None:
+    work_session_context.bind_session(
+        repo, "codex", "broken", work_sessions.start(repo, "DAY-001").value.id
+    )
+    next((repo / work_session_context.ROOT / "codex").glob("*.json")).write_text(
+        "invalid"
+    )
+    type_prompt(repo, "harness suspend", session="broken")
+    assert state.harness_mode(repo) == "suspended"
+
+
 def test_revoke_suspend_and_typed_approvals_still_work(repo: Path) -> None:
     state.open_approval(repo, "HB-OPEN1", 20)
     chat_decision(repo)
