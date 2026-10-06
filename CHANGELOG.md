@@ -6,6 +6,20 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.6.2] - 2026-10-06
+
+### Fixed
+
+- Codex captures native question answers returned as JSON text and can recover a recorded reply
+  from the matching host conversation when a hook misses it, preserving question identity and
+  approval checks.
+- Bootstrap shows the selected settings once with a native Yes / No confirmation, including before
+  repository settings exist. Routing questions accept a real request entered through Other.
+- Failed question delivery or capture quietly re-asks through blocking, asynchronous, or chat
+  fallback in the same run. Missing replies never become assumed answers or approvals.
+- Read-only formatter and Git diff commands no longer trigger the hook-execution guard; actual
+  hook execution remains blocked. Doctor states that live question capture has not been checked.
+
 ## [0.6.1] - 2026-10-06
 
 ### Fixed
@@ -599,7 +613,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.6.1
 [0.6.0]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.4...v0.6.0
 [0.5.4]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.3...v0.5.4

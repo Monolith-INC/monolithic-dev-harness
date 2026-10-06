@@ -155,7 +155,11 @@ def doctor(args: argparse.Namespace) -> int:
     else:
         _repository(report, repo, args)
 
-    print("healthy" if report.failures == 0 else f"{report.failures} problem(s) found")
+    print(
+        "healthy (installation and repository configuration; live question capture not checked)"
+        if report.failures == 0
+        else f"{report.failures} problem(s) found"
+    )
     return 0 if report.failures == 0 else 1
 
 

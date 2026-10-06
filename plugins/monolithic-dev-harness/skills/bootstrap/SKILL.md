@@ -65,12 +65,23 @@ The command prints the complete candidate, a `digest`, and a `source_digest`. Ex
 settings are preserved. If proposal validation fails, use its error to correct the missing value;
 do not inspect implementation files to second-guess the command. Summarize only user-facing choices:
 the selected work-item tracker and artifact destination. Do not show raw settings, inferred remote,
-branch, or source-control fields. Then offer **Apply setup** or **Change choices** as clickable
-choices. Do not provide a typed reply as a fallback. If a blocking control is unavailable, present the complete proposal in chat and end the turn; leave it unapplied until the real human answers. A selection to
-apply authorizes only this exact local proposal; it does not authorize tracker or source-control
-writes.
+branch, or source-control fields. Show the selected language, work-item tracker, and planning
+folder once, then ask **Confirm?** with exactly **Yes** and **No** in the native question UI.
+Prepare this confirmation with `harness decision present --repo <project> --host <host>
+--question "Confirm?" --option "Yes" --option "No"`, adding `--blocking-available` or
+`--async-available` according to the tools actually available. Invoke the returned question tool
+with the returned questions; plain chat labels do not count as clickable controls. This works
+before settings exist. Do not ask another confirmation after Yes. No returns to changing the
+selected choices while keeping their current values.
 
-After the user chooses Apply, repeat the proposal arguments with `--apply-digest <digest>
+If delivery fails, quietly use `harness decision fallback` to re-ask the same confirmation by the
+next method: blocking buttons, asynchronous buttons, then ordinary chat. Keep the run and proposal;
+do not expose tool failures, demand a typed Apply command, or report onboarding blocked. Chat asks
+the same **Confirm? Yes / No** naturally and continues this run when the human replies. Silence,
+dismissal, and elapsed time never count as Yes. Yes authorizes only this exact local proposal;
+it does not authorize tracker or source-control writes.
+
+After the user chooses Yes, repeat the proposal arguments with `--apply-digest <digest>
 --source-digest <source_digest>`. A change to the candidate or existing settings makes application
 fail and requires a new review. The controlled command adds the local Git ignore, writes settings
 atomically, prepares every local-tracker folder when selected, preserves an explicit disabled Codex
@@ -87,6 +98,10 @@ Run `harness doctor` once. Do not run `--tools`, `review-setup`, knowledge disco
 building as part of basic setup. Do those only when the user's next task needs them. Report a missing
 optional tool without searching for or installing replacements. Tell the user only about a sign-in,
 project trust, or restart that is actually required.
+Doctor checks installation and repository configuration; it does not verify live answer capture.
+A read-only Codex configuration path or unavailable picker uses the next question method and
+does not require restarting setup. Do not describe optional host configuration as fully applied
+when the command reports it was preserved or could not be written.
 
 After setup is ready, ask what to do next through the available native question control. Offer up to three
 clickable choices based on the current request: continue the named task, prepare work items, or
@@ -94,6 +109,10 @@ explore an idea. When no task was supplied, use **Start feature work** as the fi
 add a literal **Other** option: the question UI supplies its default **Other** text field. Route the
 clicked choice or the text entered through **Other** and continue in this same run; do not ask the
 user to invoke the harness again.
+Prepare this routing question through `harness decision present --allow-free-text` and the available
+native transport. For a direct Codex routing control use question id `next_step`. Other supplies
+the actual request; it never approves writes. Quietly fall back and re-ask if the control fails to
+land. Never abandon the run for a question delivery or capture failure.
 
 The next route starts product or engineering work. A named project file can be read directly; it is
 not required to be a tracker-issued item before discovery. At this boundary, return to the harness

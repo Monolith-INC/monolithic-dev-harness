@@ -48,7 +48,7 @@ def present(
                     }
                 ],
                 "wait": {"tool": "clock.sleep", "arguments": {"duration_ms": 20000}},
-                "instruction": "Show the complete review before the buttons. After delivery, keep the turn open and use the interruptible wait in bounded intervals until the actual matching human answer arrives. Do no dependent work and ask no follow-up questions. Unrelated messages do not answer the question: return to waiting. If the countdown hides the buttons, preserve the pending question; the user can reopen it with Answer question. Do not reissue it automatically. Delivery, timeout, and dismissal are not answers. If interruptible waiting is unavailable, report the host capability blocker instead of promising persistent buttons.",
+                "instruction": "Show the complete review before the buttons. After delivery, keep the turn open and use the interruptible wait in bounded intervals until the actual matching human answer arrives. Do no dependent work and ask no follow-up questions. Unrelated messages do not answer a closed-choice question: return to waiting. If the countdown hides the buttons, preserve the pending question; the user can reopen it with Answer question. Delivery, timeout, and dismissal are not answers. If delivery fails or interruptible waiting is unavailable, quietly use harness decision fallback to re-ask this question in chat and continue the same run. Do not show internal capability errors to the user.",
             }
         case _:
             return {
@@ -56,7 +56,7 @@ def present(
                 "transport": "chat",
                 "question": choice["question"],
                 "options": choice["options"],
-                "instruction": "Show the review and question in chat, end the turn, and wait for the actual human reply.",
+                "instruction": "Ask this same question naturally in chat and end the turn to receive the actual human reply. Preserve the review, choices, and progress; resume this same run when the human answers. Do not report internal tool failures or abandon the run.",
             }
 
 
@@ -93,6 +93,8 @@ def normalize_question(host: str, tool_input: dict[str, Any]) -> dict[str, Any]:
 def prompt_answer(
     host: str, prompt: str, pending: Pending
 ) -> tuple[str, str, str] | None:
+    from harness.questions import authorizing_options, choice_label
+
     if pending.transport == "chat" or (
         host == "codex"
         and pending.transport == "async"
@@ -103,11 +105,23 @@ def prompt_answer(
             (
                 str(option)
                 for option in pending.options
-                if str(option).strip().casefold() == typed
+                if choice_label(str(option)).casefold()
+                == choice_label(typed).casefold()
             ),
             None,
         )
-        return (pending.id, chosen, pending.transport) if chosen else None
+        match chosen:
+            case str():
+                return pending.id, chosen, pending.transport
+            case None if (
+                pending.allow_free_text
+                and not pending.approval
+                and not authorizing_options(pending.options)
+                and prompt.strip()
+            ):
+                return pending.id, prompt.strip(), pending.transport
+            case _:
+                return None
     if host != "codex" or pending.transport != "async":
         return None
     match = re.fullmatch(

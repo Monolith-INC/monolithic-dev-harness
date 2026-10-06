@@ -40,6 +40,23 @@ def test_reader_does_not_hide_hook_execution() -> None:
     assert rules.runs_harness_hook(f"cat {HOOK}; python3 {HOOK} --event prompt")
 
 
+@pytest.mark.parametrize("operation", ("check", "format"))
+def test_ruff_maintains_hook_source_without_running_it(operation: str) -> None:
+    assert not rules.runs_harness_hook(f"ruff {operation} {HOOK}")
+    assert rules.runs_harness_hook(
+        f"ruff {operation} {HOOK}; python3 {HOOK} --event prompt"
+    )
+
+
+@pytest.mark.parametrize("operation", ("diff", "show", "status"))
+def test_git_inspects_hook_source_without_running_it(operation: str) -> None:
+    assert not rules.runs_harness_hook(f"git {operation} -- {HOOK}")
+    assert rules.runs_harness_hook(
+        f"git {operation} -- {HOOK}; python3 {HOOK} --event prompt"
+    )
+    assert rules.runs_harness_hook(f"git {operation} --ext-diff -- {HOOK}")
+
+
 @pytest.mark.parametrize(
     "command",
     (
