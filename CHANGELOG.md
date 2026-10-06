@@ -13,10 +13,17 @@ All notable changes to this project are documented here. The format follows
 - Project work sessions: several tickets can be in flight in one project, each bound to its own
   host conversation, with `harness work-session` lifecycle commands (start, list, route, select,
   status, pause, stop, resume, complete), per-session workflow checkpoints, and routing that keeps
-  the user's original request.
-- Human decisions: a question shown to the user is recorded as pending, and only the user's own
-  answer, read by the prompt and answer hooks, resolves it. A pending decision blocks the writes
-  that depend on it. `harness decision status` reports it.
+  the user's original request. A conversation binds to a session through its first session-scoped
+  command and switches only with an exact `harness work-session select|resume <id>`, never while a
+  decision is pending; a command naming another session is refused.
+- The `hook-entry` rule refuses shell commands that run or copy the harness's own hook entry
+  points, so an agent cannot answer or approve for the user by feeding them a payload.
+- Human decisions: a question shown to the user is recorded as pending, and only a reply that picks
+  one of its offered options, read by the prompt and answer hooks, resolves it; other messages stay
+  ordinary prompts, so `harness revoke`, `harness suspend`, and typed approvals keep working. One
+  gate holds work while a decision is pending: a project-wide decision holds everyone, a session's
+  decision holds that session, and work with no session (an unbound conversation, or Cursor) is
+  held by any pending decision. `harness decision status` reports it.
 - Prepared workflows: a catalog of routes and steps (`config/prepared-workflows.json`) that hands
   each step its references, skills, operations, outputs, checks, and recovery.
 - A subagent contract for agent hosts: `SubagentOps` (start, status, follow-up, cancel, events)
@@ -34,7 +41,11 @@ All notable changes to this project are documented here. The format follows
   (`HARNESS_PYTHON`, then `python3.15` down to `python3.12`, then `python3`), so they work where the
   default `python3` is older. The installer and `harness doctor` check for it. CI tests 3.12 and 3.13.
 - The installer installs Jinja2 into the plugin's own `runtime/python` folder
-  (`requirements-runtime.txt`), never into the user's Python.
+  (`requirements-runtime.txt`), never into the user's Python; a failure there is a warning, since
+  only `harness workflow render` needs it. It also records the Python it found, which
+  `bin/harness-python` tries first, so hosts started from the desktop find it. Without any Python
+  3.12+, prompt and question hooks let the user's message through; tool calls fail closed.
+- `/check` and `/review` run their scripts through `bin/harness-python`.
 - An approval window now covers only the work session it was opened in. A write from another
   session needs its own approval; a window opened without a session (Cursor, or no session bound)
   covers only writes without one. `harness revoke` still closes every window; workflow back,
@@ -47,7 +58,9 @@ All notable changes to this project are documented here. The format follows
   and pins the snapshot to the work session. `harness bootstrap` runs BMad's bundled setup and
   points its output folder at `artifacts_path`; BMad skills run their unchanged scripts through
   `bin/harness-python` instead of `uv`; the module record ships beside the skills, and BMad's
-  ticket script is installed again.
+  ticket script is installed again. A pinned discovery snapshot is rendered again when only the setup
+  around the run changed (Python, plugin path, settings); a change to the run's request, language,
+  BMad configuration, or the discovery steps keeps the run on its snapshot.
 - Approving through a pending decision now opens the window for `approvals.window_minutes`
   instead of a fixed 20 minutes.
 
