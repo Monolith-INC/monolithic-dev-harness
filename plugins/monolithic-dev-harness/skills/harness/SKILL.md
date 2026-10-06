@@ -31,7 +31,7 @@ enforce the rules that must never depend on the model remembering them.
 Stacked Feature work (several Stories under one Feature) runs stage 3–4 per Story inside
 `feature-implementation`, then `merge-story-stack-into-feature` and `finish-feature-development`.
 
-## Select a project work session
+## Complete onboarding, then select a project work session
 
 The plugin ships the `harness` command. Use `harness` from the shell path when available. If it is
 not available, run the sibling `bin/harness` executable using the absolute plugin path derived from
@@ -40,8 +40,15 @@ the plugin again. Report a missing command only if neither the shell command nor
 executable exists.
 
 Use the project path already supplied by the host or the user. Run
-`harness bootstrap --inspect --repo <project>` to read shared project settings and tracker status,
-then run `harness work-session route --request "<exact user request>" --repo <project>`. The route
+`harness bootstrap --inspect --repo <project>` to read shared project settings and tracker status.
+Complete onboarding before routing, starting, or resuming a work session. Invoke the `bootstrap`
+skill when setup is incomplete, this project's language is unconfirmed, or `bmad_runtime.ready`
+is false. Language, settings,
+local tracker preparation, runtime setup, trust, and required sign-in are onboarding actions;
+none requires a work session or workflow. Preserve the original request while setup is pending.
+Verify setup and language confirmation, then run
+`harness work-session route --request "<exact user request>" --repo <project>` immediately before
+starting product or engineering work. The route
 command only reports candidates; it never starts or resumes a session. If it returns
 `continue_active`, use that exact session. If it returns `start_new`, create a session with
 `harness work-session start --request "<exact user request>" --repo <project>`. If it returns
@@ -54,11 +61,12 @@ If the route returns `review_legacy`, show its saved request, stage, and next ac
 the same work, stop before starting or resuming a session; the user must choose how to handle the
 unbound workflow first. A corrupt legacy record is also a blocker and must be preserved for review.
 
-Keep the selected work-session ID as required context for the whole run. Every workflow command
+Keep the selected work-session ID as required context after onboarding. Every workflow command
 must include `--session-id <id>`, including `start`, `checkpoint`, `status`, `list`, `pause`,
-`resume`, `back`, `cancel`, and `complete`. Session checkpoints are stored with that session.
-Project settings such as tracker and planning folder remain shared. A project work session does not
-require Git, a tracker, a project contract, or starting the checkout-bound implementation session.
+`resume`, `back`, `cancel`, `complete`, and discovery `render`. Session checkpoints are stored with that session.
+Project settings such as tracker and planning folder remain shared. Onboarding establishes the
+tracker and runtime before session creation. A project work session does not require Git, a project
+contract, or starting the checkout-bound implementation session.
 Never attach an older project-wide workflow to a new session automatically; show it as legacy state
 and keep its checkpoints untouched. If that legacy workflow appears related to the user's request,
 stop before creating another session: the current commands do not yet provide a safe way to choose
@@ -68,19 +76,12 @@ Use the selected session's exact saved request as the run context. Pass the proj
 ID, bundled command, isolated preferences environment, checkpoint, and next action to any delegated
 agent; do not make it rediscover the project or reset confirmed setup. Inspect is read-only. Pending
 questions and a suspended harness remain explicit; do not resume a stopped run or replace invalid
-saved progress automatically. If `language_confirmed` is false,
-offer **English** and **Português (Brasil)** as clickable choices for this project, even if a
-different project saved a preference. Save the selected language with
-`harness preference language <en|pt-br> --repo <project>`. Use the host adapter described in
-[human-decisions.md](../../references/human-decisions.md): a supported blocking control, otherwise
-adapter-supported buttons and a turn kept open while waiting for the actual answer; use chat when no
-button tool is available. Start the workflow with the selected session's exact original request:
+saved progress automatically. Use the host adapter described in
+[human-decisions.md](../../references/human-decisions.md) for human decisions.
+Start the workflow with the selected session's exact original request:
 `harness workflow start --session-id <id> --request "<original request>" --repo <project>`. If that
 session already has a workflow, show its saved checkpoints and let the user resume or cancel it
-before starting another. If setup is
-missing or incomplete, guide the user through only the choices that are actually missing, prepare a
-reviewable settings proposal, apply it after the user's choice, verify it, and return to the original
-request in this same run. Do not ask the user to edit JSON or assume the bundled Azure example.
+before starting another. Do not start a session or workflow to complete onboarding.
 Host trust and sign-in remain human actions where required. The selected tracker and its manifest
 provide the work-item capabilities for planning; do not start a second tracker or review-source
 setup during discovery, ideation, or backlog drafting. Mark the workflow complete when its
@@ -115,7 +116,9 @@ To restore enforcement, use `resume-harness` (`harness suspension resume --repo 
 human sends `harness resume`). Resume restores checks without opening an approval window or
 accepting old readiness evidence. Never ask the human to suspend the harness to get past a refusal.
 
-Save a checkpoint after setup and at each material review point. Before a review question, record
+Once onboarding is complete and a work session has been selected, save its initial checkpoint
+with setup already verified and the original request as the next action. Save another checkpoint
+at each material review point. Before a review question, record
 the artifact path, pending decision, and next action; include `--artifact <path>` so the saved point
 captures its content digest. When the user says Pause, save any new progress first, then run
 `harness workflow pause`. On Resume, show `harness workflow list` and offer the current point and
@@ -124,10 +127,11 @@ and save a new checkpoint before asking for another decision.
 
 ## Stage 0: Technical discovery
 
-For an assigned ticket or request to change an existing product, invoke `bmad-build`. It runs BMad
-Build's clarify-and-route and plan steps, shipped already rendered in the plugin, on the BMad runtime
-that `harness bootstrap` prepares (`_bmad/`). Do not install, render, or fetch anything, and do not
-offer the user choices about repairing or installing workflow infrastructure. For broad or risky
+For an assigned ticket or request to change an existing product, invoke `bmad-build`. It renders
+the bundled clarify-and-route and plan templates with this project's verified context and selected
+work-session ID. Follow only the returned absolute entry; the snapshot is pinned to the session
+and verified on resume. Onboarding prepares the BMad runtime (`_bmad/`). Do not install or fetch
+workflow infrastructure during discovery. For broad or risky
 work, BMad's `bmad-spec` (a capability contract) and `bmad-architecture` (decisions that keep
 separately built parts consistent) are available; `bmad-build` uses `bmad-prd` when the requested
 behavior is too unclear to investigate. Do not start implementation from this step. On approval, save the plan as a harness workflow
@@ -147,8 +151,9 @@ bundled local tracker or ask the user to initialize it during planning.
 
 Git is optional. Discovery, planning, local work-item drafts, and workflow checkpoints must continue
 when the folder has no Git metadata or has no commit yet. Do not request an initial commit, branch,
-or implementation session to read or save a plan. Session and commit rules apply only when the
-repository has a committed Git baseline and the workflow reaches governed code changes.
+or checkout-bound implementation session to read or save a plan. The selected project work
+session still owns those plans and checkpoints. Checkout-bound session and commit rules apply
+when the repository has a committed Git baseline and the workflow reaches governed code changes.
 
 Use `plan-initiative` when the user explicitly wants to explore what problem or product to pursue,
 or when the intended outcome is not yet identifiable. Its optional brainstorming, idea-forging,

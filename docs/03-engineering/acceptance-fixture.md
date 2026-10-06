@@ -75,7 +75,8 @@ For a command-line run, `run` manages the disposable copy automatically. It appl
 starts the command in the project, deletes that run's copy when the command exits, and first removes
 only abandoned copies created by earlier `run` invocations. When a Codex command is nested inside
 another Codex shell sandbox, launch this test helper outside the outer sandbox; Codex's own
-read-only sandbox remains enabled for the trial.
+workspace-write sandbox remains enabled for the trial so normal local setup, planning artifacts,
+and workflow checkpoints can be written. The scenario's stopping checkpoint still bounds the work.
 
 ```bash
 python3 scripts/acceptance_trial.py run --profile local-planning -- codex exec --ignore-user-config <test-arguments>

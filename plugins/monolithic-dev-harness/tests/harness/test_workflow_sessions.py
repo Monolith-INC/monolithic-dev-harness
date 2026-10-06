@@ -10,8 +10,8 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from core.result import Err
-from harness import work_sessions, workflow
+from core.result import Err, Ok
+from harness import bmad, setup, work_sessions, workflow
 
 
 class WorkflowSessionTest(unittest.TestCase):
@@ -109,8 +109,22 @@ class WorkflowSessionTest(unittest.TestCase):
                 },
             )
 
-        session = self.start_session("Investigate DAY-001")
+        (self.project / ".harness").mkdir(exist_ok=True)
+        (self.project / ".harness/settings.json").write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "tracker": {"name": "local"},
+                    "scm": {"name": "local"},
+                    "branch_template": "{key}-{slug}",
+                    "artifacts_path": "docs/planning",
+                }
+            )
+        )
+        self.assertIsInstance(setup.prepare_local_tracker(self.project), Ok)
+        self.assertIsInstance(bmad.prepare(self.project, "docs/planning"), Ok)
         self.assertEqual(run("preference", "language", "en").returncode, 0)
+        session = self.start_session("Investigate DAY-001")
         started = run(
             "workflow",
             "start",

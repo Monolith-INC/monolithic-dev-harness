@@ -6,8 +6,8 @@ after setup instead of making the user repeat it.
 
 | Stage | Entry | Work before stopping | Review point | Exit |
 | --- | --- | --- | --- | --- |
-| Project and session | Any harness request | Reuse the supplied project path, inspect shared settings, then read-only route the exact request to a project work session | Ask only when resuming paused/stopped work or choosing among matches | Carry the selected work-session ID and request into the focused skill; never start a central loop just to select a session |
-| Setup | First use or changed project configuration | Prepare the bundled local tracker if needed; confirm this project's language; ask only for missing project choices | Show chosen settings with the alternatives offered | Check once, then continue in the same selected work session |
+| Setup | First use or changed project configuration | Reuse the supplied project path; inspect settings; prepare the bundled runtime and local tracker if needed; confirm language; ask only for missing choices. No session or workflow is required. | Show chosen settings with the alternatives offered | Verify setup, then return to the original request |
+| Project and session | Setup verified, immediately before product or engineering work | Read-only route the exact request to a project work session, then select or start it | Ask only when resuming paused/stopped work or choosing among matches | Carry the selected work-session ID and request into the focused skill; never start a central loop just to select a session |
 | Discover | Named existing task or request for a technical plan | Read the named item directly. Use tracker tools for tracker items; read an explicitly linked project file directly. Investigate fit and alternatives, then prepare a reviewed implementation plan. | Show the technical plan and review notes | Accepted plan enters backlog; no repeated starting-point question |
 | Ideate | User selects idea exploration or submits a new idea | Use `plan-initiative` and only its needed routes: brainstorm, pressure-test, research, brief, requirements, UX, architecture, product spec | Show the product contract and critique | Accepted contract enters backlog; ideation is offered after setup |
 | Backlog | Accepted product contract or sufficiently defined work item | Draft, enrich, decompose, create Story Tasks, and validate locally; check tracker readiness before publication | Show the complete Feature, Story, and Task batch and its destination; seek one approval for the specified external writes | Publish and read back the approved batch |
@@ -38,6 +38,7 @@ Use this map instead of searching plugin files to rediscover workflow capabiliti
 | Project language confirmation, tracker choices, missing settings | `harness bootstrap --inspect` |
 | Current commit, branch, saved workflow, and local tracker readiness | `harness bootstrap --inspect` |
 | Work sessions for this exact request | `harness work-session route --request "<exact request>" --repo <project>` |
+| Validated discovery instructions bound to the selected session | `harness workflow render --stage discover --session-id <id> --repo <project>` |
 | Start, inspect, pause, stop, or resume a project work session | `harness work-session` |
 | Prepare missing bundled local tracker folders | `harness bootstrap --prepare-local-tracker` |
 | Setup health | `harness doctor` |

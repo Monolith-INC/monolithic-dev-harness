@@ -37,8 +37,12 @@ def test_the_bmad_skills_ship() -> None:
     assert {"bmad-build", "bmad-spec", "bmad-architecture", "bmod-method"} <= names
 
 
-@pytest.mark.parametrize("skill", BMAD_SKILLS, ids=lambda path: path.name)
-def test_shipped_files_need_no_renderer_and_no_uv(skill: Path) -> None:
+@pytest.mark.parametrize(
+    "skill",
+    [path for path in BMAD_SKILLS if path.name != "bmad-build"],
+    ids=lambda path: path.name,
+)
+def test_other_shipped_files_need_no_renderer_and_no_uv(skill: Path) -> None:
     for path in shipped(skill):
         text = path.read_text(encoding="utf-8")
         for marker in ("{{", "{%", "uv run", "_bmad/render", "/tmp/"):
@@ -61,24 +65,6 @@ def test_every_project_script_is_one_setup_installs(skill: Path) -> None:
             assert (INSTALLED[folder] / script).is_file(), (
                 f"{path.relative_to(PLUGIN)} runs _bmad/{folder}/{script}"
             )
-
-
-def test_bmad_build_follows_its_rendered_steps() -> None:
-    skill = SKILLS / "bmad-build"
-    assert "workflow.md" in (skill / "SKILL.md").read_text(encoding="utf-8")
-    steps = {path.name for path in skill.glob("*.md")} - {"SKILL.md"}
-    assert steps == {
-        "workflow.md",
-        "step-01-clarify-and-route.md",
-        "step-02-plan.md",
-        "plan-template.md",
-    }
-    for path in skill.glob("*.md"):
-        for named in re.findall(
-            r"`([a-z0-9-]+\.md)`", path.read_text(encoding="utf-8")
-        ):
-            if named.startswith(("step-", "plan-template", "workflow")):
-                assert (skill / named).is_file(), f"{path.name} names {named}"
 
 
 def test_stage_zero_routes_to_bmad_build() -> None:

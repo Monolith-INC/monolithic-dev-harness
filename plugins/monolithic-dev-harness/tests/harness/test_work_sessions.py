@@ -165,8 +165,8 @@ class WorkSessionTest(unittest.TestCase):
                 "point": {
                     "id": 1,
                     "label": "First request",
-                    "stage": "setup",
-                    "next_action": "Check setup",
+                    "stage": "discover",
+                    "next_action": "Continue original request",
                 },
             },
         )
@@ -236,6 +236,31 @@ class WorkSessionTest(unittest.TestCase):
                 timeout=30,
             )
 
+        # CLI onboarding is verified without a session; the session library stays independent.
+        from harness import bmad, preferences, setup
+
+        (self.project / ".harness").mkdir(exist_ok=True)
+        (self.project / ".harness/settings.json").write_text(
+            json.dumps(
+                {
+                    "schemaVersion": 1,
+                    "tracker": {"name": "local"},
+                    "scm": {"name": "local"},
+                    "branch_template": "{key}-{slug}",
+                    "artifacts_path": "docs/planning",
+                }
+            )
+        )
+        import os
+        from unittest.mock import patch
+
+        with patch.dict(
+            os.environ,
+            {"HARNESS_USER_STATE_DIR": str(self.project.parent / "preferences")},
+        ):
+            self.assertIsInstance(setup.prepare_local_tracker(self.project), Ok)
+            self.assertIsInstance(bmad.prepare(self.project, "docs/planning"), Ok)
+            self.assertIsInstance(preferences.set_language("en", self.project), Ok)
         started = run("start", "--request", "Investigate DAY-001")
         self.assertEqual(started.returncode, 0, started.stderr)
         session_id = json.loads(started.stdout)["id"]

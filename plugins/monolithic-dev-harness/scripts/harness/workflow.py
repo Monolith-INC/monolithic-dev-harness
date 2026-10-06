@@ -112,7 +112,14 @@ def start(request: str, language: str = "") -> Result[Workflow]:
                     "active",
                     request.strip(),
                     language,
-                    (Point(1, "First request", "setup", next_action="Check setup"),),
+                    (
+                        Point(
+                            1,
+                            "First request",
+                            "discover",
+                            next_action="Continue original request",
+                        ),
+                    ),
                     0,
                 )
             )

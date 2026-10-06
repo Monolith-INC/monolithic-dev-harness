@@ -12,6 +12,22 @@
 
 [workflow]
 
+# Required invocation context. The harness supplies these after onboarding and session selection.
+project_root = ""
+session_id = ""
+original_request = ""
+language = ""
+tracker = ""
+scm = ""
+preferences_path = ""
+settings_sha256 = ""
+bmad_config_sha256 = ""
+status_command = ""
+checkpoint_command = ""
+python_command = ""
+config_command = ""
+tickets_command = ""
+
 # Extra instructions to run before config is loaded and before the user is greeted.
 
 activation_steps_prepend = []

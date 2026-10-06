@@ -6,7 +6,7 @@ harness doctor [--repo <dir>] [--tools]
 harness bootstrap --repo <dir> [--inspect | --propose | --apply-digest <hash>]
 harness session start <work item> [--workflow <name>] | status | pause | resume | close
 harness work-session route --request <text> | start --request <text> | list | select <id> | pause|stop|resume|complete <id>
-harness workflow start | checkpoint | list | status | routes | prepare | back | pause | resume | cancel | complete [--session-id <id>]
+harness workflow start | render | checkpoint | list | status | routes | prepare | back | pause | resume | cancel | complete --session-id <id>
 harness preference show | language <en|pt-br>
 harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...]
 harness adoption assess | plan | status | materialize ...
@@ -35,6 +35,7 @@ from core.result import (  # noqa: E402
     Result,
     attempt,
     bind,
+    err,
     fmap,
     require,
 )
@@ -42,6 +43,7 @@ from harness import (  # noqa: E402
     adoption,
     bmad,
     decisions,
+    discovery,
     gitstate,
     knowledge,
     local_tracker,
@@ -312,8 +314,12 @@ def work_session_command(args: argparse.Namespace) -> int:
     project = Path(args.repo).resolve()
     match args.operation:
         case "start":
-            result = fmap(
-                work_sessions.start(project, args.request or ""), work_sessions.as_json
+            result = bind(
+                discovery.onboarding_ready(project),
+                lambda _: fmap(
+                    work_sessions.start(project, args.request or ""),
+                    work_sessions.as_json,
+                ),
             )
         case "list":
             result = fmap(
@@ -329,7 +335,20 @@ def work_session_command(args: argparse.Namespace) -> int:
                 work_sessions.select(project, args.session_id or ""),
                 work_sessions.as_json,
             )
-        case "pause" | "stop" | "resume" | "complete":
+        case "resume":
+            result = bind(
+                discovery.onboarding_ready(project),
+                lambda _: bind(
+                    discovery.verify(project, args.session_id or ""),
+                    lambda _: fmap(
+                        work_sessions.transition(
+                            project, args.session_id or "", "resume"
+                        ),
+                        work_sessions.as_json,
+                    ),
+                ),
+            )
+        case "pause" | "stop" | "complete":
             result = fmap(
                 work_sessions.transition(
                     project, args.session_id or "", args.operation
@@ -730,7 +749,10 @@ def _workflow_resume(
             ),
         )
 
-    return bind(workflow.load(repo, session_id), checked)
+    return bind(
+        discovery.verify(repo, session_id),
+        lambda _: bind(workflow.load(repo, session_id), checked),
+    )
 
 
 def _workflow_start(
@@ -738,7 +760,10 @@ def _workflow_start(
 ) -> Result[workflow.Workflow]:
     def begin(_: object) -> Result[workflow.Workflow]:
         return bind(
-            preferences.language(),
+            bind(
+                discovery.onboarding_ready(repo),
+                lambda _: preferences.language_for(repo),
+            ),
             lambda language: bind(
                 require(
                     bool(language),
@@ -791,7 +816,38 @@ def workflow_command(args: argparse.Namespace) -> int:
                 )
             )
         )
+    match args.operation, args.session_id:
+        case operation, None if operation not in (
+            "status",
+            "list",
+            "routes",
+            "prepare",
+        ):
+            return _print(
+                err(
+                    "work_session_required",
+                    "complete onboarding, then select a work session and pass --session-id before project work",
+                )
+            )
+        case _:
+            pass
     match args.operation:
+        case "render":
+            return _print(
+                bind(
+                    require(
+                        args.stage == "discover",
+                        "invalid_request",
+                        "runtime rendering supports the discover stage",
+                    ),
+                    lambda _: fmap(
+                        discovery.render(repo, args.session_id),
+                        lambda package: json.dumps(
+                            package, ensure_ascii=False, indent=2
+                        ),
+                    ),
+                )
+            )
         case "routes":
             try:
                 print(json.dumps(prepared_workflows.routes(), indent=2, sort_keys=True))
@@ -987,6 +1043,7 @@ def main(argv: list[str] | None = None) -> int:
         "operation",
         choices=(
             "start",
+            "render",
             "checkpoint",
             "status",
             "list",
@@ -1095,6 +1152,11 @@ def main(argv: list[str] | None = None) -> int:
     knowledge_parser.add_argument("--repo", default=".")
     knowledge_parser.add_argument("--store", default="project")
     args, extra = parser.parse_known_args(argv)
+    match args.command, extra:
+        case "workflow", [*unknown] if unknown:
+            parser.error("unrecognized workflow arguments: " + " ".join(unknown))
+        case _:
+            pass
     if args.command == "version":
         print(version())
         return 0

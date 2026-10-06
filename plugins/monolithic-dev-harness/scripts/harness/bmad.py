@@ -36,7 +36,14 @@ def prepare(repo: Path, artifacts_path: str) -> Result[dict[str, Any]]:
 
 
 def ready(repo: Path) -> bool:
-    return (repo / "_bmad" / "config.toml").is_file()
+    return all(
+        (repo / relative).is_file()
+        for relative in (
+            "_bmad/config.toml",
+            "_bmad/scripts/resolve_config.py",
+            "_bmad/method/scripts/tickets.py",
+        )
+    )
 
 
 def _setup(repo: Path) -> Result[dict[str, Any]]:

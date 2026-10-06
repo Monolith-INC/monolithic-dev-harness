@@ -29,7 +29,8 @@ None.
 
 | Dependency | Needed by | Notes |
 | --- | --- | --- |
-| Python 3.12+ (standard library only) | hooks, orchestrators, gateway, CLI | checked by the installer and `harness doctor` |
+| Python 3.12+ | hooks, orchestrators, gateway, CLI | checked by the installer and `harness doctor` |
+| Jinja2 3.1+ (<4), with MarkupSafe | Stage 0 runtime snapshots | `requirements-runtime.txt`; installer uses pip to place dependencies inside the owned plugin directory; development requirements include the same declaration |
 | git | hooks | trees, staged paths, branch diffs |
 | Node.js / `npx` | `@azure-devops/mcp` | downloaded by `npx` on first start |
 | `@azure-devops/mcp` | Internal Azure DevOps adapter used by `workflow-integrations` | interactive OAuth; the gateway reads organization from harness settings |

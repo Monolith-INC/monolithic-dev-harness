@@ -230,12 +230,19 @@ install_marketplace_copy() {
   mkdir -p "${MARKETPLACE_DIR}.new/plugins"
   cp -R "${PAYLOAD}/.claude-plugin" "${PAYLOAD}/.cursor-plugin" "${MARKETPLACE_DIR}.new/"
   cp -R "${PAYLOAD}/plugins/${PLUGIN}" "${MARKETPLACE_DIR}.new/plugins/"
+  # Keep rendering dependencies in the owned plugin copy, never user-global Python.
+  "$PY" -m pip install --disable-pip-version-check --no-cache-dir --no-compile \
+    --target "${MARKETPLACE_DIR}.new/plugins/${PLUGIN}/runtime/python" \
+    -r "${MARKETPLACE_DIR}.new/plugins/${PLUGIN}/requirements-runtime.txt"
   cp -R "${PAYLOAD}/codex-marketplace" "${MARKETPLACE_DIR}.new/"
   mkdir -p "${MARKETPLACE_DIR}.new/codex-marketplace/.agents/plugins"
   cp "${PAYLOAD}/codex-marketplace/marketplace.json" \
     "${MARKETPLACE_DIR}.new/codex-marketplace/.agents/plugins/marketplace.json"
   mkdir -p "${MARKETPLACE_DIR}.new/codex-marketplace/plugins"
   cp -R "${PAYLOAD}/plugins/${PLUGIN}" "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/"
+  mkdir -p "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/runtime"
+  cp -R "${MARKETPLACE_DIR}.new/plugins/${PLUGIN}/runtime/python" \
+    "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/runtime/"
   rm -rf "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/tests"
   cp "${PAYLOAD}/plugins/${PLUGIN}/codex.mcp.json" \
     "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/.mcp.json"

@@ -25,7 +25,7 @@ Before listing artifacts, resolve existing workflow state in this order. Skip th
 
 1. Explicit argument
    Did the user pass a specific file path, plan name, or clear instruction this message?
-   - It names a ticket from the tree when it gives a ref such as `1.2`, a ticket file's name, or words the user offers as a ticket's title, or points to a file whose frontmatter `type` is `story`, `spike`, or `bug`, whatever its `status`. Resolve a named ticket's plan, entry, and prerequisites with `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/method/scripts/tickets.py --project-root {project-root} find <ref>`; for a ticket file, pass its folder before its file name. Non-zero exit → show its error and HALT. Otherwise follow **Ticket resolution** (below).
+   - It names a ticket from the tree when it gives a ref such as `1.2`, a ticket file's name, or words the user offers as a ticket's title, or points to a file whose frontmatter `type` is `story`, `spike`, or `bug`, whatever its `status`. Resolve a named ticket's plan, entry, and prerequisites with `{{ workflow.tickets_command }} find <ref>`; for a ticket file, pass its folder before its file name. Non-zero exit → show its error and HALT. Otherwise follow **Ticket resolution** (below).
    - If it points to a file that matches the plan template (has `status` frontmatter with a recognized value: draft, ready-for-dev, in-progress, in-review, built, done, or blocked) → set `plan_file`, then act on its status: `draft` → **EARLY EXIT** to `{{ rendered("step-02-plan.md") }}`; `ready-for-dev` → the plan is already approved: offer to hand it to the harness backlog stage as at the end of step 2, and stop here; `in-progress`, `in-review`, or `built` → implementation and review belong to the harness (`implement-story`, then `review`), not this workflow: report the plan's status and stop. For `done`, ingest as context and proceed to INSTRUCTIONS — do not resume. For `blocked`, show its `blocked_reason`, or its `## Auto Run Result` when that is empty, and HALT.
    - Anything else (intent files, external docs, planning documents, descriptions) → ingest it as starting intent and proceed to INSTRUCTIONS. Do not attempt to infer a workflow state from it.
 
@@ -34,7 +34,7 @@ Before listing artifacts, resolve existing workflow state in this order. Skip th
    Use the same routing as above.
 
 3. The ticket tree
-   With no argument and no intent from the conversation, run `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/method/scripts/tickets.py --project-root {project-root} next`.
+   With no argument and no intent from the conversation, run `{{ workflow.tickets_command }} next`.
    - Non-zero exit (no active initiative, a store refusal, a malformed tree) → say in one line that the ticket tree is unavailable and why, then go to 4.
    - A row in any group whose `status` is `draft`, `ready-for-dev`, `in-progress`, or `in-review` has a started plan when the file at `find <ref>`'s `plan` exists. When any row has one, or `{{ config.output_folder }}/{active_initiative}/` holds a `plan-*.md` with one of those statuses, go to 4.
    - No `ready_to_start` row → say in one line that nothing in the tree is ready, naming what is ready to refine, in progress, or blocked, then go to 4.

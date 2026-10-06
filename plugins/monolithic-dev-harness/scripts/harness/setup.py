@@ -11,6 +11,7 @@ from typing import Any
 
 from core.result import Ok, Result, attempt, bind, err, fmap, require
 from harness import (
+    bmad,
     decisions,
     local_tracker,
     preferences,
@@ -239,6 +240,7 @@ def inspect(repo: Path) -> Result[dict[str, Any]]:
                     "language": language,
                     "handoff": _handoff(repo, raw, current_workflow),
                     "language_confirmed": language_confirmed,
+                    "bmad_runtime": {"ready": bmad.ready(repo)},
                     "trackers": [
                         {
                             "name": item.name,

@@ -5,9 +5,14 @@ description: Technical discovery for a named feature request or ticket, using BM
 
 # BMad Build (harness Stage 0)
 
-Read fully and follow `workflow.md` in this skill's folder. It is BMad Build's workflow, rendered for
-the harness: step 1 clarifies and routes the request, step 2 investigates the repository and writes
-the plan from `plan-template.md`.
+After onboarding is verified and the project work session and workflow are active, run:
+
+`harness workflow render --stage discover --session-id <selected-id> --repo <project>`
+
+Use the bundled `bin/harness` if the command is absent from PATH. Read and follow the single
+absolute entry path returned in `entry`. Do not execute the templates in this skill folder directly.
+On failure, report the output and stop. The command validates and pins a project-specific snapshot;
+repeating it verifies and returns the existing snapshot without replacing the run's instructions.
 
 Harness boundaries:
 
@@ -17,6 +22,6 @@ Harness boundaries:
 - Stop at step 2's checkpoint. On **Approve and continue**, save the plan in the harness workflow
   checkpoint and hand it to the backlog stage. Never implement code here; the harness owns
   implementation and review.
-- `harness bootstrap` prepares BMad's runtime (`_bmad/`); `workflow.md` says how to prepare it if it
-  is missing. Never install or fetch BMad from another source, and never ask the user to repair it.
+- `harness bootstrap` prepares BMad's runtime (`_bmad/`) during session-free onboarding.
+  Rendering requires verified setup; it never installs or fetches BMad or repairs project settings.
 - Planning needs no Git metadata, commit, branch, or implementation session.
