@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import secrets
 from pathlib import Path
 from typing import Any
 
@@ -112,6 +113,29 @@ def _pending_sessions(repo: Path) -> list[tuple[str, dict[str, Any]]]:
             ]
         case Err():
             return []
+
+
+def matches_presentation(
+    pending: dict[str, Any] | None, question: dict[str, Any], transport: str
+) -> bool:
+    """Whether a question being shown is the prepared presentation of the pending decision."""
+    return bool(
+        pending
+        and pending.get("transport") in ("blocking", "async")
+        and pending.get("transport") == transport
+        and (
+            question.get("id") == pending.get("id")
+            or (
+                transport == "async"
+                and question.get("question") == pending.get("question")
+            )
+        )
+        and not pending.get("presentation_id")
+    )
+
+
+def new_key() -> str:
+    return "HD-" + secrets.token_hex(8)
 
 
 def begin(

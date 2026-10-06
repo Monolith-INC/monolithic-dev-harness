@@ -18,7 +18,6 @@ from __future__ import annotations
 import argparse
 import json
 import os
-import secrets
 import shutil
 import subprocess
 import sys
@@ -49,6 +48,7 @@ from harness import (  # noqa: E402
     local_tracker,
     preferences,
     prepared_workflows,
+    questions,
     sessions,
     settings,
     state,
@@ -627,7 +627,24 @@ def decision_command(args: argparse.Namespace) -> int:
             print(decisions.status(repo, args.session_id))
             return 0
         case "present":
-            key = "HD-" + secrets.token_hex(8)
+            key = decisions.new_key()
+            wording = questions.problems(
+                {
+                    "questions": [
+                        {
+                            "question": args.question or "",
+                            "header": "Review",
+                            "options": [
+                                {"label": option, "description": ""}
+                                for option in args.option or ()
+                            ],
+                        }
+                    ]
+                }
+            )
+            if wording:
+                print(questions.rewrite_reason(wording), file=sys.stderr)
+                return 2
             shown = present(
                 {
                     "id": key,

@@ -7,7 +7,7 @@ it records the pending question and keeps the turn open while waiting. Delivery 
 If no supported button tool exists,
 show the complete review and question in chat, end the turn, and wait for the human reply.
 
-Use `harness decision present --repo <project> --host <host> --question "..." --option "..."`
+Use `harness decision present --repo <project> --session-id <id> --host <host> --question "..." --option "..."`
 with each offered option repeated and each reviewed file supplied through `--artifact <path>`.
 Use `--blocking-available` only when the adapter's blocking tool is actually callable in this
 session. Use `--async-available` when the Codex asynchronous button tool is callable but its blocking tool is unavailable. `--approval` explicitly identifies a review that authorizes the described writes; merely
@@ -15,13 +15,16 @@ choosing a route is not write approval. The command returns the adapter presenta
 decision id. Present it faithfully and follow the adapter waiting instruction. Do not continue dependent work after delivery of a question.
 
 The trusted prompt/answer hook resolves the offered choice for the same decision and artifact
-revision. Other messages, delivery acknowledgments, expired time, and default selections are not
+revision. Only a reply that picks an offered option answers it; any other message stays an ordinary
+prompt, so `harness revoke`, `harness suspend`, and typed approvals keep working while it waits. An
+approval it records covers the work session of the conversation that answered. Without a session
+id (Cursor), the one pending session decision is the one answered; with several, none is guessed. Other messages, delivery acknowledgments, expired time, and default selections are not
 answers. A changed artifact cannot be approved from its earlier question. Revise or Stop can still
 reject a stale review. Repeated responses cannot reopen its approval. There is no agent-facing
 command to record a human answer. If the host cannot capture the actual reply, report that capability
 blocker; do not forge a hook event to keep the workflow moving.
 
-Status is available through `harness decision status --repo <project>`. Pending decisions block
+Status is available through `harness decision status --repo <project> --session-id <id>`. Pending decisions block
 workflow advancement and writes. Suspending harness checks remains independently available on the
 human's request; it preserves the pending decision rather than inventing an answer.
 

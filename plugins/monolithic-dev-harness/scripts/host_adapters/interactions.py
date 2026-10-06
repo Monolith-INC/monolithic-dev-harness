@@ -91,7 +91,16 @@ def prompt_answer(
     host: str, prompt: str, pending: dict[str, Any]
 ) -> tuple[str, str, str] | None:
     if pending.get("transport") == "chat":
-        return str(pending["id"]), prompt.strip(), "chat"
+        typed = prompt.strip().rstrip(".!").strip().casefold()
+        chosen = next(
+            (
+                str(option)
+                for option in pending.get("options", ())
+                if str(option).strip().casefold() == typed
+            ),
+            None,
+        )
+        return (str(pending["id"]), chosen, "chat") if chosen else None
     if host != "codex" or pending.get("transport") != "async":
         return None
     match = re.fullmatch(
@@ -119,28 +128,15 @@ def prompt_answer(
         return None
 
 
-def reply_payload(
-    repo: str,
-    pending: dict[str, Any],
-    reply: tuple[str, str, str],
-    host_session_id: str = "",
-) -> dict[str, Any]:
-    """Translate an actual delayed Codex reply into the existing answer handler input."""
-    return {
-        "cwd": repo,
-        **({"session_id": host_session_id} if host_session_id else {}),
-        "tool_use_id": reply[0],
-        "tool_input": {
-            "questions": [
-                {
-                    "id": "decision",
-                    "question": pending["question"],
-                    "options": [
-                        {"label": option, "description": ""}
-                        for option in pending["options"]
-                    ],
-                }
-            ]
-        },
-        "tool_response": {"answers": {"decision": {"answers": [reply[1]]}}},
+def decision_exchange(
+    pending: dict[str, Any], answer: str
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The question a delayed reply answered and the response, in the shape the question checks read."""
+    question = {
+        "id": "decision",
+        "question": pending["question"],
+        "options": [
+            {"label": option, "description": ""} for option in pending["options"]
+        ],
     }
+    return {"questions": [question]}, {"answers": {"decision": {"answers": [answer]}}}
