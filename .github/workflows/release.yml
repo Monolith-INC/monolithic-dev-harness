@@ -20,7 +20,7 @@ jobs:
         run: python scripts/check_versions.py --tag "${GITHUB_REF_NAME}"
       - name: Tests
         run: |
-          pip install pytest
+          pip install pytest -r plugins/monolithic-dev-harness/requirements-runtime.txt
           git config --global user.name "ci"
           git config --global user.email "ci@example.invalid"
           PYTHON=python plugins/monolithic-dev-harness/tests/run.sh
