@@ -184,6 +184,26 @@ def set_tracking_mode(repo: Path, mode: str) -> str:
     return mode
 
 
+# --- suspension (every check released, on the user's own typed request) -----------------------
+
+HARNESS_MODES = ("active", "suspended")
+
+
+def harness_mode(repo: Path) -> str:
+    mode = (read_json(state_dir(repo) / "suspension.json") or {}).get("mode")
+    return mode if mode in HARNESS_MODES else "active"
+
+
+def set_harness_mode(repo: Path, mode: str) -> str:
+    if mode not in HARNESS_MODES:
+        raise ValueError(f"harness mode must be one of {HARNESS_MODES}")
+    write_json(
+        state_dir(repo) / "suspension.json",
+        {"mode": mode, "changed": _now().isoformat()},
+    )
+    return mode
+
+
 # --- questions shown to the user (approval by click) ------------------------------------------
 
 

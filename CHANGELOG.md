@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-10-06
+
+### Added
+
+- The user can turn off every harness check in a repository by sending `harness suspend` as its own
+  message, and turn them back on with `harness resume`. Only the user's own message can suspend the
+  harness; no command or tool call lets an agent do it. While suspended, only direct edits to the
+  harness's own records under `.harness/` stay blocked, and approval clicks are still recorded.
+  Settings, tracker, sessions, and evidence are kept. It works even when the settings are invalid,
+  so a blocked repository can always be released.
+- `harness suspension status|resume`, the `suspend-harness` and `resume-harness` skills, and a
+  `harness doctor` warning while a repository is suspended.
+
 ## [0.5.3] - 2026-10-02
 
 ### Fixed
@@ -516,7 +529,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.3...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.4...HEAD
+[0.5.4]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.0...v0.5.1

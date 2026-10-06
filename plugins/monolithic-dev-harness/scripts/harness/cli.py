@@ -158,6 +158,12 @@ def doctor(args: argparse.Namespace) -> int:
 
 def _repository(report: Report, repo: Path, args: argparse.Namespace) -> None:
     loaded = settings.load(repo)
+    if state.harness_mode(repo) == "suspended":
+        report.line(
+            "warn",
+            "harness checks",
+            "suspended (type `harness resume` in the chat to restore them)",
+        )
     report.line(
         "ok" if isinstance(loaded, Ok) else "FAIL",
         "settings",
@@ -525,6 +531,27 @@ def preference_command(args: argparse.Namespace) -> int:
             return 2
 
 
+def suspension_command(args: argparse.Namespace) -> int:
+    """Status and resume only: suspending is recorded from the user's own prompt."""
+    if not Path(args.repo).is_dir():
+        print(f"{args.repo} is not a directory", file=sys.stderr)
+        return 2
+    repo = _repo(args.repo)
+    changed = (
+        attempt(
+            lambda: state.set_harness_mode(repo, "active"),
+            "state_unwritable",
+            "harness mode",
+            OSError,
+        )
+        if args.operation == "resume"
+        else Ok(None)
+    )
+    return _print(
+        fmap(changed, lambda _: json.dumps({"mode": state.harness_mode(repo)}))
+    )
+
+
 def _workflow_result(repo: Path, result: Result[workflow.Workflow]) -> int:
     return _print(
         bind(
@@ -829,6 +856,12 @@ def main(argv: list[str] | None = None) -> int:
         "--destination", help="new recovery worktree path (plan)"
     )
     adoption_parser.add_argument("--repo", default=".")
+    suspension_parser = sub.add_parser(
+        "suspension",
+        help="show or end a suspension of the harness checks (type `harness suspend` to start one)",
+    )
+    suspension_parser.add_argument("operation", choices=("status", "resume"))
+    suspension_parser.add_argument("--repo", default=".")
     knowledge_parser = sub.add_parser(
         "knowledge", help="query or refresh a harness-owned immutable knowledge store"
     )
@@ -858,6 +891,8 @@ def main(argv: list[str] | None = None) -> int:
         return tracker_command(args)
     if args.command == "adoption":
         return adoption_command(args)
+    if args.command == "suspension":
+        return suspension_command(args)
     return bootstrap(extra)
 
 

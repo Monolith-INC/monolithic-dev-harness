@@ -25,7 +25,7 @@ cannot reach the rules or the settings. Reviewer agents have no file-edit tools 
 | Stage | Skills |
 | --- | --- |
 | Conductors | `harness` (whole flow), `plan-initiative` (definition stage), `implement-story` (build stage), `review` (verify stage) |
-| Setup | `bootstrap`, `azure-devops`, `onboard-tracker`, `review-setup`, `tracking-status`, `skip-tracker`, `resume-tracker` |
+| Setup | `bootstrap`, `azure-devops`, `onboard-tracker`, `review-setup`, `tracking-status`, `skip-tracker`, `resume-tracker`, `suspend-harness`, `resume-harness` |
 | 0 · Define | `brainstorm-ideas`, `forge-idea`, `research-decision`, `product-brief`, `product-requirements`, `experience-design`, `architecture-spine`, `product-spec` |
 | 1 · Backlog | `generate-work-item`, `enrich-work-item`, `decompose-backlog`, `split-story`, `generate-breakdown-work-items`, `validate-artifact`, `auto-fix-artifact`, `amend-workitems`, `generate-plain-language-documentation` |
 | 2 · Technical plan | `start-ticket`, `write-spec`, `feature-implementation` |
