@@ -1,4 +1,8 @@
-"""Resolve a versioned workflow stage into its project-specific agent handoff."""
+"""Resolve a versioned workflow stage into its project-specific agent handoff.
+
+`routes` and `prepare_stage` return `Result` values; the helpers below raise `_Invalid`, which
+only those two edges catch.
+"""
 
 from __future__ import annotations
 
@@ -6,14 +10,13 @@ import hashlib
 import json
 import re
 from collections.abc import Iterable
-from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from core.result import Result, attempt
 from integrations.gateway import TOOLS_BY_NAME
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
-CATALOG_PATH = PLUGIN_ROOT / "config" / "prepared-workflows.json"
 PROJECT_CONTEXT_FILE_LIMIT = 32_000
 PROJECT_CONTEXT_TOTAL_LIMIT = 96_000
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
@@ -34,12 +37,8 @@ LOCAL_OPERATIONS = {
 }
 
 
-@dataclass
-class PreparedWorkflowError(Exception):
-    message: str
-
-    def __str__(self) -> str:
-        return self.message
+class _Invalid(ValueError):
+    """A catalog, reference, or request the prepared step cannot be built from."""
 
 
 def catalog_path(plugin_root: Path = PLUGIN_ROOT) -> Path:
@@ -51,24 +50,27 @@ def load_catalog(plugin_root: Path = PLUGIN_ROOT) -> dict[str, Any]:
     try:
         catalog = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError) as exc:
-        raise PreparedWorkflowError(
-            f"cannot read prepared workflow catalog: {exc}"
-        ) from exc
+        raise _Invalid(f"cannot read prepared workflow catalog: {exc}") from exc
     if not isinstance(catalog, dict) or catalog.get("version") != 1:
-        raise PreparedWorkflowError(
-            "prepared workflow catalog has an unsupported version"
-        )
+        raise _Invalid("prepared workflow catalog has an unsupported version")
     return catalog
 
 
-def routes(plugin_root: Path = PLUGIN_ROOT) -> dict[str, tuple[str, ...]]:
+def routes(plugin_root: Path = PLUGIN_ROOT) -> Result[dict[str, tuple[str, ...]]]:
+    return attempt(
+        lambda: _routes(plugin_root),
+        "prepared_workflow_invalid",
+        "prepared workflow",
+        _Invalid,
+    )
+
+
+def _routes(plugin_root: Path) -> dict[str, tuple[str, ...]]:
     catalog = load_catalog(plugin_root)
     raw_routes = catalog.get("routes")
     stages = catalog.get("stages")
     if not isinstance(raw_routes, dict) or not isinstance(stages, dict):
-        raise PreparedWorkflowError(
-            "prepared workflow catalog is missing routes or stages"
-        )
+        raise _Invalid("prepared workflow catalog is missing routes or stages")
     checked: dict[str, tuple[str, ...]] = {}
     for route_id, stage_ids in raw_routes.items():
         if (
@@ -80,19 +82,9 @@ def routes(plugin_root: Path = PLUGIN_ROOT) -> dict[str, tuple[str, ...]]:
                 for stage_id in stage_ids
             )
         ):
-            raise PreparedWorkflowError(
-                f"route {route_id!r} refers to an unknown stage"
-            )
+            raise _Invalid(f"route {route_id!r} refers to an unknown stage")
         checked[route_id] = tuple(stage_ids)
     return checked
-
-
-def stage_ids(route_id: str, plugin_root: Path = PLUGIN_ROOT) -> tuple[str, ...]:
-    match routes(plugin_root).get(route_id):
-        case tuple() as selected:
-            return selected
-        case _:
-            raise PreparedWorkflowError(f"unknown prepared route: {route_id}")
 
 
 def _digest(path: Path) -> str:
@@ -123,31 +115,13 @@ def _skill_description(path: Path) -> str:
     return value.strip("\"'")
 
 
-def _plugin_file(plugin_root: Path, relative: str) -> Path:
+def _inside(plugin_root: Path, relative: str, what: str) -> Path:
+    """A file inside the harness package, or `_Invalid` naming what was asked for."""
     candidate = (plugin_root / relative).resolve()
-    try:
-        candidate.relative_to(plugin_root.resolve())
-    except ValueError as exc:
-        raise PreparedWorkflowError(
-            f"knowledge reference escapes the harness package: {relative}"
-        ) from exc
+    if not candidate.is_relative_to(plugin_root.resolve()):
+        raise _Invalid(f"{what} escapes the harness package: {relative}")
     if not candidate.is_file():
-        raise PreparedWorkflowError(
-            f"required harness knowledge is missing: {relative}"
-        )
-    return candidate
-
-
-def _skill_file(plugin_root: Path, name: str) -> Path:
-    candidate = (plugin_root / "skills" / name / "SKILL.md").resolve()
-    try:
-        candidate.relative_to(plugin_root.resolve())
-    except ValueError as exc:
-        raise PreparedWorkflowError(
-            f"skill reference escapes the harness package: {name}"
-        ) from exc
-    if not candidate.is_file():
-        raise PreparedWorkflowError(f"recommended skill has no SKILL.md: {name}")
+        raise _Invalid(f"{what} is missing: {relative}")
     return candidate
 
 
@@ -173,19 +147,13 @@ def _project_documents(repo: Path) -> tuple[dict[str, str], ...]:
         raw = resolved.read_bytes()
         total_bytes += len(raw)
         if len(raw) > PROJECT_CONTEXT_FILE_LIMIT:
-            raise PreparedWorkflowError(
-                f"project context file is too large to preload: {resolved}"
-            )
+            raise _Invalid(f"project context file is too large to preload: {resolved}")
         if total_bytes > PROJECT_CONTEXT_TOTAL_LIMIT:
-            raise PreparedWorkflowError(
-                "project context exceeds the prepared handoff size limit"
-            )
+            raise _Invalid("project context exceeds the prepared handoff size limit")
         try:
             content = raw.decode("utf-8")
         except UnicodeDecodeError as exc:
-            raise PreparedWorkflowError(
-                f"project context is not UTF-8 text: {resolved}"
-            ) from exc
+            raise _Invalid(f"project context is not UTF-8 text: {resolved}") from exc
         entries.append(
             {
                 "kind": "project-guidance"
@@ -225,33 +193,59 @@ def prepare_stage(
     plugin_root: Path = PLUGIN_ROOT,
     original_request: str = "",
     available_operations: Iterable[str] | None = None,
+) -> Result[dict[str, Any]]:
+    """A read-only step package with verified references and skill guidance.
+
+    The step is `ready` only when its inputs are present and the host confirmed, through
+    `available_operations`, every tracker or SCM operation it needs.
+    """
+    return attempt(
+        lambda: _prepare_stage(
+            repo,
+            route_id,
+            stage_id,
+            plugin_root,
+            original_request,
+            available_operations,
+        ),
+        "prepared_workflow_invalid",
+        "prepared workflow",
+        _Invalid,
+    )
+
+
+def _prepare_stage(
+    repo: Path,
+    route_id: str,
+    stage_id: str,
+    plugin_root: Path,
+    original_request: str,
+    available_operations: Iterable[str] | None,
 ) -> dict[str, Any]:
-    """Return a read-only step package with verified references and skill guidance."""
     canonical_repo = repo.resolve()
     if not canonical_repo.is_dir():
-        raise PreparedWorkflowError(
-            f"project directory does not exist: {canonical_repo}"
-        )
+        raise _Invalid(f"project directory does not exist: {canonical_repo}")
     catalog = load_catalog(plugin_root)
-    route_stages = routes(plugin_root).get(route_id)
+    route_stages = _routes(plugin_root).get(route_id)
     if route_stages is None:
-        raise PreparedWorkflowError(f"unknown prepared route: {route_id}")
+        raise _Invalid(f"unknown prepared route: {route_id}")
     if stage_id not in route_stages:
-        raise PreparedWorkflowError(
-            f"stage {stage_id!r} is not part of route {route_id!r}"
-        )
+        raise _Invalid(f"stage {stage_id!r} is not part of route {route_id!r}")
     stage = catalog["stages"].get(stage_id)
     if not isinstance(stage, dict):
-        raise PreparedWorkflowError(f"prepared stage is missing: {stage_id}")
+        raise _Invalid(f"prepared stage is missing: {stage_id}")
 
     knowledge = tuple(
-        _plugin_file(plugin_root, item) for item in stage.get("knowledge", ())
+        _inside(plugin_root, item, "required harness knowledge")
+        for item in stage.get("knowledge", ())
     )
     skill_entries: list[dict[str, str]] = []
     for recommendation in stage.get("skills", ()):
         name = recommendation.get("name", "")
         when = recommendation.get("when", "")
-        skill_file = _skill_file(plugin_root, name)
+        skill_file = _inside(
+            plugin_root, f"skills/{name}/SKILL.md", "recommended skill"
+        )
         skill_entries.append(
             {
                 "name": name,
@@ -282,7 +276,7 @@ def prepare_stage(
                 }
             )
         else:
-            raise PreparedWorkflowError(
+            raise _Invalid(
                 f"prepared stage {stage_id!r} names an unknown operation: {operation_id}"
             )
 

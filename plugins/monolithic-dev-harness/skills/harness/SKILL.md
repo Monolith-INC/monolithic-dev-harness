@@ -118,6 +118,19 @@ captures its content digest. When the user says Pause, save any new progress fir
 earlier review points in one choice. After revising an earlier point, rebuild only affected drafts
 and save a new checkpoint before asking for another decision.
 
+## Prepare each stage
+
+At the start of each stage, run
+`harness workflow prepare --route <route> --prepared-stage <stage> --request "<exact request>" --repo <project>`,
+adding `--available <tool>` for each tracker or SCM tool your host offers. Use what it returns: the
+project and harness references, recommended skills, operations, expected outputs, checks, and
+recovery. `harness workflow routes` lists the routes: `investigate-request` for a named request,
+`explore-idea` for ideation, `prepare-artifacts` for backlog and specification work,
+`implement-approved-item` for build and verify, `resume-work` to continue saved work, and
+`suspend-checks` when the user asks to work outside the harness. The step is `ready` only when its
+inputs are present and you confirmed every tool it needs; report anything missing instead of
+improvising around it. The stage sections below add what the prepared step does not cover.
+
 ## Stage 0: Technical discovery
 
 For an assigned ticket or request to change an existing product, invoke `bmad-build`. It renders

@@ -859,25 +859,27 @@ def workflow_command(args: argparse.Namespace) -> int:
                 )
             )
         case "routes":
-            try:
-                print(json.dumps(prepared_workflows.routes(), indent=2, sort_keys=True))
-                return 0
-            except prepared_workflows.PreparedWorkflowError as exc:
-                print(str(exc), file=sys.stderr)
-                return 2
-        case "prepare":
-            try:
-                package = prepared_workflows.prepare_stage(
-                    repo,
-                    args.route or "",
-                    args.prepared_stage or "",
-                    original_request=args.request or "",
+            return _print(
+                fmap(
+                    prepared_workflows.routes(),
+                    lambda found: json.dumps(found, indent=2, sort_keys=True),
                 )
-            except prepared_workflows.PreparedWorkflowError as exc:
-                print(str(exc), file=sys.stderr)
-                return 2
-            print(json.dumps(package, ensure_ascii=False, indent=2, sort_keys=True))
-            return 0
+            )
+        case "prepare":
+            return _print(
+                fmap(
+                    prepared_workflows.prepare_stage(
+                        repo,
+                        args.route or "",
+                        args.prepared_stage or "",
+                        original_request=args.request or "",
+                        available_operations=args.available,
+                    ),
+                    lambda package: json.dumps(
+                        package, ensure_ascii=False, indent=2, sort_keys=True
+                    ),
+                )
+            )
         case "status":
             return _print(
                 fmap(
@@ -1086,6 +1088,13 @@ def main(argv: list[str] | None = None) -> int:
     workflow_parser.add_argument(
         "--prepared-stage", help="stage within a prepared route to inspect"
     )
+    workflow_parser.add_argument(
+        "--available",
+        action="append",
+        help="a tracker or SCM tool this host offers (repeat); a prepared step is ready only "
+        "when the host confirmed every tool it needs",
+    )
+
     decision_parser = sub.add_parser(
         "decision", help="present a host-adapted decision and wait for the human"
     )
