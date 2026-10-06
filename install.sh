@@ -230,10 +230,16 @@ install_marketplace_copy() {
   mkdir -p "${MARKETPLACE_DIR}.new/plugins"
   cp -R "${PAYLOAD}/.claude-plugin" "${PAYLOAD}/.cursor-plugin" "${MARKETPLACE_DIR}.new/"
   cp -R "${PAYLOAD}/plugins/${PLUGIN}" "${MARKETPLACE_DIR}.new/plugins/"
-  # Keep rendering dependencies in the owned plugin copy, never user-global Python.
-  "$PY" -m pip install --disable-pip-version-check --no-cache-dir --no-compile \
+  # Hosts started from the desktop may not see this terminal's PATH: remember the Python found
+  # here, which bin/harness-python tries first.
+  printf '%s\n' "$PY" >"${MARKETPLACE_DIR}.new/plugins/${PLUGIN}/runtime/python-path"
+  # Keep rendering dependencies in the owned plugin copy, never user-global Python. Only planning
+  # discovery needs them, so a failure here is a warning, not a failed install.
+  if ! "$PY" -m pip install --disable-pip-version-check --no-cache-dir --no-compile \
     --target "${MARKETPLACE_DIR}.new/plugins/${PLUGIN}/runtime/python" \
-    -r "${MARKETPLACE_DIR}.new/plugins/${PLUGIN}/requirements-runtime.txt"
+    -r "${MARKETPLACE_DIR}.new/plugins/${PLUGIN}/requirements-runtime.txt"; then
+    warn "could not install Jinja2 for ${PY}; \`harness workflow render\` needs it. Install pip for that Python and run the installer again"
+  fi
   cp -R "${PAYLOAD}/codex-marketplace" "${MARKETPLACE_DIR}.new/"
   mkdir -p "${MARKETPLACE_DIR}.new/codex-marketplace/.agents/plugins"
   cp "${PAYLOAD}/codex-marketplace/marketplace.json" \
@@ -241,8 +247,12 @@ install_marketplace_copy() {
   mkdir -p "${MARKETPLACE_DIR}.new/codex-marketplace/plugins"
   cp -R "${PAYLOAD}/plugins/${PLUGIN}" "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/"
   mkdir -p "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/runtime"
-  cp -R "${MARKETPLACE_DIR}.new/plugins/${PLUGIN}/runtime/python" \
+  cp "${MARKETPLACE_DIR}.new/plugins/${PLUGIN}/runtime/python-path" \
     "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/runtime/"
+  if [[ -d "${MARKETPLACE_DIR}.new/plugins/${PLUGIN}/runtime/python" ]]; then
+    cp -R "${MARKETPLACE_DIR}.new/plugins/${PLUGIN}/runtime/python" \
+      "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/runtime/"
+  fi
   rm -rf "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/tests"
   cp "${PAYLOAD}/plugins/${PLUGIN}/codex.mcp.json" \
     "${MARKETPLACE_DIR}.new/codex-marketplace/plugins/${PLUGIN}/.mcp.json"

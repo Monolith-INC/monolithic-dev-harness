@@ -63,6 +63,43 @@ def test_no_new_enough_python_is_a_clear_failure(tmp_path: Path) -> None:
     assert result.stdout == ""
 
 
+def test_the_installer_recorded_python_comes_first(tmp_path: Path) -> None:
+    plugin = tmp_path / "plugin"
+    (plugin / "bin").mkdir(parents=True)
+    (plugin / "runtime").mkdir()
+    launcher = plugin / "bin" / "harness-python"
+    launcher.write_text(LAUNCHER.read_text())
+    path_bin = tmp_path / "path"
+    path_bin.mkdir()
+    interpreter(path_bin, "python3.13", (3, 13))
+    recorded = interpreter(tmp_path, "recorded", (3, 12))
+    (plugin / "runtime" / "python-path").write_text(f"{recorded}\n")
+    result = subprocess.run(
+        ["/bin/sh", str(launcher), "hook.py"],
+        env={"PATH": str(path_bin)},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.stdout.startswith("recorded ")
+
+
+@pytest.mark.parametrize("event", ["prompt", "ask", "answer"])
+def test_without_python_the_users_message_still_goes_through(
+    tmp_path: Path, event: str
+) -> None:
+    interpreter(tmp_path, "python3", (3, 10))
+    result = subprocess.run(
+        ["/bin/sh", str(LAUNCHER), "hook.py", "--host", "claude", "--event", event],
+        env={"PATH": str(tmp_path)},
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+    assert result.returncode == 0
+    assert "needs Python 3.12 or newer" in result.stderr
+
+
 @pytest.mark.parametrize(
     "config", ["hooks/hooks.json", "hooks/codex.hooks.json", "hooks/cursor.hooks.json"]
 )
