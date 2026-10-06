@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import secrets
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -14,19 +15,52 @@ from harness import commands, questions, state
 RELATIVE_PATH = Path(".harness/state/decision.json")
 
 
+@dataclass(frozen=True)
+class Pending:
+    """A decision waiting for the human, with the scope it is stored in (None: project-wide)."""
+
+    id: str
+    question: str
+    options: tuple[str, ...]
+    transport: str
+    approval: bool
+    scope: str | None
+    presentation_id: str = ""
+
+    @classmethod
+    def from_record(cls, value: dict[str, Any], scope: str | None) -> Pending:
+        return cls(
+            id=str(value.get("id", "")),
+            question=str(value.get("question", "")),
+            options=tuple(str(option) for option in value.get("options", ())),
+            transport=str(value.get("transport", "")),
+            approval=bool(value.get("approval")),
+            scope=scope,
+            presentation_id=str(value.get("presentation_id", "")),
+        )
+
+    def matches_presentation(self, question: dict[str, Any], transport: str) -> bool:
+        """Whether a question being shown is this decision's prepared presentation."""
+        return (
+            self.transport in ("blocking", "async")
+            and self.transport == transport
+            and (
+                question.get("id") == self.id
+                or (transport == "async" and question.get("question") == self.question)
+            )
+            and not self.presentation_id
+        )
+
+
 def _path(
     repo: Path, work_session_id: str | None, *, active: bool = False
 ) -> Result[Path]:
-    if work_session_id is None:
-        return Ok(repo / RELATIVE_PATH)
     from harness import work_sessions
 
-    selected = (
-        work_sessions.require_active(repo, work_session_id)
-        if active
-        else work_sessions.select(repo, work_session_id)
+    return fmap(
+        work_sessions.scope_folder(repo, work_session_id, active=active),
+        lambda folder: folder / "decision.json",
     )
-    return fmap(selected, lambda session: session.folder / "decision.json")
 
 
 def record(repo: Path, work_session_id: str | None = None) -> dict[str, Any] | None:
@@ -78,25 +112,21 @@ def any_waiting(repo: Path) -> bool:
             return True
 
 
-def pending_scope(
-    repo: Path, work_session_id: str | None = None
-) -> tuple[dict[str, Any] | None, str | None]:
-    """Return the pending decision and the storage scope it actually belongs to.
+def pending(repo: Path, work_session_id: str | None = None) -> Pending | None:
+    """The decision this scope's user is answering.
 
-    Without a session (Cursor gives none), the one pending session decision is the one the user
-    is answering; with several, none is guessed.
+    The scope's own, else the project-wide one; without a session (Cursor gives none), the one
+    pending session decision. With several, none is guessed.
     """
-    scoped = record(repo, work_session_id)
-    if scoped and scoped.get("status") == "pending":
-        return scoped, work_session_id
-    global_record = record(repo)
-    if global_record and global_record.get("status") == "pending":
-        return global_record, None
+    for scope in (work_session_id, None) if work_session_id else (None,):
+        value = record(repo, scope)
+        if value and value.get("status") == "pending":
+            return Pending.from_record(value, scope)
     if work_session_id is None:
         match _pending_sessions(repo):
             case [(session_id, only)]:
-                return only, session_id
-    return None, work_session_id
+                return Pending.from_record(only, session_id)
+    return None
 
 
 def _pending_sessions(repo: Path) -> list[tuple[str, dict[str, Any]]]:
@@ -113,25 +143,6 @@ def _pending_sessions(repo: Path) -> list[tuple[str, dict[str, Any]]]:
             ]
         case Err():
             return []
-
-
-def matches_presentation(
-    pending: dict[str, Any] | None, question: dict[str, Any], transport: str
-) -> bool:
-    """Whether a question being shown is the prepared presentation of the pending decision."""
-    return bool(
-        pending
-        and pending.get("transport") in ("blocking", "async")
-        and pending.get("transport") == transport
-        and (
-            question.get("id") == pending.get("id")
-            or (
-                transport == "async"
-                and question.get("question") == pending.get("question")
-            )
-        )
-        and not pending.get("presentation_id")
-    )
 
 
 def new_key() -> str:

@@ -41,6 +41,20 @@ class Session:
     folder: Path
 
 
+def scope_folder(
+    project: Path, work_session_id: str | None, *, active: bool = False
+) -> Result[Path]:
+    """Where a scope keeps its records: the project's state folder, or the session's own."""
+    if work_session_id is None:
+        return Ok(state.state_dir(project))
+    selected = (
+        require_active(project, work_session_id)
+        if active
+        else select(project, work_session_id)
+    )
+    return fmap(selected, lambda session: session.folder)
+
+
 def root(project: Path) -> Path:
     return project.resolve() / ROOT
 

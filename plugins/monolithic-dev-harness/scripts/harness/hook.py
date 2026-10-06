@@ -383,14 +383,11 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         return 0
     work_session_id = context.value
     notes: list[str] = []
-    pending, decision_scope = decisions.pending_scope(repo, work_session_id)
+    pending = decisions.pending(repo, work_session_id)
     # Only a reply that picks an offered option answers; anything else is an ordinary prompt.
     reply = prompt_answer(host, prompt, pending) if pending else None
-    if reply is not None:
-        _print_prompt(
-            host,
-            _answer_decision(repo, pending, decision_scope, work_session_id, reply),
-        )
+    if pending is not None and reply is not None:
+        _print_prompt(host, _answer_decision(repo, pending, work_session_id, reply))
         return 0
     if not settings.governed(repo):
         if output := hook_bridge.format_prompt(host, []):
@@ -445,11 +442,11 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
         )
         return 0
     work_session_id = context.value
-    pending, pending_scope = decisions.pending_scope(repo, work_session_id)
+    pending = decisions.pending(repo, work_session_id)
     transport = question_transport(host, str(payload.get("tool_name", "")))
     tool_input = normalize_question(host, hook_bridge.question_input(payload))
     first = (tool_input.get("questions") or [{}])[0]
-    preparing = decisions.matches_presentation(pending, first, transport)
+    preparing = pending is not None and pending.matches_presentation(first, transport)
     if decisions.blocking(repo, work_session_id) and not preparing:
         _emit_decision(
             host,
@@ -518,11 +515,13 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
         for option in first.get("options", ())
         if isinstance(option, dict)
     )
-    decision_scope = pending_scope if preparing else work_session_id
+    decision_scope = (
+        pending.scope if pending is not None and preparing else work_session_id
+    )
     result = (
         decisions.bind_question(
             repo,
-            str((pending or {}).get("id", "")),
+            pending.id if pending is not None else "",
             tool_use_id,
             question,
             options,
@@ -641,19 +640,20 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
         print(hook_bridge.format_answer_context(context.failure.message))
         return 0
     work_session_id = context.value
-    pending, decision_scope = decisions.pending_scope(repo, work_session_id)
+    pending = decisions.pending(repo, work_session_id)
+    decision_scope = pending.scope if pending is not None else work_session_id
     tool_input = normalize_question(host, hook_bridge.question_input(payload))
     response = hook_bridge.answer_response(payload)
-    if pending and pending.get("transport") == "async":
+    if pending is not None and pending.transport == "async":
         return 0  # tool completion is delivery; the reply arrives later as a prompt
-    if pending:
+    if pending is not None:
         answered = questions.answer(tool_input, response)
         if answered is None:
             return 0  # delivery acknowledgment is not a human answer
         chosen = next(
             (
                 str(option)
-                for option in pending.get("options", ())
+                for option in pending.options
                 if questions.choice_label(str(option)).casefold()
                 == questions.choice_label(answered).casefold()
             ),
@@ -663,7 +663,7 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
             repo,
             tool_use_id,
             chosen,
-            str(pending.get("transport")),
+            pending.transport,
             work_session_id=decision_scope,
         )
         if isinstance(result, Err):
@@ -683,13 +683,13 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
 
 def _answer_decision(
     repo: Path,
-    pending: dict[str, Any],
-    decision_scope: str | None,
+    pending: decisions.Pending,
     conversation_scope: str | None,
     reply: tuple[str, str, str],
 ) -> list[str]:
     """Record a typed or delayed reply, then what it approves; notes for the agent."""
     key, answer, transport = reply
+    decision_scope = pending.scope
     match decisions.resolve(
         repo, key, answer, transport, work_session_id=decision_scope
     ):

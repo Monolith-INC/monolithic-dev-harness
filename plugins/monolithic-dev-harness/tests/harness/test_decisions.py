@@ -182,16 +182,16 @@ def test_answer_in_one_work_session_cannot_resolve_another_session_question(
     assert decisions.waiting(tmp_path, first.id)
 
 
-def test_pending_scope_reports_legacy_question_as_project_wide(
+def test_a_project_wide_question_is_pending_for_every_session(
     tmp_path: Path,
 ) -> None:
     session = work_sessions.start(tmp_path, "DAY-001").value
-    decisions.begin(tmp_path, "legacy", "Continue?", ("Continue",), "chat")
+    decisions.begin(tmp_path, "shared", "Continue?", ("Continue",), "chat")
 
-    pending, scope = decisions.pending_scope(tmp_path, session.id)
+    pending = decisions.pending(tmp_path, session.id)
 
-    assert pending is not None and pending["id"] == "legacy"
-    assert scope is None
+    assert pending is not None and pending.id == "shared"
+    assert pending.scope is None
 
 
 def test_host_conversations_keep_work_session_questions_separate(

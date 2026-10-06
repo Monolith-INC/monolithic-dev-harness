@@ -235,13 +235,11 @@ def set_harness_mode(repo: Path, mode: str) -> str:
 def _session_record_path(
     repo: Path, folder: str, name: str, work_session_id: str | None
 ) -> Path:
-    if work_session_id is None:
-        return state_dir(repo) / folder / f"{safe_name(name)}.json"
     from harness import work_sessions
 
-    match work_sessions.select(repo, work_session_id):
-        case Ok(session):
-            return session.folder / folder / f"{safe_name(name)}.json"
+    match work_sessions.scope_folder(repo, work_session_id):
+        case Ok(scope):
+            return scope / folder / f"{safe_name(name)}.json"
         case Err(failure):
             raise ValueError(failure.message)
 

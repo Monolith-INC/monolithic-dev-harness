@@ -4,7 +4,10 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from harness.decisions import Pending
 
 
 def present(
@@ -88,20 +91,20 @@ def normalize_question(host: str, tool_input: dict[str, Any]) -> dict[str, Any]:
 
 
 def prompt_answer(
-    host: str, prompt: str, pending: dict[str, Any]
+    host: str, prompt: str, pending: Pending
 ) -> tuple[str, str, str] | None:
-    if pending.get("transport") == "chat":
+    if pending.transport == "chat":
         typed = prompt.strip().rstrip(".!").strip().casefold()
         chosen = next(
             (
                 str(option)
-                for option in pending.get("options", ())
+                for option in pending.options
                 if str(option).strip().casefold() == typed
             ),
             None,
         )
-        return (str(pending["id"]), chosen, "chat") if chosen else None
-    if host != "codex" or pending.get("transport") != "async":
+        return (pending.id, chosen, "chat") if chosen else None
+    if host != "codex" or pending.transport != "async":
         return None
     match = re.fullmatch(
         r"\s*<send_user_message_question_reply>\s*(.*?)\s*</send_user_message_question_reply>\s*",
@@ -116,27 +119,24 @@ def prompt_answer(
             return None
         reply = replies[0]
         item = json.loads(reply["questionItemId"])
-        if item != ["request_user_input_async", pending.get("id"), 0] or reply.get(
-            "question"
-        ) != pending.get("question"):
+        if (
+            item != ["request_user_input_async", pending.id, 0]
+            or reply.get("question") != pending.question
+        ):
             return None
         answer = reply.get("answer")
-        return (
-            (str(pending["id"]), answer, "async") if isinstance(answer, str) else None
-        )
+        return (pending.id, answer, "async") if isinstance(answer, str) else None
     except (ValueError, KeyError, TypeError):
         return None
 
 
 def decision_exchange(
-    pending: dict[str, Any], answer: str
+    pending: Pending, answer: str
 ) -> tuple[dict[str, Any], dict[str, Any]]:
     """The question a delayed reply answered and the response, in the shape the question checks read."""
     question = {
         "id": "decision",
-        "question": pending["question"],
-        "options": [
-            {"label": option, "description": ""} for option in pending["options"]
-        ],
+        "question": pending.question,
+        "options": [{"label": option, "description": ""} for option in pending.options],
     }
     return {"questions": [question]}, {"answers": {"decision": {"answers": [answer]}}}
