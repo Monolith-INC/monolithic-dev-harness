@@ -330,3 +330,46 @@ def test_cli_rejects_unknown_render_options(project: Path) -> None:
         != 0
     )
     assert not (project / "_bmad/render").exists()
+
+
+def change_settings(project: Path) -> None:
+    settings = json.loads((project / ".harness/settings.json").read_text())
+    settings["approvals"] = {"window_minutes": 30}
+    (project / ".harness/settings.json").write_text(json.dumps(settings))
+
+
+def test_a_changed_setup_renders_the_same_steps_again(
+    project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    selected = session(project)
+    before = discovery.render(project, selected.id).value
+    change_settings(project)
+    # The same interpreter under another path, as after installing a newer Python.
+    current = Path(sys.executable)
+    monkeypatch.setattr(
+        discovery.sys, "executable", f"{current.parent}/./{current.name}"
+    )
+    after = discovery.render(project, selected.id).value
+    assert after["entry"] != before["entry"]
+    assert Path(before["entry"]).is_file()
+    assert {"settings_sha256", "python_command"} <= set(after["refreshed"]["changed"])
+    assert discovery.verify(project, selected.id).value["entry"] == after["entry"]
+
+
+def test_changed_steps_keep_the_run_on_its_snapshot(
+    project: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    selected = session(project)
+    before = discovery.render(project, selected.id).value
+    upgraded = tmp_path / "upgraded-skill"
+    import shutil
+
+    shutil.copytree(discovery.SKILL, upgraded)
+    step = upgraded / "step-02-plan.md"
+    step.write_text(step.read_text() + "\nA new rule.\n")
+    monkeypatch.setattr(discovery, "SKILL", upgraded)
+    change_settings(project)
+    result = discovery.render(project, selected.id)
+    assert result.failure.code == "discovery_snapshot_changed"
+    assert "steps changed" in result.failure.message
+    assert json.loads((selected.folder / discovery.PIN).read_text()) == before

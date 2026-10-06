@@ -22,17 +22,29 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 SKILL = PLUGIN_ROOT / "skills" / "bmad-build"
 DRIVER = PLUGIN_ROOT / "scripts" / "harness" / "render_discovery.py"
 PIN = "discovery-render.json"
+# What defines the planned run. When only the rest changed (a newer Python, a plugin path, the
+# settings file, the tracker), the same steps are rendered again for the new setup; a change here,
+# or to the steps themselves, keeps the run on the instructions it was planned with.
+IDENTITY = (
+    "project_root",
+    "session_id",
+    "original_request",
+    "language",
+    "route",
+    "review",
+    "bmad_config_sha256",
+)
 
 
 def onboarding_ready(repo: Path) -> Result[dict[str, Any]]:
     return bind(
-        setup.inspect(repo),
+        setup.onboarding_status(repo),
         lambda report: fmap(
             require(
                 report["status"] == "ready"
                 and report["language_confirmed"]
-                and not report["handoff"]["waiting_for_answer"]
-                and report["bmad_runtime"]["ready"],
+                and not report["waiting_for_answer"]
+                and report["bmad_ready"],
                 "onboarding_incomplete",
                 "complete project setup, language confirmation, and bundled runtime before work",
             ),
@@ -108,8 +120,8 @@ def _context(
         "session_id": session.id,
         "original_request": session.request,
         "language": str(report["language"]),
-        "tracker": str(report["current_tracker"]["name"]),
-        "scm": str(report["current_scm"].get("name", "local")),
+        "tracker": report["tracker"],
+        "scm": report["scm"],
         "preferences_path": str(preferences.path().resolve()),
         "settings_sha256": _digest(repo / ".harness" / "settings.json"),
         "bmad_config_sha256": hashlib.sha256(
@@ -239,12 +251,15 @@ def _read_pin(
 ) -> Result[dict[str, Any]]:
     return bind(
         _json(session.folder / PIN),
-        lambda pin: _verify_pin(repo, pin, context),
+        lambda pin: _verify_pin(repo, session, pin, context),
     )
 
 
 def _verify_pin(
-    repo: Path, pin: dict[str, Any], context: dict[str, str]
+    repo: Path,
+    session: work_sessions.Session,
+    pin: dict[str, Any],
+    context: dict[str, str],
 ) -> Result[dict[str, Any]]:
     match pin:
         case {
@@ -264,11 +279,78 @@ def _verify_pin(
                     lambda _: package,
                 ),
             )
+        case {
+            "version": 1,
+            "context": dict() as saved,
+            "entry": str() as entry,
+        } if all(saved.get(key) == context.get(key) for key in IDENTITY):
+            return bind(
+                _validate_entry(repo, Path(entry), saved),
+                lambda _: bind(
+                    require(
+                        _same_steps(Path(entry)),
+                        "discovery_snapshot_changed",
+                        "the plugin's discovery steps changed since this run was planned; "
+                        "finish or stop this session, then start a new one for the new steps",
+                    ),
+                    lambda _: _render_again(repo, session, saved, context, entry),
+                ),
+            )
+        case {"version": 1, "context": dict() as saved}:
+            changed = [key for key in IDENTITY if saved.get(key) != context.get(key)]
+            return err(
+                "discovery_snapshot_changed",
+                "this run was planned for a different "
+                + ", ".join(changed or ["context"])
+                + "; preserve it for review and start a new session",
+            )
         case _:
             return err(
                 "discovery_snapshot_changed",
                 "discovery context or pin changed; preserve the original run for review",
             )
+
+
+def _same_steps(entry: Path) -> bool:
+    """Whether the plugin's discovery steps are the ones this snapshot was rendered from."""
+    match _json(entry.parent / "manifest.json"):
+        case Ok({"inputs": {"source_sha256": dict() as rendered_from}}):
+            return rendered_from == {
+                path.relative_to(SKILL).as_posix(): _digest(path)
+                for path in sorted(SKILL.rglob("*.md"))
+                if path.name != "SKILL.md"
+            }
+        case _:
+            return False
+
+
+def _render_again(
+    repo: Path,
+    session: work_sessions.Session,
+    saved: dict[str, str],
+    context: dict[str, str],
+    previous: str,
+) -> Result[dict[str, Any]]:
+    """Render the same steps for the changed setup; the earlier snapshot stays on disk."""
+    changed = sorted(key for key in context if saved.get(key) != context.get(key))
+    return bind(
+        _invoke(repo, context),
+        lambda entry: bind(
+            _validate_entry(repo, entry, context),
+            lambda package: attempt(
+                lambda: _save_pin(
+                    session.folder / PIN,
+                    {
+                        **package,
+                        "refreshed": {"changed": changed, "previous": previous},
+                    },
+                ),
+                "discovery_render_failed",
+                "could not pin the discovery snapshot",
+                OSError,
+            ),
+        ),
+    )
 
 
 def _validate_entry(
