@@ -30,7 +30,7 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
 
 from core.result import Err, Failure, Ok, Result, attempt, bind, fmap  # noqa: E402
-from harness import gitstate, settings, setup, state  # noqa: E402
+from harness import bmad, gitstate, settings, setup, state  # noqa: E402
 from integrations import registry  # noqa: E402
 
 
@@ -273,6 +273,14 @@ def _finish(repo: Path) -> int:
                     pass
         case _:
             pass
+    match bmad.prepare(repo, chosen.value.artifacts_path):
+        case Err(failure):
+            print(
+                f"warning: {failure.message}; BMad planning skills need it",
+                file=sys.stderr,
+            )
+        case Ok(report):
+            print(f"bmad: setup {report['setup']}, output folder {report['output']}")
     match _ensure_codex_config(repo):
         case Err(failure):
             print(

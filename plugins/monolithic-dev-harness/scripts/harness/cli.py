@@ -40,6 +40,7 @@ from core.result import (  # noqa: E402
 )
 from harness import (  # noqa: E402
     adoption,
+    bmad,
     decisions,
     gitstate,
     knowledge,
@@ -164,6 +165,13 @@ def doctor(args: argparse.Namespace) -> int:
 
 def _repository(report: Report, repo: Path, args: argparse.Namespace) -> None:
     loaded = settings.load(repo)
+    report.line(
+        "ok" if bmad.ready(repo) else "warn",
+        "bmad",
+        "set up (_bmad/config.toml)"
+        if bmad.ready(repo)
+        else "not set up; run `harness bootstrap` again to prepare it",
+    )
     if state.harness_mode(repo) == "suspended":
         report.line(
             "warn",

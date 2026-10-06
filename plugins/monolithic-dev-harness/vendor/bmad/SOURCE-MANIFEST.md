@@ -23,7 +23,7 @@ Runtime support copied from the same source revision is under `skills/`. Its pac
 
 - `skills/bmad/` — setup, renderer, configuration, and shared runtime scripts.
 - `skills/bmad-ticket/` — BMad's local ticket-store support; kept internal to the bundle.
-- `skills/bmod-method/` — local package manifest listing only the bundled runtime skills.
+- `skills/bmod-method/` — local package manifest listing only the bundled runtime skills; it ships in the plugin's `skills/` folder, beside the skills it describes, because BMad looks for it there.
 
 Harness-exposed copies are under `../skills/`:
 

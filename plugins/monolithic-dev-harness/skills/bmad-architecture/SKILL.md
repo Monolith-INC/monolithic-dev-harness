@@ -36,8 +36,8 @@ The **memlog** (`.memlog.md`) is the run's working memory: every decision, const
 
 Writes go through the shared script (don't read the file back except on resume):
 
-- `uv run {project-root}/_bmad/scripts/memlog.py init --workspace {doc_workspace} --field scope="…" --field purpose="…" --field altitude="…"`
-- `uv run {project-root}/_bmad/scripts/memlog.py append --workspace {doc_workspace} --type <decision|constraint|version|assumption|question|direction|event> --text "…"`
+- `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/memlog.py init --workspace {doc_workspace} --field scope="…" --field purpose="…" --field altitude="…"`
+- `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/memlog.py append --workspace {doc_workspace} --type <decision|constraint|version|assumption|question|direction|event> --text "…"`
 
 ## Resolution rules
 
@@ -50,14 +50,14 @@ Writes go through the shared script (don't read the file back except on resume):
 
 **Forwarded activation:** if a caller invoked you with a stated intent and pre-resolved customization fields, honor them verbatim — skip your own intent inference, use the supplied values for those named fields, and resolve only the remaining fields from your own `customize.toml`.
 
-1. Resolve customization: `uv run {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow`.
+1. Resolve customization: `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/resolve_customization.py --skill {skill-root} --project-root {project-root} --key workflow`.
    - Script not found: prepare the project runtime from the harness-bundled BMad files, then run the command again:
-     `uv run --no-cache "{skill-root}/../../vendor/bmad/skills/bmad/scripts/setup.py" --project-root "{project-root}" --skill "{skill-root}/../../vendor/bmad/skills/bmad" --root "{skill-root}/.." --root "{skill-root}/../../vendor/bmad/skills"`.
+     `sh "{skill-root}/../../bin/harness-python" "{skill-root}/../../vendor/bmad/skills/bmad/scripts/setup.py" --project-root "{project-root}" --skill "{skill-root}/../../vendor/bmad/skills/bmad" --root "{skill-root}/.." --root "{skill-root}/../../vendor/bmad/skills"`.
      If setup fails, report its output and stop. Do not install or fetch BMad from another repository.
    - Any other failure: read `{skill-root}/customize.toml` and use defaults.
 
    Run `{workflow.activation_steps_prepend}`, then `{workflow.activation_steps_append}`. Hold `{workflow.persistent_facts}` as standing context — empty unless the user opted in — and consult `{workflow.external_sources}` on demand.
-2. Resolve config: `uv run {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key core.output_folder --key core.active_initiative`. `{date}` is the current system datetime. `{slug}` is what the architecture is about, in kebab-case: the run lands in `architecture-{slug}/architecture-{slug}.md`.
+2. Resolve config: `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/resolve_config.py --project-root {project-root} --key core.output_folder --key core.active_initiative`. `{date}` is the current system datetime. `{slug}` is what the architecture is about, in kebab-case: the run lands in `architecture-{slug}/architecture-{slug}.md`.
    - Script not found, or no `output_folder`: prepare the project runtime using the bundled setup command above, then retry once. If it still fails, report the error and stop; do not install or fetch BMad from another repository.
    - No `active_initiative`: ask once whether this work belongs to a named initiative or is standalone. Use the answer for this run only; do not invoke an unbundled skill or write project configuration. For standalone work, use the configured output folder directly.
 3. Headless (no interactive user) → follow `references/headless.md` for the whole run. Otherwise greet the user. Detect the intent from the conversation and input — **create** (the default), **update** an existing spine, or **validate** one (see those sections). If the real ask is requirements, UX, a capability contract, or backlog breakdown, use the matching harness product or backlog skill instead.
