@@ -124,11 +124,13 @@ and save a new checkpoint before asking for another decision.
 
 ## Stage 0: Technical discovery
 
-For an assigned ticket or request to change an existing product, follow
-[`technical-discovery.md`](references/technical-discovery.md). It is included in the plugin, so this
-stage does not prepare a project copy of BMad, render generated steps, install modules, or fetch
-dependencies. Do not offer the user choices about repairing or installing workflow infrastructure.
-Do not start implementation from this step. On approval, save the plan as a harness workflow
+For an assigned ticket or request to change an existing product, invoke `bmad-build`. It runs BMad
+Build's clarify-and-route and plan steps, shipped already rendered in the plugin, on the BMad runtime
+that `harness bootstrap` prepares (`_bmad/`). Do not install, render, or fetch anything, and do not
+offer the user choices about repairing or installing workflow infrastructure. For broad or risky
+work, BMad's `bmad-spec` (a capability contract) and `bmad-architecture` (decisions that keep
+separately built parts consistent) are available; `bmad-build` uses `bmad-prd` when the requested
+behavior is too unclear to investigate. Do not start implementation from this step. On approval, save the plan as a harness workflow
 checkpoint and pass it to Stage 1 as the source for work-item drafting. The Stage 0 approval does
 not publish tracker items; the normal backlog review and write gates still apply.
 

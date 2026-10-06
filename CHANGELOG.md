@@ -28,6 +28,11 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- BMad is hooked back in. Stage 0 runs BMad Build's own clarify and plan steps (rendered at build
+  time with BMad's renderer) instead of a hand-written checklist. `harness bootstrap` runs BMad's
+  bundled setup and points its output folder at `artifacts_path`; BMad skills run their unchanged
+  scripts through `bin/harness-python` instead of `uv`; the module record ships beside the skills,
+  and BMad's ticket script is installed again.
 - Approving through a pending decision now opens the window for `approvals.window_minutes`
   instead of a fixed 20 minutes.
 

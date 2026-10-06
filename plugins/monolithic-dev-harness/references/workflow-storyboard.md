@@ -48,7 +48,7 @@ Use this map instead of searching plugin files to rediscover workflow capabiliti
 | Existing requirements/spec/review artifacts | `tracker_list_artifacts` |
 | Active or saved workflow state | `harness workflow status` / `harness workflow list` |
 | Settings and artifact folder for backlog work | `bin/agile-backlog-toolkit config --show` |
-| Technical discovery | `skills/harness/references/technical-discovery.md` |
+| Technical discovery | `bmad-build` (BMad Build's clarify and plan steps) |
 | Ideation and product shaping | `plan-initiative` and its listed optional routes |
 
 For a named project file, open that file directly. Use the host's tool catalog and these known

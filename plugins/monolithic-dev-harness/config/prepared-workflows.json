@@ -16,10 +16,11 @@
     "discover": {
       "title": "Investigate the named request",
       "required_inputs": ["original_request"],
-      "knowledge": ["references/workflow-storyboard.md", "skills/harness/references/technical-discovery.md"],
+      "knowledge": ["references/workflow-storyboard.md", "skills/bmad-build/SKILL.md"],
       "operations": ["harness.bootstrap.inspect", "harness.knowledge.find", "harness.knowledge.fetch", "tracker_describe", "tracker_search_work_items", "tracker_get_work_item"],
       "skills": [
-        {"name": "knowledge-acquire", "when": "Before analysis, find source-backed project notes related to the exact request."}
+        {"name": "knowledge-acquire", "when": "Before analysis, find source-backed project notes related to the exact request."},
+        {"name": "bmad-build", "when": "Investigate the request and prepare the reviewed plan with BMad Build's clarify and plan steps."}
       ],
       "outputs": ["discovery findings", "code or artifact map", "open questions", "proposed next route"],
       "checks": ["carry the exact request and selected project into the step", "inspect the matching source or work item and cite file paths", "separate observed facts, assumptions, and open questions"],

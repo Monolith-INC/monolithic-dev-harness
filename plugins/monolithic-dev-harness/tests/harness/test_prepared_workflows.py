@@ -140,7 +140,7 @@ class PreparedWorkflowTests(unittest.TestCase):
         references = {Path(item["path"]).name for item in package["harness_knowledge"]}
         self.assertEqual(
             references,
-            {"workflow-storyboard.md", "technical-discovery.md"},
+            {"workflow-storyboard.md", "SKILL.md"},
         )
         self.assertTrue(all(item["digest"] for item in package["harness_knowledge"]))
 
