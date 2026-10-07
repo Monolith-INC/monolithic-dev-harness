@@ -69,7 +69,9 @@ def test_every_project_script_is_one_setup_installs(skill: Path) -> None:
 
 def test_stage_zero_routes_to_bmad_build() -> None:
     harness = (SKILLS / "harness" / "SKILL.md").read_text(encoding="utf-8")
-    stage_zero = harness[harness.index("## Stage 0") : harness.index("## Stage 1")]
+    assert "../../references/harness-stage-guide.md" in harness
+    guide = (PLUGIN / "references/harness-stage-guide.md").read_text(encoding="utf-8")
+    stage_zero = guide[guide.index("## Stage 0") : guide.index("## Stage 1")]
     assert "invoke `bmad-build`" in stage_zero
     assert not (SKILLS / "harness" / "references" / "technical-discovery.md").exists()
 

@@ -181,7 +181,7 @@ Every harness command costs the agent a full step (seconds to tens of seconds ea
 
 | # | Friction (DAY-003) | Steps lost | Fix |
 |---|---|---|---|
-| F1 | Starting work took ~11 commands: inspect, route, start session, start workflow, prepare (twice), render, read entry and steps, resolve config | ~9 | One `harness begin "<request>"`: setup check, route, start or resume the session, start the workflow, render, and return the entry and any setup question |
+| F1 | Starting work took ~11 commands: inspect, route, start session, start workflow, prepare (twice), render, read entry and steps, resolve config | ~9 | One `harness begin --request "<request>"`: setup check, route, start or resume the session, start the workflow, render, and return the entry and any setup question |
 | F2 | `decision status` after every answer, though the prompt hook already reports "human decision recorded: X" | ~1 per answer | Drop it from the instructions |
 | F3 | A manual `workflow checkpoint` with five arguments before every question | ~1 per question | Asking a gate with `--artifact` saves the checkpoint itself; manual checkpoints only at stage ends |
 | F4 | `workflow prepare --available <tool>...` capability declarations | ~2 | Infer or drop them |
@@ -217,3 +217,5 @@ Replay DAY-003 on test-project-template in Codex and Claude Code, and keep the r
   - `bmad-qa-generate-e2e-tests` — runs in Build/Verify alongside `automated-tests`.
 - ✅ Code review stays with `thermos`. Verify runs `thermos` plus `bmad-review`'s edge-case (claims + deletion) and verification-gap lenses. Of BMAD's step-04/05 we port only the findings-triage menu.
 - ✅ Documentation is a standing duty of every phase (see §5).
+
+F1–F6 implementation and verification: [checkpoint log](../../06-delivery/checkpoints/2026-10-07-less-friction.md).
