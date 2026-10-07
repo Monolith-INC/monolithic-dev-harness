@@ -38,7 +38,7 @@ import json
 import re
 import sys
 import unicodedata
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -163,11 +163,16 @@ def cmd_tally(args) -> int:
 # --- staleness ---------------------------------------------------------------
 
 
+def _today() -> date:
+    """The local calendar date, as `date.today()` gives it."""
+    return datetime.now().astimezone().date()
+
+
 def parse_date(raw: str) -> date:
     raw = raw.strip()
     for fmt in ("%Y-%m-%d", "%Y-%m", "%Y"):
         try:
-            return datetime.strptime(raw, fmt).date()
+            return datetime.strptime(raw, fmt).replace(tzinfo=UTC).date()
         except ValueError:
             continue
     raise ValueError(f"unparseable date: {raw!r} (want YYYY[-MM[-DD]])")
@@ -183,7 +188,7 @@ def cmd_staleness(args) -> int:
     try:
         payload = json.loads(read_text(args.file))
         windows = {k.lower(): int(v) for k, v in json.loads(args.windows).items()}
-        today = parse_date(args.today) if args.today else date.today()
+        today = parse_date(args.today) if args.today else _today()
     except (ValueError, json.JSONDecodeError) as e:
         print(f"error: {e}", file=sys.stderr)
         return 2
@@ -236,7 +241,7 @@ def cmd_slug(args) -> int:
     folder = (
         args.pattern.replace("{research_type}", args.type)
         .replace("{topic_slug}", slug)
-        .replace("{date}", args.date or date.today().isoformat())
+        .replace("{date}", args.date or _today().isoformat())
     )
     return out({"topic_slug": slug, "folder": folder}, 0)
 
@@ -290,27 +295,43 @@ def cmd_escape_sources(args) -> int:
         tds = "".join(f"<td>{cell_html(c, invalid)}</td>" for c in cells[1:])
         body_rows.append(f'<tr id="src-{n}"><td>[{n}]</td>{tds}</tr>')
     table = '<table class="sources"><tbody>' + "".join(body_rows) + "</tbody></table>"
-    return out({"rows": len(rows), "invalid_urls": invalid, "html": table}, 1 if invalid else 0)
+    return out(
+        {"rows": len(rows), "invalid_urls": invalid, "html": table}, 1 if invalid else 0
+    )
 
 
 # --- entry point -------------------------------------------------------------
 
 
 def main(argv: list[str] | None = None) -> int:
-    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    pc = sub.add_parser("citations", help="cross-check [n] markers vs the source appendix")
+    pc = sub.add_parser(
+        "citations", help="cross-check [n] markers vs the source appendix"
+    )
     pc.add_argument("file", help="path to the research report (or - for stdin)")
     pc.set_defaults(func=cmd_citations)
 
-    pt = sub.add_parser("tally", help="count memlog entries by type and claims by status")
+    pt = sub.add_parser(
+        "tally", help="count memlog entries by type and claims by status"
+    )
     pt.add_argument("file", help="path to .memlog.md (or - for stdin)")
     pt.set_defaults(func=cmd_tally)
 
-    ps = sub.add_parser("staleness", help="compute re-check dates from freshness windows")
-    ps.add_argument("file", help="claims JSON: [{claim, class, pub_date}] (or - for stdin)")
-    ps.add_argument("--windows", required=True, help="JSON months-per-class map, e.g. '{\"pricing\": 3}'")
+    ps = sub.add_parser(
+        "staleness", help="compute re-check dates from freshness windows"
+    )
+    ps.add_argument(
+        "file", help="claims JSON: [{claim, class, pub_date}] (or - for stdin)"
+    )
+    ps.add_argument(
+        "--windows",
+        required=True,
+        help="JSON months-per-class map, e.g. '{\"pricing\": 3}'",
+    )
     ps.add_argument("--today", help="override today's date (YYYY-MM-DD)")
     ps.set_defaults(func=cmd_staleness)
 
@@ -325,7 +346,9 @@ def main(argv: list[str] | None = None) -> int:
     pg.add_argument("--date", help="override date (YYYY-MM-DD; default today)")
     pg.set_defaults(func=cmd_slug)
 
-    pe = sub.add_parser("escape-sources", help="source appendix as escaped HTML with validated links")
+    pe = sub.add_parser(
+        "escape-sources", help="source appendix as escaped HTML with validated links"
+    )
     pe.add_argument("file", help="path to the research report (or - for stdin)")
     pe.set_defaults(func=cmd_escape_sources)
 

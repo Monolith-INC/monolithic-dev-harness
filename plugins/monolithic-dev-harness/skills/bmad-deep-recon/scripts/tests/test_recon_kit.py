@@ -125,7 +125,16 @@ class SlugTest(unittest.TestCase):
         self.assertEqual(code, 0)
         pattern = "{research_type}-{topic_slug}-{date}"
         code, result = run(
-            ["slug", "SMB Accounting SaaS", "--type", "market", "--date", "2026-07-22", "--pattern", pattern]
+            [
+                "slug",
+                "SMB Accounting SaaS",
+                "--type",
+                "market",
+                "--date",
+                "2026-07-22",
+                "--pattern",
+                pattern,
+            ]
         )
         self.assertEqual(result["folder"], "market-smb-accounting-saas-2026-07-22")
         self.assertEqual(code, 0)
@@ -138,7 +147,9 @@ class EscapeSourcesTest(unittest.TestCase):
             report.write_text(REPORT, encoding="utf-8")
             code, result = run(["escape-sources", str(report)])
         self.assertEqual(result["rows"], 3)
-        self.assertTrue(any(u.startswith("javascript:") for u in result["invalid_urls"]))
+        self.assertTrue(
+            any(u.startswith("javascript:") for u in result["invalid_urls"])
+        )
         self.assertNotIn("javascript:", result["html"])  # never linked
         self.assertIn('href="https://example.com/g"', result["html"])
         self.assertIn('id="src-1"', result["html"])
