@@ -219,3 +219,6 @@ Replay DAY-003 on test-project-template in Codex and Claude Code, and keep the r
 - ✅ Documentation is a standing duty of every phase (see §5).
 
 F1–F6 implementation and verification: [checkpoint log](../../06-delivery/checkpoints/2026-10-07-less-friction.md).
+
+Technical recovery and binding contracts for the thermos corrections:
+[PR #36 recovery contracts](pr-36-recovery-contracts.md).

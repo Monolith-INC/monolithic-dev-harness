@@ -1,9 +1,9 @@
 """Bind host-owned conversation ids to project work sessions at the host boundary.
 
 A conversation is bound once, by the first session-scoped harness command it runs, and switches
-only through an exact `harness work-session select|resume <id>`. The hook binds after it has
-allowed the command, and the decision gate runs first, so a pending decision can never be escaped
-by moving to another session.
+through an exact `harness work-session select|resume <id>` or a successfully completed `begin`.
+The startup adapter pairs trusted pre/post events and protected completion evidence before binding.
+The pending-decision guard runs first, so a pending question cannot be escaped by switching work.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from core.result import Err, Failure, Ok, Result, attempt, bind, fmap, require
-from harness import commands, state, work_sessions
+from harness import commands, decisions, state, work_sessions
 
 VERSION = 1
 ROOT = Path(".harness") / "state" / "host_sessions"
@@ -54,6 +54,8 @@ def bind_session(
     host_session_id: str,
     work_session_id: str,
     operation: str = "select",
+    *,
+    startup_receipt: str = "",
 ) -> Result[str]:
     return bind(
         _path(project, host, host_session_id),
@@ -68,6 +70,19 @@ def bind_session(
                             "host": host,
                             "host_session_id": host_session_id,
                             "work_session_id": session.id,
+                            "consumed_startups": list(
+                                dict.fromkeys(
+                                    (*consumed_startups(destination),)
+                                    + ((startup_receipt,) if startup_receipt else ())
+                                )
+                            ),
+                            **{
+                                key: value
+                                for key, value in (
+                                    ("startup_receipt", startup_receipt),
+                                )
+                                if value
+                            },
                         },
                     ),
                     "host_session_unwritable",
@@ -78,6 +93,22 @@ def bind_session(
             ),
         ),
     )
+
+
+def consumed_startups(source: Path) -> tuple[str, ...]:
+    match state.read_json(source):
+        case {"consumed_startups": list() as receipts}:
+            return tuple(item for item in receipts if isinstance(item, str))
+        case _:
+            return ()
+
+
+def startup_consumed(project: Path, host: str, conversation: str, receipt: str) -> bool:
+    match _path(project, host, conversation):
+        case Ok(source):
+            return receipt in consumed_startups(source)
+        case _:
+            return False
 
 
 def resolve_session(
@@ -150,6 +181,12 @@ def requested(command: str, cwd: Path) -> tuple[str, str] | None:
     `workflow` or `decision` command names its session.
     """
     match commands.harness_args(command, cwd):
+        case ("begin", *rest) if "--new" not in rest:
+            match commands.option(tuple(rest), "--session"):
+                case str() as identifier:
+                    return identifier, "begin"
+                case _:
+                    return None
         case ("work-session", "select" | "resume" as how, identifier, *_):
             return identifier, how
         case ("workflow" | "decision", *rest):
@@ -157,6 +194,19 @@ def requested(command: str, cwd: Path) -> tuple[str, str] | None:
             return (named, "named") if named else None
         case _:
             return None
+
+
+def recovery_allowed(
+    project: Path, current: str | None, request: tuple[str, str] | None
+) -> bool:
+    """Recover a pending scope without leaving another unanswered conversation."""
+    match request:
+        case (identifier, "begin") if not decisions.waiting(project):
+            return current == identifier or (
+                current is None and decisions.pending(project, identifier) is not None
+            )
+        case _:
+            return False
 
 
 def mismatch(current: str | None, request: tuple[str, str] | None) -> Failure | None:

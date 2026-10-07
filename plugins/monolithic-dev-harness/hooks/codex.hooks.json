@@ -3,7 +3,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*",
+        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*|exec_command|functions\\.exec_command",
         "hooks": [
           {
             "type": "command",
@@ -31,6 +31,16 @@
           {
             "type": "command",
             "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event answer",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "^(Bash|exec_command|functions\\.exec_command)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event startup",
             "timeout": 10
           }
         ]

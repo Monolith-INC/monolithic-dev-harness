@@ -113,3 +113,12 @@ acknowledgement; do not ask for each decision again.
 
 Every turn ends with a menu, a question batch, or a status line that starts `Next:` and continues
 working. Never end a turn with none of these.
+
+## Automatic review checkpoints
+
+Presenting a decision with artifacts adds a workflow review point when that workflow is active.
+The pending decision owns recovery data until the checkpoint is applied. Failed decision storage
+creates no checkpoint; an interrupted projection is completed once on workflow read or answer
+capture. Recovery never answers for the user or grants approval. A conflict preserves both records
+and stops advancement for inspection; do not replace either record or re-ask approval to bypass it.
+Questions without a workflow or in a paused workflow continue without an automatic checkpoint.

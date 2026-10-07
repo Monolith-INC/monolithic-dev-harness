@@ -297,17 +297,18 @@ def _point(raw: Any) -> Result[Point]:
 
 
 def load(repo: Path, session_id: str | None = None) -> Result[Workflow]:
-    if session_id is not None:
-        from harness import work_sessions
+    from harness import review_decisions, work_sessions
 
-        return bind(
-            work_sessions.select(repo, session_id),
-            lambda selected: _load_file(selected.folder / "workflow.json"),
-        )
-    return _load_file(path(repo))
+    return bind(
+        work_sessions.scope_folder(repo, session_id),
+        lambda folder: bind(
+            review_decisions.recover(repo, session_id),
+            lambda _: read_file(folder / "workflow.json"),
+        ),
+    )
 
 
-def _load_file(file: Path) -> Result[Workflow]:
+def read_file(file: Path) -> Result[Workflow]:
     match file.is_file():
         case False:
             return err("workflow_absent", "no workflow has been saved")
@@ -321,14 +322,12 @@ def save(repo: Path, workflow: Workflow, session_id: str | None = None) -> Resul
 
         return bind(
             work_sessions.require_active(repo, session_id),
-            lambda selected: _save_scoped(
-                repo, workflow, selected.folder / "workflow.json"
-            ),
+            lambda selected: persist(repo, workflow, selected.folder / "workflow.json"),
         )
-    return _save_scoped(repo, workflow, path(repo))
+    return persist(repo, workflow, path(repo))
 
 
-def _save_scoped(repo: Path, workflow: Workflow, destination: Path) -> Result[Path]:
+def persist(repo: Path, workflow: Workflow, destination: Path) -> Result[Path]:
     return bind(
         attempt(
             lambda: state.ensure_local_exclude(repo),

@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- PR #36 recovery fixes: shared checked resume, deferred successful-startup conversation binding,
+  and recoverable decision/checkpoint projection. Failed writes, stale instructions and replayed
+  completion output preserve existing progress and approval boundaries.
+
 - `harness begin --request` consolidates setup inspection, session routing and pinned discovery entry.
 - Artifact review questions save workflow checkpoints automatically. `harness plan check` reports
   plan size estimates and advisory scope signals; the entry skill loads detailed guidance on demand.

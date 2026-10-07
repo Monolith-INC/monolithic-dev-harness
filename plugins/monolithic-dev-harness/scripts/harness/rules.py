@@ -346,6 +346,7 @@ def shell_writes_matching(
 _HOOK_SCRIPT = re.compile(r"(?:^|[\s/'\"=])(?:hook|hook_runtime)\.py\b")
 _HOOK_MODULE = re.compile(
     r"\bhook_runtime\b|\bharness\.hook\b|\bharness\s+import\s+.*\bhook\b"
+    r"|\bhost_adapters\.startup_context\b|\bhost_adapters\s+import\s+.*\bstartup_context\b"
 )
 
 

@@ -39,6 +39,7 @@ class Session:
     updated_at: str
     events: tuple[dict[str, str], ...]
     folder: Path
+    implicit_selection: bool = True
 
 
 def scope_folder(
@@ -73,6 +74,7 @@ def _payload(session: Session) -> dict[str, Any]:
         "created_at": session.created_at,
         "updated_at": session.updated_at,
         "events": list(session.events),
+        "implicit_selection": session.implicit_selection,
     }
 
 
@@ -93,6 +95,7 @@ def _from_payload(
                 for event in payload["events"]
             ),
             folder=folder,
+            implicit_selection=payload.get("implicit_selection", True) is True,
         )
     except (KeyError, TypeError, ValueError):
         return err(
@@ -135,17 +138,29 @@ def _read(project: Path, folder: Path) -> Result[Session]:
 
 
 def start(project: Path, request: str) -> Result[Session]:
-    normalized = request.strip()
+    return bind(
+        create(project, request, implicit_selection=True),
+        lambda selected: attempt(
+            lambda: _remembered(project, selected),
+            "session_unwritable",
+            "could not select the created work session",
+            OSError,
+        ),
+    )
+
+
+def create(
+    project: Path, request: str, *, implicit_selection: bool = False
+) -> Result[Session]:
+    """Create durable work without selecting it; startup selects only after validation."""
     return bind(
         require(
-            bool(normalized),
+            bool(request.strip()),
             "invalid_request",
             "a work session needs the original request",
         ),
         lambda _: attempt(
-            lambda: _remembered(
-                project.resolve(), _create(project.resolve(), normalized)
-            ),
+            lambda: _create(project.resolve(), request.strip(), implicit_selection),
             "session_unwritable",
             "could not create a work session",
             OSError,
@@ -158,7 +173,7 @@ def _remembered(project: Path, session: Session) -> Session:
     return session
 
 
-def _create(project: Path, request: str) -> Session:
+def _create(project: Path, request: str, implicit_selection: bool) -> Session:
     state.ensure_local_exclude(project)
     identifier = "WS-" + secrets.token_hex(6)
     sessions_root = root(project)
@@ -174,6 +189,7 @@ def _create(project: Path, request: str) -> Session:
         updated_at=now,
         events=({"type": "started", "at": now},),
         folder=folder,
+        implicit_selection=implicit_selection,
     )
     staging.mkdir(parents=True, exist_ok=False)
     try:
@@ -193,7 +209,23 @@ CURRENT = "current.json"
 
 def remember_current(project: Path, identifier: str) -> None:
     """Record the session the project is working in, so nobody has to repeat its id."""
-    state.write_json(root(project) / CURRENT, {"id": identifier})
+    state.write_json(
+        root(project) / CURRENT,
+        {
+            "id": identifier,
+            "selected": sorted(set((*_selected(project), identifier))),
+        },
+    )
+
+
+def _selected(project: Path) -> tuple[str, ...]:
+    match state.read_json(root(project) / CURRENT):
+        case {"selected": list() as selected}:
+            return tuple(item for item in selected if isinstance(item, str))
+        case {"id": str() as identifier}:
+            return (identifier,)
+        case _:
+            return ()
 
 
 def current(project: Path) -> str | None:
@@ -205,13 +237,27 @@ def current(project: Path) -> str | None:
     """
     match list_sessions(project):
         case Ok(sessions):
-            active = [s.id for s in sessions if s.status == Status.ACTIVE]
+            return _current_active(
+                tuple(
+                    s.id
+                    for s in sessions
+                    if s.status == Status.ACTIVE
+                    and (s.implicit_selection or s.id in _selected(project))
+                ),
+                (state.read_json(root(project) / CURRENT) or {}).get("id"),
+            )
         case _:
             return None
-    remembered = (state.read_json(root(project) / CURRENT) or {}).get("id")
-    if remembered in active:
-        return str(remembered)
-    return active[0] if len(active) == 1 else None
+
+
+def _current_active(active: tuple[str, ...], remembered: object) -> str | None:
+    match active:
+        case _ if remembered in active:
+            return str(remembered)
+        case (identifier,):
+            return identifier
+        case _:
+            return None
 
 
 def list_sessions(project: Path) -> Result[tuple[Session, ...]]:
@@ -342,20 +388,28 @@ TRANSITIONS = {
 }
 
 
-def transition(project: Path, identifier: str, operation: str) -> Result[Session]:
+def transition(
+    project: Path, identifier: str, operation: str, *, make_current: bool = True
+) -> Result[Session]:
     return bind(
         select(project, identifier),
-        lambda current: _transition(current, operation),
+        lambda current: _transition(current, operation, make_current),
     )
 
 
-def _save_transition(updated: Session) -> None:
+def _save_transition(updated: Session, make_current: bool) -> Session:
     state.write_json(updated.folder / "session.json", _payload(updated))
-    if updated.status == Status.ACTIVE:
-        remember_current(updated.project_root, updated.id)
+    match updated.status, make_current:
+        case Status.ACTIVE, True:
+            remember_current(updated.project_root, updated.id)
+        case _:
+            pass
+    return updated
 
 
-def _transition(current: Session, operation: str) -> Result[Session]:
+def _transition(
+    current: Session, operation: str, make_current: bool
+) -> Result[Session]:
     match TRANSITIONS.get((operation, current.status)):
         case None:
             return err(
@@ -372,7 +426,7 @@ def _transition(current: Session, operation: str) -> Result[Session]:
             )
             return bind(
                 attempt(
-                    lambda: _save_transition(updated),
+                    lambda: _save_transition(updated, make_current),
                     "session_unwritable",
                     f"could not update work session {current.id}",
                     OSError,

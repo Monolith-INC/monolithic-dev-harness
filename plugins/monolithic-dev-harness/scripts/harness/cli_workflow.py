@@ -16,9 +16,11 @@ from harness import (
     preferences,
     prepared_workflows,
     questions,
+    review_decisions,
     settings,
-    setup,
+    startup,
     state,
+    work_lifecycle,
     work_sessions,
     workflow,
 )
@@ -177,7 +179,14 @@ def run(args: argparse.Namespace) -> int:
                 )
             )
         case "begin":
-            return begin_command(args)
+            return print_result(
+                fmap(
+                    startup.begin(
+                        resolve_repo(args.repo), args.request, args.session, args.new
+                    ),
+                    lambda value: json.dumps(value, ensure_ascii=False),
+                )
+            )
         case "work-session":
             return work_session_command(args)
         case "workflow":
@@ -186,163 +195,6 @@ def run(args: argparse.Namespace) -> int:
             return decision_command(_with_current_session(args))
         case _:
             return suspension_command(args)
-
-
-def begin_command(args: argparse.Namespace) -> int:
-    return print_result(
-        bind(
-            setup.onboarding_status(resolve_repo(args.repo)),
-            lambda report: _begin_ready(resolve_repo(args.repo), args, report),
-        )
-    )
-
-
-def _begin_ready(repo: Path, args: argparse.Namespace, report: dict) -> Result[str]:
-    match report:
-        case {"status": "ready", "language_confirmed": True, "bmad_ready": True}:
-            return bind(
-                _begin_session(repo, args.request.strip(), args),
-                lambda selected: _remember_begin(repo, selected, report),
-            )
-        case _:
-            return Ok(
-                json.dumps(
-                    {
-                        "state": "setup_needed",
-                        "setup": report,
-                        "request": args.request,
-                        "next": "Finish bootstrap, then repeat begin with this request.",
-                    }
-                )
-            )
-
-
-def _begin_selected(
-    repo: Path, selected: work_sessions.Session | dict, report: dict
-) -> Result[str]:
-    match selected:
-        case dict():
-            return Ok(json.dumps(selected))
-        case _:
-            match decisions.pending(repo, selected.id):
-                case None:
-                    return bind(
-                        _begin_workflow(repo, selected),
-                        lambda current: _begin_output(repo, selected, current, report),
-                    )
-                case pending:
-                    return Ok(
-                        json.dumps(
-                            {"state": "waiting_for_human", "question": pending.question}
-                        )
-                    )
-
-
-def _begin_workflow(
-    repo: Path, selected: work_sessions.Session
-) -> Result[workflow.Workflow]:
-    match workflow.load(repo, selected.id):
-        case Ok() as current:
-            return current
-        case Err(failure) if failure.code == "workflow_absent":
-            return bind(
-                _workflow_start(repo, selected.request, selected.id),
-                lambda fresh: fmap(
-                    workflow.save(repo, fresh, selected.id), lambda _: fresh
-                ),
-            )
-        case Err() as failure:
-            return failure
-
-
-def _begin_output(
-    repo: Path,
-    selected: work_sessions.Session,
-    current: workflow.Workflow,
-    report: dict,
-) -> Result[str]:
-    match current.status, current.current.stage:
-        case "active", "discover":
-            return fmap(
-                discovery.render(repo, selected.id),
-                lambda package: _begin_payload(
-                    selected, current, report, package["entry"]
-                ),
-            )
-        case _:
-            return Ok(_begin_payload(selected, current, report, ""))
-
-
-def _begin_payload(
-    selected: work_sessions.Session,
-    current: workflow.Workflow,
-    report: dict,
-    entry: str,
-) -> str:
-    return json.dumps(
-        {
-            "state": current.status,
-            "session_id": selected.id,
-            "request": selected.request,
-            "language": report["language"],
-            "workflow": {
-                "stage": current.current.stage,
-                "checkpoint": current.current.label,
-                "next_action": current.current.next_action,
-                "saved_points": len(current.points),
-            },
-            "discover_entry": entry,
-            "next": "Follow saved next_action; for fresh discovery read discover_entry. Paused work requires explicit resume.",
-        }
-    )
-
-
-def _begin_session(
-    repo: Path, request: str, args: argparse.Namespace
-) -> Result[work_sessions.Session | dict]:
-    match args.session, args.new:
-        case str() as chosen, False:
-            return bind(
-                work_sessions.select(repo, chosen),
-                lambda selected: _begin_resume(repo, selected),
-            )
-        case None, True:
-            return work_sessions.start(repo, request)
-        case None, False:
-            return bind(
-                work_sessions.route(repo, request),
-                lambda routed: _begin_route(repo, request, routed),
-            )
-        case _:
-            return err("invalid_session", "choose --session or --new, not both")
-
-
-def _begin_resume(
-    repo: Path, selected: work_sessions.Session
-) -> Result[work_sessions.Session]:
-    match selected.status:
-        case work_sessions.Status.ACTIVE:
-            return Ok(selected)
-        case _:
-            return work_sessions.transition(repo, selected.id, "resume")
-
-
-def _begin_route(
-    repo: Path, request: str, routed: dict
-) -> Result[work_sessions.Session | dict]:
-    match routed["action"]:
-        case "continue_active":
-            return work_sessions.select(repo, routed["session_id"])
-        case "start_new":
-            return work_sessions.start(repo, request)
-        case _:
-            return Ok(
-                {
-                    "state": "choose_session",
-                    "candidates": routed["candidates"],
-                    "next": "Offer saved sessions and Start new; repeat begin with --session or --new after the choice.",
-                }
-            )
 
 
 def _current_as_json(project: Path, session: work_sessions.Session) -> dict:
@@ -388,17 +240,9 @@ def work_session_command(args: argparse.Namespace) -> int:
                 work_sessions.as_json,
             )
         case "resume":
-            result = bind(
-                discovery.onboarding_ready(project),
-                lambda _: bind(
-                    discovery.verify(project, args.session_id or ""),
-                    lambda _: fmap(
-                        work_sessions.transition(
-                            project, args.session_id or "", "resume"
-                        ),
-                        work_sessions.as_json,
-                    ),
-                ),
+            result = fmap(
+                work_lifecycle.resume(project, args.session_id or ""),
+                work_sessions.as_json,
             )
         case "pause" | "stop" | "complete":
             result = fmap(
@@ -510,24 +354,19 @@ def decision_command(args: argparse.Namespace) -> int:
                             )
                         )
                         or fmap(
-                            bind(
-                                _decision_checkpoint(
-                                    repo, args.session_id, spec.question, artifacts
-                                ),
-                                lambda _: decisions.begin(
-                                    repo,
-                                    key,
-                                    spec.question,
-                                    spec.options,
-                                    shown["transport"],
-                                    artifacts,
-                                    spec.approval,
-                                    work_session_id=args.session_id,
-                                    allow_free_text=spec.free_text,
-                                    details=spec.details,
-                                    gate=spec.gate,
-                                    binds=binds,
-                                ),
+                            review_decisions.begin(
+                                repo,
+                                key,
+                                spec.question,
+                                spec.options,
+                                shown["transport"],
+                                artifacts,
+                                spec.approval,
+                                work_session_id=args.session_id,
+                                allow_free_text=spec.free_text,
+                                details=spec.details,
+                                gate=spec.gate,
+                                binds=binds,
                             ),
                             lambda _: json.dumps(
                                 {
@@ -776,48 +615,6 @@ def _workflow_resume(
     )
 
 
-def _workflow_start(
-    repo: Path, request: str, session_id: str | None = None
-) -> Result[workflow.Workflow]:
-    def begin(_: object) -> Result[workflow.Workflow]:
-        return bind(
-            bind(
-                discovery.onboarding_ready(repo),
-                lambda _: preferences.language_for(repo),
-            ),
-            lambda language: bind(
-                require(
-                    bool(language),
-                    "language_unset",
-                    "choose English or Português (Brasil) before starting",
-                ),
-                lambda _: workflow.start(request, language),
-            ),
-        )
-
-    match workflow.load(repo, session_id):
-        case Ok(current) if current.status in workflow.TERMINAL_STATUSES:
-            return bind(workflow.archive_terminal(repo, session_id), begin)
-        case Ok():
-            return Err(Failure("workflow_exists", "a workflow is already saved"))
-        case Err(failure) if failure.code == "workflow_absent":
-            if session_id is None:
-                return begin(None)
-            return bind(
-                work_sessions.select(repo, session_id),
-                lambda session: bind(
-                    require(
-                        not request or request.strip() == session.request,
-                        "invalid_workflow",
-                        "the workflow request must match its work session",
-                    ),
-                    begin,
-                ),
-            )
-        case Err() as failure:
-            return failure
-
-
 def workflow_command(args: argparse.Namespace) -> int:
     repo = resolve_repo(args.repo)
     if decisions.blocking(repo, args.session_id) and args.operation not in (
@@ -929,7 +726,9 @@ def workflow_command(args: argparse.Namespace) -> int:
         case "start":
             return _workflow_result(
                 repo,
-                _workflow_start(repo, args.request or "", args.session_id),
+                work_lifecycle.start_workflow(
+                    repo, args.request or "", args.session_id
+                ),
                 args.session_id,
             )
         case "checkpoint":
@@ -975,50 +774,3 @@ def workflow_command(args: argparse.Namespace) -> int:
             )
         case _:
             return 2
-
-
-def _decision_checkpoint(
-    repo: Path,
-    session_id: str | None,
-    question: str,
-    artifacts: tuple[tuple[str, str], ...],
-) -> Result[object]:
-    match artifacts, workflow.load(repo, session_id):
-        case (), _:
-            return Ok(None)
-        case _, Err(failure) if failure.code == "workflow_absent":
-            return Ok(None)
-        case _, Err() as failure:
-            return failure
-        case _, Ok(current) if current.status != "active":
-            return Ok(None)
-        case _, Ok(current):
-            return bind(
-                workflow.add_point(
-                    current,
-                    question,
-                    current.current.stage,
-                    artifacts=artifacts,
-                    pending=question,
-                    next_action="Continue from the human's answer to: " + question,
-                ),
-                lambda updated: workflow.save(repo, updated, session_id),
-            )
-
-
-def _remember_begin(
-    repo: Path, selected: work_sessions.Session | dict, report: dict
-) -> Result[str]:
-    match selected:
-        case dict():
-            return _begin_selected(repo, selected, report)
-        case _:
-            return bind(
-                attempt(
-                    lambda: work_sessions.remember_current(repo, selected.id),
-                    "session_unwritable",
-                    "remember current work",
-                    OSError,
-                ),
-                lambda _: _begin_selected(repo, selected, report),
-            )
