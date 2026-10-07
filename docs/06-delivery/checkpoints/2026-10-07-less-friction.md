@@ -57,3 +57,10 @@ Final full-suite rerun: 332 backlog tests passed; 737 main tests passed, one ski
    reviewers found no remaining implementation blockers after correcting the global-only recovery
    check. The CLI is 776 lines. These results establish local behavior, not live host compatibility;
    the demo-project walkthrough and measured time savings remain pending before merge readiness.
+6. **Desktop acceptance preparation and installation.** Prepared a disposable local-planning
+   fixture. Detected older cached/PATH integration and paused rather than test the wrong revision.
+   The human authorized updating the shared Codex installation. Backed up the previous install and
+   ran the supported source installer successfully. All 366 checked source files match the installed
+   cache; user config is unchanged; doctor reports healthy installation/repository configuration.
+   Installer requires a desktop restart; live question capture and the walkthrough remain pending.
+   Evidence and launch briefing are in `docs/06-delivery/acceptance/pr-36/`.
