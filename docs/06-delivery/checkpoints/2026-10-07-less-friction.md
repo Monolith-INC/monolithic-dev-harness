@@ -64,3 +64,37 @@ Final full-suite rerun: 332 backlog tests passed; 737 main tests passed, one ski
    cache; user config is unchanged; doctor reports healthy installation/repository configuration.
    Installer requires a desktop restart; live question capture and the walkthrough remain pending.
    Evidence and launch briefing are in `docs/06-delivery/acceptance/pr-36/`.
+
+## Optional onboarding and free mode
+
+1. **Recovered interruption.** Preserved the uncommitted implementation and acceptance evidence
+   after a worker hit its usage limit. The focused decision/onboarding/startup/discovery/recovery
+   run passed 127 tests. No prior English answer was fabricated or written into the fixture.
+2. **Decision typing and default language.** Catalog and saved records distinguish preferences,
+   required decisions and approvals. Legacy language prompts are nonblocking; absent language uses
+   English without claiming confirmation. Captured choices still persist. Unknown records and
+   approvals fail closed. Optional supersession preserves terminal evidence.
+3. **Sessionless mode and onboarding lifecycle.** Added onboarding status/skip/dismiss/restart and
+   free/structured mode controls. Free entry avoids setup and sessions; existing work is preserved.
+   Known onboarding prompts can be cancelled without answers or permissions. An abandoned settings
+   review cannot be applied until a fresh review. Generic required decisions and approvals remain
+   pending, and mode controls do not disable governance.
+4. **Documentation duty.** Updated the specification, entry/bootstrap guidance, decision protocol,
+   storyboard and stage guide. Regenerated the main-flow SVG with optional onboarding and free mode.
+   Full-suite verification and thermos findings will be recorded before commit.
+5. **Recovery review corrections.** Thermos identified cancellation bypass after unrelated menus,
+   interrupted checkpoint recovery and repeated-control failures. Persisted settings proposal
+   identity and cancellation evidence, required fresh exact-proposal confirmation, and recovered
+   checkpoint projection before cancelling. Repeated controls are idempotent; free startup uses
+   one payload contract. The final focused recovery run passed 119 tests. These are fixture tests,
+   not evidence that desktop answer capture is repaired.
+6. **Confirmed-review continuity.** A further review found that replacing a confirmed settings
+   menu lost its usable confirmation. Application now also checks saved answer evidence after the
+   latest exact cancellation, preserving proposal/source binding. The regression includes an
+   unrelated language menu before application; 72 control tests passed. Both reviewers report no
+   remaining concrete blockers. Missing or corrupt evidence grants no permission.
+7. **Final verification.** Final snapshot: 332 backlog tests and 19 subtests passed; 884 main
+   tests and 277 subtests passed, one skipped; installer confirmation checks passed. Ruff lint and
+   format, repository/schema/link checks, version consistency, Markdown and whitespace checks
+   passed. ShellCheck is unavailable locally; no shell scripts changed. The installed desktop
+   build has not been refreshed with this patch, and live answer capture remains unverified.

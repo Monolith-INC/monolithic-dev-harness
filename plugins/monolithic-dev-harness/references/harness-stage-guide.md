@@ -41,6 +41,11 @@ executable exists.
 
 Start with `harness begin --request "<exact user request>" --repo <project>`.
 Follow its setup or session-choice instructions before doing work.
+Onboarding is optional. `harness mode free` provides direct skill use and guidance without creating
+a session, requiring tracker setup or confirming language. `harness onboarding skip|dismiss|restart`
+controls onboarding only; saved engineering work and action approvals remain intact. A missing
+language choice uses English, and optional preferences never stop work. Actual requested skills
+may still require their own dependencies.
 
 You never need to carry the work-session ID. Starting, resuming, or selecting a work session makes it
 the project's current session, and every `workflow` and `decision` command without `--session-id`
@@ -74,6 +79,7 @@ permission for an external write. Resume rechecks files, tracker, and approvals 
 
 ### Suspend harness checks on the human's request
 
+For skills without a session while retaining governance, use free mode rather than suspension.
 Only the human can suspend the harness: the hook records it when they send `harness suspend` as its
 own message, and no command lets an agent do it. When they want to continue ordinary work outside
 the harness, use `suspend-harness` to ask them to send it. It works before setup and with invalid

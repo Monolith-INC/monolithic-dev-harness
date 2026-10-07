@@ -70,7 +70,7 @@ def language_for(repo: Path) -> Result[str]:
                 "invalid_preferences", "saved project language could not be read"
             )
         case None:
-            return language()
+            return fmap(language(), lambda chosen: chosen or "en")
         case _:
             return err(
                 "invalid_preferences", "saved project language must be en or pt-br"

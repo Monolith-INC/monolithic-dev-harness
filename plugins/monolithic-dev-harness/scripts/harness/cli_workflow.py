@@ -13,6 +13,7 @@ from harness import (
     decisions,
     discovery,
     gates,
+    onboarding,
     preferences,
     prepared_workflows,
     questions,
@@ -28,10 +29,40 @@ from harness.cli_common import pairs, print_result, resolve_repo
 from host_adapters.interactions import present
 from integrations import registry
 
-COMMANDS = ("plan", "begin", "work-session", "workflow", "decision", "suspension")
+COMMANDS = (
+    "plan",
+    "begin",
+    "work-session",
+    "workflow",
+    "decision",
+    "suspension",
+    "onboarding",
+    "mode",
+)
+
+
+def _control_parser(
+    sub: argparse._SubParsersAction, family: str, help_text: str
+) -> argparse.ArgumentParser:
+    """Argparse mutation is isolated to parser construction."""
+    match sub.add_parser(family, help=help_text):
+        case parser:
+            parser.add_argument("operation", choices=onboarding.OPERATIONS[family])
+            parser.add_argument(
+                "--repo", default=".", help="project directory; no session required"
+            )
+            return parser
 
 
 def add_parsers(sub: argparse._SubParsersAction) -> None:
+    _control_parser(
+        sub,
+        "onboarding",
+        "show, skip, dismiss, or restart onboarding without a session",
+    )
+    _control_parser(
+        sub, "mode", "choose free or structured guidance; governance checks still apply"
+    )
     plan_parser = sub.add_parser("plan", help="inspect a plan's size and scope signals")
     plan_parser.add_argument("operation", choices=("check",))
     plan_parser.add_argument("file")
@@ -169,6 +200,15 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
 
 def run(args: argparse.Namespace) -> int:
     match args.command:
+        case "onboarding" | "mode":
+            return print_result(
+                fmap(
+                    onboarding.control(
+                        resolve_repo(args.repo), args.command, args.operation
+                    ),
+                    lambda value: json.dumps(value, ensure_ascii=False),
+                )
+            )
         case "plan":
             from harness.plan_check import check
 

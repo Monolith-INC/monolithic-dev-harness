@@ -39,6 +39,7 @@ class Gate:
     artifact: bool = False
     recommended: str = ""
     binds: str = ""
+    kind: str = "required"
 
 
 @dataclass(frozen=True)
@@ -54,6 +55,7 @@ class Rendered:
     artifact: bool
     bound: bool  # an approval tied to a context (no expiry); False: a general, short window
     target: tuple[str, str] | None
+    kind: str = "required"
 
 
 def load(path: Path = CATALOG) -> Result[tuple[tuple[str, ...], dict[str, Gate]]]:
@@ -98,6 +100,7 @@ def _gate(entry: dict[str, Any], languages: tuple[str, ...]) -> Result[Gate]:
         artifact=bool(entry.get("artifact", False)),
         recommended=str(entry.get("recommended", "")),
         binds=str(entry.get("binds", "")),
+        kind=_kind(entry),
     )
     problems = _problems(gate, languages)
     return (
@@ -107,12 +110,24 @@ def _gate(entry: dict[str, Any], languages: tuple[str, ...]) -> Result[Gate]:
     )
 
 
+def _kind(entry: dict[str, Any]) -> str:
+    match entry:
+        case {"approval": approval} if approval:
+            return "approval"
+        case _:
+            return str(entry.get("kind", "required"))
+
+
 def _problems(gate: Gate, languages: tuple[str, ...]) -> list[str]:
     ids = [option.id for option in gate.options]
     found = [
         problem
         for problem, failed in (
             ("needs an id", not gate.id),
+            (
+                "has an unknown decision kind",
+                gate.kind not in ("preference", "required", "approval"),
+            ),
             ("needs one to three options", not 1 <= len(gate.options) <= 3),
             ("has repeated option ids", len(set(ids)) != len(ids)),
             (
@@ -205,6 +220,7 @@ def render(
 
     return Ok(
         Rendered(
+            kind=gate.kind,
             gate=gate.id,
             question=fill(gate.question[language]),
             options=tuple(

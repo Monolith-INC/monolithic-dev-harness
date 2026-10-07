@@ -16,6 +16,7 @@ from harness import (
     local_tracker,
     preferences,
     settings,
+    setup_reviews,
     state,
     workflow,
 )
@@ -414,18 +415,35 @@ def _source_digest(repo: Path, current: Mapping[str, Any]) -> str:
 def review(repo: Path, **choices: Any) -> Result[dict[str, Any]]:
     return bind(
         _raw(repo),
-        lambda original: fmap(
+        lambda original: bind(
             propose(repo, **choices),
-            lambda candidate: {
-                "candidate": candidate,
-                "digest": digest(candidate),
-                "source_digest": _source_digest(repo, original),
-            },
+            lambda candidate: setup_reviews.remember(
+                repo,
+                {
+                    "candidate": candidate,
+                    "digest": digest(candidate),
+                    "source_digest": _source_digest(repo, original),
+                },
+            ),
         ),
     )
 
 
 def apply(
+    repo: Path,
+    candidate: Mapping[str, Any],
+    approved_digest: str,
+    source_digest: str,
+) -> Result[Path]:
+    return bind(
+        setup_reviews.check(
+            repo, decisions.record(repo) or {}, approved_digest, source_digest
+        ),
+        lambda _: _apply_reviewed(repo, candidate, approved_digest, source_digest),
+    )
+
+
+def _apply_reviewed(
     repo: Path,
     candidate: Mapping[str, Any],
     approved_digest: str,

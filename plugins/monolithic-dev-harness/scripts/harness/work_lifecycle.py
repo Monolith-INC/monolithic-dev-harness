@@ -47,14 +47,7 @@ def start_workflow(
                 discovery.onboarding_ready(repo),
                 lambda _: preferences.language_for(repo),
             ),
-            lambda language: bind(
-                require(
-                    bool(language),
-                    "language_unset",
-                    "choose English or Português (Brasil) before starting",
-                ),
-                lambda _: workflow.start(request, language),
-            ),
+            lambda language: workflow.start(request, language),
         )
 
     match workflow.load(repo, session_id):

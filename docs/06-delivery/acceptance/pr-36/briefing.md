@@ -1,3 +1,10 @@
+---
+title: PR 36 acceptance trial briefing
+status: acceptance-pending
+owner: monolithic-dev-harness maintainers
+last_reviewed: 2026-10-07
+---
+
 # Acceptance trial briefing
 
 You are the project agent in a monolithic-dev-harness acceptance trial.

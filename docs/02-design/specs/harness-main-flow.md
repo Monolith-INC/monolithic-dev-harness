@@ -73,7 +73,11 @@ Yellow = gate (turn ends; answers go into the plan). Red 🔒 = recap/approval g
 
 ```mermaid
 flowchart TD
-    REQ([Request: ticket / idea / file]) --> SETUP{{"G0 Setup<br/>only if config missing<br/>(one batched menu)"}}
+    REQ([Request: ticket / idea / file]) --> MODE{{"Structured or free mode?"}}
+    MODE -->|free| FREE["Skills and guidance<br/>no session or mandatory setup<br/>action governance retained"]
+    MODE -->|structured| SETUP{{"G0 Optional onboarding<br/>skip / dismiss / restart<br/>language defaults to English"}}
+    SETUP -->|skip or dismiss| FREE
+    FREE -->|return to structured| SETUP
     SETUP --> ROUTE["Route<br/>infer from request; ask only if ambiguous"]
     ROUTE -->|idea| IDEATE["Ideate<br/>plan-initiative: brief → PRD → UX → arch<br/>coach, don't quiz"]
     ROUTE -->|ticket / feature| INV
@@ -110,6 +114,10 @@ flowchart TD
 ```
 
 </details>
+
+Onboarding and free-mode behavior is specified in [Optional onboarding](optional-onboarding.md).
+Preference questions never block; required decisions and action approvals retain their protection.
+Free mode does not create sessions or disable governance, and can coexist with saved structured work.
 
 ### Interaction types (the only four)
 

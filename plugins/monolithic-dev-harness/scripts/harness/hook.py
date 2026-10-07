@@ -38,8 +38,11 @@ from core.result import Err, Ok, Result, attempt, bind  # noqa: E402
 from harness import (  # noqa: E402
     adoption,
     decisions,
+    gates,
     gitstate,
     globs,
+    onboarding,
+    preferences,
     questions,
     rules,
     settings,
@@ -235,6 +238,11 @@ def _held(
     request: tuple[str, str] | None,
 ) -> rules.Decision | None:
     """Why a write must wait: the conversation's session or a pending decision, checked once."""
+    match _onboarding_control(call, repo):
+        case True:
+            return None
+        case _:
+            pass
     if not rules.is_write_class(call) or _diagnostic_read(call, repo):
         return None
     match context:
@@ -255,6 +263,12 @@ def _held(
             "Wait for the human's answer before continuing this run.",
         )
     return None
+
+
+def _onboarding_control(call: rules.ToolCall, repo: Path) -> bool:
+    return call.kind == "shell" and onboarding.recovery_command(
+        call.command, Path(call.cwd or repo), repo
+    )
 
 
 def _diagnostic_read(call: rules.ToolCall, repo: Path) -> bool:
@@ -280,6 +294,11 @@ def _bind(
     request: tuple[str, str] | None,
 ) -> Result[object]:
     """Bind the conversation to the session an allowed command chose; a failure binds nothing."""
+    match _onboarding_control(_tool_call(host, "pre-tool", payload), repo):
+        case True:
+            return Ok(None)
+        case _:
+            pass
     from host_adapters import native_session_id, startup_context
 
     return bind(
@@ -552,6 +571,11 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
     """
     repo = _workspace(payload, host)
     message = hook_bridge.stop_message(payload)
+    match onboarding.mode(repo):
+        case "free":
+            return 0
+        case _:
+            pass
     if (
         message is None
         or not settings.governed(repo)
@@ -950,6 +974,11 @@ def _apply_marker(
     response: Any,
 ) -> str | None:
     """What an answered question pinned when it was asked: adoption, manual check, tracker, or approval."""
+    match _captured_language(repo, decision_scope, marker_id):
+        case str() as note:
+            return note
+        case _:
+            pass
     asked = state.take_asked(repo, questions.marker_name(marker_id), decision_scope)
     if asked is None:
         return None  # the question never passed the check, so its answer opens nothing
@@ -1033,6 +1062,43 @@ def _apply_marker(
         conversation_scope,
         _answered_binds(repo, decision_scope, marker_id),
     )
+
+
+def _captured_language(repo: Path, scope: str | None, key: str) -> str | None:
+    """Persist only a language choice already resolved by a trusted human-answer hook."""
+    match decisions.record(repo, scope):
+        case {
+            "id": saved_key,
+            "status": "answered",
+            "gate": "language",
+            "answer": str() as answer,
+        } as record if (
+            saved_key == key and decisions.decision_kind(record) == "preference"
+        ):
+            return _save_captured_language(repo, questions.choice_label(answer))
+        case _:
+            return None
+
+
+def _save_captured_language(repo: Path, answer: str) -> str | None:
+    match gates.load():
+        case Ok((_, catalog)) if "language" in catalog:
+            match tuple(
+                option.id
+                for option in catalog["language"].options
+                if answer in option.label.values()
+                and option.id in preferences.LANGUAGES
+            ):
+                case (chosen,):
+                    match preferences.set_language(chosen, repo):
+                        case Ok():
+                            return f"[harness] project language recorded: {chosen}."
+                        case Err(failure):
+                            return f"[harness] project language was NOT saved: {failure.message}"
+                case _:
+                    return None
+        case _:
+            return None
 
 
 def main(argv: list[str] | None = None) -> int:

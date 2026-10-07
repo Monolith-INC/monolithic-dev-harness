@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Optional, restartable onboarding and sessionless free mode. Preferences use safe defaults;
+  missing language capture never blocks work. Required decisions and action approvals retain their
+  enforcement, and cancelled settings reviews require fresh confirmation of the exact proposal.
+
 - PR #36 recovery fixes: shared checked resume, deferred successful-startup conversation binding,
   and recoverable decision/checkpoint projection. Failed writes, stale instructions and replayed
   completion output preserve existing progress and approval boundaries.

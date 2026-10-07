@@ -176,7 +176,7 @@ def test_an_unnamed_session_is_the_current_one(project: Path) -> None:
     assert shown.get("request") == selected.request
 
 
-def test_no_setup_or_unconfirmed_language_prevents_render(
+def test_missing_required_setup_prevents_render(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("HARNESS_USER_STATE_DIR", str(tmp_path / "preferences"))
@@ -262,14 +262,17 @@ def test_onboarding_repairs_runtime_without_work_session(project: Path) -> None:
     )
 
 
-def test_unconfirmed_project_language_blocks_session(project: Path) -> None:
+def test_unconfirmed_project_language_uses_default_without_blocking_session(
+    project: Path,
+) -> None:
     (project / preferences.LANGUAGE_STATE).unlink()
     assert preferences.language().value == "en"
     assert (
         cli(project, "work-session", "start", "--request", "Count tasks").returncode
-        != 0
+        == 0
     )
-    assert not (project / ".harness/state/work_sessions").exists()
+    assert (project / ".harness/state/work_sessions").exists()
+    assert preferences.language_confirmed(project) == Ok(False)
 
 
 def test_changed_bmad_configuration_preserves_pin(project: Path) -> None:

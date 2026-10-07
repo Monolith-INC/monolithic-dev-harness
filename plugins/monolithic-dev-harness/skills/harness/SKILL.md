@@ -6,10 +6,15 @@ description: Default entry point when the user asks to add, build, change, or fi
 # Harness
 
 Use the bundled `bin/harness` when `harness` is unavailable on PATH.
+Onboarding is optional. If the user wants skills or guidance without a session, use
+`harness mode free --repo <project>` and invoke the relevant skill directly. Free mode preserves
+all action approvals and protected-state rules; it is not suspension. Ideation can be added to
+ongoing work without restarting that work.
 Start with `harness begin --request "<exact request>" --repo <project>`.
 It checks setup, routes the session, creates the workflow when absent, and returns pinned discovery instructions.
 
 - `setup_needed`: follow the bootstrap skill, preserving the returned request, then repeat begin.
+- `free`: provide the requested guidance or skill without creating a session or requiring setup.
 - `choose_session`: offer its candidates and Start new through native controls; repeat begin with the chosen `--session` or `--new`.
 - `waiting_for_human`: present the saved question through the best available host control.
 - Active discovery: read the returned `discover_entry` and follow it. Later stages: follow the saved next action.
@@ -27,6 +32,9 @@ Use catalog gates in the selected language; keep native controls and gracefully 
 use status only for recovery when capture is uncertain. A gate with `--artifact` automatically saves
 its review checkpoint when a workflow exists. Save manual checkpoints at stage completion or material
 progress without a question. Communication works without any active session.
+Language is optional: use the captured project choice, saved preference, or English. Never stop
+because language confirmation or capture is missing. Optional preferences do not block progress.
+`harness onboarding skip|dismiss|restart --repo <project>` controls onboarding only.
 
 `workflow prepare` is optional reference material, not a mandatory capability-declaration ceremony.
 Discover tools at the point of use and report genuinely missing capabilities. Explicit `--available`

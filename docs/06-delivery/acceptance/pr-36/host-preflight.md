@@ -1,6 +1,7 @@
 ---
 title: PR 36 interactive acceptance preflight
-status: awaiting-host-restart
+status: answer-capture-blocked
+owner: monolithic-dev-harness maintainers
 last_reviewed: 2026-10-07
 ---
 
@@ -55,3 +56,21 @@ hooks when prompted. No hot-reload capability was available in this chat. The de
 restarted automatically, and no trial agent has been launched against potentially stale hooks.
 After restart, resume this chat and launch the prepared interactive fixture through its briefing.
 No merge, deployment, or acceptance verdict is claimed. The fixture remains available.
+
+## Restart and launch
+
+The human reported restarting Codex. Rechecked cached/source hook hashes; they still match.
+Launched a fresh general-purpose interactive subagent, Goodall
+(`01a11631-1447-7213-bb2c-5a73340cf264`), with the prepared briefing and inherited model.
+It must stop at the first real human gate and retain evidence, including any missing native hook
+identities. Restart confirmation and matching files do not by themselves prove live hook loading.
+
+## First live control
+
+The project agent reached the recorded language gate `HD-84469801a71e8fdb` before discovery.
+The parent presented its exact native `request_user_input` payload; the tool returned the human's
+`English` choice. Reading the fixture record afterward showed it still pending with an empty answer.
+The parent relayed the actual answer to the agent and prohibited synthetic hook events or manual
+decision writes. Button delivery is observed; fixture answer capture is not established. Parent
+and fixture contexts differ, so this run must not be treated as proof of a capture-code defect.
+See `result.md` for the project agent's command evidence. No implementation has started.

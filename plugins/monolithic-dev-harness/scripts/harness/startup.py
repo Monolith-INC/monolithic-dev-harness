@@ -7,6 +7,7 @@ from core.result import Err, Ok, Result, bind, err, fmap
 from harness import (
     decisions,
     discovery,
+    onboarding,
     setup,
     startup_receipts,
     work_lifecycle,
@@ -18,17 +19,21 @@ from harness import (
 def begin(
     repo: Path, request: str, selected_id: str | None = None, new: bool = False
 ) -> Result[dict]:
-    return bind(
-        setup.onboarding_status(repo),
-        lambda report: _begin_ready(repo, request, selected_id, new, report),
-    )
+    match onboarding.mode(repo):
+        case "free":
+            return Ok(onboarding.free_payload(repo, request))
+        case _:
+            return bind(
+                setup.onboarding_status(repo),
+                lambda report: _begin_ready(repo, request, selected_id, new, report),
+            )
 
 
 def _begin_ready(
     repo: Path, request: str, selected_id: str | None, new: bool, report: dict
 ) -> Result[dict]:
     match report:
-        case {"status": "ready", "language_confirmed": True, "bmad_ready": True}:
+        case {"status": "ready", "bmad_ready": True}:
             return bind(
                 _begin_session(repo, request.strip(), selected_id, new),
                 lambda selected: _begin_selected(
@@ -60,7 +65,9 @@ def _begin_selected(
             return Ok(dict(selected))
         case _:
             match decisions.pending(repo, selected.id):
-                case None:
+                case pending if pending is None or not decisions.is_blocking(
+                    decisions.record(repo, pending.scope) or {}
+                ):
                     return bind(
                         _begin_workflow(repo, selected),
                         lambda current: bind(
