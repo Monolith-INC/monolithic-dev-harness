@@ -10,11 +10,38 @@ if TYPE_CHECKING:
     from harness.decisions import Pending
 
 
+_MENU_TEXT = {
+    "en": {
+        "closed": "Reply with a number or an option name.",
+        "open": "Reply with a number, an option name, or tell me what you'd like instead.",
+    },
+    "pt-br": {
+        "closed": "Responda com um número ou o nome de uma opção.",
+        "open": "Responda com um número, o nome de uma opção ou diga o que prefere.",
+    },
+}
+
+
+def chat_menu(choice: dict[str, Any], free_text: bool, language: str = "en") -> str:
+    """The one chat rendering of a decision, so every fallback looks the same."""
+    lines = [f"**{choice['question']}**", ""]
+    for number, option in enumerate(choice["options"], start=1):
+        detail = str(option.get("description", "")).strip()
+        lines.append(
+            f"{number}. **{option['label']}**" + (f" — {detail}" if detail else "")
+        )
+    text = _MENU_TEXT.get(language, _MENU_TEXT["en"])
+    return "\n".join([*lines, "", text["open" if free_text else "closed"]])
+
+
 def present(
     choice: dict[str, Any],
     host: str,
     blocking_available: bool,
     async_available: bool = False,
+    *,
+    free_text: bool = False,
+    language: str = "en",
 ) -> dict[str, Any]:
     match host, blocking_available:
         case "codex", True:
@@ -56,7 +83,8 @@ def present(
                 "transport": "chat",
                 "question": choice["question"],
                 "options": choice["options"],
-                "instruction": "Ask this same question naturally in chat and end the turn to receive the actual human reply. Preserve the review, choices, and progress; resume this same run when the human answers. Do not report internal tool failures or abandon the run.",
+                "menu": chat_menu(choice, free_text, language),
+                "instruction": "Show the review, then `menu` exactly as written, and end the turn to receive the actual human reply. Do not reword, renumber, or add options. Preserve the review, choices, and progress; resume this same run when the human answers. Do not report internal tool failures or abandon the run.",
             }
 
 
@@ -93,25 +121,13 @@ def normalize_question(host: str, tool_input: dict[str, Any]) -> dict[str, Any]:
 def prompt_answer(
     host: str, prompt: str, pending: Pending
 ) -> tuple[str, str, str] | None:
-    from harness.questions import authorizing_options, choice_label
+    from harness.questions import authorizing_options, match_option
 
-    if pending.transport == "chat" or (
-        host == "codex"
-        and pending.transport == "async"
-        and not prompt.lstrip().startswith("<send_user_message_question_reply>")
-    ):
-        typed = prompt.strip().rstrip(".!").strip().casefold()
-        chosen = next(
-            (
-                str(option)
-                for option in pending.options
-                if choice_label(str(option)).casefold()
-                == choice_label(typed).casefold()
-            ),
-            None,
-        )
-        match chosen:
-            case str():
+    # A typed message is the human's own reply whatever showed the question: a dismissed picker
+    # or expired buttons leave the person typing, and that reply must still count.
+    if not prompt.lstrip().startswith("<send_user_message_question_reply>"):
+        match match_option(prompt, pending.options):
+            case str() as chosen:
                 return pending.id, chosen, pending.transport
             case None if (
                 pending.allow_free_text

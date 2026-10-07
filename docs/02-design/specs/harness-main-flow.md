@@ -34,7 +34,7 @@ BMAD has **no UI tool layer**. The chat itself is the interface:
 
 Decided 2026-10-06: keep native buttons and make them reliable. Record every approval once, never ask for it again, and close each series of decisions with a single final acknowledgement.
 
-1. **One gate model, several renderings.** `harness gate render <id>` produces the gate content once (question, options, consequences, recommendation). Each transport renders that same content:
+1. **One gate model, several renderings.** `harness decision present` takes the gate content once (question, up to three options, `--detail` per option, `--recommended`) and stores it with the pending decision. Each transport renders that same content:
    1. a blocking native control;
    2. an asynchronous native control;
    3. a chat menu block.
@@ -45,12 +45,11 @@ Decided 2026-10-06: keep native buttons and make them reliable. Record every app
    ```markdown
    **G1 · Plan ready — how do you want to proceed?**
 
-   1. **Approve & continue** — plan locks; I draft work items next.
-   2. **Deepen** — adversarial review, elicitation, or party mode before approving. *(recommended for multi-platform work)*
-   3. **Revise** — tell me what to change.
-   4. **Approve & stop** — plan locks; pause here.
+   1. **Approve and continue** — plan locks; I draft work items next.
+   2. **Deepen (Recommended)** — adversarial review, elicitation, or party mode before approving.
+   3. **Approve and stop** — plan locks; pause here.
 
-   Reply with a number, a name, or your own direction.
+   Reply with a number, an option name, or tell me what you'd like instead.
    ```
 
 3. **Replies are matched loosely on every transport.** A reply resolves the open gate when it is:
@@ -59,8 +58,8 @@ Decided 2026-10-06: keep native buttons and make them reliable. Record every app
    - an option name (case-insensitive);
    - a unique prefix or an unambiguous paraphrase ("the first", "feature").
 
-   An ambiguous reply records nothing, and the agent re-asks the same gate once. Any other free text is direction, not an error.
-4. **Every approval is recorded once and never repeated.** The ledger keys each approval by gate and artifact digest. An approval stays valid until the approved content materially changes, and a later stage reuses it instead of asking again.
+   A loose reply never selects an approving option unless it says "approve" itself. An ambiguous reply, a question, or other conversation leaves the gate pending: the agent answers, then shows the same menu again. On gates that allow free text (routing, the plan checkpoint), other text comes back as the human's direction, so "Revise" needs no option of its own. Native controls allow at most three options.
+4. **Every answer is recorded once and not asked again.** A human-owned history keys each answer by question, options and artifact digests. Asking again about the same unchanged content returns `already_answered`. A decline is never reused. **Limit (ADR-0003):** a write approval is reused only while the window it opened is still open; after it closes, only a new human reply opens another.
 5. **Final acknowledgement at the end of a series.** Individual product choices inside a Q-batch are answers, not approvals. When the series ends, a **recap gate** lists every choice made, with the option to change any of them, and the user acknowledges once. G1 is that recap for discovery; G2–G4 are recaps for publishing, the spec and delivery.
 6. **No-stall rule:** every turn ends with either a gate block or ongoing work. A status beat ends with `Next: <action>` and continues without waiting.
 
@@ -87,14 +86,14 @@ flowchart TD
     end
 
     IDEATE --> G1
-    OQ -->|none left| G1{{"G1 Plan gate<br/>1 Approve & continue<br/>2 Deepen<br/>3 Revise<br/>4 Approve & stop"}}
+    OQ -->|none left| G1{{"G1 Plan gate<br/>1 Approve & continue<br/>2 Deepen<br/>3 Approve & stop<br/>(typed text = revise)"}}
     G1 -->|2 Deepen| DEEP["Deepen loop<br/>adversarial review (subagents) ·<br/>elicitation methods · party mode<br/>→ Apply / Reject per proposal"]
     DEEP --> G1
-    G1 -->|3 Revise| DRAFT
-    G1 -->|4| STOP1([Paused: plan ready-for-dev])
+    G1 -->|typed changes| DRAFT
+    G1 -->|3| STOP1([Paused: plan ready-for-dev])
     G1 -->|1| BACKLOG["Backlog<br/>draft Feature / Stories / Tasks locally"]
 
-    BACKLOG --> G2{{"G2 Publish gate 🔒<br/>exact batch + destination<br/>Approve / Revise / Stop"}}
+    BACKLOG --> G2{{"G2 Publish gate 🔒<br/>exact batch + destination<br/>Approve / Not now"}}
     G2 -->|approve| SPEC["Story spec<br/>per ready story"]
     SPEC --> G3{{"G3 Spec gate 🔒<br/>Approve & build / Deepen / Revise"}}
     G3 --> BUILD["Build<br/>tasks + checks, no routine stops"]
@@ -138,7 +137,7 @@ Our vendored skills consistently turned off the three things that make BMAD deep
 | ✅ | Scope gate never fired | Multi-goal and token checks run again on the decided plan; compressing the plan to fit is forbidden. |
 | ✅ | Party mode was one voice | Upstream `auto`/`subagent`/`agent-team` modes restored, default `auto`; per-party memory restored. |
 | ✅ | No durable decision memory | `plan-<slug>.memlog.md` beside the plan (new `memlog_command` in the render context); every answer, accepted proposal, scope choice and approval is logged; resume reads it first. |
-| ✅ | Deepen not a formal option | Checkpoint 1 is now *Approve & continue / Deepen / Revise / Approve & stop*. Deepen = `bmad-review` (adversarial + edge-case lenses, parallel subagents) → elicitation → party mode offer. The recap lists every recorded decision instead of re-asking. |
+| ✅ | Deepen not a formal option | Checkpoint 1 is now a menu: *Approve and continue / Deepen / Approve and stop*, with typed changes as revisions. Deepen = `bmad-review` (adversarial + edge-case lenses, parallel subagents) → elicitation → party mode offer. The recap lists every recorded decision instead of re-asking. |
 | ✅ | Build and verify were thin | Verify runs `thermos` ∥ `bmad-review` edge-case (claims + deletion checks) and verification-gap lenses, then one triage menu. Build generates e2e tests at Story done. BMAD's code-diff `review-prompts/` stay unvendored: `bmad-review` ships the same lenses. |
 | ✅ | Quiz instead of coaching | Open Questions go out in one message with trade-offs and a recommendation; answers accepted in any form. |
 | ✅ | Subagents also disabled elsewhere | `bmad-prd` (research, extraction, review lenses, reconciliation) and `bmad-review` (parallel lenses) restored. |
@@ -150,17 +149,22 @@ Every change in P1–P4 updates, in the same branch:
 - [x] `docs/02-design/workflows.md` — discovery depth model, correct-course, Build/Verify changes (P1).
 - [x] `vendor/bmad/SOURCE-MANIFEST.md` — bundled skills and each harness adaptation (P1).
 - [x] `CHANGELOG.md` and `docs/06-delivery/changelog.md` (P1).
-- [ ] `references/human-decisions.md` and `references/workflow-storyboard.md` — rewrite for the gate model (P2).
-- [ ] `docs/03-engineering/discovery-rendering.md` — memlog command and gate rendering (P2).
+- [x] `references/human-decisions.md` and `references/workflow-storyboard.md` — rewritten for menus and question batches (P2).
+- [x] `docs/03-engineering/discovery-rendering.md` — memlog command (P2).
+- [x] `docs/02-design/workflows.md` "Asking the human", ADR-0003 amendment, both changelogs (P2).
 - [ ] This spec — status per phase, and the diagram regenerated when the flow changes (`docs/assets/diagrams/harness-main-flow.svg`).
 - [ ] User-facing guide (`docs/07-guides/`) — what each gate means and how to answer it (after P4).
 
-### P2: Gate model and reliable buttons
+### P2: Gate model and reliable buttons — implemented on `feat/gate-model`, awaiting P4 replay
 
-1. Gate definitions as data (`config/gates.toml`: id, question, options, consequences, recommendation, recap flag). Add `harness gate render` for all three transports.
-2. Loose reply matching in the hook for all transports (§3.3). Ledger keyed by gate + digest; reuse instead of re-asking (§3.4).
-3. A transport ladder with silent fallback, plus a per-host reliability test: click, typed number, typed name and paraphrase must each resolve on Codex, Claude Code and Cursor.
-4. Rewrite `references/human-decisions.md` and `workflow-storyboard.md` around §3–4. No compatibility path is needed (not in production).
+| Status | Item | Result |
+|---|---|---|
+| ✅ | Loose reply matching on every transport | `questions.match_option`: number, ordinal (en/pt-br), label in any case or accents, `&` = and, unique prefix, unique word set. Never selects an approving option unless the reply says "approve". Typed replies now count after a dismissed picker or expired buttons. |
+| ✅ | One rendering | `decision present --detail --recommended`; options and details are stored with the decision, so every fallback returns the same numbered `menu` (en/pt-br). |
+| ✅ | Answer once | `decision-history.json` (human-owned); `already_answered` for unchanged content; approvals only while their window is open (ADR-0003 amended). |
+| ✅ | Contract rewrite | `human-decisions.md` (menus vs. question batches, never stall), storyboard, harness skill, plan checkpoint as a three-option menu. |
+| ↪ | Gate catalog (`config/gates.toml`, `harness gate render`) | Not built: `decision present` with stored details already gives one rendering, and each gate's wording lives in the skill that owns it. Revisit if gate wording drifts between skills. |
+| ⏳ | Per-host live reliability (click, number, name, paraphrase on Codex, Claude Code, Cursor) | Covered by hook-level tests; live hosts are part of the P4 replay. |
 
 ### P3: Flow continuity
 

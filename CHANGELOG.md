@@ -16,9 +16,19 @@ All notable changes to this project are documented here. The format follows
   edge-case review, elicitation, party mode) as a formal option at plan approval.
 - Verify runs `bmad-review` edge-case (with claims and deletion checks) and verification-gap lenses
   alongside `thermos`, then triages all findings in one menu.
+- `harness decision present` takes `--detail` (what each option means) and `--recommended`, and
+  its chat fallback returns one numbered `menu`, identical on every host and every fallback.
+- An answer about unchanged content is returned as `already_answered` instead of asking again; an
+  approval is reused only while its write window is open.
 
 ### Changed
 
+- Replies to a pending question are matched loosely on every transport: a number, an ordinal, the
+  label in any case or accents, a unique prefix, or a unique set of its words. A loose reply never
+  selects an approving option unless it says "approve". Typing after a dismissed picker or expired
+  buttons now answers the question.
+- The plan checkpoint is a three-option menu (*Approve and continue*, *Deepen*, *Approve and
+  stop*); any other reply is a revision.
 - Bundled BMad skills use subagents again for investigation, research, extraction, review lenses,
   and party mode (`auto` by default), asking once per run when the host needs permission.
 - Discovery asks all open questions in one message with trade-offs and a recommendation, accepts

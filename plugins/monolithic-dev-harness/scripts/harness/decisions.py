@@ -13,6 +13,8 @@ from core.result import Err, Ok, Result, attempt, bind, err, fmap
 from harness import commands, questions, state
 
 RELATIVE_PATH = Path(".harness/state/decision.json")
+HISTORY = "decision-history.json"
+HISTORY_KEPT = 50
 
 
 @dataclass(frozen=True)
@@ -27,6 +29,7 @@ class Pending:
     scope: str | None
     presentation_id: str = ""
     allow_free_text: bool = False
+    details: tuple[str, ...] = ()
 
     @classmethod
     def from_record(cls, value: dict[str, Any], scope: str | None) -> Pending:
@@ -40,6 +43,7 @@ class Pending:
             presentation_id=str(value.get("presentation_id", "")),
             allow_free_text=bool(value.get("allow_free_text"))
             and not bool(value.get("approval")),
+            details=tuple(str(detail) for detail in value.get("details", ())),
         )
 
     def matches_presentation(self, question: dict[str, Any], transport: str) -> bool:
@@ -163,6 +167,7 @@ def begin(
     *,
     work_session_id: str | None = None,
     allow_free_text: bool = False,
+    details: tuple[str, ...] = (),
 ) -> Result[dict[str, Any]]:
     return bind(
         _path(repo, work_session_id, active=True),
@@ -178,6 +183,7 @@ def begin(
                 approval,
                 work_session_id,
                 allow_free_text,
+                details,
             ),
             "decision_invalid",
             "human decision",
@@ -198,6 +204,7 @@ def _begin(
     approval: bool,
     work_session_id: str | None,
     allow_free_text: bool,
+    details: tuple[str, ...] = (),
 ) -> dict[str, Any]:
     if waiting(repo, work_session_id):
         raise ValueError("answer the pending question before asking another")
@@ -209,6 +216,7 @@ def _begin(
         or any(not option.strip() for option in options)
         or len({option.strip().casefold() for option in options}) != len(options)
         or transport not in ("chat", "blocking", "async")
+        or len(details) > len(options)
         or (allow_free_text and (approval or questions.authorizing_options(options)))
     ):
         raise ValueError("a decision needs an id, question, and distinct options")
@@ -222,6 +230,7 @@ def _begin(
         "status": "pending",
         "answer": "",
         "allow_free_text": allow_free_text,
+        "details": details,
     }
     if work_session_id:
         value["work_session_id"] = work_session_id
@@ -295,14 +304,7 @@ def _resolve(
     current = state.read_json(path) or {}
     if current.get("status") != "pending" or current.get("id") != key:
         raise ValueError("this answer does not belong to the pending decision")
-    answer = next(
-        (
-            option
-            for option in current.get("options", ())
-            if option.strip().casefold() == answer.strip().casefold()
-        ),
-        answer,
-    )
+    answer = questions.match_option(answer, tuple(current.get("options", ()))) or answer
     if answer not in current.get("options", ()) and not _free_text_allowed(
         current, answer
     ):
@@ -319,7 +321,62 @@ def _resolve(
         )
     updated = {**current, "status": "answered", "answer": answer}
     state.write_json(path, updated)
+    history = path.with_name(HISTORY)
+    earlier = (state.read_json(history) or {}).get("answers", [])
+    state.write_json(history, {"answers": [*earlier, updated][-HISTORY_KEPT:]})
     return updated
+
+
+def reusable(
+    repo: Path,
+    question: str,
+    options: tuple[str, ...],
+    artifacts: tuple[tuple[str, str], ...],
+    approval: bool,
+    *,
+    work_session_id: str | None = None,
+) -> dict[str, Any] | None:
+    """An earlier answer to this same question about the same, unchanged content.
+
+    Only content-bound questions are reused: a question without reviewed files may mean something
+    new each time it is asked. A decline is never reused, so the human can change their mind. An
+    approval is reused only while the write window it opened is still open; once it closes, only a
+    new human reply can open another (ADR-0003).
+    """
+    if not artifacts:
+        return None
+    match _path(repo, work_session_id):
+        case Ok(path):
+            history = (state.read_json(path.with_name(HISTORY)) or {}).get(
+                "answers", []
+            )
+        case Err():
+            return None
+    labels = {questions.choice_label(option).casefold() for option in options}
+    for entry in reversed(history):
+        if (
+            entry.get("question", "").strip().casefold() == question.strip().casefold()
+            and {questions.choice_label(o).casefold() for o in entry.get("options", ())}
+            == labels
+            and bool(entry.get("approval")) == approval
+            and [tuple(pair) for pair in entry.get("artifacts", ())] == list(artifacts)
+            and questions.choice_label(str(entry.get("answer", ""))).casefold()
+            not in questions.DECLINE_LABELS
+        ):
+            return (
+                entry
+                if not approval or _window_open(repo, entry, work_session_id)
+                else None
+            )
+    return None
+
+
+def _window_open(repo: Path, entry: dict[str, Any], scope: str | None) -> bool:
+    match state.active_approval(repo, scope):
+        case (_, {"id": str() as window}):
+            return window == questions.approval_id(str(entry.get("id", "")))
+        case _:
+            return False
 
 
 def _free_text_allowed(current: dict[str, Any], answer: str) -> bool:

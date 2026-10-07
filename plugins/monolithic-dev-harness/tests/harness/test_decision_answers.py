@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from harness import decisions, state, work_sessions
+from harness import decisions, questions, state, work_sessions
 from host_adapters import work_session_context
 from tests.harness.test_hook_security import HARNESS, run_hook
 from tests.settings_fixture import write_settings
@@ -132,3 +132,59 @@ def test_a_wordy_chat_approval_is_refused(repo: Path) -> None:
     )
     assert result.returncode == 2
     assert not decisions.waiting(repo)
+
+
+ROUTES = ("Start feature work (Recommended)", "Prepare work items", "Explore an idea")
+
+
+@pytest.mark.parametrize(
+    ("reply", "chosen"),
+    [
+        ("feature", 0),
+        ("Start feature work", 0),
+        ("1", 0),
+        ("option 2", 1),
+        ("the first", 0),
+        ("3.", 2),
+        ("**Explore an idea**", 2),
+        ("last", 2),
+    ],
+)
+def test_loose_replies_name_one_option(reply: str, chosen: int) -> None:
+    assert questions.match_option(reply, ROUTES) == ROUTES[chosen]
+
+
+@pytest.mark.parametrize("reply", ["work", "what are the choices", "", "4"])
+def test_ambiguous_or_unrelated_replies_name_nothing(reply: str) -> None:
+    assert questions.match_option(reply, ROUTES) is None
+
+
+def test_accents_and_ampersands_do_not_matter() -> None:
+    assert questions.match_option("portugues", ("English", "Português (Brasil)")) == (
+        "Português (Brasil)"
+    )
+    assert questions.match_option(
+        "Approve & continue", ("Approve and continue", "Deepen")
+    ) == ("Approve and continue")
+
+
+def test_a_loose_reply_never_approves_on_the_users_behalf() -> None:
+    gate = ("Approve and continue", "Deepen", "Approve and stop")
+    assert questions.match_option("stop", gate) is None
+    assert questions.match_option("continue", gate) is None
+    assert questions.match_option("approve and stop", gate) == "Approve and stop"
+    assert questions.match_option("3", gate) == "Approve and stop"
+
+
+def test_a_numbered_reply_answers_a_chat_question(repo: Path) -> None:
+    decisions.begin(
+        repo, "d1", "Which conflict policy?", ("Latest wins", "Ask"), "chat"
+    )
+    type_prompt(repo, "the first")
+    assert (decisions.record(repo) or {}).get("answer") == "Latest wins"
+
+
+def test_typing_after_a_dismissed_picker_answers_it(repo: Path) -> None:
+    decisions.begin(repo, "d1", "Next step?", ROUTES, "blocking")
+    type_prompt(repo, "feature", host="claude")
+    assert (decisions.record(repo) or {}).get("answer") == ROUTES[0]

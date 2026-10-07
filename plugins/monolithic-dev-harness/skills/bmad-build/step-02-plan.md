@@ -55,12 +55,13 @@ If token count exceeded 1600 and the user chose to keep the full plan, include t
 
 The summary closes the series of decisions: list every decision recorded in this run (from the memlog), so the user can change any of them here instead of re-approving each one. Never re-ask a decision that is already recorded unless the user reopens it.
 
-HALT and give the user a choice:
+HALT and give the user a choice, as a menu: `harness decision present` with `--artifact {plan_file}` and `--allow-free-text`, these three options in this order, each with its `--detail`, and `--recommended` on **Deepen** when the plan spans several platforms or subsystems, carries security or data-loss risk, or the user kept the full plan past the scope check (otherwise on **Approve and continue**):
 
 1. **Approve and continue** — approve the plan, leave it `ready-for-dev`, and hand it to the harness backlog stage for work-item drafting. This approval does not publish tracker items or authorize implementation.
-2. **Deepen** — challenge the plan before approving it. Recommend this when the plan spans several platforms or subsystems, carries security or data-loss risk, or the user kept the full plan past the scope check.
-3. **Revise** — the user says what to change; apply it, then return to this checkpoint.
-4. **Approve and stop** — approve the plan, leave it `ready-for-dev`, and stop before backlog drafting.
+2. **Deepen** — challenge the plan before approving it.
+3. **Approve and stop** — approve the plan, leave it `ready-for-dev`, and stop before backlog drafting.
+
+Any other reply is a revision: apply what the user asked for, then return to this checkpoint. When the command returns `already_answered`, the plan has not changed since the user chose; act on that choice.
 
 **Deepen** runs, in order, returning to this checkpoint when done:
 

@@ -174,14 +174,14 @@ def test_transcript_from_a_different_chat_cannot_recover_the_answer(
     tmp_path: Path,
 ) -> None:
     write_settings(tmp_path)
-    ask(tmp_path)
+    ask(tmp_path, approval=True)
     native(
         tmp_path,
         "prompt",
         {
             "prompt": "ordinary message",
             "session_id": "original-chat",
-            "transcript_path": str(transcript(tmp_path, "another-chat")),
+            "transcript_path": str(transcript(tmp_path, "another-chat", approval=True)),
         },
     )
     assert decisions.waiting(tmp_path)

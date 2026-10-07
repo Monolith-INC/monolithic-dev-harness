@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from dataclasses import dataclass
 from typing import Any
 
@@ -315,6 +316,92 @@ def _answer_for(question: dict[str, Any], answers: Any) -> str | None:
 def choice_label(value: str) -> str:
     """Normalize Codex's recommended-option suffix while preserving the choice label."""
     return re.sub(r"\s*\(recommended\)\s*$", "", value, flags=re.IGNORECASE).strip()
+
+
+_ORDINALS = {
+    "first": 0,
+    "1st": 0,
+    "primeira": 0,
+    "primeiro": 0,
+    "second": 1,
+    "2nd": 1,
+    "segunda": 1,
+    "segundo": 1,
+    "third": 2,
+    "3rd": 2,
+    "terceira": 2,
+    "terceiro": 2,
+}
+_LAST = frozenset({"last", "última", "ultima", "último", "ultimo"})
+_FILLER = frozenset(
+    {"the", "a", "o", "one", "option", "opção", "opcao", "choice", "number", "nº", "no"}
+)
+_PUNCTUATION = ".,;:!?\"'`*()[]#-–—"
+
+
+_APPROVING = frozenset({"approve", "aprovar", "aprovo", "aprove"})
+
+
+def _words_of(value: str) -> tuple[str, ...]:
+    """Lowercase words without accents or edge punctuation; `&` reads as `and`."""
+    plain = "".join(
+        char
+        for char in unicodedata.normalize("NFKD", value.casefold())
+        if not unicodedata.combining(char)
+    )
+    return tuple(
+        "and" if word == "&" else word
+        for word in (part.strip(_PUNCTUATION) for part in plain.split())
+        if word
+    )
+
+
+def match_option(reply: str, options: tuple[str, ...]) -> str | None:
+    """The one offered option a human reply names, or None when it names none or several.
+
+    People answer menus loosely: `1`, `1.`, `option 2`, `the first`, `english`, `feature` for
+    `Start feature work`, or the label with different case or punctuation. Each rule runs only when
+    the earlier ones found nothing, and a rule that fits several options picks none.
+    """
+    labels = tuple(choice_label(option) for option in options)
+    words = _words_of(reply)
+    if not words or not options:
+        return None
+    wanted = " ".join(words)
+    exact = [
+        i for i, label in enumerate(labels) if " ".join(_words_of(label)) == wanted
+    ]
+    if len(exact) == 1:
+        return options[exact[0]]
+    meaningful = tuple(word for word in words if word not in _FILLER)
+    match meaningful:
+        case (number,) if number.isdigit() and 1 <= int(number) <= len(options):
+            return options[int(number) - 1]
+        case (ordinal,) if _ORDINALS.get(ordinal, len(options)) < len(options):
+            return options[_ORDINALS[ordinal]]
+        case (last,) if last in _LAST:
+            return options[-1]
+    if not meaningful:
+        return None
+    # A loose reply never approves on the user's behalf: it must say so itself.
+    says_approve = bool(_APPROVING & set(meaningful))
+    labels = tuple(
+        label if says_approve or not _APPROVING & set(_words_of(label)) else ""
+        for label in labels
+    )
+    prefix = [
+        i
+        for i, label in enumerate(labels)
+        if label and " ".join(_words_of(label)).startswith(wanted)
+    ]
+    if len(wanted) >= 3 and len(prefix) == 1:
+        return options[prefix[0]]
+    containing = [
+        i
+        for i, label in enumerate(labels)
+        if label and set(meaningful) <= set(_words_of(label))
+    ]
+    return options[containing[0]] if len(containing) == 1 else None
 
 
 def authorizing_options(options: tuple[str, ...]) -> bool:
