@@ -89,3 +89,11 @@ Doctor passed against the preserved acceptance fixture. Doctor does not verify l
 
 Desktop restart is required before the next live trial. No restart, trial, merge or deployment
 was performed during this update.
+
+## Restart after optional onboarding update
+
+The human reported restarting Codex after installation of `9488f91`. Rechecked 368 source files
+against the installed cache: zero mismatches. Launched a fresh interactive project agent, Cicero
+(`01a1176d-2568-7650-bcc8-3bca43dcde3a`), with the revised briefing and inherited model/effort.
+It continues the preserved fixture without repeating the English question and must stop before
+implementation. Matching files and human restart confirmation do not prove live answer capture.

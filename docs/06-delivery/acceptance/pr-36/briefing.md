@@ -10,7 +10,7 @@ last_reviewed: 2026-10-07
 You are the project agent in a monolithic-dev-harness acceptance trial.
 
 - PROJECT: `/tmp/monolithic-dev-harness-trial-hfex7n7v/project`.
-- HARNESS UNDER TEST: source commit `3d723e3dda51097ff66723aba4631e34a4411d75`; installed
+- HARNESS UNDER TEST: source commit `9488f91761089c5be532917297eaed9c15ed1bf0`; installed
   integration must be verified against this revision before launch.
 - HOST: Codex desktop, interactive. Parent model inherited; launch only after host choice is settled.
 - SCENARIO: “I can see how many tasks I still need to do, but I also want to see how many I have
@@ -28,6 +28,8 @@ parent conclusions or harness implementation to predict findings. Relay human qu
 the parent and wait for actual answers. Do not spawn further agents. Report observed versus expected
 behavior, artifacts, actual failures and unresolved decisions. Do not delete the fixture at a gate.
 
-Launch is pending a desktop restart. The installed cache now matches all 366 checked source files,
-but the running host may retain old hooks. After restart, verify the installation and launch the
-trial. No test agent has been started and no acceptance result exists yet.
+The human reported restarting after this build was installed. The parent verified all 368 source
+files against the installed cache. This is continuation of the preserved trial, not a fresh fixture.
+English was already selected: do not ask again, forge capture, or rewrite the saved answer.
+Use the installed preference/default policy to continue. Preserve existing failed-run evidence.
+Record new evidence in `resumed-result.md` in this directory. Stop before implementation.

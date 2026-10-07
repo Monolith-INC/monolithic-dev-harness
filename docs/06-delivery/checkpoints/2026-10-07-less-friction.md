@@ -102,3 +102,9 @@ Final full-suite rerun: 332 backlog tests passed; 737 main tests passed, one ski
    source `9488f91` through the supported Codex installer. All 368 checked files match both cache
    and PATH installation; user config is unchanged; doctor passed. Evidence is in host-preflight.
    Restart and live trial remain pending; no acceptance verdict is claimed.
+9. **Restarted live acceptance.** After human restart, 368 installed files still match. The trial
+   entered discovery in English despite the unrecorded legacy language answer. A real native
+   Standalone choice returned for `HD-a2811e0cbd10f7e5`, but its saved session decision remains
+   pending with an empty answer. Startup/default behavior passed this observation; live capture
+   remains blocked. Preserved evidence and stopped before implementation without repeating the
+   question. Parent/fixture context separation remains a limitation; root cause is not established.
