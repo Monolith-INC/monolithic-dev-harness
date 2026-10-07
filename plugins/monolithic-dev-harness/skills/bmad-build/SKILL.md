@@ -7,7 +7,7 @@ description: Technical discovery for a named feature request or ticket, using BM
 
 After onboarding is verified and the project work session and workflow are active, run:
 
-`harness workflow render --stage discover --session-id <selected-id> --repo <project>`
+`harness workflow render --stage discover --repo <project>`
 
 Use the bundled `bin/harness` if the command is absent from PATH. Read and follow the single
 absolute entry path returned in `entry`. Do not execute the templates in this skill folder directly.

@@ -14,7 +14,7 @@ verified. Project work then selects a work session and starts its workflow.
 `harness workflow render --stage discover --session-id <id> --repo <project>` resolves the project
 path, original saved request, language, tracker, source control, preference environment, route,
 and session-bound workflow commands, including the decision-log (`memlog.py`) command the plan's
-memlog uses and the `harness decision present` prefix that keeps questions in the session. It runs the unchanged vendored BMAD renderer against the
+memlog uses. Without `--session-id`, rendering uses the project's current work session. It runs the unchanged vendored BMAD renderer against the
 shipped Stage 0 templates. Conditional branches are resolved before the agent receives instructions;
 cross-step references are absolute paths in the resulting snapshot.
 

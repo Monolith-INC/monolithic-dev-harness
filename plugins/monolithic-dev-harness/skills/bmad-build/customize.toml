@@ -28,7 +28,6 @@ python_command = ""
 config_command = ""
 tickets_command = ""
 memlog_command = ""
-decision_command = ""
 
 # Extra instructions to run before config is loaded and before the user is greeted.
 

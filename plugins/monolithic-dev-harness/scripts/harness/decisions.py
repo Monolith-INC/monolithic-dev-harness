@@ -122,10 +122,15 @@ def any_waiting(repo: Path) -> bool:
 def pending(repo: Path, work_session_id: str | None = None) -> Pending | None:
     """The decision this scope's user is answering.
 
-    The scope's own, else the project-wide one; without a session (Cursor gives none), the one
-    pending session decision. With several, none is guessed.
+    A linked conversation: its session's own, else the project-wide one. A conversation with no
+    link (Cursor gives none): the project's current session's, where commands that name no
+    session ask, else the project-wide one, else the one pending session decision. With several,
+    none is guessed; a linked conversation never answers another session's question.
     """
-    for scope in (work_session_id, None) if work_session_id else (None,):
+    from harness import work_sessions
+
+    first = work_session_id or work_sessions.current(repo)
+    for scope in (first, None) if first else (None,):
         value = record(repo, scope)
         if value and value.get("status") == "pending":
             return Pending.from_record(value, scope)

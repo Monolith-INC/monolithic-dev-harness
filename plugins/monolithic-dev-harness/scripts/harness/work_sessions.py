@@ -143,12 +143,19 @@ def start(project: Path, request: str) -> Result[Session]:
             "a work session needs the original request",
         ),
         lambda _: attempt(
-            lambda: _create(project.resolve(), normalized),
+            lambda: _remembered(
+                project.resolve(), _create(project.resolve(), normalized)
+            ),
             "session_unwritable",
             "could not create a work session",
             OSError,
         ),
     )
+
+
+def _remembered(project: Path, session: Session) -> Session:
+    remember_current(project, session.id)
+    return session
 
 
 def _create(project: Path, request: str) -> Session:
@@ -179,6 +186,32 @@ def _create(project: Path, request: str) -> Session:
             shutil.rmtree(staging)
         raise
     return session
+
+
+CURRENT = "current.json"
+
+
+def remember_current(project: Path, identifier: str) -> None:
+    """Record the session the project is working in, so nobody has to repeat its id."""
+    state.write_json(root(project) / CURRENT, {"id": identifier})
+
+
+def current(project: Path) -> str | None:
+    """The work session commands and questions belong to when none is named.
+
+    The one last started, resumed, or selected while it is still active; else the only active
+    session; else none, and the work is project-wide. Never an error: talking to the human must
+    not depend on a session existing.
+    """
+    match list_sessions(project):
+        case Ok(sessions):
+            active = [s.id for s in sessions if s.status == Status.ACTIVE]
+        case _:
+            return None
+    remembered = (state.read_json(root(project) / CURRENT) or {}).get("id")
+    if remembered in active:
+        return str(remembered)
+    return active[0] if len(active) == 1 else None
 
 
 def list_sessions(project: Path) -> Result[tuple[Session, ...]]:
@@ -316,6 +349,12 @@ def transition(project: Path, identifier: str, operation: str) -> Result[Session
     )
 
 
+def _save_transition(updated: Session) -> None:
+    state.write_json(updated.folder / "session.json", _payload(updated))
+    if updated.status == Status.ACTIVE:
+        remember_current(updated.project_root, updated.id)
+
+
 def _transition(current: Session, operation: str) -> Result[Session]:
     match TRANSITIONS.get((operation, current.status)):
         case None:
@@ -333,9 +372,7 @@ def _transition(current: Session, operation: str) -> Result[Session]:
             )
             return bind(
                 attempt(
-                    lambda: state.write_json(
-                        current.folder / "session.json", _payload(updated)
-                    ),
+                    lambda: _save_transition(updated),
                     "session_unwritable",
                     f"could not update work session {current.id}",
                     OSError,

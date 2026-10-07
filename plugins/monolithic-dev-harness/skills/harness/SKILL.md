@@ -63,9 +63,10 @@ the human chooses whether to switch or keep the current work. A paused or stoppe
 the human to choose it before running
 `harness work-session resume <id> --repo <project>`. Never silently resume paused or stopped work.
 
-Keep the selected work-session ID as required context after onboarding. Every workflow command
-must include `--session-id <id>`, including `start`, `checkpoint`, `status`, `list`, `pause`,
-`resume`, `back`, `cancel`, `complete`, and discovery `render`. Session checkpoints are stored with that session.
+You never need to carry the work-session ID. Starting, resuming, or selecting a work session makes it
+the project's current session, and every `workflow` and `decision` command without `--session-id`
+uses it (else the only active session, else the project as a whole). Session checkpoints are
+stored with that session.
 Project settings such as tracker and planning folder remain shared. Onboarding establishes the
 tracker and runtime before session creation. A project work session does not require Git, a project
 contract, or starting the checkout-bound implementation session.
@@ -77,7 +78,7 @@ questions and a suspended harness remain explicit; do not resume a stopped run o
 saved progress automatically. Use the host adapter described in
 [human-decisions.md](../../references/human-decisions.md) for human decisions.
 Start the workflow with the selected session's exact original request:
-`harness workflow start --session-id <id> --request "<original request>" --repo <project>`. If that
+`harness workflow start --request "<original request>" --repo <project>`. If that
 session already has a workflow, show its saved checkpoints and let the user resume or cancel it
 before starting another. Do not start a session or workflow to complete onboarding.
 Host trust and sign-in remain human actions where required. The selected tracker and its manifest
@@ -184,7 +185,7 @@ publish tracker items.
 
 When the request names an existing task or ticket, follow the storyboard directly; do not ask whether
 to investigate or draft new work items. When the request is a feature idea with no clear starting
-point, ask the `starting-point` gate: `harness decision present --session-id <id> --gate starting-point`. The existing `plain-questions` hook validates the question before
+point, ask the `starting-point` gate: `harness decision present --gate starting-point`. The existing `plain-questions` hook validates the question before
 display. Use the available native control. If delivery fails, quietly run `harness decision fallback`
 and re-ask the same question by the next method, including ordinary chat when needed. Preserve
 the choices and progress and continue this same run after the reply; do not abandon it or expose
@@ -276,7 +277,7 @@ standard approval gates in `config/gates.toml`; each is tied to what the user re
 
 1. Say in plain words what will be written: which items, with their titles, and what changes.
 2. Present the complete relevant artifact or batch through the best available host surface, then
-   ask the gate: `harness decision present --session-id <id> --gate <id> --value ... --artifact ...`. The harness
+   ask the gate: `harness decision present --gate <id> --value ... --artifact ...`. The harness
    shows it in the project's language; never word or translate an approval yourself.
 3. The user's click or typed `Approve` opens the approval. It holds until the user revokes it, the
    work session ends, or what it is tied to changes (an edited draft or spec, another branch, item,

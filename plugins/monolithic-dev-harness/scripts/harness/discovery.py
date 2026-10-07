@@ -143,7 +143,6 @@ def _context(
         "review": "none",
         "status_command": _command(repo, session.id, "status"),
         "checkpoint_command": _command(repo, session.id, "checkpoint"),
-        "decision_command": _command(repo, session.id, "present", "decision"),
         "python_command": shlex.quote(sys.executable),
         "config_command": shlex.join(
             (
@@ -169,15 +168,13 @@ def _context(
     }
 
 
-def _command(
-    repo: Path, session_id: str, operation: str, group: str = "workflow"
-) -> str:
+def _command(repo: Path, session_id: str, operation: str) -> str:
     return shlex.join(
         (
             "env",
             f"HARNESS_USER_STATE_DIR={preferences.path().resolve().parent}",
             str(PLUGIN_ROOT / "bin" / "harness"),
-            group,
+            "workflow",
             operation,
             "--repo",
             str(repo.resolve()),

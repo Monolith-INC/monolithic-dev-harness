@@ -21,8 +21,9 @@ All notable changes to this project are documented here. The format follows
 - An answer about unchanged content is returned as `already_answered` instead of asking again.
 - A stop guard (Claude, Codex) sends the agent back once when a turn would end mid-workflow with
   no question for the user and no pending menu, quoting the saved next action.
-- Discovery renders a session-scoped `decision present` prefix, so its questions wait only in their
-  work session.
+- No command needs a work-session id. Starting, resuming, or selecting a session makes it current,
+  and `workflow` and `decision` commands use it; with no session, questions still work
+  project-wide.
 - Standard questions live in `config/gates.toml` in English and Brazilian Portuguese; agents ask
   them with `decision present --gate <id> --value name=value`. Approvals come only from gates.
 - Approvals asked through a gate are tied to what was reviewed (drafts or spec, one item, branch,
