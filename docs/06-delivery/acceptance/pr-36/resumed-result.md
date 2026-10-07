@@ -19,11 +19,11 @@ Existing failed-run evidence was preserved. No source implementation, global con
 
 All shell commands used working directory `/tmp/monolithic-dev-harness-trial-hfex7n7v/project`, except the initial briefing read, which used the calling workspace. All returned exit code 0.
 
-1. `cat /home/monolith/projects/monolithic-dev-harness/docs/06-delivery/acceptance/pr-36/briefing.md` — loaded the trial constraints and fixture.
-2. Tool catalog discovery — installed bootstrap/provider tools were exposed; the installed skill selected the CLI entry workflow.
-3. `ls -la /tmp/monolithic-dev-harness-trial-hfex7n7v/project` — preserved fixture exists, including `.harness`, `_bmad`, source, tests, and Git.
-4. `cat /home/bhave/.codex/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2/skills/harness/SKILL.md` — normal entry is `harness begin`; optional language capture must not block.
-5. `/home/bhave/.codex/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2/bin/harness begin --request "I can see how many tasks I still need to do, but I also want to see how many I have finished. Show both counts on the task screen." --repo /tmp/monolithic-dev-harness-trial-hfex7n7v/project`
+- `cat /home/monolith/projects/monolithic-dev-harness/docs/06-delivery/acceptance/pr-36/briefing.md` — loaded the trial constraints and fixture.
+- Tool catalog discovery — installed bootstrap/provider tools were exposed; the installed skill selected the CLI entry workflow.
+- `ls -la /tmp/monolithic-dev-harness-trial-hfex7n7v/project` — preserved fixture exists, including `.harness`, `_bmad`, source, tests, and Git.
+- `cat /home/bhave/.codex/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2/skills/harness/SKILL.md` — normal entry is `harness begin`; optional language capture must not block.
+- `/home/bhave/.codex/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2/bin/harness begin --request "I can see how many tasks I still need to do, but I also want to see how many I have finished. Show both counts on the task screen." --repo /tmp/monolithic-dev-harness-trial-hfex7n7v/project`
 
 Actual entry response:
 
@@ -31,11 +31,11 @@ Actual entry response:
 {"state":"active","session_id":"WS-6cbe6b704607","request":"I can see how many tasks I still need to do, but I also want to see how many I have finished. Show both counts on the task screen.","language":"en","workflow":{"stage":"discover","checkpoint":"First request","next_action":"Continue original request","saved_points":1},"discover_entry":"/tmp/monolithic-dev-harness-trial-hfex7n7v/project/_bmad/render/bmad-build/project-e69c90a7319d/56a8eb119eaeaaa259b4/workflow.md","next":"Follow saved next_action; for fresh discovery read discover_entry. Paused work requires explicit resume.","startup_receipt":"BS-2e19f2cecbb0ac1ccdebc937"}
 ```
 
-6. `cat /tmp/monolithic-dev-harness-trial-hfex7n7v/project/_bmad/render/bmad-build/project-e69c90a7319d/56a8eb119eaeaaa259b4/workflow.md` — pinned installed workflow, session and English; local tracker/SCM, discover stage.
-7. `cat /tmp/monolithic-dev-harness-trial-hfex7n7v/project/_bmad/render/bmad-build/project-e69c90a7319d/56a8eb119eaeaaa259b4/step-01-clarify-and-route.md` — requires an initiative/standalone choice when no initiative is configured, before listing planning context.
-8. `/usr/local/bin/python3.12 /tmp/monolithic-dev-harness-trial-hfex7n7v/project/_bmad/scripts/resolve_config.py --project-root /tmp/monolithic-dev-harness-trial-hfex7n7v/project --key core.active_initiative` — output `{}`; no active initiative resolved.
-9. `cat /home/bhave/.codex/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2/references/human-decisions.md` — one-off menus use `decision present`; only human answers resolve them.
-10. `/home/bhave/.codex/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2/bin/harness decision present --repo /tmp/monolithic-dev-harness-trial-hfex7n7v/project --host codex --question "Does this work belong to an initiative, or is it standalone?" --option "Standalone" --detail "Plan the task-screen counts directly in docs/planning; no active initiative is configured." --option "Initiative" --detail "Provide the initiative name to place this work under its planning folder." --recommended "Standalone" --allow-free-text --blocking-available` — returned the real pending decision below.
+- `cat /tmp/monolithic-dev-harness-trial-hfex7n7v/project/_bmad/render/bmad-build/project-e69c90a7319d/56a8eb119eaeaaa259b4/workflow.md` — pinned installed workflow, session and English; local tracker/SCM, discover stage.
+- `cat /tmp/monolithic-dev-harness-trial-hfex7n7v/project/_bmad/render/bmad-build/project-e69c90a7319d/56a8eb119eaeaaa259b4/step-01-clarify-and-route.md` — requires an initiative/standalone choice when no initiative is configured, before listing planning context.
+- `/usr/local/bin/python3.12 /tmp/monolithic-dev-harness-trial-hfex7n7v/project/_bmad/scripts/resolve_config.py --project-root /tmp/monolithic-dev-harness-trial-hfex7n7v/project --key core.active_initiative` — output `{}`; no active initiative resolved.
+- `cat /home/bhave/.codex/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2/references/human-decisions.md` — one-off menus use `decision present`; only human answers resolve them.
+- `/home/bhave/.codex/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2/bin/harness decision present --repo /tmp/monolithic-dev-harness-trial-hfex7n7v/project --host codex --question "Does this work belong to an initiative, or is it standalone?" --option "Standalone" --detail "Plan the task-screen counts directly in docs/planning; no active initiative is configured." --option "Initiative" --detail "Provide the initiative name to place this work under its planning folder." --recommended "Standalone" --allow-free-text --blocking-available` — returned the real pending decision below.
 
 ## Exact decision control payload for parent relay
 
