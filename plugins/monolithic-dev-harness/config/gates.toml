@@ -1,0 +1,283 @@
+# The standard questions the harness asks the human, ready in every supported language.
+#
+# The agent never words or translates these: it runs
+#   harness decision present --gate <id> [--value name=value]... [--artifact <path>]...
+# and the harness shows the entry in the project's language. `{name}` slots take `--value`s.
+#
+# Fields per gate:
+#   question.<lang>         the question
+#   free_text               a typed reply that is not an option comes back as the human's direction
+#   approval                answering Approve authorizes tracker/SCM writes
+#   artifact                the human reviews files; at least one --artifact is required
+#   recommended             the option id marked as recommended unless --recommended names another
+#   binds                   for approvals, what the approval is tied to:
+#                             "artifacts"        the reviewed files, unchanged (tracker writes)
+#                             "branch:{slot}"    pushes and draft pull requests for that branch
+#                             "pr:{slot}"        replies and links on that pull request
+#                             "item:{slot}"      writes to that one existing work item
+#                             ""                 a general, short-lived window
+#   [[gate.option]]         up to three; id, label.<lang>, detail.<lang>
+#
+# Every gate must define every language in `languages`, with the same options in each.
+
+languages = ["en", "pt-br"]
+
+[[gate]]
+id = "language"
+# Asked before the project has a language: shown in the user's saved preference, else English.
+question.en = "Which language should this project use?"
+question.pt-br = "Qual idioma este projeto deve usar?"
+
+[[gate.option]]
+id = "en"
+label.en = "English"
+label.pt-br = "English"
+detail.en = "Questions, plans, and work items in English."
+detail.pt-br = "Perguntas, planos e itens de trabalho em inglês."
+
+[[gate.option]]
+id = "pt-br"
+label.en = "Português (Brasil)"
+label.pt-br = "Português (Brasil)"
+detail.en = "Questions, plans, and work items in Brazilian Portuguese."
+detail.pt-br = "Perguntas, planos e itens de trabalho em português do Brasil."
+
+[[gate]]
+id = "setup-confirm"
+question.en = "Use these settings?"
+question.pt-br = "Usar estas configurações?"
+recommended = "yes"
+
+[[gate.option]]
+id = "yes"
+label.en = "Yes"
+label.pt-br = "Sim"
+detail.en = "Save the settings and continue with your request."
+detail.pt-br = "Salvar as configurações e continuar com o seu pedido."
+
+[[gate.option]]
+id = "no"
+label.en = "No"
+label.pt-br = "Não"
+detail.en = "Change a choice before saving."
+detail.pt-br = "Mudar uma escolha antes de salvar."
+
+[[gate]]
+id = "next-step"
+question.en = "What would you like to do next?"
+question.pt-br = "O que você quer fazer agora?"
+free_text = true
+recommended = "feature"
+
+[[gate.option]]
+id = "feature"
+label.en = "Start feature work"
+label.pt-br = "Começar uma funcionalidade"
+detail.en = "Investigate the request and prepare a technical plan."
+detail.pt-br = "Investigar o pedido e preparar um plano técnico."
+
+[[gate.option]]
+id = "items"
+label.en = "Prepare work items"
+label.pt-br = "Preparar itens de trabalho"
+detail.en = "Draft the work items from the request as it is."
+detail.pt-br = "Rascunhar os itens de trabalho a partir do pedido como está."
+
+[[gate.option]]
+id = "idea"
+label.en = "Explore an idea"
+label.pt-br = "Explorar uma ideia"
+detail.en = "Shape or challenge the idea before planning."
+detail.pt-br = "Dar forma à ideia ou questioná-la antes de planejar."
+
+[[gate]]
+id = "starting-point"
+question.en = "What would you like to do with this idea?"
+question.pt-br = "O que você quer fazer com esta ideia?"
+free_text = true
+recommended = "investigate"
+
+[[gate.option]]
+id = "investigate"
+label.en = "Investigate first"
+label.pt-br = "Investigar primeiro"
+detail.en = "Review the repository and prepare a technical plan."
+detail.pt-br = "Analisar o repositório e preparar um plano técnico."
+
+[[gate.option]]
+id = "items"
+label.en = "Draft work items"
+label.pt-br = "Rascunhar itens de trabalho"
+detail.en = "Use the request as it is and prepare work items now."
+detail.pt-br = "Usar o pedido como está e preparar os itens de trabalho agora."
+
+[[gate.option]]
+id = "explore"
+label.en = "Explore the idea"
+label.pt-br = "Explorar a ideia"
+detail.en = "Shape or challenge the idea before planning the technical work."
+detail.pt-br = "Dar forma à ideia ou questioná-la antes de planejar o trabalho técnico."
+
+[[gate]]
+id = "plan-checkpoint"
+question.en = "The plan is ready. How do you want to proceed?"
+question.pt-br = "O plano está pronto. Como você quer seguir?"
+free_text = true
+artifact = true
+recommended = "continue"
+
+[[gate.option]]
+id = "continue"
+label.en = "Approve and continue"
+label.pt-br = "Aprovar e continuar"
+detail.en = "The plan locks and I draft the work items next."
+detail.pt-br = "O plano fica travado e eu rascunho os itens de trabalho em seguida."
+
+[[gate.option]]
+id = "deepen"
+label.en = "Deepen"
+label.pt-br = "Aprofundar"
+detail.en = "Challenge the plan with reviews and other perspectives before approving."
+detail.pt-br = "Questionar o plano com revisões e outras perspectivas antes de aprovar."
+
+[[gate.option]]
+id = "stop"
+label.en = "Approve and stop"
+label.pt-br = "Aprovar e parar"
+detail.en = "The plan locks and we pause here."
+detail.pt-br = "O plano fica travado e paramos por aqui."
+
+[[gate]]
+id = "publish-items"
+question.en = "Publish these {count} work items to {tracker}?"
+question.pt-br = "Publicar estes {count} itens de trabalho em {tracker}?"
+approval = true
+artifact = true
+binds = "artifacts"
+recommended = "approve"
+
+[[gate.option]]
+id = "approve"
+label.en = "Approve"
+label.pt-br = "Aprovar"
+detail.en = "Create them as reviewed. Changing the drafts needs a new approval."
+detail.pt-br = "Criar como revisados. Mudar os rascunhos exige nova aprovação."
+
+[[gate.option]]
+id = "not-now"
+label.en = "Not now"
+label.pt-br = "Agora não"
+detail.en = "Keep the drafts and publish nothing."
+detail.pt-br = "Manter os rascunhos e não publicar nada."
+
+[[gate]]
+id = "approve-spec"
+question.en = "Approve this technical spec and start building?"
+question.pt-br = "Aprovar esta especificação técnica e começar a construir?"
+approval = true
+artifact = true
+binds = "artifacts"
+recommended = "approve"
+
+[[gate.option]]
+id = "approve"
+label.en = "Approve"
+label.pt-br = "Aprovar"
+detail.en = "Build from this spec. Changing it needs a new approval."
+detail.pt-br = "Construir a partir desta especificação. Mudá-la exige nova aprovação."
+
+[[gate.option]]
+id = "not-now"
+label.en = "Not now"
+label.pt-br = "Agora não"
+detail.en = "Keep the spec as a draft and build nothing."
+detail.pt-br = "Manter a especificação como rascunho e não construir nada."
+
+[[gate]]
+id = "move-item"
+question.en = "Move {item} to {status}?"
+question.pt-br = "Mover {item} para {status}?"
+approval = true
+binds = "item:{ref}"
+recommended = "approve"
+
+[[gate.option]]
+id = "approve"
+label.en = "Approve"
+label.pt-br = "Aprovar"
+detail.en = "Update this work item only. Others need their own approval."
+detail.pt-br = "Atualizar somente este item de trabalho. Outros precisam da própria aprovação."
+
+[[gate.option]]
+id = "not-now"
+label.en = "Not now"
+label.pt-br = "Agora não"
+detail.en = "Leave the work item as it is."
+detail.pt-br = "Deixar o item de trabalho como está."
+
+[[gate]]
+id = "publish-branch"
+question.en = "Push {branch} and open a draft pull request?"
+question.pt-br = "Enviar {branch} e abrir um pull request em rascunho?"
+approval = true
+binds = "branch:{branch}"
+recommended = "approve"
+
+[[gate.option]]
+id = "approve"
+label.en = "Approve"
+label.pt-br = "Aprovar"
+detail.en = "Push this branch and open its draft. Other branches need their own approval."
+detail.pt-br = "Enviar esta branch e abrir o rascunho. Outras branches precisam da própria aprovação."
+
+[[gate.option]]
+id = "not-now"
+label.en = "Not now"
+label.pt-br = "Agora não"
+detail.en = "Keep the work local."
+detail.pt-br = "Manter o trabalho local."
+
+[[gate]]
+id = "reply-pr"
+question.en = "Post these replies on pull request {pr}?"
+question.pt-br = "Publicar estas respostas no pull request {pr}?"
+approval = true
+artifact = true
+binds = "pr:{pr}"
+recommended = "approve"
+
+[[gate.option]]
+id = "approve"
+label.en = "Approve"
+label.pt-br = "Aprovar"
+detail.en = "Post the reviewed replies on this pull request only."
+detail.pt-br = "Publicar as respostas revisadas somente neste pull request."
+
+[[gate.option]]
+id = "not-now"
+label.en = "Not now"
+label.pt-br = "Agora não"
+detail.en = "Keep the replies as drafts."
+detail.pt-br = "Manter as respostas como rascunho."
+
+[[gate]]
+id = "pause-tracking"
+question.en = "Pause tracker checks for this project for a short while?"
+question.pt-br = "Pausar as verificações do rastreador neste projeto por um curto período?"
+approval = true
+binds = ""
+recommended = "not-now"
+
+[[gate.option]]
+id = "approve"
+label.en = "Approve"
+label.pt-br = "Aprovar"
+detail.en = "Work without tracker checks until the window closes."
+detail.pt-br = "Trabalhar sem as verificações do rastreador até a janela fechar."
+
+[[gate.option]]
+id = "not-now"
+label.en = "Not now"
+label.pt-br = "Agora não"
+detail.en = "Keep tracker checks on."
+detail.pt-br = "Manter as verificações do rastreador ativas."

@@ -66,7 +66,7 @@ blocker and do not open a pull request.
 ## 5. Pull request
 
 When GitHub or Azure Repos is configured, `branch-and-pr` can push and open the **draft** pull
-request linked to the Story (one approval batch for both). Include the requirements coverage and
+request linked to the Story (one `publish-branch` approval for both). Include the requirements coverage and
 the thermos verdict in the description. If no hosted service is configured, finish after recording
 the verdict; the local review is complete and must not be marked blocked for lack of a pull request.
 
@@ -76,4 +76,4 @@ the verdict; the local review is complete and must not be marked blocked for lac
   staging environment, per the team's Definition of Done.
 - **G4, pull request:** a human publishes the draft and approves it. The hooks block both actions
   for the agent. Reviewer comments come back through `triage-pr-comments` and
-  `respond-pr-comments`; posting replies is a write that needs the user's approval batch.
+  `respond-pr-comments`; posting replies is a write that needs the `reply-pr` approval.

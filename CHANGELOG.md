@@ -18,8 +18,12 @@ All notable changes to this project are documented here. The format follows
   alongside `thermos`, then triages all findings in one menu.
 - `harness decision present` takes `--detail` (what each option means) and `--recommended`, and
   its chat fallback returns one numbered `menu`, identical on every host and every fallback.
-- An answer about unchanged content is returned as `already_answered` instead of asking again; an
-  approval is reused only while its write window is open.
+- An answer about unchanged content is returned as `already_answered` instead of asking again.
+- Standard questions live in `config/gates.toml` in English and Brazilian Portuguese; agents ask
+  them with `decision present --gate <id> --value name=value`. Approvals come only from gates.
+- Approvals asked through a gate are tied to what was reviewed (drafts or spec, one item, branch,
+  or pull request) and do not expire: they hold until revoked, the work session ends, or that
+  context changes. A typed `approve HB-…` keeps the short general window.
 
 ### Changed
 

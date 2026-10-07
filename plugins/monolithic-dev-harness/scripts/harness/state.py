@@ -98,18 +98,25 @@ def open_approval(
     minutes: int,
     question: str = "",
     work_session_id: str | None = None,
+    binds: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """A window for tracker/SCM writes, scoped to the work session it was opened in.
+    """An approval for tracker/SCM writes, scoped to the work session it was opened in.
 
-    Without a work session (Cursor, or a project with none bound) the window is project-wide.
+    Without a work session (Cursor, or a project with none bound) it is project-wide. An approval
+    bound to a context (`binds`: reviewed files with their digests, and/or one target such as a
+    branch or pull request) does not expire: it lasts until revoked, its work session ends, or the
+    context changes. A general approval, bound to nothing, is a window of `minutes`.
     """
     now = _now()
     record: dict[str, Any] = {
         "id": approval_id,
         "opened": now.isoformat(),
-        "expires": (now + timedelta(minutes=minutes)).isoformat(),
         "writes": [],
     }
+    if binds:
+        record["binds"] = binds
+    else:
+        record["expires"] = (now + timedelta(minutes=minutes)).isoformat()
     if question:
         record["question"] = question
     if work_session_id is not None:
@@ -127,7 +134,7 @@ def revoke_approvals(repo: Path, work_session_id: str | None = None) -> int:
         if (
             record
             and (work_session_id is None or _scope(record) == work_session_id)
-            and datetime.fromisoformat(record["expires"]) > _now()
+            and approval_open(record)
         ):
             record["expires"] = _now().isoformat()
             record["revoked"] = True
@@ -141,25 +148,42 @@ def _scope(record: dict[str, Any]) -> str | None:
     return scope if isinstance(scope, str) else None
 
 
+def approval_open(record: dict[str, Any]) -> bool:
+    """Not revoked, and either bound to a context (no expiry) or inside its window."""
+    if record.get("revoked"):
+        return False
+    match record.get("expires"):
+        case None:
+            return bool(record.get("binds"))
+        case str() as expires:
+            try:
+                return datetime.fromisoformat(expires) > _now()
+            except ValueError:
+                return False
+        case _:
+            return False
+
+
+def open_approvals(
+    repo: Path, work_session_id: str | None = None
+) -> list[tuple[Path, dict[str, Any]]]:
+    """Open approvals for exactly this work session (`None`: project-wide), newest first."""
+    directory = state_dir(repo) / "approvals"
+    found = [
+        (path, record)
+        for path in (directory.glob("*.json") if directory.is_dir() else ())
+        if (record := read_json(path))
+        and _scope(record) == work_session_id
+        and approval_open(record)
+    ]
+    return sorted(found, key=lambda item: str(item[1].get("opened", "")), reverse=True)
+
+
 def active_approval(
     repo: Path, work_session_id: str | None = None
 ) -> tuple[Path, dict[str, Any]] | None:
-    """The newest open window for exactly this work session; `None` means project-wide only."""
-    directory = state_dir(repo) / "approvals"
-    if not directory.is_dir():
-        return None
-    best: tuple[Path, dict[str, Any]] | None = None
-    for path in directory.glob("*.json"):
-        record = read_json(path)
-        if not record or "expires" not in record or _scope(record) != work_session_id:
-            continue
-        try:
-            expires = datetime.fromisoformat(record["expires"])
-        except ValueError:
-            continue
-        if expires > _now() and (best is None or record["opened"] > best[1]["opened"]):
-            best = (path, record)
-    return best
+    """The newest open approval for exactly this work session; `None` means project-wide only."""
+    return next(iter(open_approvals(repo, work_session_id)), None)
 
 
 def pin_notes(repo: Path, approval_id: str, notes: dict[str, str]) -> None:

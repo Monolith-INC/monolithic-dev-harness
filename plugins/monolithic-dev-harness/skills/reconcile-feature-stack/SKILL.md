@@ -18,7 +18,7 @@ skill is unavailable until `/resume-tracker`.
    previous Story is not yet merged into the Feature. Merge only (`git merge`); never rebase, since
    the Story branches already have open pull requests.
 4. **Resolve conflicts** on the Story branch that received the merge.
-5. **Push** each reconciled Story branch before moving to the next one (approval batch).
+5. **Push** each reconciled Story branch before moving to the next one (`publish-branch` approval for that branch).
 6. **Re-run the checks** (`check`) after each update.
 7. **Publish evidence** of the reconciliation on the Feature work item.
 

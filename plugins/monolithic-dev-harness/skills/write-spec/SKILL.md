@@ -38,9 +38,10 @@ Present the exact accepted spec revision to the user for **gate G2** (the Tech L
 Use the best surface the host actually provides: interactive canvas/document/editor, native
 rendered preview, an opened file with structured summary, then faithful inline review. A bare path,
 unopened file link, or short summary does not count. Record the content digest and surface used in
-the workflow checkpoint. Ask for approval in chat only after the material needed to decide is
-visible; pane controls do not record harness approval. Publishing it to the tracker is a write, so
-include it in the approval batch. An edited digest requires a new review. `implement-story` starts
+the workflow checkpoint. Once the material needed to decide is
+visible, ask the `approve-spec` gate with the spec as `--artifact`; pane controls do not record
+harness approval. That approval also covers publishing the spec and the Tasks' tracker updates while
+the spec is unchanged. An edited digest requires a new review. `implement-story` starts
 only after G2.
 
 When the spec lives only in the artifacts path, set its frontmatter to `status: approved` before you ask

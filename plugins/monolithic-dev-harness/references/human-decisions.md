@@ -15,26 +15,41 @@ and opens no write window.
 
 ## Menu
 
+Standard questions come from the catalog in `config/gates.toml`, already written in every supported
+language. Ask them by id; the harness shows the version for the project's language. Never word,
+reword, or translate a standard question yourself.
+
 ```text
 harness decision present --repo <project> --session-id <id> --host <host> \
-  --question "..." --option "..." [--detail "..."] [--recommended "..."] \
-  [--artifact <path>] [--approval | --allow-free-text] \
+  --gate <id> [--value name=value]... [--recommended <option id>] [--artifact <path>]... \
   [--blocking-available] [--async-available]
 ```
 
-- Repeat `--option` for each choice (at most three) and `--detail` for what each one means in
-  practice, in the same order. Name the option you recommend with `--recommended`.
+| Gate | Asked when |
+| --- | --- |
+| `language` | A project has no confirmed language |
+| `setup-confirm` | The setup proposal is ready |
+| `next-step` | Setup is done and the request did not say what to do |
+| `starting-point` | An idea arrives with no clear starting point |
+| `plan-checkpoint` | The discovery plan is ready (`--artifact` the plan) |
+| `publish-items`, `move-item`, `approve-spec`, `publish-branch`, `reply-pr`, `pause-tracking` | Approvals; see the harness skill's approval protocol |
+
+- `--value` fills the gate's `{slots}`; the command names any that are missing.
+- `--recommended` names an option id to mark instead of the gate's default.
 - Pass every reviewed file with `--artifact`. A changed file invalidates the earlier answer.
-- `--approval` marks a review that authorizes protected writes; it needs an `Approve` option.
-  `--allow-free-text` lets a typed reply that is not an option come back as the human's direction
-  (routing and plan checkpoints). The two never combine: free text never authorizes a write.
 - Say which controls are actually callable: `--blocking-available`, `--async-available`.
+
+A **one-off question** that no gate covers (a product choice specific to this work) uses
+`--question`, `--option` (at most three), `--detail` per option, `--recommended <label>`, and
+`--allow-free-text` when a typed direction is a valid answer. Write it in the project's language.
+Approvals are never one-off: they always come from a gate, which fixes what they are tied to.
 
 The command returns one of:
 
 - `"state": "already_answered"`: the human already answered this question about the same,
   unchanged content. Do not ask again. Continue with `answer`, and mention the earlier choice in one
-  line so the human can reopen it. An approval is reused only while its write window is open.
+  line so the human can reopen it. An approval is reused while it holds (not revoked, its work
+  session still running, and what it is tied to unchanged).
 - `"state": "waiting_for_human"`, with a `transport`:
   - `blocking` or `async`: invoke the returned native control. Show the review first.
   - `chat`: show the review, then `menu` exactly as written, and end the turn.

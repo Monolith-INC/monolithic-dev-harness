@@ -33,12 +33,18 @@ and it marks each question it lets through under `.harness/state/asked/` (human-
 `PostToolUse` hook honours only an answer to a marked question, once, so a question that skipped the
 check opens nothing. Typed `approve HB-…` stays, and is the only way in Cursor.
 
-**Amended after 0.6.2 (unreleased): menus and reuse.** Approval is one `Approve` / `Not now` menu on every host,
-falling back from native controls to the same numbered menu in chat, where a typed `Approve` (or its
-number) counts as the human's reply. A loose reply never selects `Approve` unless it says "approve".
-Asking again for the same unchanged batch while its window is open returns the earlier approval
-instead of a new question; once the window closes, only a new human reply opens another. Answers
-are kept in a human-owned history beside the decision record.
+**Amended after 0.6.2 (unreleased): approvals tied to their context.** Approvals are asked
+through the standard approval gates (ADR-0011), on every host, by click or typed reply. Each gate
+says what its approval is tied to: the reviewed drafts or spec (by content digest), one existing
+work item, one branch, or one pull request. Such an approval has **no time limit**. It holds until
+the user revokes it, its work session stops or completes, or its context changes: an edited draft
+or spec, or a write to a different item, branch, or pull request. Then the write is refused with a
+note telling the agent to explain what changed and ask again. A general approval, tied to nothing
+(a typed `approve HB-…`, or pausing tracker checks), keeps the short window. Asking the same gate
+again for unchanged context returns the earlier answer instead of a new question. Answers are kept
+in a human-owned history beside the decision record.
+
+The decision itself is unchanged: only the user opens an approval, never the agent.
 
 ## Options Considered
 
@@ -56,7 +62,10 @@ are kept in a human-owned history beside the decision record.
 
 ### Trade-offs
 
-- A window covers any write for its duration, not only the batch that was shown.
+- A general window covers any write for its duration, not only the batch that was shown.
+- An approval tied to reviewed drafts covers that work session's tracker writes while the drafts are
+  unchanged; the hook cannot match each write to one draft. Branch, item, and pull-request approvals
+  are matched exactly.
 - Tool output cannot open a window, but a user who pastes `approve HB-…` does.
 
 ## Host-specific Impact

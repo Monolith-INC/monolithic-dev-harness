@@ -16,10 +16,10 @@ skill is unavailable until `/resume-tracker`.
    (merge commits).
 4. **Reconcile** first if an ancestor update is still pending (`reconcile-feature-stack`).
 5. **Open the Feature pull request** into the base branch through the SCM adapter, as a **draft**,
-   and link it to the Feature. Push and pull request are one approval batch.
+   and link it to the Feature. Push and pull request are one `publish-branch` approval.
 6. **Publish closing evidence** on the Feature: what was verified and how it was resolved.
-7. **Move the Feature to done** only after the evidence and the pull-request link exist (approval
-   batch).
+7. **Move the Feature to done** only after the evidence and the pull-request link exist. One
+   `move-item` approval for the Feature covers both its closing evidence and the move.
 
 ## Rules
 

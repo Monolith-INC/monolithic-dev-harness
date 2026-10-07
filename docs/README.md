@@ -37,7 +37,8 @@ docs/
 |       |-- ADR-0007-backlog-owns-what-spec-owns-how.md
 |       |-- ADR-0008-the-harness-owns-its-files.md
 |       |-- ADR-0009-trackers-are-adapters.md
-|       `-- ADR-0010-codex-host-adapter.md
+|       |-- ADR-0010-codex-host-adapter.md
+|       `-- ADR-0011-standard-questions-catalog.md
 |-- 02-design/
 |   |-- api.md
 |   |-- components.md

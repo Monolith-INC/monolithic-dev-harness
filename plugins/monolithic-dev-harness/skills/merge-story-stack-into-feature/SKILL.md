@@ -39,7 +39,7 @@ repository is governed; nothing needs switching on.
    2. Merge it with a merge commit: `git merge --no-ff <story-branch>` locally, or complete the
       pull request with the merge (no-fast-forward) strategy. Never squash.
    3. Resolve any conflicts on the Feature branch, then continue.
-   4. Push the Feature branch (approval batch).
+   4. Push the Feature branch (`publish-branch` approval for that branch).
    5. Complete or update the Story's pull request to reflect the merge.
    6. Run `reconcile-feature-stack` for the Stories still open, so the next one stays incremental.
    7. Publish evidence of this Story's merge on the Feature work item.

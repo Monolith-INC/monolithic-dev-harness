@@ -12,6 +12,7 @@ from core.result import Err, Failure, Ok, Result, attempt, bind, err, fmap, requ
 from harness import (
     decisions,
     discovery,
+    gates,
     preferences,
     prepared_workflows,
     questions,
@@ -119,7 +120,15 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
         help="what an option means in practice; one per --option, in the same order",
     )
     decision_parser.add_argument(
-        "--recommended", help="the offered option the agent recommends"
+        "--recommended",
+        help="the option the agent recommends: an option id with --gate, else its label",
+    )
+    decision_parser.add_argument(
+        "--gate",
+        help="a standard question from config/gates.toml, in the project's language",
+    )
+    decision_parser.add_argument(
+        "--value", action="append", help="fill one of the gate's {slots}: name=value"
     )
     decision_parser.add_argument("--artifact", action="append")
     decision_parser.add_argument("--approval", action="store_true")
@@ -232,6 +241,8 @@ def decision_command(args: argparse.Namespace) -> int:
             or args.option
             or args.detail
             or args.recommended
+            or args.gate
+            or args.value
             or args.artifact
             or args.approval
             or args.allow_free_text
@@ -240,20 +251,19 @@ def decision_command(args: argparse.Namespace) -> int:
             return _fallback_decision(repo, args)
         case "present":
             key = decisions.new_key()
-            match _labelled_options(args):
+            match _question_spec(repo, args):
                 case Err(failure):
                     print(failure.message, file=sys.stderr)
                     return 2
-                case Ok(labelled):
+                case Ok(spec):
                     pass
-            details = tuple(args.detail or ())
             wording = questions.problems(
                 {
                     "questions": [
                         {
-                            "question": args.question or "",
+                            "question": spec.question,
                             "header": "Review",
-                            "options": _choice_options(labelled, details),
+                            "options": _choice_options(spec.options, spec.details),
                         }
                     ]
                 }
@@ -265,14 +275,19 @@ def decision_command(args: argparse.Namespace) -> int:
                 {
                     "id": key,
                     "header": "Review",
-                    "question": args.question or "",
-                    "options": _choice_options(labelled, details),
+                    "question": spec.question,
+                    "options": _choice_options(spec.options, spec.details),
                 },
                 args.host,
                 args.blocking_available,
                 args.async_available,
-                free_text=args.allow_free_text,
+                free_text=spec.free_text,
                 language=_language(repo),
+            )
+            binds = (
+                {"bound": spec.bound, "target": list(spec.target or ())}
+                if spec.approval
+                else None
             )
             return print_result(
                 bind(
@@ -281,25 +296,28 @@ def decision_command(args: argparse.Namespace) -> int:
                         _reused(
                             decisions.reusable(
                                 repo,
-                                args.question or "",
-                                labelled,
+                                spec.question,
+                                spec.options,
                                 artifacts,
-                                args.approval,
+                                spec.approval,
                                 work_session_id=args.session_id,
+                                target=spec.target,
                             )
                         )
                         or fmap(
                             decisions.begin(
                                 repo,
                                 key,
-                                args.question or "",
-                                labelled,
+                                spec.question,
+                                spec.options,
                                 shown["transport"],
                                 artifacts,
-                                args.approval,
+                                spec.approval,
                                 work_session_id=args.session_id,
-                                allow_free_text=args.allow_free_text,
-                                details=details,
+                                allow_free_text=spec.free_text,
+                                details=spec.details,
+                                gate=spec.gate,
+                                binds=binds,
                             ),
                             lambda _: json.dumps(
                                 {
@@ -334,6 +352,59 @@ def _reused(entry: dict | None) -> Result[str] | None:
             )
         case _:
             return None
+
+
+def _question_spec(repo: Path, args: argparse.Namespace) -> Result[gates.Rendered]:
+    """The question to ask: a catalog gate in the project's language, or a one-off question.
+
+    Approvals always come from the catalog, so their wording and what they are tied to are fixed.
+    """
+    values = dict(pairs(args.value))
+    if args.gate:
+        if (
+            args.question
+            or args.option
+            or args.detail
+            or args.approval
+            or args.allow_free_text
+        ):
+            return err(
+                "decision_invalid",
+                "a --gate supplies its own question, options, and kind; pass only --value, "
+                "--recommended, and --artifact",
+            )
+        return bind(
+            gates.render(args.gate, _language(repo), values, args.recommended),
+            lambda rendered: (
+                Ok(rendered)
+                if not rendered.artifact or args.artifact
+                else err(
+                    "decision_invalid",
+                    f"gate {args.gate} reviews files: pass them with --artifact",
+                )
+            ),
+        )
+    if args.approval:
+        return err(
+            "decision_invalid",
+            "approvals come from the catalog: use --gate (see config/gates.toml)",
+        )
+    if values:
+        return err("decision_invalid", "--value fills a --gate's slots")
+    return fmap(
+        _labelled_options(args),
+        lambda labelled: gates.Rendered(
+            gate="",
+            question=args.question or "",
+            options=labelled,
+            details=tuple(args.detail or ()),
+            free_text=args.allow_free_text,
+            approval=False,
+            artifact=False,
+            bound=False,
+            target=None,
+        ),
+    )
 
 
 def _labelled_options(args: argparse.Namespace) -> Result[tuple[str, ...]]:
