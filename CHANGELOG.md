@@ -19,6 +19,10 @@ All notable changes to this project are documented here. The format follows
 - `harness decision present` takes `--detail` (what each option means) and `--recommended`, and
   its chat fallback returns one numbered `menu`, identical on every host and every fallback.
 - An answer about unchanged content is returned as `already_answered` instead of asking again.
+- A stop guard (Claude, Codex) sends the agent back once when a turn would end mid-workflow with
+  no question for the user and no pending menu, quoting the saved next action.
+- Discovery renders a session-scoped `decision present` prefix, so its questions wait only in their
+  work session.
 - Standard questions live in `config/gates.toml` in English and Brazilian Portuguese; agents ask
   them with `decision present --gate <id> --value name=value`. Approvals come only from gates.
 - Approvals asked through a gate are tied to what was reviewed (drafts or spec, one item, branch,

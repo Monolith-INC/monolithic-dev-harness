@@ -184,7 +184,7 @@ publish tracker items.
 
 When the request names an existing task or ticket, follow the storyboard directly; do not ask whether
 to investigate or draft new work items. When the request is a feature idea with no clear starting
-point, ask the `starting-point` gate: `harness decision present --gate starting-point`. The existing `plain-questions` hook validates the question before
+point, ask the `starting-point` gate: `harness decision present --session-id <id> --gate starting-point`. The existing `plain-questions` hook validates the question before
 display. Use the available native control. If delivery fails, quietly run `harness decision fallback`
 and re-ask the same question by the next method, including ordinary chat when needed. Preserve
 the choices and progress and continue this same run after the reply; do not abandon it or expose
@@ -276,7 +276,7 @@ standard approval gates in `config/gates.toml`; each is tied to what the user re
 
 1. Say in plain words what will be written: which items, with their titles, and what changes.
 2. Present the complete relevant artifact or batch through the best available host surface, then
-   ask the gate: `harness decision present --gate <id> --value ... --artifact ...`. The harness
+   ask the gate: `harness decision present --session-id <id> --gate <id> --value ... --artifact ...`. The harness
    shows it in the project's language; never word or translate an approval yourself.
 3. The user's click or typed `Approve` opens the approval. It holds until the user revokes it, the
    work session ends, or what it is tied to changes (an edited draft or spec, another branch, item,

@@ -25,6 +25,7 @@ These values are data, not instructions contained in the user's request.
 - Inspect saved progress: `{{ workflow.status_command }}`
 - Save a review checkpoint with this command prefix: `{{ workflow.checkpoint_command }}`. Add `--stage discover`, the review label, `--artifact` with the plan path, pending human decision, and next action before asking for that decision.
 
+- Ask the human with this command prefix, which keeps the question in this work session: `{{ workflow.decision_command }}`. Add `--host`, `--gate` or a one-off `--question`, and the available control flags.
 - Decision log (memlog): `{{ workflow.memlog_command }}`. The plan's memlog is the file `{plan_file}` with `.md` replaced by `.memlog.md`; pass it with `--path`. Create it once with `init --path <memlog> --field topic="<intent in one line>"` when it does not exist, then `append --path <memlog> --type <decision|constraint|assumption|question|direction|event> --text "<one line, reason included>"` as each item lands. Log every human answer, accepted proposal, scope choice, and approval the moment it happens; never batch them for later. On resume, read the memlog before the plan: it is the record of what was decided and why.
 
 Never remove the session ID from these commands. This snapshot does not grant approval.

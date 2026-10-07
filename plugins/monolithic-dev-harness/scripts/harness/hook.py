@@ -487,6 +487,54 @@ def _question_repo(payload: dict[str, Any], host: str) -> Path | None:
             return None
 
 
+_QUESTION_LINE = re.compile(r"[?？]\s*[*_`)\]]*\s*$")
+
+
+def asks_the_user(message: str) -> bool:
+    """Whether a final message hands the turn to the user: some line ends in a question."""
+    return any(_QUESTION_LINE.search(line) for line in message.splitlines())
+
+
+def handle_stop(host: str, payload: dict[str, Any]) -> int:
+    """Never end a turn mid-workflow with nothing for the user to answer.
+
+    A turn may end on a pending menu, on a question to the user, or when no workflow is active.
+    Otherwise the agent is sent back once, with the saved next action, to continue or ask.
+    """
+    repo = _workspace(payload, host)
+    message = hook_bridge.stop_message(payload)
+    if (
+        message is None
+        or not settings.governed(repo)
+        or state.harness_mode(repo) == "suspended"
+        or asks_the_user(message)
+    ):
+        return 0
+    context = work_session_context.for_payload(repo, host, payload)
+    if isinstance(context, Err):
+        return 0
+    scope = context.value
+    if decisions.blocking(repo, scope):
+        return 0
+    match workflow.load(repo, scope):
+        case Ok(current) if current.status == "active":
+            pass
+        case _:
+            return 0
+    upcoming = current.current.next_action.strip()
+    print(
+        hook_bridge.format_stop(
+            "[harness] The workflow is still active, and this turn ends without a question "
+            "for the user or a pending menu, so the user would have to ask what's next. "
+            + (f"The saved next action is: {upcoming}. " if upcoming else "")
+            + "Continue with it now. If you need the user, ask with a menu or a question batch. "
+            "If the requested outcome is finished, mark the workflow complete "
+            "(`harness workflow complete`) and say so."
+        )
+    )
+    return 0
+
+
 def handle_ask(host: str, payload: dict[str, Any]) -> int:
     """Before a question is shown: send it back if a person would have to decode it."""
     repo = _question_repo(payload, host)
@@ -943,7 +991,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--host", choices=("claude", "cursor", "codex"), required=True)
     parser.add_argument(
         "--event",
-        choices=("pre-tool", "prompt", "shell", "mcp", "ask", "answer"),
+        choices=("pre-tool", "prompt", "shell", "mcp", "ask", "answer", "stop"),
         required=True,
     )
     args = parser.parse_args(argv)
@@ -972,6 +1020,11 @@ def main(argv: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
             return 0
+    if args.event == "stop":
+        try:
+            return handle_stop(args.host, payload)
+        except Exception:
+            return 0  # ending a turn is never blocked by a broken guard
     if args.event in ("ask", "answer"):
         try:
             return (

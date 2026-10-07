@@ -46,6 +46,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event stop",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

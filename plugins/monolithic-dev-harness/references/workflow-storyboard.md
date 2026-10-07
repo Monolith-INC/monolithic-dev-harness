@@ -74,9 +74,10 @@ Project work sessions (`harness work-session`) hold one request and checkpoint p
 problem. Checkout-bound implementation sessions (`harness session`) continue to protect code changes
 for one branch. They are separate records. A work-session pause or stop is local and should remain
 easy; it does not require closing the checkout-bound session or asking the tracker for approval.
-Pass the selected work-session ID to every workflow command so each ticket keeps its own
-checkpoints. Pending human questions are still project-wide and remain a known gap until their state
-is scoped to the selected session.
+Pass the selected work-session ID to every workflow and decision command so each ticket keeps its
+own checkpoints and questions. A question asked with `--session-id` waits only in that session;
+other sessions keep working. Only setup questions, asked before a session exists, are
+project-wide and hold every session until answered.
 
 These actions are semantic choices. Offer them as a menu; never ask the user to type a command. A
 typed reply to a menu still counts (a number, a name, or a paraphrase). This also applies to

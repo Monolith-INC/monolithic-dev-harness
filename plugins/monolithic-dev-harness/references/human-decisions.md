@@ -34,6 +34,9 @@ harness decision present --repo <project> --session-id <id> --host <host> \
 | `plan-checkpoint` | The discovery plan is ready (`--artifact` the plan) |
 | `publish-items`, `move-item`, `approve-spec`, `publish-branch`, `reply-pr`, `pause-tracking` | Approvals; see the harness skill's approval protocol |
 
+- Always pass the selected work session's `--session-id`. Only setup questions (`language`,
+  `setup-confirm`, `next-step`), asked before a session exists, go without it; a project-wide
+  question holds every session until answered.
 - `--value` fills the gate's `{slots}`; the command names any that are missing.
 - `--recommended` names an option id to mark instead of the gate's default.
 - Pass every reviewed file with `--artifact`. A changed file invalidates the earlier answer.

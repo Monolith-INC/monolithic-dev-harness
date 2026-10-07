@@ -167,10 +167,12 @@ Every change in P1–P4 updates, in the same branch:
 | ✅ | Gate catalog | `config/gates.toml` with 11 gates in en and pt-BR; `decision present --gate --value`; approvals only through gates; catalog tests for completeness, slots and plain wording (ADR-0011). Exceptions still asked natively by their skills: manual-check, adoption, and tracker-trust questions, whose hook pins require a native control. |
 | ⏳ | Per-host live reliability (click, number, name, paraphrase on Codex, Claude Code, Cursor) | Covered by hook-level tests; live hosts are part of the P4 replay. |
 
-### P3: Flow continuity
+### P3: Flow continuity — implemented on `feat/flow-continuity`, awaiting P4 replay
 
-1. A no-stall `Stop` hook: if a workflow is active and the last message has neither a gate nor a `Next:` line, nudge the agent to continue.
-2. Scope pending decisions to the work session (a known gap noted in the storyboard).
+| Status | Item | Result |
+|---|---|---|
+| ✅ | No-stall guard | `Stop` hook (Claude, Codex): when a workflow is active, no menu is pending, and the final message asks the user nothing, the agent is sent back once with the saved next action (or told to mark the workflow complete). Never loops (`stop_hook_active`); silent when suspended. Cursor is not registered: its stop hook gets no final message, so it cannot tell a question from a stall. |
+| ✅ | Questions scoped to the work session | Already implemented in code (per-session decision records); the storyboard note was stale. Remaining gap closed: discovery renders a session-scoped `decision present` prefix, and the contract requires `--session-id` for everything but setup questions. |
 
 ### P4: Acceptance
 

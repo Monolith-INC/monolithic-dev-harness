@@ -245,7 +245,9 @@ Brazilian Portuguese; the agent names the gate and the harness shows the project
 (ADR-0011). A menu uses the best native control the host offers and falls back silently to the same
 numbered menu in chat. Replies are matched loosely on every transport (`2`, `the second`, the label,
 a unique part of it), but a loose reply never selects an approving option unless it says "approve".
-An answer about unchanged content is reused rather than asked again. The full contract is
+An answer about unchanged content is reused rather than asked again. Questions asked within a work
+session wait only in that session. In Claude and Codex, a stop guard sends the agent back once when
+a turn would end mid-workflow with no question and no pending menu, with the saved next action. The full contract is
 `plugins/monolithic-dev-harness/references/human-decisions.md`.
 
 ## Examples

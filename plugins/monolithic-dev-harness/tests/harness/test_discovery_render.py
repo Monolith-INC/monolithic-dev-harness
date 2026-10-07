@@ -93,6 +93,11 @@ def check_package(
     assert str(memlog) in text and memlog.is_file()
     plan_step = (entry.parent / "step-02-plan.md").read_text()
     assert "2. **Deepen**" in plan_step and "Never ask them one at a time" in plan_step
+    assert shlex.split(package["context"]["decision_command"])[-2:] == [
+        "--session-id",
+        selected.id,
+    ]
+    assert package["context"]["decision_command"] in text
     assert shlex.split(package["context"]["status_command"])[-2:] == [
         "--session-id",
         selected.id,
