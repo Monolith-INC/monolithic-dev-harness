@@ -24,6 +24,27 @@ the repository's review guides as house rules: the root `docs/review.md` and the
 subproject's `docs/review.md` when they exist, plus the rules list `implement-story` carried. Items
 no linter catches go here explicitly, for example masking personal data in the UI when the repository requires it.
 
+In parallel with thermos, run the bundled `bmad-review` skill on the same diff with lenses
+`edge-case-hunter` and `verification-gap` (as `skill:bmad-review lenses=edge-case-hunter,verification-gap`),
+passing the Story's approved technical spec (or the discovery plan when there is no spec) as
+`claims`. The edge-case lens traces unhandled paths, then checks removed code and falsifies the
+plan's claims against the code; the verification-gap lens finds behavior the tests do not prove.
+
+### Triage
+
+Merge the findings from both audits into one list without duplicates. Fix `VERIFIED` findings at
+`high` or above (and any `error` or `gap` from the requirements pass) as described below without
+asking. For the rest, present one summary grouped as **patch** (a clear fix), **decision needed**
+(a product or design choice), and **defer** (real but out of scope), then HALT and give the user a
+choice:
+
+1. **Apply every patch** — fix all patch findings now.
+2. **Walk through each** — show each finding with its evidence and proposed fix before deciding.
+3. **Leave as action items** — record them in the Story's evidence and continue.
+
+Ask about decision-needed findings in one batched message with a recommendation for each. Append
+deferred findings to `deferred-work.md` in the planning output folder, with a one-line reason each.
+
 ## 3. Fix and re-run
 
 Fix every `VERIFIED` finding at `high` or above, and any `error` or `gap` from the requirements

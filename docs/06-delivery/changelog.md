@@ -2,10 +2,18 @@
 title: Documentation Changelog
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-06
 ---
 
 # Changelog
+
+## 2026-10-06: BMad depth restored
+
+- Workflows: discovery depth model (subagent investigation, batched questions, scope re-check,
+  memlog, Deepen), correct-course routing, end-to-end tests in Build, and the combined Verify audit.
+- Vendor manifest: four new bundled BMad skills and the harness adaptations of each.
+- Spec: [harness-main-flow.md](../02-design/specs/harness-main-flow.md) maps stages, gates, and the interaction contract;
+  its diagram lives in `docs/assets/diagrams/`.
 
 ## 2026-09-30: Codex host adapter (0.4.0)
 

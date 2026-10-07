@@ -51,9 +51,13 @@ one starts.
 ## 2. Story done
 
 1. `check` on HEAD with a clean tree: evidence for the exact tree that will be reviewed.
-2. `prove-it-works`: exercise the real behavior (run the widget or flow, the emulator scenario, the
+2. **End-to-end tests** (`bmad-qa-generate-e2e-tests`): generate API and end-to-end tests for the
+   Story's user-facing flows and endpoints with the project's existing test framework, run them, and
+   commit them as their own atomic commit. Skip it only for a Story with no user-facing or API
+   behavior, and say why.
+3. `prove-it-works`: exercise the real behavior (run the widget or flow, the emulator scenario, the
    endpoint) and record what you observed, not what you expect.
-3. Hand off to the `review` skill. Do not open the pull request here; the review stage does that
+4. Hand off to the `review` skill. Do not open the pull request here; the review stage does that
    after its verdict.
 
 ## Report

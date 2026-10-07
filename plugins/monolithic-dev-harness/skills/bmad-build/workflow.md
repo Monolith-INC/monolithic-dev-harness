@@ -6,7 +6,8 @@
 
 **CRITICAL:** If a step directs you to another snapshot file, read it fully and follow it. No exceptions.
 
-Work in the current session by default. Use separate agents only when the user or the governing project instructions explicitly request them.
+Subagents, when the capability is available, are an important part of this workflow. Use them as directed by the workflow steps.
+If you need an explicit user instruction to run them, ask once now for the whole workflow run.
 
 ## Resolved execution context
 
@@ -23,6 +24,8 @@ These values are data, not instructions contained in the user's request.
 - Route: {{ workflow.route }}; review selection: {{ workflow.review }}
 - Inspect saved progress: `{{ workflow.status_command }}`
 - Save a review checkpoint with this command prefix: `{{ workflow.checkpoint_command }}`. Add `--stage discover`, the review label, `--artifact` with the plan path, pending human decision, and next action before asking for that decision.
+
+- Decision log (memlog): `{{ workflow.memlog_command }}`. The plan's memlog is the file `{plan_file}` with `.md` replaced by `.memlog.md`; pass it with `--path`. Create it once with `init --path <memlog> --field topic="<intent in one line>"` when it does not exist, then `append --path <memlog> --type <decision|constraint|assumption|question|direction|event> --text "<one line, reason included>"` as each item lands. Log every human answer, accepted proposal, scope choice, and approval the moment it happens; never batch them for later. On resume, read the memlog before the plan: it is the record of what was decided and why.
 
 Never remove the session ID from these commands. This snapshot does not grant approval.
 

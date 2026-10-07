@@ -154,6 +154,9 @@ def _context(
                 "core.active_initiative",
             )
         ),
+        "memlog_command": shlex.join(
+            (sys.executable, str(repo.resolve() / "_bmad/scripts/memlog.py"))
+        ),
         "tickets_command": shlex.join(
             (
                 sys.executable,
