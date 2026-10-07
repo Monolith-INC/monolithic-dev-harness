@@ -74,3 +74,18 @@ The parent relayed the actual answer to the agent and prohibited synthetic hook 
 decision writes. Button delivery is observed; fixture answer capture is not established. Parent
 and fixture contexts differ, so this run must not be treated as proof of a capture-code defect.
 See `result.md` for the project agent's command evidence. No implementation has started.
+
+## Optional onboarding build installed
+
+On 2026-10-07, the human authorized updating the installed build to source commit
+`9488f91761089c5be532917297eaed9c15ed1bf0`. The supported installer completed successfully
+with `--host codex --source /home/monolith/projects/monolithic-dev-harness --yes`.
+The version label remains 0.6.2; revision identity comes from the checked source files.
+
+Backup and installer log: `/tmp/harness-pr36-onboarding-install-BBqRtf` (private, not committed).
+Compared 368 source files in scripts, skills, references, hooks and config against both the Codex
+cache and PATH installation: zero mismatches. Codex user config is byte-for-byte unchanged.
+Doctor passed against the preserved acceptance fixture. Doctor does not verify live answer capture.
+
+Desktop restart is required before the next live trial. No restart, trial, merge or deployment
+was performed during this update.

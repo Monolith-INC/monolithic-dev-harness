@@ -98,3 +98,7 @@ Final full-suite rerun: 332 backlog tests passed; 737 main tests passed, one ski
    format, repository/schema/link checks, version consistency, Markdown and whitespace checks
    passed. ShellCheck is unavailable locally; no shell scripts changed. The installed desktop
    build has not been refreshed with this patch, and live answer capture remains unverified.
+8. **Installed build refreshed.** With explicit human authorization, backed up and installed
+   source `9488f91` through the supported Codex installer. All 368 checked files match both cache
+   and PATH installation; user config is unchanged; doctor passed. Evidence is in host-preflight.
+   Restart and live trial remain pending; no acceptance verdict is claimed.
