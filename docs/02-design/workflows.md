@@ -229,6 +229,19 @@ agent                          you                      prompt hook          pre
 ```
 
 The agent cannot open a window: approval records are human-owned. `harness revoke` closes windows.
+In Claude and Codex the agent asks with an `Approve` / `Not now` menu instead of a batch id; the
+click or a typed `Approve` opens the window the same way. Asking again for the same unchanged batch
+while the window is open returns the earlier approval instead of a second question.
+
+## Asking the human
+
+Every question is a **menu** (`harness decision present`: one choice, up to three options with what
+each means, the recommended one marked) or a **question batch** (all open questions in one chat
+message). A menu uses the best native control the host offers and falls back silently to the same
+numbered menu in chat. Replies are matched loosely on every transport (`2`, `the second`, the label,
+a unique part of it), but a loose reply never selects an approving option unless it says "approve".
+An answer about unchanged content is reused rather than asked again. The full contract is
+`plugins/monolithic-dev-harness/references/human-decisions.md`.
 
 ## Examples
 

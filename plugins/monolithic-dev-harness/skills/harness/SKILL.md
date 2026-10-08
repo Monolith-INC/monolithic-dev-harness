@@ -255,7 +255,12 @@ them:
   tools, follow-ups) waits for one short list at the end of the stage.
 - Plain words. No file names, code, rule names, tool names, or batch ids unless they ask. Describe
   what a thing does instead ("the setting that hides local files from git").
-- One question at a time, with options that say what happens for them.
+- Ask in one of two shapes only ([human-decisions.md](../../references/human-decisions.md)): a
+  **menu** through `harness decision present` (one choice, up to three options, each with
+  `--detail` saying what happens for them and the `--recommended` one marked), or a **question
+  batch** (every open question in one chat message, each with options and a recommendation).
+  Never ask batch questions one at a time.
+- Every turn ends with a menu, a question batch, or a `Next:` line followed by continued work.
 - Apply `generate-plain-language-documentation` writing rules to labels, questions, updates, and
   artifact summaries as an inline prose pass; do not run its standalone intake for every message.
 - Continue through reversible local drafting and checks within a stage. Stop only for missing
@@ -271,12 +276,16 @@ requests, threads, branches, `git push`) unless the user has opened an approval 
 
 1. Say in plain words what will be written: which items, with their titles, and what changes.
 2. Present the complete relevant artifact or batch through the best available host surface. Ask one
-   question with two options, labelled exactly `Approve` and `Not now`. A working native control in
-   Claude or trusted Codex opens the window for `approvals.window_minutes` (default 20). The window
-   covers only the work session it was opened in; another session needs its own approval.
+   `--approval` menu with two options, labelled exactly `Approve` and `Not now`, passing the batch
+   with `--artifact`. The human's click or typed `Approve` opens the window for
+   `approvals.window_minutes` (default 20). The window covers only the work session it was opened
+   in; another session needs its own approval. Asking again for the same unchanged batch while the
+   window is open returns the earlier approval instead of a new question.
 3. Make only the writes you described. Anything new needs a new question.
 
-If a blocking approval control is unavailable, show the complete review and ask in chat. End the turn and wait for the real human reply; do not write while approval is pending. `harness revoke` closes a window early.
+If a native control is unavailable, the menu falls back to chat: show the review and the returned
+`menu`, end the turn, and wait for the real human reply; do not write while approval is pending.
+`harness revoke` closes a window early.
 
 You cannot open the window yourself: approvals are recorded only from the user's own prompt or
 click, a question that arrives with answers already filled in is refused, and hook `human-owned`

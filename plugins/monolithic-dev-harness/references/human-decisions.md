@@ -1,69 +1,98 @@
 # Human decisions
 
-The shared workflow requests a decision, records that it is waiting, and advances only after the
-matching human answer. The host adapter owns the question tool and response format. Prefer a
-supported blocking control. When it is unavailable, the Codex adapter may use asynchronous buttons;
-it records the pending question and keeps the turn open while waiting. Delivery never counts as an answer.
-If no supported button tool exists,
-show the complete review and question in chat, end the turn, and wait for the human reply.
+The harness asks the human in only two shapes. Use the shape that fits; never invent a third.
 
-Use `harness decision present --repo <project> --session-id <id> --host <host> --question "..." --option "..."`
-with each offered option repeated and each reviewed file supplied through `--artifact <path>`.
-Use `--blocking-available` only when the adapter's blocking tool is actually callable in this
-session. Use `--async-available` when the Codex asynchronous button tool is callable but its blocking tool is unavailable. `--approval` explicitly identifies a review that authorizes the described writes; merely
-choosing a route is not write approval. The command returns the adapter presentation and a pending
-decision id. Present it faithfully and follow the adapter waiting instruction. Do not continue dependent work after delivery of a question.
+| Shape | When | How | Recorded |
+| --- | --- | --- | --- |
+| **Menu** | One choice with up to three options: a route, a plan checkpoint, an approval | `harness decision present` | Decision record; the answer is reused while the content is unchanged |
+| **Question batch** | Several open questions that investigation could not settle | One chat message, then end the turn | Answers go into the plan and its memlog |
 
-The trusted prompt/answer hook resolves the offered choice for the same decision and artifact
-revision. Approval questions require an offered option. Native routing questions prepared with
-`--allow-free-text` also accept the UI's actual Other response. Direct Codex routing controls use
-id `next_step` or `starting_point`; other direct questions remain closed choices. Free text never
-authorizes a write. Other chat messages stay an ordinary
-prompt, so `harness revoke`, `harness suspend`, and typed approvals keep working while it waits. An
-approval it records covers the work session of the conversation that answered. Without a session
-id (Cursor), the one pending session decision is the one answered; with several, none is guessed. Other messages, delivery acknowledgments, expired time, and default selections are not
-answers. A changed artifact cannot be approved from its earlier question. Revise or Stop can still
-reject a stale review. Repeated responses cannot reopen its approval. There is no agent-facing
-command to record a human answer. Capture decodes JSON text and objects at the host boundary.
-On a subsequent real Codex prompt, the hook can recover a missed blocking-tool answer from the
-host-supplied transcript, checking its session, project, call id, question, and options. The current
-prompt's revocations still apply. Never forge a hook event or reconstruct an answer from assistant prose.
+Never ask the questions of a batch one at a time, and never ask a menu question in your own words.
 
-Question delivery and capture failures are recoverable, not reasons to abandon the run. Quietly
-try the next available method and re-ask when the question failed to land: blocking native
-control, asynchronous native control, then ordinary chat. Use `harness decision fallback --repo
-<project> --session-id <id> --host <host>`, adding `--async-available` when that method is callable.
-It moves the same pending decision to a simpler transport and returns its presentation; it cannot
-replace the question, choices, review, or answer. Invoke the returned control. Preserve existing
-choices, artifacts, and progress, and resume this same run after the answer. Do not show internal
-failure reports to the user or ask them to diagnose hooks. Reuse a captured answer rather than
-asking it again. Only actual human input resolves the decision; delivery, silence, and timers do not.
+A skill's own catalog (elicitation methods, party rooms, review findings to triage) is shown the way
+that skill specifies: a numbered list that accepts any form of reply. It is not a recorded decision
+and opens no write window.
 
-Status is available through `harness decision status --repo <project> --session-id <id>`. Pending decisions block
-workflow advancement and writes. Suspending harness checks remains independently available on the
-human's request; it preserves the pending decision rather than inventing an answer.
+## Menu
 
-An unanswered decision must not block read-only diagnosis, `harness suspension status`, or the
-controlled `harness decision fallback` transport change.
-Inspect the installed registration, event format, and project/state paths when a genuine reply
-is not recorded. Recover a captured answer first; re-ask through an alternative method when delivery
-failed. Do not suspend enforcement merely to
-read diagnostics. A human suspension request works before onboarding and even when the saved
-conversation binding is invalid. Capture diagnostics go to the agent without private reply content;
-recover quietly instead of turning them into a user-facing blocker. A successful hook exit does not
-prove that an answer was recorded.
+```text
+harness decision present --repo <project> --session-id <id> --host <host> \
+  --question "..." --option "..." [--detail "..."] [--recommended "..."] \
+  [--artifact <path>] [--approval | --allow-free-text] \
+  [--blocking-available] [--async-available]
+```
 
-Codex delayed button replies are read only from the actual human prompt event. The adapter checks
-the saved tool-call id, question index, and question text before passing the choice to the shared
-answer handler. Immediate tool completion cannot answer an asynchronous question. A typed chat
-choice is matched without regard to capitalization; asynchronous replies still require their
-question identity. For Codex asynchronous buttons, use the returned interruptible wait in short intervals and keep
-the turn open. Do not send a final response before the actual answer. Do not ask another question
-while waiting; unrelated messages leave the decision pending. The native countdown may hide the
-panel without an answer; the user can reopen the same question with Answer question. Do not
-create a replacement solely because the panel countdown elapsed. If delivery actually fails or
-interruptible waiting is unavailable, use the next method and re-ask the same question. The harness
-does not change the native app timer.
+- Repeat `--option` for each choice (at most three) and `--detail` for what each one means in
+  practice, in the same order. Name the option you recommend with `--recommended`.
+- Pass every reviewed file with `--artifact`. A changed file invalidates the earlier answer.
+- `--approval` marks a review that authorizes protected writes; it needs an `Approve` option.
+  `--allow-free-text` lets a typed reply that is not an option come back as the human's direction
+  (routing and plan checkpoints). The two never combine: free text never authorizes a write.
+- Say which controls are actually callable: `--blocking-available`, `--async-available`.
 
-A focused process replay is diagnostic evidence, not proof that installed host
-hooks captured a live reply.
+The command returns one of:
+
+- `"state": "already_answered"`: the human already answered this question about the same,
+  unchanged content. Do not ask again. Continue with `answer`, and mention the earlier choice in one
+  line so the human can reopen it. An approval is reused only while its write window is open.
+- `"state": "waiting_for_human"`, with a `transport`:
+  - `blocking` or `async`: invoke the returned native control. Show the review first.
+  - `chat`: show the review, then `menu` exactly as written, and end the turn.
+
+### Fallback
+
+Delivery problems are recoverable and invisible to the human. When a control fails to show, or its
+reply is not captured, run `harness decision fallback --repo <project> --session-id <id> --host
+<host>` (add `--async-available` when that control is callable). It moves the same question to the
+next transport (blocking → async → chat) with the same options, details, and menu text. Never
+replace the question, ask the human to diagnose hooks, or show internal errors. Reuse a captured
+answer rather than asking again.
+
+### Answers
+
+Only the human resolves a menu: a click, a Codex button reply, or a typed message. Typed replies
+count on every transport, including after a dismissed picker or expired buttons, and are matched
+loosely: `2`, `option 2`, `the second`, the label in any case or accents, a unique prefix, or a
+unique set of its words (`feature` for `Start feature work`). A loose reply never selects an
+approving option unless it says "approve" itself; a number or the full label always works. An
+ambiguous reply, a question, or other conversation leaves the menu pending: answer it, then show
+the same menu again. Delivery, silence, timers, and default selections are never answers.
+
+The prompt and answer hooks record answers. There is no agent-facing command to record one; never
+forge a hook event or reconstruct an answer from assistant prose. `harness revoke`, `harness
+suspend`, and typed `approve HB-…` keep working while a menu waits.
+
+### While a menu waits
+
+A pending menu blocks writes and workflow advancement in its scope (its work session, or the whole
+project for an unscoped one). Read-only inspection, `harness decision status`, `harness
+suspension status`, and `harness decision fallback` still run. For a Codex asynchronous control,
+keep the turn open with the returned interruptible wait; do not ask another question meanwhile.
+
+## Question batch
+
+After investigation, put every open question in one message:
+
+```markdown
+1. **<question>**
+   a. **<option>** — what it means in practice. *(recommended: one-line reason)*
+   b. **<option>** — …
+2. **<question>**
+   …
+
+Reply in any form: `1a 2b`, the option names, or "your recommendations".
+```
+
+End the turn. Accept any form; ask again only about an answer you cannot place, batched the same
+way. Log each answer to the plan's memlog as it lands.
+
+## Closing a series
+
+A series of answers ends with one recap menu, such as the plan checkpoint, that lists every
+recorded decision and lets the human change any of them. The recap is the single
+acknowledgement; do not ask for each decision again.
+
+## Never stall
+
+Every turn ends with a menu, a question batch, or a status line that starts `Next:` and continues
+working. Never end a turn with none of these.

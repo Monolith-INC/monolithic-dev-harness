@@ -1,14 +1,18 @@
 # Harness workflow storyboard
 
-The harness owns the sequence and the meaning of each decision. The host adapter presents decisions through a supported blocking control, or a chat question followed by ending the turn. Follow [human-decisions.md](human-decisions.md). The Codex adapter may use asynchronous buttons when blocking controls are unavailable; it records the pending question and keeps the turn open with interruptible waits. Delivery never counts as an answer. Their default **Other** field handles
-anything outside the listed choices, so never add an `Other` option yourself. A first request resumes
-after setup instead of making the user repeat it.
+The harness owns the sequence and the meaning of each decision. Every question to the human is a
+**menu** (`harness decision present`, rendered the same way on every transport and falling back
+silently from native controls to chat) or a **question batch** (all open questions in one chat
+message). Follow [human-decisions.md](human-decisions.md). Native controls supply their own **Other**
+field, so never add an `Other` option yourself. A first request resumes after setup instead of
+making the user repeat it. The target flow and its gates are drawn in the project documentation
+(`docs/02-design/specs/harness-main-flow.md`).
 
 | Stage | Entry | Work before stopping | Review point | Exit |
 | --- | --- | --- | --- | --- |
 | Setup | First use or changed project configuration | Reuse the supplied project path; inspect settings; prepare the bundled runtime and local tracker if needed; confirm language; ask only for missing choices. No session or workflow is required. | Show chosen settings with the alternatives offered | Verify setup, then return to the original request |
 | Project and session | Setup verified, immediately before product or engineering work | Read-only route the exact request to a project work session, then select or start it | Ask only when resuming paused/stopped work or choosing among matches | Carry the selected work-session ID and request into the focused skill; never start a central loop just to select a session |
-| Discover | Named existing task or request for a technical plan | Read the named item directly. Use tracker tools for tracker items; read an explicitly linked project file directly. Investigate fit and alternatives, then prepare a reviewed implementation plan. | Show the technical plan and review notes | Accepted plan enters backlog; no repeated starting-point question |
+| Discover | Named existing task or request for a technical plan | Read the named item directly. Use tracker tools for tracker items; read an explicitly linked project file directly. Investigate with subagents, ask every open question in one batch, re-check scope on the decided plan, and keep the decision memlog. | Plan checkpoint menu: recap of every decision; *Approve and continue*, *Deepen*, *Approve and stop*, or typed changes | Accepted plan enters backlog; no repeated starting-point question |
 | Ideate | User selects idea exploration or submits a new idea | Use `plan-initiative` and only its needed routes: brainstorm, pressure-test, research, brief, requirements, UX, architecture, product spec | Show the product contract and critique | Accepted contract enters backlog; ideation is offered after setup |
 | Backlog | Accepted product contract or sufficiently defined work item | Draft, enrich, decompose, create Story Tasks, and validate locally; check tracker readiness before publication | Show the complete Feature, Story, and Task batch and its destination; seek one approval for the specified external writes | Publish and read back the approved batch |
 | Technical plan | A ready Story and its Tasks | Start the Story, draft and validate its Story-local technical spec | Present the exact spec revision, then seek the technical decision | Approved spec is pinned to its revision |
@@ -19,7 +23,7 @@ An agent continues through reversible local work within a stage. It stops for mi
 
 ## After setup
 
-When a request needs routing, use the available native question control with up to three routes that fit it:
+When a request needs routing, present a menu with up to three routes that fit it:
 
 - Continue the named task or request.
 - Prepare or organize work items.
@@ -74,9 +78,10 @@ Pass the selected work-session ID to every workflow command so each ticket keeps
 checkpoints. Pending human questions are still project-wide and remain a known gap until their state
 is scoped to the selected session.
 
-These actions are semantic choices. Show them as clickable host controls; never ask the user to type
-an option or command. This also applies to permission for a branch or commit. If blocking controls are unavailable, show the question in chat and end the turn. Wait for its actual answer. `harness session
-pause/resume` still controls only an implementation checkout.
+These actions are semantic choices. Offer them as a menu; never ask the user to type a command. A
+typed reply to a menu still counts (a number, a name, or a paraphrase). This also applies to
+permission for a branch or commit. `harness session pause/resume` still controls only an
+implementation checkout.
 
 `harness workflow list` shows saved review points and the current point. `harness workflow status` shows the full saved record. Resuming can choose any listed point.
 
@@ -85,10 +90,10 @@ pause/resume` still controls only an implementation checkout.
 An artifact decision identifies the exact path and content digest. Present the material needed to decide through the best available host surface: interactive canvas/document/editor, native rendered preview, an actually opened file with a structured summary, then faithful inline review. A link or summary alone is insufficient. The user sees the material before the approval question. A changed digest invalidates the decision.
 
 An external tracker or source-control write still needs the existing approval hook. State precisely
-what will be written and ask for approval through a clickable host control. If the control cannot
-open an approval window, do not write; explain that approval is waiting for a host that supports
-clickable controls. A routing choice, Back, Pause, Resume, Cancel, or Complete never opens a write
-window.
+what will be written and ask with an `--approval` menu (`Approve` / `Not now`). The human's click
+or typed `Approve` opens the write window; nothing else does. An approval for unchanged content is
+reused while its window is open and asked again once it closes. A routing choice, Back, Pause,
+Resume, Cancel, or Complete never opens a write window.
 
 ## Language and setup
 

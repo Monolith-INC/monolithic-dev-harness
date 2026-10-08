@@ -2,7 +2,7 @@
 title: ADR-0003 Human-only approval windows
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-23
+last_reviewed: 2026-10-06
 ---
 
 # ADR-0003: Approval windows are opened only by the user's own prompt
@@ -32,6 +32,13 @@ it that way. The `PreToolUse` hook refuses a question that arrives with answers 
 and it marks each question it lets through under `.harness/state/asked/` (human-owned). The
 `PostToolUse` hook honours only an answer to a marked question, once, so a question that skipped the
 check opens nothing. Typed `approve HB-…` stays, and is the only way in Cursor.
+
+**Amended after 0.6.2 (unreleased): menus and reuse.** Approval is one `Approve` / `Not now` menu on every host,
+falling back from native controls to the same numbered menu in chat, where a typed `Approve` (or its
+number) counts as the human's reply. A loose reply never selects `Approve` unless it says "approve".
+Asking again for the same unchanged batch while its window is open returns the earlier approval
+instead of a new question; once the window closes, only a new human reply opens another. Answers
+are kept in a human-owned history beside the decision record.
 
 ## Options Considered
 

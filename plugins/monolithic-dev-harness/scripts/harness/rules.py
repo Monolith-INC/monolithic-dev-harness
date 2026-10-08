@@ -256,6 +256,7 @@ _OWNED_FILES = (
     (".harness", "state", "tracking.json"),
     (".harness", "state", "suspension.json"),
     (".harness", "state", "decision.json"),
+    (".harness", "state", "decision-history.json"),
 )
 _OWNED_DIRS = (
     (".harness", "state", "approvals"),

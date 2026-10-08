@@ -113,6 +113,14 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     decision_parser.add_argument("--async-available", action="store_true")
     decision_parser.add_argument("--question")
     decision_parser.add_argument("--option", action="append")
+    decision_parser.add_argument(
+        "--detail",
+        action="append",
+        help="what an option means in practice; one per --option, in the same order",
+    )
+    decision_parser.add_argument(
+        "--recommended", help="the offered option the agent recommends"
+    )
     decision_parser.add_argument("--artifact", action="append")
     decision_parser.add_argument("--approval", action="store_true")
     decision_parser.add_argument(
@@ -222,6 +230,8 @@ def decision_command(args: argparse.Namespace) -> int:
         case "fallback" if not (
             args.question
             or args.option
+            or args.detail
+            or args.recommended
             or args.artifact
             or args.approval
             or args.allow_free_text
@@ -230,16 +240,20 @@ def decision_command(args: argparse.Namespace) -> int:
             return _fallback_decision(repo, args)
         case "present":
             key = decisions.new_key()
+            match _labelled_options(args):
+                case Err(failure):
+                    print(failure.message, file=sys.stderr)
+                    return 2
+                case Ok(labelled):
+                    pass
+            details = tuple(args.detail or ())
             wording = questions.problems(
                 {
                     "questions": [
                         {
                             "question": args.question or "",
                             "header": "Review",
-                            "options": [
-                                {"label": option, "description": ""}
-                                for option in args.option or ()
-                            ],
+                            "options": _choice_options(labelled, details),
                         }
                     ]
                 }
@@ -252,38 +266,110 @@ def decision_command(args: argparse.Namespace) -> int:
                     "id": key,
                     "header": "Review",
                     "question": args.question or "",
-                    "options": [
-                        {"label": option, "description": ""}
-                        for option in args.option or ()
-                    ],
+                    "options": _choice_options(labelled, details),
                 },
                 args.host,
                 args.blocking_available,
                 args.async_available,
+                free_text=args.allow_free_text,
+                language=_language(repo),
             )
             return print_result(
                 bind(
                     _workflow_artifacts(repo, args.artifact),
-                    lambda artifacts: fmap(
-                        decisions.begin(
-                            repo,
-                            key,
-                            args.question or "",
-                            tuple(args.option or ()),
-                            shown["transport"],
-                            artifacts,
-                            args.approval,
-                            work_session_id=args.session_id,
-                            allow_free_text=args.allow_free_text,
-                        ),
-                        lambda _: json.dumps(
-                            {**shown, "decision_id": key, "state": "waiting_for_human"}
-                        ),
+                    lambda artifacts: (
+                        _reused(
+                            decisions.reusable(
+                                repo,
+                                args.question or "",
+                                labelled,
+                                artifacts,
+                                args.approval,
+                                work_session_id=args.session_id,
+                            )
+                        )
+                        or fmap(
+                            decisions.begin(
+                                repo,
+                                key,
+                                args.question or "",
+                                labelled,
+                                shown["transport"],
+                                artifacts,
+                                args.approval,
+                                work_session_id=args.session_id,
+                                allow_free_text=args.allow_free_text,
+                                details=details,
+                            ),
+                            lambda _: json.dumps(
+                                {
+                                    **shown,
+                                    "decision_id": key,
+                                    "state": "waiting_for_human",
+                                }
+                            ),
+                        )
                     ),
                 )
             )
         case _:
             return 2
+
+
+def _reused(entry: dict | None) -> Result[str] | None:
+    """The human already answered this about the same content: say so instead of asking."""
+    match entry:
+        case {"id": str() as key, "answer": str() as answer}:
+            return Ok(
+                json.dumps(
+                    {
+                        "state": "already_answered",
+                        "decision_id": key,
+                        "answer": answer,
+                        "instruction": "The human already gave this answer about the same, "
+                        "unchanged content. Do not ask again; continue with it. Mention the "
+                        "earlier choice in one line so the human can reopen it.",
+                    }
+                )
+            )
+        case _:
+            return None
+
+
+def _labelled_options(args: argparse.Namespace) -> Result[tuple[str, ...]]:
+    """Offered options as shown, with the recommended one marked the way Codex marks it."""
+    options = tuple(args.option or ())
+    if len(args.detail or ()) > len(options):
+        return err("decision_invalid", "give at most one --detail per --option")
+    match args.recommended:
+        case None:
+            return Ok(options)
+        case str() as recommended if recommended in options:
+            return Ok(
+                tuple(
+                    f"{option} (Recommended)" if option == recommended else option
+                    for option in options
+                )
+            )
+        case _:
+            return err("decision_invalid", "--recommended must name an offered option")
+
+
+def _choice_options(
+    options: tuple[str, ...], details: tuple[str, ...]
+) -> list[dict[str, str]]:
+    return [
+        {"label": option, "description": details[i] if i < len(details) else ""}
+        for i, option in enumerate(options)
+    ]
+
+
+def _language(repo: Path) -> str:
+    match preferences.language_for(repo):
+        case Ok("pt-br"):
+            return "pt-br"
+        case _:
+            return "en"
 
 
 def _fallback_decision(repo: Path, args: argparse.Namespace) -> int:
@@ -300,14 +386,13 @@ def _fallback_decision(repo: Path, args: argparse.Namespace) -> int:
                         "id": pending.id,
                         "header": "Review",
                         "question": pending.question,
-                        "options": [
-                            {"label": option, "description": ""}
-                            for option in pending.options
-                        ],
+                        "options": _choice_options(pending.options, pending.details),
                     },
                     args.host,
                     False,
                     args.async_available and pending.transport == "blocking",
+                    free_text=pending.allow_free_text,
+                    language=_language(repo),
                 ),
             )
 

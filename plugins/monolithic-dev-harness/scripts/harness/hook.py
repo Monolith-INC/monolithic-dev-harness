@@ -739,15 +739,7 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
                 return 0
             case _:
                 pass
-        chosen = next(
-            (
-                str(option)
-                for option in pending.options
-                if questions.choice_label(str(option)).casefold()
-                == questions.choice_label(answered).casefold()
-            ),
-            answered,
-        )
+        chosen = questions.match_option(answered, pending.options) or answered
         result = decisions.resolve(
             repo,
             tool_use_id,
