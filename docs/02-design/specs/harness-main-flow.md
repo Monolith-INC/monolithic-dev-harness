@@ -153,6 +153,7 @@ Every change in P1–P4 updates, in the same branch:
 - [x] `docs/03-engineering/discovery-rendering.md` — memlog command (P2).
 - [x] `docs/02-design/workflows.md` "Asking the human", ADR-0003 amendment, both changelogs (P2).
 - [ ] This spec — status per phase, and the diagram regenerated when the flow changes (`docs/assets/diagrams/harness-main-flow.svg`).
+- [x] Friction audit recorded (P3b).
 - [ ] User-facing guide (`docs/07-guides/`) — what each gate means and how to answer it (after P4).
 
 ### P2: Gate model and reliable buttons — implemented on `feat/gate-model`, awaiting P4 replay
@@ -167,10 +168,28 @@ Every change in P1–P4 updates, in the same branch:
 | ✅ | Gate catalog | `config/gates.toml` with 11 gates in en and pt-BR; `decision present --gate --value`; approvals only through gates; catalog tests for completeness, slots and plain wording (ADR-0011). Exceptions still asked natively by their skills: manual-check, adoption, and tracker-trust questions, whose hook pins require a native control. |
 | ⏳ | Per-host live reliability (click, number, name, paraphrase on Codex, Claude Code, Cursor) | Covered by hook-level tests; live hosts are part of the P4 replay. |
 
-### P3: Flow continuity
+### P3: Flow continuity — implemented on `feat/flow-continuity`, awaiting P4 replay
 
-1. A no-stall `Stop` hook: if a workflow is active and the last message has neither a gate nor a `Next:` line, nudge the agent to continue.
-2. Scope pending decisions to the work session (a known gap noted in the storyboard).
+| Status | Item | Result |
+|---|---|---|
+| ✅ | No-stall guard | `Stop` hook (Claude, Codex): when a workflow is active, no menu is pending, and the final message asks the user nothing, the agent is sent back once with the saved next action (or told to mark the workflow complete). Never loops (`stop_hook_active`); silent when suspended. Cursor is not registered: its stop hook gets no final message, so it cannot tell a question from a stall. |
+| ✅ | No session id anywhere (decided 2026-10-07) | The harness records the current work session on start, resume, or select; `workflow` and `decision` commands use it when none is named, else the only active session, else project-wide. Asking never requires a session. Hooks stay strict: a conversation with no saved link is held by any pending question, so switching the current session cannot dodge one. |
+
+### P3b: Agent friction (audit 2026-10-07)
+
+Every harness command costs the agent a full step (seconds to tens of seconds each); a hook call costs about 0.2 s and is not the bottleneck. In the DAY-003 run, roughly 40 of about 70 agent steps were harness bookkeeping rather than work.
+
+| # | Friction (DAY-003) | Steps lost | Fix |
+|---|---|---|---|
+| F1 | Starting work took ~11 commands: inspect, route, start session, start workflow, prepare (twice), render, read entry and steps, resolve config | ~9 | One `harness begin "<request>"`: setup check, route, start or resume the session, start the workflow, render, and return the entry and any setup question |
+| F2 | `decision status` after every answer, though the prompt hook already reports "human decision recorded: X" | ~1 per answer | Drop it from the instructions |
+| F3 | A manual `workflow checkpoint` with five arguments before every question | ~1 per question | Asking a gate with `--artifact` saves the checkpoint itself; manual checkpoints only at stage ends |
+| F4 | `workflow prepare --available <tool>...` capability declarations | ~2 | Infer or drop them |
+| F5 | Improvised token counting (tiktoken, three runs) | ~3 | `harness plan check <file>`: token count and scope signals in one call |
+| F6 | ~975 lines of instructions read before real work (harness skill, storyboard, decision contract, bootstrap, BMad steps) | context and time | Slim the harness skill to a short router; load references only when a step needs them |
+| ✅ | Session ids passed on every command | ~1 per command | Done: the harness tracks the current session |
+
+Target: harness overhead from ~40 steps to ~15 for a DAY-003-sized discovery.
 
 ### P4: Acceptance
 

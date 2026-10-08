@@ -20,7 +20,7 @@ language. Ask them by id; the harness shows the version for the project's langua
 reword, or translate a standard question yourself.
 
 ```text
-harness decision present --repo <project> --session-id <id> --host <host> \
+harness decision present --repo <project> --host <host> \
   --gate <id> [--value name=value]... [--recommended <option id>] [--artifact <path>]... \
   [--blocking-available] [--async-available]
 ```
@@ -34,6 +34,8 @@ harness decision present --repo <project> --session-id <id> --host <host> \
 | `plan-checkpoint` | The discovery plan is ready (`--artifact` the plan) |
 | `publish-items`, `move-item`, `approve-spec`, `publish-branch`, `reply-pr`, `pause-tracking` | Approvals; see the harness skill's approval protocol |
 
+- Never pass a session id: the harness asks in the project's current work session, or
+  project-wide when there is none. Asking never requires a session to exist.
 - `--value` fills the gate's `{slots}`; the command names any that are missing.
 - `--recommended` names an option id to mark instead of the gate's default.
 - Pass every reviewed file with `--artifact`. A changed file invalidates the earlier answer.
@@ -57,7 +59,7 @@ The command returns one of:
 ### Fallback
 
 Delivery problems are recoverable and invisible to the human. When a control fails to show, or its
-reply is not captured, run `harness decision fallback --repo <project> --session-id <id> --host
+reply is not captured, run `harness decision fallback --repo <project> --host
 <host>` (add `--async-available` when that control is callable). It moves the same question to the
 next transport (blocking → async → chat) with the same options, details, and menu text. Never
 replace the question, ask the human to diagnose hooks, or show internal errors. Reuse a captured

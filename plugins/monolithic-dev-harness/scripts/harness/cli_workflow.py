@@ -150,11 +150,23 @@ def run(args: argparse.Namespace) -> int:
         case "work-session":
             return work_session_command(args)
         case "workflow":
-            return workflow_command(args)
+            return workflow_command(_with_current_session(args))
         case "decision":
-            return decision_command(args)
+            return decision_command(_with_current_session(args))
         case _:
             return suspension_command(args)
+
+
+def _current_as_json(project: Path, session: work_sessions.Session) -> dict:
+    work_sessions.remember_current(project, session.id)
+    return work_sessions.as_json(session)
+
+
+def _with_current_session(args: argparse.Namespace) -> argparse.Namespace:
+    """Nobody has to name the work session: an unnamed one is the project's current session."""
+    if args.session_id is None:
+        args.session_id = work_sessions.current(Path(args.repo).resolve())
+    return args
 
 
 def work_session_command(args: argparse.Namespace) -> int:
@@ -177,7 +189,12 @@ def work_session_command(args: argparse.Namespace) -> int:
             )
         case "route":
             result = work_sessions.route(project, args.request or "")
-        case "select" | "status":
+        case "select":
+            result = fmap(
+                work_sessions.select(project, args.session_id or ""),
+                lambda session: _current_as_json(project, session),
+            )
+        case "status":
             result = fmap(
                 work_sessions.select(project, args.session_id or ""),
                 work_sessions.as_json,
@@ -637,7 +654,7 @@ def workflow_command(args: argparse.Namespace) -> int:
             return print_result(
                 err(
                     "work_session_required",
-                    "complete onboarding, then select a work session and pass --session-id before project work",
+                    "start or resume a work session before project work",
                 )
             )
         case _:

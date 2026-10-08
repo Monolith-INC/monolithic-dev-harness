@@ -165,8 +165,15 @@ def change_language(project: Path, selected: work_sessions.Session) -> None:
 def test_cli_refuses_missing_session_before_any_workflow_write(
     project: Path, operation: str
 ) -> None:
-    assert "--session-id" in cli(project, "workflow", operation).stderr
+    assert "work session" in cli(project, "workflow", operation).stderr
     assert not (project / ".harness/state/workflow.json").exists()
+
+
+def test_an_unnamed_session_is_the_current_one(project: Path) -> None:
+    selected = session(project)
+    assert work_sessions.current(project) == selected.id
+    shown = json.loads(cli(project, "workflow", "status").stdout or "{}")
+    assert shown.get("request") == selected.request
 
 
 def test_no_setup_or_unconfirmed_language_prevents_render(

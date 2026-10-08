@@ -63,9 +63,10 @@ the human chooses whether to switch or keep the current work. A paused or stoppe
 the human to choose it before running
 `harness work-session resume <id> --repo <project>`. Never silently resume paused or stopped work.
 
-Keep the selected work-session ID as required context after onboarding. Every workflow command
-must include `--session-id <id>`, including `start`, `checkpoint`, `status`, `list`, `pause`,
-`resume`, `back`, `cancel`, `complete`, and discovery `render`. Session checkpoints are stored with that session.
+You never need to carry the work-session ID. Starting, resuming, or selecting a work session makes it
+the project's current session, and every `workflow` and `decision` command without `--session-id`
+uses it (else the only active session, else the project as a whole). Session checkpoints are
+stored with that session.
 Project settings such as tracker and planning folder remain shared. Onboarding establishes the
 tracker and runtime before session creation. A project work session does not require Git, a project
 contract, or starting the checkout-bound implementation session.
@@ -77,7 +78,7 @@ questions and a suspended harness remain explicit; do not resume a stopped run o
 saved progress automatically. Use the host adapter described in
 [human-decisions.md](../../references/human-decisions.md) for human decisions.
 Start the workflow with the selected session's exact original request:
-`harness workflow start --session-id <id> --request "<original request>" --repo <project>`. If that
+`harness workflow start --request "<original request>" --repo <project>`. If that
 session already has a workflow, show its saved checkpoints and let the user resume or cancel it
 before starting another. Do not start a session or workflow to complete onboarding.
 Host trust and sign-in remain human actions where required. The selected tracker and its manifest

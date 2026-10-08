@@ -42,7 +42,7 @@ Use this map instead of searching plugin files to rediscover workflow capabiliti
 | Project language confirmation, tracker choices, missing settings | `harness bootstrap --inspect` |
 | Current commit, branch, saved workflow, and local tracker readiness | `harness bootstrap --inspect` |
 | Work sessions for this exact request | `harness work-session route --request "<exact request>" --repo <project>` |
-| Validated discovery instructions bound to the selected session | `harness workflow render --stage discover --session-id <id> --repo <project>` |
+| Validated discovery instructions bound to the current session | `harness workflow render --stage discover --repo <project>` |
 | Start, inspect, pause, stop, or resume a project work session | `harness work-session` |
 | Prepare missing bundled local tracker folders | `harness bootstrap --prepare-local-tracker` |
 | Setup health | `harness doctor` |
@@ -74,9 +74,9 @@ Project work sessions (`harness work-session`) hold one request and checkpoint p
 problem. Checkout-bound implementation sessions (`harness session`) continue to protect code changes
 for one branch. They are separate records. A work-session pause or stop is local and should remain
 easy; it does not require closing the checkout-bound session or asking the tracker for approval.
-Pass the selected work-session ID to every workflow command so each ticket keeps its own
-checkpoints. Pending human questions are still project-wide and remain a known gap until their state
-is scoped to the selected session.
+No command needs the work-session ID: the harness keeps track of the current session (the one last
+started, resumed, or selected) and uses it, so each ticket keeps its own checkpoints and questions.
+Without any session, questions and answers still work, project-wide.
 
 These actions are semantic choices. Offer them as a menu; never ask the user to type a command. A
 typed reply to a menu still counts (a number, a name, or a paraphrase). This also applies to

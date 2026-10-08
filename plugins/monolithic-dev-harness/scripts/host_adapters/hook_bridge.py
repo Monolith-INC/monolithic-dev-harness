@@ -256,6 +256,23 @@ def prompt_text(payload: dict[str, Any]) -> str:
     return str(payload.get("prompt") or payload.get("user_prompt") or "")
 
 
+def stop_message(payload: dict[str, Any]) -> str | None:
+    """The agent's final message for this turn, or None when the host does not supply it or a
+    stop hook already sent the agent back once this turn (never loop)."""
+    if payload.get("stop_hook_active") or payload.get("loop_count"):
+        return None
+    match payload.get("last_assistant_message"):
+        case str() as message:
+            return message
+        case _:
+            return None
+
+
+def format_stop(reason: str) -> str:
+    """Claude and Codex both continue the turn on `decision: block` with a reason."""
+    return json.dumps({"decision": "block", "reason": reason})
+
+
 def format_prompt(host: str, notes: list[str]) -> str | None:
     return (
         json.dumps({"continue": True}) if host == "cursor" else "\n".join(notes) or None

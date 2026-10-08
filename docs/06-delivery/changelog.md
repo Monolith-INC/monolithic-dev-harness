@@ -15,6 +15,9 @@ last_reviewed: 2026-10-06
 - Asking the human: menus and question batches (`workflows.md`), the rewritten decision contract,
   the standard-questions catalog (ADR-0011), and the ADR-0003 amendment for approvals tied to
   their context.
+- Flow continuity: the stop guard in `workflows.md` and the architecture host table; the
+  current work session (no session id needed) in the storyboard, harness skill, and decision
+  contract.
 - Spec: [harness-main-flow.md](../02-design/specs/harness-main-flow.md) maps stages, gates, and the interaction contract;
   its diagram lives in `docs/assets/diagrams/`.
 

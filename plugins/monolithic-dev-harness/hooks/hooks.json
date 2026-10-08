@@ -46,6 +46,17 @@
           }
         ]
       }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/harness-python\" \"${CLAUDE_PLUGIN_ROOT}/scripts/harness/hook.py\" --host claude --event stop",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }

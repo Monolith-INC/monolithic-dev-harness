@@ -188,3 +188,37 @@ def test_typing_after_a_dismissed_picker_answers_it(repo: Path) -> None:
     decisions.begin(repo, "d1", "Next step?", ROUTES, "blocking")
     type_prompt(repo, "feature", host="claude")
     assert (decisions.record(repo) or {}).get("answer") == ROUTES[0]
+
+
+def ask_without_session(repo: Path, question: str) -> None:
+    subprocess.run(
+        [
+            str(HARNESS),
+            "decision",
+            "present",
+            "--repo",
+            str(repo),
+            "--question",
+            question,
+            "--option",
+            "Continue",
+            "--option",
+            "Stop",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
+
+
+def test_questions_never_need_a_session_id(repo: Path) -> None:
+    ask_without_session(repo, "Continue before any work session?")
+    assert decisions.waiting(repo)  # no session exists: the question is project-wide
+    type_prompt(repo, "1")
+    assert not decisions.waiting(repo)
+    session = work_sessions.start(repo, "DAY-001").value.id
+    ask_without_session(repo, "Continue in the current session?")
+    assert (decisions.record(repo, session) or {}).get("status") == "pending"
+    type_prompt(repo, "continue")
+    assert (decisions.record(repo, session) or {}).get("answer") == "Continue"
