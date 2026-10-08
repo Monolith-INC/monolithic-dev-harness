@@ -23,6 +23,11 @@ An agent continues through reversible local work within a stage. It stops for mi
 
 ## After setup
 
+Onboarding is the optional initial setup workflow. The user may skip, dismiss or restart it,
+or use `harness mode free` for skills and guidance without a session. Language uses a captured
+choice or saved preference, else English; no confirmation is required. These controls preserve
+structured work and strict action governance. The routing below applies when guided work is wanted.
+
 When a request needs routing, present a menu with up to three routes that fit it:
 
 - Continue the named task or request.

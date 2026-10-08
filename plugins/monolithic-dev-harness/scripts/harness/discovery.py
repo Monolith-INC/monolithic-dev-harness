@@ -42,11 +42,10 @@ def onboarding_ready(repo: Path) -> Result[dict[str, Any]]:
         lambda report: fmap(
             require(
                 report["status"] == "ready"
-                and report["language_confirmed"]
                 and not report["waiting_for_answer"]
                 and report["bmad_ready"],
                 "onboarding_incomplete",
-                "complete project setup, language confirmation, and bundled runtime before work",
+                "complete project setup and bundled runtime before work",
             ),
             lambda _: report,
         ),

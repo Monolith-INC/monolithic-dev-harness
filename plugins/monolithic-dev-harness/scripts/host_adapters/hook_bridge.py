@@ -13,7 +13,16 @@ from harness.rules import Decision, ToolCall, make_call
 from policy.events import CanonicalToolEvent, PolicyDecision
 
 _SHELL_NAMES = frozenset(
-    {"Bash", "Shell", "run_terminal_cmd", "shell", "run_command", "run_shell_command"}
+    {
+        "Bash",
+        "Shell",
+        "run_terminal_cmd",
+        "shell",
+        "run_command",
+        "run_shell_command",
+        "exec_command",
+        "functions.exec_command",
+    }
 )
 _EDIT_NAMES = frozenset(
     {
@@ -200,7 +209,12 @@ def parse_tool_call(host: str, event: str, payload: dict[str, Any]) -> ToolCall:
     name, server = _logical_name(
         raw_name, str(payload.get("server") or payload.get("server_name") or "")
     )
-    command = arguments.get("command") or arguments.get("CommandLine") or ""
+    command = (
+        arguments.get("command")
+        or arguments.get("cmd")
+        or arguments.get("CommandLine")
+        or ""
+    )
     cwd = str(payload.get("cwd") or "")
     kind = _kind(raw_name, server)
     return make_call(

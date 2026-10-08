@@ -13,11 +13,15 @@ from harness import (
     decisions,
     discovery,
     gates,
+    onboarding,
     preferences,
     prepared_workflows,
     questions,
+    review_decisions,
     settings,
+    startup,
     state,
+    work_lifecycle,
     work_sessions,
     workflow,
 )
@@ -25,10 +29,59 @@ from harness.cli_common import pairs, print_result, resolve_repo
 from host_adapters.interactions import present
 from integrations import registry
 
-COMMANDS = ("work-session", "workflow", "decision", "suspension")
+COMMANDS = (
+    "plan",
+    "begin",
+    "work-session",
+    "workflow",
+    "decision",
+    "suspension",
+    "onboarding",
+    "mode",
+)
+
+
+def _control_parser(
+    sub: argparse._SubParsersAction, family: str, help_text: str
+) -> argparse.ArgumentParser:
+    """Argparse mutation is isolated to parser construction."""
+    match sub.add_parser(family, help=help_text):
+        case parser:
+            parser.add_argument("operation", choices=onboarding.OPERATIONS[family])
+            parser.add_argument(
+                "--repo", default=".", help="project directory; no session required"
+            )
+            return parser
 
 
 def add_parsers(sub: argparse._SubParsersAction) -> None:
+    _control_parser(
+        sub,
+        "onboarding",
+        "show, skip, dismiss, or restart onboarding without a session",
+    )
+    _control_parser(
+        sub, "mode", "choose free or structured guidance; governance checks still apply"
+    )
+    plan_parser = sub.add_parser("plan", help="inspect a plan's size and scope signals")
+    plan_parser.add_argument("operation", choices=("check",))
+    plan_parser.add_argument("file")
+    plan_parser.add_argument("--repo", default=".")
+    begin_parser = sub.add_parser(
+        "begin",
+        help="start or continue work on a request in one step: setup check, work session, "
+        "workflow, and discovery instructions",
+    )
+    begin_parser.add_argument(
+        "--request", required=True, help="the user's exact request"
+    )
+    begin_parser.add_argument("--repo", default=".")
+    begin_parser.add_argument(
+        "--session", help="continue this saved work session (the user chose it)"
+    )
+    begin_parser.add_argument(
+        "--new", action="store_true", help="start a new session even if one matches"
+    )
     work_session_parser = sub.add_parser(
         "work-session",
         help="start, choose, pause, stop, or resume project work sessions",
@@ -147,6 +200,33 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
 
 def run(args: argparse.Namespace) -> int:
     match args.command:
+        case "onboarding" | "mode":
+            return print_result(
+                fmap(
+                    onboarding.control(
+                        resolve_repo(args.repo), args.command, args.operation
+                    ),
+                    lambda value: json.dumps(value, ensure_ascii=False),
+                )
+            )
+        case "plan":
+            from harness.plan_check import check
+
+            return print_result(
+                fmap(
+                    check(resolve_repo(args.repo) / args.file),
+                    lambda value: json.dumps(value),
+                )
+            )
+        case "begin":
+            return print_result(
+                fmap(
+                    startup.begin(
+                        resolve_repo(args.repo), args.request, args.session, args.new
+                    ),
+                    lambda value: json.dumps(value, ensure_ascii=False),
+                )
+            )
         case "work-session":
             return work_session_command(args)
         case "workflow":
@@ -200,17 +280,9 @@ def work_session_command(args: argparse.Namespace) -> int:
                 work_sessions.as_json,
             )
         case "resume":
-            result = bind(
-                discovery.onboarding_ready(project),
-                lambda _: bind(
-                    discovery.verify(project, args.session_id or ""),
-                    lambda _: fmap(
-                        work_sessions.transition(
-                            project, args.session_id or "", "resume"
-                        ),
-                        work_sessions.as_json,
-                    ),
-                ),
+            result = fmap(
+                work_lifecycle.resume(project, args.session_id or ""),
+                work_sessions.as_json,
             )
         case "pause" | "stop" | "complete":
             result = fmap(
@@ -322,7 +394,7 @@ def decision_command(args: argparse.Namespace) -> int:
                             )
                         )
                         or fmap(
-                            decisions.begin(
+                            review_decisions.begin(
                                 repo,
                                 key,
                                 spec.question,
@@ -583,48 +655,6 @@ def _workflow_resume(
     )
 
 
-def _workflow_start(
-    repo: Path, request: str, session_id: str | None = None
-) -> Result[workflow.Workflow]:
-    def begin(_: object) -> Result[workflow.Workflow]:
-        return bind(
-            bind(
-                discovery.onboarding_ready(repo),
-                lambda _: preferences.language_for(repo),
-            ),
-            lambda language: bind(
-                require(
-                    bool(language),
-                    "language_unset",
-                    "choose English or Português (Brasil) before starting",
-                ),
-                lambda _: workflow.start(request, language),
-            ),
-        )
-
-    match workflow.load(repo, session_id):
-        case Ok(current) if current.status in workflow.TERMINAL_STATUSES:
-            return bind(workflow.archive_terminal(repo, session_id), begin)
-        case Ok():
-            return Err(Failure("workflow_exists", "a workflow is already saved"))
-        case Err(failure) if failure.code == "workflow_absent":
-            if session_id is None:
-                return begin(None)
-            return bind(
-                work_sessions.select(repo, session_id),
-                lambda session: bind(
-                    require(
-                        not request or request.strip() == session.request,
-                        "invalid_workflow",
-                        "the workflow request must match its work session",
-                    ),
-                    begin,
-                ),
-            )
-        case Err() as failure:
-            return failure
-
-
 def workflow_command(args: argparse.Namespace) -> int:
     repo = resolve_repo(args.repo)
     if decisions.blocking(repo, args.session_id) and args.operation not in (
@@ -736,7 +766,9 @@ def workflow_command(args: argparse.Namespace) -> int:
         case "start":
             return _workflow_result(
                 repo,
-                _workflow_start(repo, args.request or "", args.session_id),
+                work_lifecycle.start_workflow(
+                    repo, args.request or "", args.session_id
+                ),
                 args.session_id,
             )
         case "checkpoint":

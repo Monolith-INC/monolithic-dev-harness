@@ -5,6 +5,11 @@ description: Use on first harness activation or when repository setup is absent,
 
 # Guided bootstrap
 
+This initial workflow is **onboarding**, and is optional. Honor skip or dismissal with
+`harness onboarding skip` or `dismiss`; provide skills and guidance in free mode without a session.
+`harness onboarding restart` restarts onboarding without resetting existing work or approvals.
+Free mode never authorizes protected writes or disables governance.
+
 Onboarding does not require a work session, workflow, or checkout-bound implementation session.
 Do not start or resume one to configure the project. Complete and verify setup first; select a
 project work session only when the user proceeds to actual product or engineering work.
@@ -34,10 +39,10 @@ Once settings are configured, if `bmad_runtime.ready` is false, run
 the bundled runtime locally without a session, installation, download, or extra human choice.
 Preserve existing configuration. If preparation fails, report its actual output and stop.
 
-If `language_confirmed` is false, always ask which language this project should use, even when a
-different project previously saved a user-level preference. Ask the `language` gate
-(`harness decision present --gate language`), then save the answer with `harness preference
-language <en|pt-br> --repo .`. Never infer a user's preferred language from their operating system or an older project.
+Language confirmation is optional. Use the captured project choice, saved user preference, or
+English by default. Ask the `language` preference gate only when the user wants to change it.
+Missing capture, dismissal or skipping never prevents setup or work. A default is not a recorded
+human answer; do not synthesize confirmation.
 
 If setup is ready, continue the original request. Otherwise, use the inspection output as the full
 setup checklist. A missing `tracker.storage` is repaired above, not presented as a choice. Never

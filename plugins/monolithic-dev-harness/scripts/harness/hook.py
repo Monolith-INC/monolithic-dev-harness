@@ -34,12 +34,15 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
     if str(entry) not in sys.path:
         sys.path.insert(0, str(entry))
 
-from core.result import Err, Ok  # noqa: E402
+from core.result import Err, Ok, Result, attempt, bind  # noqa: E402
 from harness import (  # noqa: E402
     adoption,
     decisions,
+    gates,
     gitstate,
     globs,
+    onboarding,
+    preferences,
     questions,
     rules,
     settings,
@@ -166,7 +169,14 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     work_session_id = context.value if isinstance(context, Ok) else None
     if not settings.governed(repo):
         # Not a governed repository: the harness is opt-in per repo (bootstrap writes the settings).
-        _bind(repo, host, payload, work_session_id, request)
+        match _bind(repo, host, payload, work_session_id, request):
+            case Err(failure):
+                _emit_decision(
+                    host, rules.Decision.deny("work-session-context", failure.message)
+                )
+                return 0
+            case _:
+                pass
         _emit_decision(host, rules.Decision.allow())
         return 0
     timed = hasattr(signal, "SIGALRM")
@@ -199,8 +209,19 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     finally:
         if timed:
             signal.setitimer(signal.ITIMER_REAL, 0)
-    if decision.allowed:
-        _bind(repo, host, payload, work_session_id, request)
+    match decision.allowed:
+        case True:
+            match _bind(repo, host, payload, work_session_id, request):
+                case Err(failure):
+                    _emit_decision(
+                        host,
+                        rules.Decision.deny("work-session-context", failure.message),
+                    )
+                    return 0
+                case _:
+                    pass
+        case _:
+            pass
     if not decision.allowed or suspended:
         _emit_decision(host, decision)
         return 0
@@ -217,6 +238,11 @@ def _held(
     request: tuple[str, str] | None,
 ) -> rules.Decision | None:
     """Why a write must wait: the conversation's session or a pending decision, checked once."""
+    match _onboarding_control(call, repo):
+        case True:
+            return None
+        case _:
+            pass
     if not rules.is_write_class(call) or _diagnostic_read(call, repo):
         return None
     match context:
@@ -230,12 +256,19 @@ def _held(
     if decisions.blocking(repo, current) and not (
         decisions.status_command(call.command, Path(call.cwd or repo))
         or decisions.fallback_command(call.command, Path(call.cwd or repo))
+        or work_session_context.recovery_allowed(repo, current, request)
     ):
         return rules.Decision.deny(
             "decision-pending",
             "Wait for the human's answer before continuing this run.",
         )
     return None
+
+
+def _onboarding_control(call: rules.ToolCall, repo: Path) -> bool:
+    return call.kind == "shell" and onboarding.recovery_command(
+        call.command, Path(call.cwd or repo), repo
+    )
 
 
 def _diagnostic_read(call: rules.ToolCall, repo: Path) -> bool:
@@ -259,13 +292,48 @@ def _bind(
     payload: dict[str, Any],
     current: str | None,
     request: tuple[str, str] | None,
-) -> None:
+) -> Result[object]:
     """Bind the conversation to the session an allowed command chose; a failure binds nothing."""
-    from host_adapters import native_session_id
+    match _onboarding_control(_tool_call(host, "pre-tool", payload), repo):
+        case True:
+            return Ok(None)
+        case _:
+            pass
+    from host_adapters import native_session_id, startup_context
 
-    work_session_context.bind_requested(
-        repo, host, native_session_id(host, payload), current, request
+    return bind(
+        work_session_context.bind_requested(
+            repo, host, native_session_id(host, payload), current, request
+        ),
+        lambda _: startup_context.arm(
+            repo, host, payload, _tool_call(host, "pre-tool", payload).command, repo
+        ),
     )
+
+
+def handle_startup(host: str, payload: dict[str, Any]) -> int:
+    from host_adapters import startup_context
+
+    match startup_context.invocation(
+        _tool_call(host, "startup", payload).command,
+        Path(str(payload.get("cwd") or Path.cwd())),
+    ):
+        case None:
+            return 0
+        case _:
+            pass
+    match startup_context.complete(_workspace(payload, host), host, payload):
+        case Err(failure):
+            print(
+                hook_bridge.format_answer_context(
+                    "[harness] Startup conversation binding was not confirmed: "
+                    + failure.message
+                    + ". Stop workflow advancement and retry the exact begin command before asking a question."
+                )
+            )
+        case _:
+            pass
+    return 0
 
 
 def _pin_approved_notes(repo: Path, approval_id: str) -> str:
@@ -503,6 +571,11 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
     """
     repo = _workspace(payload, host)
     message = hook_bridge.stop_message(payload)
+    match onboarding.mode(repo):
+        case "free":
+            return 0
+        case _:
+            pass
     if (
         message is None
         or not settings.governed(repo)
@@ -901,6 +974,11 @@ def _apply_marker(
     response: Any,
 ) -> str | None:
     """What an answered question pinned when it was asked: adoption, manual check, tracker, or approval."""
+    match _captured_language(repo, decision_scope, marker_id):
+        case str() as note:
+            return note
+        case _:
+            pass
     asked = state.take_asked(repo, questions.marker_name(marker_id), decision_scope)
     if asked is None:
         return None  # the question never passed the check, so its answer opens nothing
@@ -986,12 +1064,58 @@ def _apply_marker(
     )
 
 
+def _captured_language(repo: Path, scope: str | None, key: str) -> str | None:
+    """Persist only a language choice already resolved by a trusted human-answer hook."""
+    match decisions.record(repo, scope):
+        case {
+            "id": saved_key,
+            "status": "answered",
+            "gate": "language",
+            "answer": str() as answer,
+        } as record if (
+            saved_key == key and decisions.decision_kind(record) == "preference"
+        ):
+            return _save_captured_language(repo, questions.choice_label(answer))
+        case _:
+            return None
+
+
+def _save_captured_language(repo: Path, answer: str) -> str | None:
+    match gates.load():
+        case Ok((_, catalog)) if "language" in catalog:
+            match tuple(
+                option.id
+                for option in catalog["language"].options
+                if answer in option.label.values()
+                and option.id in preferences.LANGUAGES
+            ):
+                case (chosen,):
+                    match preferences.set_language(chosen, repo):
+                        case Ok():
+                            return f"[harness] project language recorded: {chosen}."
+                        case Err(failure):
+                            return f"[harness] project language was NOT saved: {failure.message}"
+                case _:
+                    return None
+        case _:
+            return None
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--host", choices=("claude", "cursor", "codex"), required=True)
     parser.add_argument(
         "--event",
-        choices=("pre-tool", "prompt", "shell", "mcp", "ask", "answer", "stop"),
+        choices=(
+            "pre-tool",
+            "prompt",
+            "shell",
+            "mcp",
+            "ask",
+            "answer",
+            "stop",
+            "startup",
+        ),
         required=True,
     )
     args = parser.parse_args(argv)
@@ -1001,6 +1125,24 @@ def main(argv: list[str] | None = None) -> int:
         payload = {}
     if not isinstance(payload, dict):
         payload = {}
+    match args.event:
+        case "startup":
+            match attempt(
+                lambda: handle_startup(args.host, payload),
+                "startup_capture_failed",
+                "startup host response",
+            ):
+                case Ok(code):
+                    return code
+                case Err():
+                    print(
+                        hook_bridge.format_answer_context(
+                            "[harness] Startup conversation binding could not be confirmed. Stop workflow advancement and inspect the host response before continuing."
+                        )
+                    )
+                    return 0
+        case _:
+            pass
     if args.event == "prompt":
         try:
             return handle_prompt(args.host, payload)

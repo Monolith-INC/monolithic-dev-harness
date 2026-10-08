@@ -41,3 +41,13 @@ same dependency declaration through `requirements-dev.txt`; no user-global Pytho
 The Stage 0 templates live only in `skills/bmad-build/`; BMad's unmodified originals stay in
 `vendor/bmad/upstream/` for reference. The discovery tests exercise real runtime rendering, pin reuse, session separation,
 corruption refusal, CLI binding, onboarding readiness, and resume verification.
+
+## Consolidated startup recovery
+
+`harness begin` uses the same checked lifecycle as explicit resume, including verification of
+saved discovery instructions at later stages. Startup creates work without selecting it; only a
+successfully prepared result selects it. On Codex/Claude, a trusted pre/post shell-event pair and
+protected completion receipt then bind the conversation. Missing identities, failed calls,
+unarmed/stale output and replay cannot switch it. Host payload fixtures cover native questions
+and answer capture after selection; live-host replay remains required. See
+[recovery contracts](../02-design/specs/pr-36-recovery-contracts.md).

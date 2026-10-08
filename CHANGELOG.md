@@ -8,6 +8,18 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Optional, restartable onboarding and sessionless free mode. Preferences use safe defaults;
+  missing language capture never blocks work. Required decisions and action approvals retain their
+  enforcement, and cancelled settings reviews require fresh confirmation of the exact proposal.
+
+- PR #36 recovery fixes: shared checked resume, deferred successful-startup conversation binding,
+  and recoverable decision/checkpoint projection. Failed writes, stale instructions and replayed
+  completion output preserve existing progress and approval boundaries.
+
+- `harness begin --request` consolidates setup inspection, session routing and pinned discovery entry.
+- Artifact review questions save workflow checkpoints automatically. `harness plan check` reports
+  plan size estimates and advisory scope signals; the entry skill loads detailed guidance on demand.
+
 - Bundled BMad `bmad-correct-course`, `bmad-project-context`, `bmad-deep-recon`, and
   `bmad-qa-generate-e2e-tests`, wired into the flow: change of direction at any stage, agent
   instruction drift found during discovery, reconnaissance for unfamiliar code or domains, and

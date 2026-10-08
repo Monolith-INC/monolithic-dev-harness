@@ -9,8 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from core.result import Err, Ok, Result, attempt, bind, err, fmap
-from harness import commands, questions, state
+from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
+from harness import commands, gates, questions, setup_reviews, state
 
 RELATIVE_PATH = Path(".harness/state/decision.json")
 HISTORY = "decision-history.json"
@@ -30,10 +30,12 @@ class Pending:
     presentation_id: str = ""
     allow_free_text: bool = False
     details: tuple[str, ...] = ()
+    kind: str = "required"
 
     @classmethod
     def from_record(cls, value: dict[str, Any], scope: str | None) -> Pending:
         return cls(
+            kind=decision_kind(value),
             id=str(value.get("id", "")),
             question=str(value.get("question", "")),
             options=tuple(str(option) for option in value.get("options", ())),
@@ -78,19 +80,193 @@ def record(repo: Path, work_session_id: str | None = None) -> dict[str, Any] | N
             return None
 
 
+def decision_kind(record: dict[str, Any]) -> str:
+    """Approvals dominate classification; unknown legacy decisions fail closed."""
+    match record:
+        case {"approval": approval} if approval:
+            return "approval"
+        case {"kind": "approval"}:
+            return "approval"
+        case {"kind": "preference" | "required" as kind}:
+            return kind
+        case {"kind": _}:
+            return "required"
+        case {"gate": "language"}:
+            return "preference"
+        case _:
+            return "required"
+
+
+ONBOARDING_GATES = frozenset(
+    ("language", "setup-confirm", "next-step", "starting-point")
+)
+
+
+def onboarding_question(record: dict[str, Any]) -> bool:
+    return (
+        record.get("gate") in ONBOARDING_GATES and decision_kind(record) != "approval"
+    )
+
+
+def is_blocking(record: dict[str, Any]) -> bool:
+    """Whether saved decision evidence still holds advancement."""
+    return (
+        record.get("status") != "answered"
+        and decision_kind(record) != "preference"
+        and not (record.get("status") == "cancelled" and onboarding_question(record))
+    )
+
+
+def cancel_onboarding(repo: Path) -> Result[dict[str, Any]]:
+    """Abandon a known onboarding prompt, without answering or authorizing its action."""
+    from harness import review_decisions
+
+    match record(repo):
+        case dict() as current if (
+            onboarding_question(current) or decision_kind(current) == "preference"
+        ):
+            return bind(review_decisions.recover(repo), lambda _: _cancel_ready(repo))
+        case current:
+            return Ok(current or {})
+
+
+def _cancel_ready(repo: Path) -> Result[dict[str, Any]]:
+    match record(repo):
+        case {"status": "cancelled"} as current if onboarding_question(current):
+            return Ok(current)
+        case {"status": "pending"} as current if onboarding_question(current):
+            return bind(
+                setup_reviews.cancel(repo, current)
+                if current.get("gate") == "setup-confirm"
+                else Ok(None),
+                lambda _: attempt(
+                    lambda: _archive_dismissal(
+                        repo / RELATIVE_PATH, {**current, "status": "cancelled"}
+                    ),
+                    "decision_invalid",
+                    "cancel onboarding question",
+                    OSError,
+                ),
+            )
+        case dict() as current if decision_kind(current) == "preference":
+            return dismiss_optional(repo)
+        case current:
+            return Ok(current or {})
+
+
 def waiting(repo: Path, work_session_id: str | None = None) -> bool:
-    global_pending = _waiting_at(repo / RELATIVE_PATH)
-    if work_session_id is None:
-        return global_pending
-    match _path(repo, work_session_id):
-        case Ok(path):
-            return global_pending or _waiting_at(path)
-        case Err():
-            return True
+    match work_session_id:
+        case None:
+            return _waiting_at(repo / RELATIVE_PATH)
+        case _:
+            match _path(repo, work_session_id):
+                case Ok(path):
+                    return _waiting_at(repo / RELATIVE_PATH) or _waiting_at(path)
+                case Err():
+                    return True
 
 
 def _waiting_at(path: Path) -> bool:
-    return path.exists() and (state.read_json(path) or {}).get("status") != "answered"
+    return path.exists() and is_blocking(state.read_json(path) or {})
+
+
+def dismiss_optional(repo: Path, scope: str | None = None) -> Result[dict[str, Any]]:
+    """Archive a saved optional question without supplying an answer or approval."""
+    from harness import review_decisions
+
+    return bind(
+        review_decisions.recover(repo, scope),
+        lambda _: bind(
+            _path(repo, scope),
+            lambda path: _dismiss_at(path, state.read_json(path) or {}),
+        ),
+    )
+
+
+def _dismiss_at(path: Path, current: dict[str, Any]) -> Result[dict[str, Any]]:
+    match current:
+        case {} if not current and not path.exists():
+            return Ok(current)
+        case {} if decision_kind(current) == "preference" and current.get("status") in (
+            "answered",
+            "dismissed",
+        ):
+            return Ok(current)
+        case {} if (
+            current.get("status") == "pending"
+            and decision_kind(current) == "preference"
+        ):
+            return attempt(
+                lambda: _archive_dismissal(path, {**current, "status": "dismissed"}),
+                "decision_invalid",
+                "optional decision dismissal",
+                OSError,
+            )
+        case _:
+            return err(
+                "decision_invalid",
+                "required decisions and approvals cannot be dismissed",
+            )
+
+
+def _archive_dismissal(path: Path, dismissed: dict[str, Any]) -> dict[str, Any]:
+    # Isolated filesystem edge: preserve evidence before replacing the current question.
+    state.write_json(
+        path.with_name(HISTORY),
+        {
+            "answers": [
+                *(
+                    item
+                    for item in (state.read_json(path.with_name(HISTORY)) or {}).get(
+                        "answers", []
+                    )
+                    if item != dismissed
+                ),
+                dismissed,
+            ][-HISTORY_KEPT:]
+        },
+    )
+    state.write_json(path, dismissed)
+    return dismissed
+
+
+def _catalog_kind(gate: str, approval: bool, kind: str | None) -> str:
+    match approval, kind:
+        case True, _:
+            return "approval"
+        case False, str():
+            return decision_kind({"kind": kind})
+        case _:
+            match gates.load():
+                case Ok((_, catalog)) if gate in catalog:
+                    return catalog[gate].kind
+                case _:
+                    return decision_kind({"gate": gate})
+
+
+def _supersede_at(path: Path, current: dict[str, Any]) -> Result[dict[str, Any]]:
+    match current.get("status"):
+        case "answered":
+            return Ok(current)
+        case "cancelled" if onboarding_question(current):
+            return Ok(current)
+        case _:
+            return _dismiss_at(path, current)
+
+
+def _save_prepared(path: Path, value: dict[str, Any]) -> Result[dict[str, Any]]:
+    return bind(
+        _supersede_at(path, state.read_json(path) or {}),
+        lambda _: fmap(
+            attempt(
+                lambda: state.write_json(path, value),
+                "decision_invalid",
+                "human decision",
+                OSError,
+            ),
+            lambda _: value,
+        ),
+    )
 
 
 def blocking(repo: Path, work_session_id: str | None) -> bool:
@@ -106,8 +282,11 @@ def blocking(repo: Path, work_session_id: str | None) -> bool:
 
 
 def any_waiting(repo: Path) -> bool:
-    if _waiting_at(repo / RELATIVE_PATH):
-        return True
+    match _waiting_at(repo / RELATIVE_PATH):
+        case True:
+            return True
+        case False:
+            pass
     from harness import work_sessions
 
     match work_sessions.list_sessions(repo):
@@ -175,35 +354,42 @@ def begin(
     details: tuple[str, ...] = (),
     gate: str = "",
     binds: dict[str, Any] | None = None,
+    review_checkpoint: dict | None = None,
+    kind: str | None = None,
 ) -> Result[dict[str, Any]]:
+    from harness import review_decisions
+
     return bind(
-        _path(repo, work_session_id, active=True),
-        lambda path: attempt(
-            lambda: _begin(
-                path,
-                repo,
-                key,
-                question,
-                options,
-                transport,
-                artifacts,
-                approval,
-                work_session_id,
-                allow_free_text,
-                details,
-                gate,
-                binds,
+        review_decisions.recover(repo, work_session_id),
+        lambda _: bind(
+            _path(repo, work_session_id, active=True),
+            lambda path: bind(
+                _prepared(
+                    repo,
+                    key,
+                    question,
+                    options,
+                    transport,
+                    artifacts,
+                    approval,
+                    work_session_id,
+                    allow_free_text,
+                    details,
+                    gate,
+                    binds,
+                    review_checkpoint,
+                    kind,
+                ),
+                lambda value: fmap(
+                    _save_prepared(path, value),
+                    lambda _: value,
+                ),
             ),
-            "decision_invalid",
-            "human decision",
-            OSError,
-            ValueError,
         ),
     )
 
 
-def _begin(
-    path: Path,
+def _prepared(
     repo: Path,
     key: str,
     question: str,
@@ -211,46 +397,63 @@ def _begin(
     transport: str,
     artifacts: tuple[tuple[str, str], ...],
     approval: bool,
-    work_session_id: str | None,
-    allow_free_text: bool,
-    details: tuple[str, ...] = (),
-    gate: str = "",
-    binds: dict[str, Any] | None = None,
-) -> dict[str, Any]:
-    if waiting(repo, work_session_id):
-        raise ValueError("answer the pending question before asking another")
-    if (
-        not key
-        or not question.strip()
-        or not options
-        or len(options) > 3
-        or any(not option.strip() for option in options)
-        or len({option.strip().casefold() for option in options}) != len(options)
-        or transport not in ("chat", "blocking", "async")
-        or len(details) > len(options)
-        or (allow_free_text and (approval or questions.authorizing_options(options)))
-    ):
-        raise ValueError("a decision needs an id, question, and distinct options")
-    value = {
-        "id": key,
-        "question": question,
-        "options": options,
-        "transport": transport,
-        "artifacts": artifacts,
-        "approval": approval,
-        "status": "pending",
-        "answer": "",
-        "allow_free_text": allow_free_text,
-        "details": details,
-    }
-    if gate:
-        value["gate"] = gate
-    if binds is not None:
-        value["binds"] = binds
-    if work_session_id:
-        value["work_session_id"] = work_session_id
-    state.write_json(path, value)
-    return value
+    scope: str | None,
+    free_text: bool,
+    details: tuple[str, ...],
+    gate: str,
+    binds: dict | None,
+    checkpoint: dict | None,
+    kind: str | None,
+) -> Result[dict]:
+    return bind(
+        require(
+            not waiting(repo, scope),
+            "decision_invalid",
+            "answer the pending question before asking another",
+        ),
+        lambda _: fmap(
+            require(
+                bool(key)
+                and bool(question.strip())
+                and bool(options)
+                and len(options) <= 3
+                and all(option.strip() for option in options)
+                and len({option.strip().casefold() for option in options})
+                == len(options)
+                and transport in ("chat", "blocking", "async")
+                and len(details) <= len(options)
+                and not (
+                    free_text and (approval or questions.authorizing_options(options))
+                ),
+                "decision_invalid",
+                "a decision needs an id, question, and distinct options",
+            ),
+            lambda _: {
+                "kind": _catalog_kind(gate, approval, kind),
+                "id": key,
+                "question": question,
+                "options": options,
+                "transport": transport,
+                "artifacts": artifacts,
+                "approval": approval,
+                "status": "pending",
+                "answer": "",
+                "allow_free_text": free_text,
+                "details": details,
+                **{
+                    name: value
+                    for name, value in (
+                        ("gate", gate),
+                        ("setup_proposal", setup_reviews.binding(repo, gate)),
+                        ("binds", binds),
+                        ("work_session_id", scope),
+                        ("review_checkpoint", checkpoint),
+                    )
+                    if value is not None and value != ""
+                },
+            },
+        ),
+    )
 
 
 def resolve(
@@ -261,14 +464,19 @@ def resolve(
     *,
     work_session_id: str | None = None,
 ) -> Result[dict[str, Any]]:
+    from harness import review_decisions
+
     return bind(
-        _path(repo, work_session_id),
-        lambda path: attempt(
-            lambda: _resolve(repo, path, key, answer, source),
-            "decision_invalid",
-            "human answer",
-            OSError,
-            ValueError,
+        review_decisions.recover(repo, work_session_id),
+        lambda _: bind(
+            _path(repo, work_session_id),
+            lambda path: attempt(
+                lambda: _resolve(repo, path, key, answer, source),
+                "decision_invalid",
+                "human answer",
+                OSError,
+                ValueError,
+            ),
         ),
     )
 
@@ -371,7 +579,9 @@ def reusable(
     labels = {questions.choice_label(option).casefold() for option in options}
     for entry in reversed(history):
         if (
-            entry.get("question", "").strip().casefold() == question.strip().casefold()
+            entry.get("status") == "answered"
+            and entry.get("question", "").strip().casefold()
+            == question.strip().casefold()
             and {questions.choice_label(o).casefold() for o in entry.get("options", ())}
             == labels
             and bool(entry.get("approval")) == approval

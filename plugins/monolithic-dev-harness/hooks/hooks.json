@@ -3,7 +3,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|mcp__.*",
+        "matcher": "Bash|Write|Edit|MultiEdit|NotebookEdit|mcp__.*|exec_command|functions\\.exec_command",
         "hooks": [
           {
             "type": "command",
@@ -42,6 +42,16 @@
           {
             "type": "command",
             "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/harness-python\" \"${CLAUDE_PLUGIN_ROOT}/scripts/harness/hook.py\" --host claude --event answer",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "^(Bash|exec_command|functions\\.exec_command)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${CLAUDE_PLUGIN_ROOT}/bin/harness-python\" \"${CLAUDE_PLUGIN_ROOT}/scripts/harness/hook.py\" --host claude --event startup",
             "timeout": 10
           }
         ]

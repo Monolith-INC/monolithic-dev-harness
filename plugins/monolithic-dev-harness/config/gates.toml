@@ -24,6 +24,7 @@ languages = ["en", "pt-br"]
 
 [[gate]]
 id = "language"
+kind = "preference"
 # Asked before the project has a language: shown in the user's saved preference, else English.
 question.en = "Which language should this project use?"
 question.pt-br = "Qual idioma este projeto deve usar?"

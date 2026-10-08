@@ -27,7 +27,7 @@ harness decision present --repo <project> --host <host> \
 
 | Gate | Asked when |
 | --- | --- |
-| `language` | A project has no confirmed language |
+| `language` | The user wants to change the optional language preference |
 | `setup-confirm` | The setup proposal is ready |
 | `next-step` | Setup is done and the request did not say what to do |
 | `starting-point` | An idea arrives with no clear starting point |
@@ -63,9 +63,17 @@ reply is not captured, run `harness decision fallback --repo <project> --host
 <host>` (add `--async-available` when that control is callable). It moves the same question to the
 next transport (blocking → async → chat) with the same options, details, and menu text. Never
 replace the question, ask the human to diagnose hooks, or show internal errors. Reuse a captured
-answer rather than asking again.
+answer rather than asking again. If an optional preference was not captured, continue with its
+default; do not keep retrying controls or repeat the preference question.
 
 ### Answers
+
+Every decision has a type: `preference`, `required`, or `approval`. A preference has a safe default
+or can be omitted and never blocks work. Language is a preference; use English if no choice was
+captured. Required decisions objectively prevent the requested operation from proceeding correctly;
+approvals authorize a specific protected action. Both retain their blocking and recording rules.
+Older language decisions are preferences; unknown older decisions remain required. Approval records
+cannot become nonblocking by declaring a preference type.
 
 Only the human resolves a menu: a click, a Codex button reply, or a typed message. Typed replies
 count on every transport, including after a dismissed picker or expired buttons, and are matched
@@ -81,10 +89,16 @@ suspend`, and typed `approve HB-…` keep working while a menu waits.
 
 ### While a menu waits
 
-A pending menu blocks writes and workflow advancement in its scope (its work session, or the whole
+A pending required decision or approval blocks writes and workflow advancement in its scope (its work session, or the whole
 project for an unscoped one). Read-only inspection, `harness decision status`, `harness
 suspension status`, and `harness decision fallback` still run. For a Codex asynchronous control,
 keep the turn open with the returned interruptible wait; do not ask another question meanwhile.
+Onboarding status, skip, dismissal, restart and mode selection are recovery controls, not answers.
+They may discard optional onboarding prompts while preserving evidence, without granting approval.
+Known onboarding prompts can be cancelled when onboarding is skipped, dismissed or restarted.
+An unanswered settings-review proposal is abandoned, never accepted; its application is blocked
+until a new review. Required product decisions and action approvals are not onboarding prompts.
+Free mode supports skills without setup or sessions and keeps strict action governance intact.
 
 ## Question batch
 
@@ -113,3 +127,12 @@ acknowledgement; do not ask for each decision again.
 
 Every turn ends with a menu, a question batch, or a status line that starts `Next:` and continues
 working. Never end a turn with none of these.
+
+## Automatic review checkpoints
+
+Presenting a decision with artifacts adds a workflow review point when that workflow is active.
+The pending decision owns recovery data until the checkpoint is applied. Failed decision storage
+creates no checkpoint; an interrupted projection is completed once on workflow read or answer
+capture. Recovery never answers for the user or grants approval. A conflict preserves both records
+and stops advancement for inspection; do not replace either record or re-ask approval to bypass it.
+Questions without a workflow or in a paused workflow continue without an automatic checkpoint.

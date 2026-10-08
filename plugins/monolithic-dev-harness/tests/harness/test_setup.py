@@ -175,6 +175,7 @@ class SetupTests(unittest.TestCase):
 
     def test_changed_source_or_candidate_cannot_be_applied(self) -> None:
         reviewed = setup.review(self.repo, **self.choices()).value
+        self.assertFalse(settings.path(self.repo).exists())
         self.assertIsInstance(
             setup.apply(
                 self.repo,
@@ -184,7 +185,7 @@ class SetupTests(unittest.TestCase):
             ),
             Err,
         )
-        settings.path(self.repo).parent.mkdir(parents=True)
+        settings.path(self.repo).parent.mkdir(parents=True, exist_ok=True)
         settings.path(self.repo).write_text("{}")
         self.assertIsInstance(
             setup.apply(
