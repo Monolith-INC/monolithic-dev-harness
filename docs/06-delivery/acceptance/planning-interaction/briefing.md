@@ -7,7 +7,7 @@ last_reviewed: 2026-10-08
 
 # Direct-workspace acceptance
 
-Harness source under test: `774a48488da83d0b2ebcdfe177206b4701325e58`.
+Harness source under test: `77546df` (Thermos corrections included).
 Installed through the supported Codex installer on 2026-10-08; desktop restart remains required.
 
 Project: `/home/monolith/projects/monolithic-dev-harness/temp/test-000/project`.

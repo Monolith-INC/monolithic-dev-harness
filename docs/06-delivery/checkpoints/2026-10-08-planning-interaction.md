@@ -69,3 +69,7 @@ last_reviewed: 2026-10-08
     20 execution/environment negatives. The supported Codex installer loaded the reviewed
     workspace; installed detector and shell-reader files match. Desktop restart remains required
     before live acceptance; the installer log is `/tmp/harness-planning-thermos-install.log`.
+11. **Published corrections.** Real Git staging succeeded through the corrected active hook.
+    Committed all three fixes and their tests as `77546df` and pushed to draft PR 37. The installed
+    plugin includes this corrected source. Updated the acceptance briefing accordingly; live
+    question capture remains unverified and no application implementation occurred.
