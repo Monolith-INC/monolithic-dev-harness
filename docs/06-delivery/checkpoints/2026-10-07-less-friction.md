@@ -108,3 +108,8 @@ Final full-suite rerun: 332 backlog tests passed; 737 main tests passed, one ski
    pending with an empty answer. Startup/default behavior passed this observation; live capture
    remains blocked. Preserved evidence and stopped before implementation without repeating the
    question. Parent/fixture context separation remains a limitation; root cause is not established.
+10. **Capture routing diagnosis.** Actual parent transcript contains the native call and Standalone
+    reply; the fixture retained its prepared HD ID. Question hooks resolve the caller workspace,
+    with no supported cross-project relay. Transcript recovery also requires matching native call
+    identity and context. Documented the confirmed trial routing gap and unverified host event
+    delivery in capture-diagnosis. No answers, hooks or implementation were fabricated.
