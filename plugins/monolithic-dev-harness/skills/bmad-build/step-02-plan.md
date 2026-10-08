@@ -8,7 +8,9 @@
 ## INSTRUCTIONS
 
 1. Draft resume check. If `{plan_file}` exists with `status: draft`, read it and capture the verbatim `<frozen-after-approval>...</frozen-after-approval>` block as `preserved_intent`. Otherwise `preserved_intent` is empty.
-2. Investigate the codebase in the current session. Search the repository and read only the relevant files. Keep the Code Map focused on the paths and symbols involved, what to reuse, and what not to change. Do not retell the investigation when implementation starts — the plan already has it.
+2. Investigate the codebase. When you can, send deep searches to subagents and wait for them in this turn. Tell them to return short summaries only, so this session does not fill up with their notes. Keep only what the work needs: the specific files, symbols or lines, what to reuse, and what not to change. Write that into the Code Map. Do not retell the investigation when implementation starts — the plan already has it.
+
+   When the code or domain is unfamiliar enough that a few searches will not settle it, use the bundled `bmad-deep-recon` skill for a focused reconnaissance pass and fold its findings into the Code Map. Compare the project's agent instructions (the managed block in `AGENTS.md`, when present) and current-state documents against what the code actually does; record any contradiction in the plan as a finding, and recommend `bmad-project-context` (intent `refresh` or `record`) at Checkpoint 1.
 
    Do not ask the human during investigation. When something is unclear, look in the repository, planning artifacts, or history first. Keep looking until you know, or until those sources have nothing more to say. Leave any remaining choice for the next step.
 {% if workflow.route == "oneshot" %}
@@ -40,7 +42,8 @@
        summary: <one sentence naming the deferred goal>
        evidence: <why this was split from the current plan>
      ```
-   - **Open Questions.** Present every entry as a numbered question with its options and what each option means, and HALT for the human's answers. Write each answer into the `<frozen-after-approval>` block as a decision and delete the entry. An answer may expose a new intent gap — add it and ask again. When the last entry is gone, delete the section.
+   - **Open Questions.** Present every entry together in one message, as a numbered question with its options, what each option means in practice (the trade-off, not just the label), and your recommendation with a one-line reason. Never ask them one at a time. HALT for the human's answers. Accept answers in any form — `1b`, an option name, a paraphrase, or "your recommendations" for all of them — and ask again only about an answer you genuinely cannot place. Write each answer into the `<frozen-after-approval>` block as a decision, log it to the memlog, and delete the entry. An answer may expose a new intent gap — add it and ask again, batched the same way. When the last entry is gone, delete the section.
+   - **Scope after answers.** Answers can turn one goal into several (for example, a new platform target or an independent subsystem). Once Open Questions is empty, run the SCOPE STANDARD multi-goal check again against the decided plan and measure its token count honestly. Never compress, abbreviate, or move content out of the plan to get under 1600 tokens; the count is a signal about scope, not a formatting target. If either check fails, offer **Split** or **Keep full plan** as above, naming the independently shippable goals and recommending which to build first. Log the outcome to the memlog either way.
 
 ### CHECKPOINT 1
 
@@ -50,21 +53,24 @@ Present summary. Display the plan file path in whatever form is clickable where 
 
 If token count exceeded 1600 and the user chose to keep the full plan, include the token count and explain why it may be a problem.
 
-After presenting the summary, display this note:
-
----
-
-Before approving, you can open the plan file in an editor or ask me questions and tell me what to change. For deeper challenge, use the bundled `bmad-advanced-elicitation` skill. When the user asks for several perspectives, use the bundled `bmad-party-mode` skill. Both are part of this harness package.
-
----
+The summary closes the series of decisions: list every decision recorded in this run (from the memlog), so the user can change any of them here instead of re-approving each one. Never re-ask a decision that is already recorded unless the user reopens it.
 
 HALT and give the user a choice:
 
-- **Approve and continue** — approve the plan, leave it `ready-for-dev`, and hand it to the harness backlog stage for work-item drafting. This approval does not publish tracker items or authorize implementation.
-- **Approve and stop** — approve the plan, leave it `ready-for-dev`, and stop before backlog drafting.
-- **Review plan** — review the plan against its requirements and code evidence, discuss any findings or revisions with the user until it is ready to approve, then either stop or continue.
+1. **Approve and continue** — approve the plan, leave it `ready-for-dev`, and hand it to the harness backlog stage for work-item drafting. This approval does not publish tracker items or authorize implementation.
+2. **Deepen** — challenge the plan before approving it. Recommend this when the plan spans several platforms or subsystems, carries security or data-loss risk, or the user kept the full plan past the scope check.
+3. **Revise** — the user says what to change; apply it, then return to this checkpoint.
+4. **Approve and stop** — approve the plan, leave it `ready-for-dev`, and stop before backlog drafting.
 
-Before acting on approval, re-read `{plan_file}` from disk. If it is missing, HALT without recreating it, changing status, or proceeding. If it changed, acknowledge the external edits and continue with the updated version. Set status `ready-for-dev`; everything inside `<frozen-after-approval>` is then locked and only the human can change it. For **Approve and continue**, record this plan as the accepted discovery artifact in the harness workflow checkpoint, then hand it to the harness backlog stage. Do not follow BMad Step 3 or start implementation.
+**Deepen** runs, in order, returning to this checkpoint when done:
+
+1. **Adversarial review.** Invoke the bundled `bmad-review` skill on `{plan_file}` with lenses `adversarial` and `edge-case-hunter` (as `skill:bmad-review lenses=adversarial,edge-case-hunter`), passing the memlog as `also_consider`. Its lenses run as parallel subagents when available. Present the triaged findings and the plan changes they imply, then HALT for **Apply**, **Reject**, or other direction per finding group. Change the plan only for what the user accepts, and log each outcome to the memlog.
+2. **Elicitation.** Invoke the bundled `bmad-advanced-elicitation` skill on the revised plan. Its own menu lets the user run methods or **Proceed**.
+3. **Party mode** (offered, not automatic). When decisions remain contested, offer the bundled `bmad-party-mode` skill for a round-table on them.
+
+After Deepen, present the checkpoint again with an updated summary of what changed.
+
+Before acting on approval, re-read `{plan_file}` from disk. If it is missing, HALT without recreating it, changing status, or proceeding. If it changed, acknowledge the external edits and continue with the updated version. Set status `ready-for-dev`; everything inside `<frozen-after-approval>` is then locked and only the human can change it. Log the approval to the memlog. For **Approve and continue**, record this plan as the accepted discovery artifact in the harness workflow checkpoint, then hand it to the harness backlog stage. Do not follow BMad Step 3 or start implementation.
 
 ## NEXT
 

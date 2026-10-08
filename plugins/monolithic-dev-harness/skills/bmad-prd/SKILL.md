@@ -37,7 +37,7 @@ Activation is complete. If `activation_steps_prepend` or `activation_steps_appen
 
 **Create.** Bind `{doc_workspace}` to `{workflow.prd_output_path}/{workflow.run_folder_pattern}/`. Write the PRD as `{workflow.run_folder_pattern}.md` with YAML frontmatter (title, status, created, updated — initial `status: draft`), and seed the memlog with `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/memlog.py init --workspace {doc_workspace} --field topic="<PRD/product name>"` so subsequent decisions land in a known file. Tell the user the path. Run `## Discovery`, then `## Finalize`.
 
-**Update.** Reconcile the PRD with a change signal. Source-extract against PRD, addendum, `.memlog.md`, and original inputs (extract, don't ingest). If `.memlog.md` is missing, init it with `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/memlog.py init --workspace {doc_workspace}`, then reconstruct a short decision log from the PRD in the current session (one `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/memlog.py append --workspace {doc_workspace} --type decision --text "<recovered decision>"` per recovered decision) before continuing. Surface conflicts with prior decisions before applying. Then `## Finalize`.
+**Update.** Reconcile the PRD with a change signal. Source-extract against PRD, addendum, `.memlog.md`, and original inputs (extract, don't ingest). If `.memlog.md` is missing, init it with `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/memlog.py init --workspace {doc_workspace}`, then spawn a one-time bootstrap subagent to reverse-engineer a thin log from the PRD (one `sh "{skill-root}/../../bin/harness-python" {project-root}/_bmad/scripts/memlog.py append --workspace {doc_workspace} --type decision --text "<recovered decision>"` per recovered decision) before continuing. Surface conflicts with prior decisions before applying. Then `## Finalize`.
 
 **Validate** (or *analyze*). Critique without changing. Load `references/validate.md`.
 
@@ -45,9 +45,9 @@ Activation is complete. If `activation_steps_prepend` or `activation_steps_appen
 
 Order: **Brain dump → Stakes calibration → Working mode → mode-scoped work.** Get to working mode fast — two or three turns, not ten. Users in a hurry must not be held hostage by upstream probing.
 
-**Brain dump.** Always the first move, even when the user opens with paragraphs of context (that is intake, not the dump). Ask for verbal context *and* any existing inputs they want you to read — product brief, research, customer transcripts, competitive analysis, prior PRD draft, design docs. Paths or paste; read only the relevant material and summarize it in the current session. A simple "anything else?" surfaces what they almost forgot.
+**Brain dump.** Always the first move, even when the user opens with paragraphs of context (that is intake, not the dump). Ask for verbal context *and* any existing inputs they want you to read — product brief, research, customer transcripts, competitive analysis, prior PRD draft, design docs. Paths or paste; big docs are fine, you will subagent-extract. A simple "anything else?" surfaces what they almost forgot.
 
-**Research (when needed).** During Discovery, use current sources to ground relevant claims about the space and comparable products. Keep the research focused on the user's stated product requirements; do not launch separate agents unless explicitly requested.
+**Research subagents (default).** During Discovery, spawn web-research subagents to ground the picture: what exists in the space, how comparables position themselves, current landscape. Subagent does the search; parent receives a digest.
 
 **Elicitation, not direction.** Discovery pulls the user's vision out; it does not insert yours. Open-ended "tell me about X" beats multiple choice. When you find yourself naming wedges, picking MVP cuts, or proposing phases, stop — you have crossed from elicitation into authoring. Hand the pen back. Infer-and-confirm ("I'm assuming X works like Y — right?") is fine; quizzing the user through a tree of LLM-shaped choices is not.
 
@@ -70,7 +70,7 @@ The workspace persists; stop and resume freely.
 
 **Shape.** Features grouped; FRs nested with globally numbered stable IDs. Cross-cutting NFRs in their own section; skip traceability matrices. Capabilities, not implementation — tech choices live in `addendum.md`. Treat `{workflow.prd_template}` as expert prior knowledge, not a checklist. The **Essential Spine** is the expected default — present it unless the product genuinely doesn't need a section, and when you drop one, do so for a reason a reviewer would agree with. The **Adapt-In Menu** is conditional: pull in the clusters the product's concerns need to best define the requirements. When the product carries a concern the menu doesn't name, invent the section — name it well, decide what belongs in it, place it where it serves the reader or the PRD. Reorder and combine for readability. Never include a section because it appears; never skip a concern because no template section covered it. Counter-metrics named when Success Metrics exist.
 
-**Extract, don't ingest.** Extract only the claims needed from source documents. Assemble the PRD from those extracts rather than copying whole documents.
+**Extract, don't ingest.** Source documents go to subagents for extraction; the parent assembles from extracts. Only load source documents into the parent context wholesale when no subagents are available.
 
 **Length scales with stakes.** Hobby / solo PRDs aim for about two pages. Internal tools land around five to eight. Launch and chain-top PRDs run as long as their FRs and concerns require. Whatever the length, detail that doesn't earn its place in the PRD's main narrative belongs in `addendum.md` — moving overflow there is correct; padding the PRD to look thorough is not.
 
@@ -80,7 +80,7 @@ Used by the Validate intent and at Finalize step 3.
 
 Assemble the menu: rubric walker against `{workflow.validation_checklist_template}` (the PRD quality rubric) + each entry in `{workflow.finalize_reviewers}` + any ad-hoc reviewers the artifact warrants. Stakes-calibrated — hobby/solo may run quietly or skip; higher stakes get the explicit all/subset/skip menu.
 
-Run each selected review lens in sequence against the PRD (and `addendum.md` if present). Save each review to `{doc_workspace}/review-{lens}.md`. The rubric walker uses the prompt and output format in `references/validate.md`.
+Dispatch entries as parallel subagents against the PRD (and `addendum.md` if present) using the standard prefix convention (`skill:` / `file:` / plain text). Each writes its full review to `{doc_workspace}/review-{lens}.md` and returns ONLY a compact summary (verdict, top 2-5 findings, file path) — the parent never holds full review text. The rubric walker uses the prompt and output format in `references/validate.md`. If subagents are unavailable, run sequentially: write the file *before* anything else, then flush the review from working context.
 
 Surface findings tiered, never dumped. Lead with a one-sentence gate verdict, then walk critical + high findings; medium/low roll into a single tail ("plus N more in {file}"). Read the full `review-{lens}.md` only when the user drills into a specific finding. Per finding: autofix, discuss, defer to open items, or ignore.
 
@@ -91,7 +91,7 @@ Under Validate intent, the parent additionally runs the synthesis pipeline in `r
 Tell the user the sequence in one sentence, then walk it. Polish goes last so it does not redo work after reviewer fixes.
 
 1. **Memlog audit.** Walk `.memlog.md` with the user; each entry captured in PRD, in addendum, or set aside.
-2. **Input reconciliation.** Subagent per user-supplied input against the PRD + `addendum.md`. Write each extract to `{doc_workspace}/reconcile-{input}.md` and record a compact summary (input name, gaps, file path). Surface gaps — especially qualitative ideas (tone, voice, feel) the FR structure silently drops. Must happen before polish.
+2. **Input reconciliation.** Subagent per user-supplied input against the PRD + `addendum.md`. Each writes its extract to `{doc_workspace}/reconcile-{input}.md` and returns ONLY a compact summary (input name, gaps 2-5, file path). Surface gaps — especially qualitative ideas (tone, voice, feel) the FR structure silently drops. Must happen before polish.
 3. **Reviewer pass.** Run `## Reviewer Gate`. Resolve before polish.
 4. **Triage open items.** All Open Questions, `[ASSUMPTION]` tags, `[NOTE FOR PM]` callouts. Phase-blockers (would make the PRD unsafe for UX/architecture/epics) surfaced one at a time and resolved; non-blockers deferred with owner + revisit condition logged via `memlog.py append`. If phase-blocker count is high, flag it.
 5. **Polish.** Apply `{workflow.doc_standards}` to the PRD and `addendum.md` in declared order (structural passes before prose — prose should not polish soon-to-be-cut text). Parallelize across documents, sequential within.

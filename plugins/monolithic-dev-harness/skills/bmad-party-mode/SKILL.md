@@ -11,8 +11,8 @@ Run a round-table where these agents talk to each other and to the user like rea
 
 - **Paths:** bare paths (e.g. `references/create-party.md`) resolve from `{skill-root}` (where `customize.toml` lives); `{project-root}`-prefixed paths from the project working dir. `{workflow.<name>}` resolves to `customize.toml`'s `[workflow]` table (overrides win).
 - **Scripts** (run with `sh "{skill-root}/../../bin/harness-python"`): `{project-root}/_bmad/scripts/resolve_config.py` resolves project settings; `{project-root}/_bmad/scripts/roster.py` reports the available personas; `{project-root}/_bmad/scripts/resolve_customization.py` resolves `{workflow.*}`; `{skill-root}/scripts/resolve_party.py` resolves the roster and discussion mode.
-- **File roles:** `references/party-memory.md` and `references/create-party.md` document upstream options that are disabled in this harness route.
-- **Search:** Use reliable sources for unfamiliar or time-sensitive claims. Work in the current session unless the user explicitly requests separate agents.
+- **File roles:** a party's memory is the per-party memlog at `{workflow.memory_dir}/<party>/.memlog.md`; mechanics in `references/party-memory.md`. `references/create-party.md` documents saved-party authoring, which is not part of this bundled route.
+- **Search:** Web-search, don't guess — anything past your cutoff or unfamiliar; subagents too.
 
 ## On Activation
 
@@ -28,7 +28,7 @@ Run a round-table where these agents talk to each other and to the user like rea
    - No `active_initiative`: ask once per session, before writing, whether this belongs to a named initiative or is standalone. Use the answer for this run only; do not invoke an unbundled skill or write project configuration. Standalone work drops `/{active_initiative}` from every path.
 3. **Detect intent and route.** Use the built-in session discussion mode. If the user explicitly asks to create or save a reusable party configuration, explain that configuration editing is not part of this bundled discussion route. Otherwise run the discussion — continue below.
 4. **Resolve the roster:** `sh "{skill-root}/../../bin/harness-python" {skill-root}/scripts/resolve_party.py --project-root {project-root} --skill {skill-root}`. It returns the active roster (`{workflow.default_party}` group if set, else the installed agents), the other group names (yours, the built-in ones, and any an installed module offers), `party_mode` and any scene/`open_cast`. Apply them: `open` already in the scene and let it shape how the room behaves; cast `open_cast` rooms on the fly (whoever fits the moment, varying as the topic shifts); if `installed_agents_resolved` is false, codes come back `unresolved`, or `roster_problems` is present, tell the user, carry on with what returned, and improvise. A member marked `installed: false` is an unavailable agent: voice the supplied persona if useful, and do not suggest installing extra packages. Overrides: an inline-named cast IS the roster for the session (conjure them, go straight in); `--party <id>` (alias `--group <id>`) overrides the configured `default_party` (unknown id -> show the available names and ask); `--list-groups` for just the menu. Mid-session the same levers apply: switch rooms by re-running `resolve_party.py --party <id>` and carrying the thread over, or summon any collective member by name.
-5. **Memory.** Keep this discussion in the current session; do not read or write persistent party memory.
+5. **Memory.** If `memory_enabled` (from `resolve_party.py`), follow `references/party-memory.md` for the whole run.
 6. **Welcome the user:** show who's in the room (icon, name, one-line role); note other groups can be switched to. Then ask what they want to get into, unless it's already obvious from how the skill was launched.
 7. Run each `{workflow.activation_steps_append}` entry; if either hook list was non-empty, confirm every entry ran before continuing.
 
@@ -48,21 +48,21 @@ This is the bar — strive for every one of these, every round. It's the differe
 
 ## How It Runs
 
-Use `{workflow.party_mode}` for the session, with `session` as the default. Dispatch separate agents only when the user explicitly asks for them and the host supports that mode; otherwise use `session`.
+Use `{workflow.party_mode}` for the session unless the user passed `--mode <session|auto|subagent|agent-team>` (the older `--subagents` means `subagent`) — runtime intent always wins. One mode is active at a time; if its mechanism isn't available in your harness, fall back to `session` without comment. If the host needs an explicit user instruction before starting agents, ask once at the start of the party for the whole session.
 
 **A party is interactive and open-ended.** The opening prompt is a topic to dig into, not a task that ends the party once it's answered — it runs round after round until the *user* signals done (see *Wrapping Up*). A served opening intent means *what's next?*, never *we're finished*: don't wrap up, disband the room, or end the discussion just because the first ask is satisfied. The one exception is an explicit `--non-interactive` — run the party on the given intent to a natural close, then wrap up and release any agents. That's the only non-interactive path, and only when the user asked for it.
 
 - **`session`** — voice every persona inline, one mind behind every voice. The floor every other mode degrades to; needs no extra instructions.
-- **`auto`** — voice inline by default; dispatch separate agents only when the user explicitly asks for them.
-- **`subagent`** — use only when the user explicitly asks for separate agents and the host supports them.
-- **`agent-team`** — use only when the user explicitly asks for a persistent team and the host supports it.
+- **`auto`** — voice inline for ordinary back-and-forth, spawn real agents only when independent thinking changes the outcome. Load `references/mode-auto.md` for that call; when it says to spawn, follow `references/mode-subagent.md`.
+- **`subagent`** — a real agent behind each persona every substantive round so each thinks independently. Load `references/mode-subagent.md`, favor faster cheaper models if available for each subagent.
+- **`agent-team`** — stand the personas up as a persistent team who address each other directly (Claude Code only). Load `references/mode-agent-team.md`.
 
 ## Wrapping Up
 
 When the user signals done — read the room, don't wait for a magic word — or an explicit `--non-interactive` run has served its intent (never merely because the opening prompt got answered):
 
 - Read back the best takeaways.
-- Do not save party memory or a transcript in this harness route.
+- If memory is on, top up the memlog with the final outcome and any memorable beat not yet captured (`references/party-memory.md`) — a top-up; memory accrued live.
 - Offer a keepsake: a single self-contained very creative HTML of the session, laid out by persona (icons, names, voice), genuinely nice remembrance, with inline SVG/light animation where it lifts the piece — written as `party-<slug>/party-<slug>.html` in `{workflow.output_dir}/`, `<slug>` the session's topic in kebab-case, or wherever they ask.
 - Do not offer to save new faces or groups in this harness route.
 - Run `{workflow.on_complete}` if non-empty, then drop back to normal mode.

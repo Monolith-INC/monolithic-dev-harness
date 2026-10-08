@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Bundled BMad `bmad-correct-course`, `bmad-project-context`, `bmad-deep-recon`, and
+  `bmad-qa-generate-e2e-tests`, wired into the flow: change of direction at any stage, agent
+  instruction drift found during discovery, reconnaissance for unfamiliar code or domains, and
+  end-to-end tests when a Story is done.
+- Discovery keeps a decision memlog beside the plan and offers **Deepen** (adversarial and
+  edge-case review, elicitation, party mode) as a formal option at plan approval.
+- Verify runs `bmad-review` edge-case (with claims and deletion checks) and verification-gap lenses
+  alongside `thermos`, then triages all findings in one menu.
+
+### Changed
+
+- Bundled BMad skills use subagents again for investigation, research, extraction, review lenses,
+  and party mode (`auto` by default), asking once per run when the host needs permission.
+- Discovery asks all open questions in one message with trade-offs and a recommendation, accepts
+  answers in any form, re-checks scope after the answers, and never compresses a plan to fit the
+  token budget. The approval summary lists every recorded decision instead of re-asking them.
+
 ## [0.6.2] - 2026-10-06
 
 ### Fixed

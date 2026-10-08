@@ -2,7 +2,7 @@
 title: monolithic-dev-harness Documentation
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-06
 ---
 
 # monolithic-dev-harness Documentation
@@ -41,7 +41,9 @@ docs/
 |-- 02-design/
 |   |-- api.md
 |   |-- components.md
-|   `-- workflows.md
+|   |-- workflows.md
+|   `-- specs/
+|       `-- harness-main-flow.md
 |-- 03-engineering/
 |   |-- development.md
 |   |-- testing.md
@@ -63,10 +65,13 @@ docs/
 |   |-- tech-debt.md
 |   `-- checkpoints/
 |       `-- pr-16-rework.md
-`-- 07-guides/
-    |-- onboarding.md
-    |-- user-guide.md
-    `-- troubleshooting.md
+|-- 07-guides/
+|   |-- onboarding.md
+|   |-- user-guide.md
+|   `-- troubleshooting.md
+`-- assets/
+    `-- diagrams/
+        `-- harness-main-flow.svg
 ```
 
 ## Canonical source hierarchy

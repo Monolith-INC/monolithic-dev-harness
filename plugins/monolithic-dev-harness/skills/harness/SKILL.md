@@ -13,7 +13,7 @@ enforce the rules that must never depend on the model remembering them.
 ```
  idea / work item
       │
- 0 DISCOVER ──── bmad-build: read request → investigate repository → review feature plan
+ 0 DISCOVER ──── bmad-build: read request → investigate (subagents) → plan + batched questions → Deepen → approve
       │           plan-initiative: ideate or shape a product idea when selected
       │
  1 BACKLOG ───── generate-work-item → enrich-work-item → decompose-backlog → generate-breakdown-work-items
@@ -22,11 +22,16 @@ enforce the rules that must never depend on the model remembering them.
       ├── G1  Feature Owner / PO reviews the complete batch before any tracker write
  2 TECH PLAN ─── start-ticket → write-spec (Actor-Critic)
       ├── G2  Tech Lead approves the spec
- 3 BUILD ─────── implement-story: per Task architect → tdd → implement → check → deslop → commit
- 4 VERIFY ────── review: review-story-preflight → thermos → fixes → verdict → branch-and-pr (draft)
+ 3 BUILD ─────── implement-story: per Task architect → tdd → implement → check → deslop → commit;
+      │           Story done: bmad-qa-generate-e2e-tests → prove-it-works
+ 4 VERIFY ────── review: review-story-preflight → thermos ∥ bmad-review (edge cases, claims, gaps) → triage → fixes → verdict → branch-and-pr (draft)
       ├── G3  Feature Owner validates in staging
       └── G4  a human publishes and approves the pull request
 ```
+
+A change of direction at any stage (a new constraint, a failed assumption, a rescoped goal) goes
+through `bmad-correct-course`: it assesses impact on the plan, spec, and work items, proposes the
+changes, and routes back to the earliest stage whose approved output the change invalidates.
 
 Stacked Feature work (several Stories under one Feature) runs stage 3–4 per Story inside
 `feature-implementation`, then `merge-story-stack-into-feature` and `finish-feature-development`.
@@ -140,7 +145,10 @@ and verified on resume. Onboarding prepares the BMad runtime (`_bmad/`). Do not 
 workflow infrastructure during discovery. For broad or risky
 work, BMad's `bmad-spec` (a capability contract) and `bmad-architecture` (decisions that keep
 separately built parts consistent) are available; `bmad-build` uses `bmad-prd` when the requested
-behavior is too unclear to investigate. Do not start implementation from this step. On approval, save the plan as a harness workflow
+behavior is too unclear to investigate. `bmad-build` investigates with subagents, uses `bmad-deep-recon` for
+unfamiliar code or domains, flags drift between the code and the project's agent instructions (fixed
+with `bmad-project-context`), keeps a decision memlog beside the plan, and offers **Deepen**
+(adversarial and edge-case review, elicitation, party mode) at its approval checkpoint. Do not start implementation from this step. On approval, save the plan as a harness workflow
 checkpoint and pass it to Stage 1 as the source for work-item drafting. The Stage 0 approval does
 not publish tracker items; the normal backlog review and write gates still apply.
 
@@ -228,11 +236,15 @@ constraint silently. Present its exact revision through the best available revie
 
 ## Stage 3: Build
 
-`implement-story`. One Task, one verified commit, in breakdown order.
+`implement-story`. One Task, one verified commit, in breakdown order. When the Story is done, it
+generates API and end-to-end tests for the delivered behavior with `bmad-qa-generate-e2e-tests`
+before `prove-it-works`.
 
 ## Stage 4: Verify
 
-`review`. The requirements check first, then thermos, fixes, a verdict for HEAD, and the draft PR.
+`review`. The requirements check first, then thermos alongside `bmad-review`'s edge-case and
+verification-gap lenses (the edge-case lens also falsifies the plan's claims and checks deletions),
+one triage of all findings, fixes, a verdict for HEAD, and the draft PR.
 
 ## Talking to the user
 
