@@ -86,9 +86,22 @@ def writes_code(
     ):
         for path in paths:
             relative = _inside(path, base)
-            if relative is not None and is_code(relative, patterns, tree, planning):
+            if escapes_checkout(path, base) or (
+                relative is not None and is_code(relative, patterns, tree, planning)
+            ):
                 return True
     return False
+
+
+def escapes_checkout(path: str, root: Path | None) -> bool:
+    """A path through this checkout must not exempt a symlink's external destination."""
+    match root:
+        case None:
+            return False
+        case Path() as base:
+            return (base / Path(path).expanduser()).is_relative_to(base) and not (
+                base / Path(path).expanduser()
+            ).resolve().is_relative_to(base)
 
 
 def _inside(path: str, base: Path | None) -> str | None:

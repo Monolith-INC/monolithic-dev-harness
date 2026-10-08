@@ -45,3 +45,27 @@ last_reviewed: 2026-10-08
    but explicitly does not test live capture. Rollback archive is held privately under
    `/tmp/harness-planning-install-backup-*`; do not publish it. Desktop restart and the real trial
    remain outstanding; neither the draft PR nor these checks establish desktop acceptance.
+9. **PR Thermos findings fixed.** Verified both P2 findings against PR head `7a66b90`.
+   Checkout paths that resolve through symlinks outside the root now retain code enforcement
+   for edits and shell writes, including absolute paths through the checkout and explicit globs.
+   Ordinary completion reuses its loaded item/artifacts and resolves only the active session;
+   mismatched task bindings still fail. Added escaping-symlink and single-read regressions.
+   Delivery/core verification passed 154 tests and 31 subtests. Ruff lint/format, repository
+   checks and whitespace checks passed. Both independent reviewers found no remaining blockers.
+   The installed trial build remains `774a484`; these corrections need installation before
+   conducting acceptance. No live Desktop capture or application implementation occurred.
+10. **Staging false positive.** The installed `hook-entry` detector rejected Git index staging
+    because an argument named a hook source file. Added a narrow noninteractive staging exception
+    for `git add`, directory selection and `core.filemode=false`. Editor/interactive/unknown flags
+    and commands changing their environment do not receive this exception. Only plain Git-only
+    invocations qualify; shell launchers, sourced configuration and heredoc execution do not.
+    The shared shell reader checks normalized words before unwrapping, including quoted names
+    and absolute env wrappers.
+    Direct execution, copying, chained execution, substitutions and executable configuration
+    remain protected. Added regression cases; combined security/startup/delivery/core checks
+    passed 226 tests and 160 subtests. Ruff lint/format, repository and whitespace checks passed.
+    Tracker enforcement was paused on the user's explicit skip-tracker request; other rules
+    remain active. Security re-review cleared the correction after 20 staging positives and
+    20 execution/environment negatives. The supported Codex installer loaded the reviewed
+    workspace; installed detector and shell-reader files match. Desktop restart remains required
+    before live acceptance; the installer log is `/tmp/harness-planning-thermos-install.log`.

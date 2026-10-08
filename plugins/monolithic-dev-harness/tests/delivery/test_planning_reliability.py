@@ -3,7 +3,7 @@
 import json
 from dataclasses import replace
 from types import SimpleNamespace
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -78,13 +78,11 @@ def test_planning_completion_needs_no_checkout_session(tmp_path):
     ops, marker, artifact = receipt_fixture()
     with patch.object(
         hook_runtime,
-        "_session_item",
+        "_active_session",
         side_effect=AssertionError("implementation session requested"),
     ):
         assert isinstance(
-            hook_runtime._completion_route(
-                tmp_path, ops, marker, marker.id, (artifact,)
-            ),
+            hook_runtime._completion_route(tmp_path, ops, marker, (artifact,)),
             Ok,
         )
 
@@ -139,11 +137,11 @@ def test_implementation_completion_still_requires_session(tmp_path):
     ops, marker, _ = receipt_fixture()
     with patch.object(
         hook_runtime,
-        "_session_item",
+        "_active_session",
         return_value=Err(hook_runtime._failure("missing session")),
     ):
         assert isinstance(
-            hook_runtime._completion_route(tmp_path, ops, marker, marker.id, ()), Err
+            hook_runtime._completion_route(tmp_path, ops, marker, ()), Err
         )
 
 
@@ -206,19 +204,90 @@ def test_shell_symlink_to_source_needs_code_context(tmp_path):
     )
 
 
+@pytest.mark.parametrize("absolute", [False, True])
+@pytest.mark.parametrize("patterns", [None, ["lib/**/*.dart"]])
+def test_external_symlink_needs_code_context(tmp_path, absolute, patterns):
+    from scripts.policy import CanonicalToolEvent
+    from tests.settings_fixture import write_settings
+
+    root = tmp_path / "project"
+    root.mkdir()
+    write_settings(root, artifacts_path="docs/planning")
+    (root / "docs/planning").mkdir(parents=True)
+    (tmp_path / "external.dart").write_text("source")
+    (root / "docs/planning/draft.md").symlink_to(tmp_path / "external.dart")
+    path = (
+        str(root / "docs/planning/draft.md") if absolute else "docs/planning/draft.md"
+    )
+    with patch.object(hook_runtime, "_code_patterns", return_value=patterns):
+        assert hook_runtime._edits_code(
+            CanonicalToolEvent(
+                client="codex",
+                tool_name="Edit",
+                kind="edit",
+                file_path=path,
+                workspace_root=str(root),
+            )
+        )
+    assert writes_code(f"echo x > {path}", root, patterns, "docs/planning")
+
+
+@pytest.mark.parametrize("session_item,denied", [("T2", False), ("OTHER", True)])
+def test_ordinary_completion_reads_tracker_once(tmp_path, session_item, denied):
+    from scripts.policy import CanonicalToolEvent
+
+    _, item, _ = receipt_fixture()
+    ops = SimpleNamespace(
+        get_work_item=Mock(return_value=Ok(item)),
+        list_artifacts=Mock(
+            return_value=Ok(
+                tuple(
+                    ArtifactRef(kind, kind, kind, "1")
+                    for kind in ("resolution_report", "verification", "pull_request")
+                )
+            )
+        ),
+    )
+    with (
+        patch.object(hook_runtime, "_enforced", return_value=True),
+        patch.object(
+            hook_runtime.registry, "open_selected", return_value=Ok(ops)
+        ) as opened,
+        patch.object(
+            hook_runtime,
+            "_active_session",
+            return_value=Ok(SimpleNamespace(work_item=session_item)),
+        ),
+        patch.object(hook_runtime.settings, "load", return_value={}),
+    ):
+        assert (
+            hook_runtime._evaluate_completion(
+                CanonicalToolEvent(
+                    client="codex",
+                    tool_name="update",
+                    kind="other",
+                    workspace_root=str(tmp_path),
+                ),
+                item.id,
+            ).is_denied()
+            is denied
+        )
+    opened.assert_called_once()
+    ops.get_work_item.assert_called_once_with(item.id)
+    ops.list_artifacts.assert_called_once_with(item.id)
+
+
 def test_corrected_receipt_supersedes_prior_revision(tmp_path):
     ops, marker, receipt = receipt_fixture()
     old = replace(receipt, content="bad", revision="1")
     corrected = replace(receipt, id="A2", revision="2")
     assert isinstance(
-        hook_runtime._completion_route(
-            tmp_path, ops, marker, marker.id, (old, corrected)
-        ),
+        hook_runtime._completion_route(tmp_path, ops, marker, (old, corrected)),
         Ok,
     )
     assert isinstance(
         hook_runtime._completion_route(
-            tmp_path, ops, marker, marker.id, (old, replace(corrected, revision="1"))
+            tmp_path, ops, marker, (old, replace(corrected, revision="1"))
         ),
         Err,
     )

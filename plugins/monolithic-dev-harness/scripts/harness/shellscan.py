@@ -441,6 +441,20 @@ def invocations(command: str, cwd: str | None = "", depth: int = 0) -> list[Invo
     return found
 
 
+def plain_git_context(command: str) -> bool:
+    """Staging exemptions require Git-only calls with no environment-changing wrappers."""
+    return all(
+        invocation.name == "git" for invocation in invocations(command)
+    ) and not any(
+        _ASSIGNMENT.match(word)
+        or posixpath.basename(word)
+        in {"env", "export", "declare", "typeset", "local", "setenv"}
+        for _, segment, _ in _segments(command)
+        if segment is not None
+        for word in segment.words
+    )
+
+
 def _dispatched(invocation: Invocation, depth: int = 0) -> list[Invocation]:
     """Commands another command runs for it: `sh -c`, `eval`, `xargs`, `find -exec`."""
     name, args = invocation.name, list(invocation.args)

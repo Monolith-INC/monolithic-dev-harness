@@ -23,7 +23,7 @@ from host_adapters.hook_bridge import project_root_hint, should_emit_allow
 from integrations import branches, registry
 from integrations.contracts import LogicalState, TrackerOps, WorkItem
 from policy import CanonicalToolEvent, PolicyDecision
-from policy.commands import git_commands, is_code, writes_code
+from policy.commands import escapes_checkout, git_commands, is_code, writes_code
 from policy.git_branch_guard import evaluate_git_branch_guard
 
 LOG_FILE = "/tmp/harness_hook_debug.log"
@@ -168,12 +168,12 @@ def _is_code_path(file_path: str, workspace_root: str) -> bool:
         try:
             relative = path.resolve().relative_to(root).as_posix()
         except ValueError:
-            return False
+            return escapes_checkout(file_path, root)
     else:
         try:
             relative = (root / path).resolve().relative_to(root).as_posix()
         except ValueError:
-            return False
+            return escapes_checkout(file_path, root)
     return is_code(
         relative,
         _code_patterns(workspace_root),
@@ -367,9 +367,7 @@ def _evaluate_completion(event: CanonicalToolEvent, ref: str) -> PolicyDecision:
                 ops.get_work_item(ref),
                 lambda item: bind(
                     ops.list_artifacts(item.id),
-                    lambda artifacts: _completion_route(
-                        root, ops, item, ref, artifacts
-                    ),
+                    lambda artifacts: _completion_route(root, ops, item, artifacts),
                 ),
             ),
         )
@@ -377,7 +375,7 @@ def _evaluate_completion(event: CanonicalToolEvent, ref: str) -> PolicyDecision:
 
 
 def _completion_route(
-    root: Path, ops: TrackerOps, item: WorkItem, ref: str, artifacts: tuple
+    root: Path, ops: TrackerOps, item: WorkItem, artifacts: tuple
 ) -> Result[object]:
     from policy.planning_completion import current, verify
 
@@ -390,28 +388,27 @@ def _completion_route(
             )
         case ():
             return bind(
-                _session_item(root),
-                lambda found: _complete(found[0], found[1], found[2], ref),
+                _active_session(root),
+                lambda session: _complete(session, item, artifacts),
             )
         case receipts:
             return bind(current(receipts), lambda receipt: verify(ops, item, receipt))
 
 
 def _complete(
-    session: sessions.Session, ops: TrackerOps, item: WorkItem, ref: str
+    session: sessions.Session, item: WorkItem, artifacts: tuple
 ) -> Result[None]:
-    if ref.strip().upper() not in {item.id.upper(), item.key.upper()}:
-        return Err(
-            _failure(
-                f"this checkout's session is for {item.key}; {ref} is completed from its own session."
+    match session.work_item.strip().upper() in {item.id.upper(), item.key.upper()}:
+        case False:
+            return Err(
+                _failure(
+                    f"this checkout's session is for {session.work_item}; {item.key} is completed from its own session."
+                )
             )
-        )
-    return bind(
-        ops.list_artifacts(item.id),
-        lambda found: _completion_evidence(
-            item, {_artifact_kind(a.kind) for a in found}
-        ),
-    )
+        case True:
+            return _completion_evidence(
+                item, {_artifact_kind(a.kind) for a in artifacts}
+            )
 
 
 def _completion_evidence(item: WorkItem, kinds: set[str]) -> Result[None]:
