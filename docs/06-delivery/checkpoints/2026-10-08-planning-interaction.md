@@ -39,3 +39,9 @@ last_reviewed: 2026-10-08
 7. **Live acceptance remains pending.** Prepared a rollback archive before installation.
    Subprocess routing tests do not prove desktop capture. The next trial must use the fresh
    project as the actual chat workspace after a desktop restart, stopping before app code.
+8. **Committed and installed.** Pushed source revision `774a484` and opened draft PR 37.
+   Supported Codex installation completed; 585 unchanged source files match the cache, and the
+   installer-generated `.mcp.json` matches its staged Codex configuration. Doctor reports healthy
+   but explicitly does not test live capture. Rollback archive is held privately under
+   `/tmp/harness-planning-install-backup-*`; do not publish it. Desktop restart and the real trial
+   remain outstanding; neither the draft PR nor these checks establish desktop acceptance.

@@ -7,6 +7,9 @@ last_reviewed: 2026-10-08
 
 # Direct-workspace acceptance
 
+Harness source under test: `774a48488da83d0b2ebcdfe177206b4701325e58`.
+Installed through the supported Codex installer on 2026-10-08; desktop restart remains required.
+
 Project: `/home/monolith/projects/monolithic-dev-harness/temp/test-000/project`.
 Evidence: `/home/monolith/projects/monolithic-dev-harness/docs/06-delivery/acceptance/planning-interaction/`.
 Mode: interactive Codex desktop, in a chat actually rooted at this project. Do not use a parent
