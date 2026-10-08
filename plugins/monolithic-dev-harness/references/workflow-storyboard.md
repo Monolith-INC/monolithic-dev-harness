@@ -90,10 +90,11 @@ implementation checkout.
 An artifact decision identifies the exact path and content digest. Present the material needed to decide through the best available host surface: interactive canvas/document/editor, native rendered preview, an actually opened file with a structured summary, then faithful inline review. A link or summary alone is insufficient. The user sees the material before the approval question. A changed digest invalidates the decision.
 
 An external tracker or source-control write still needs the existing approval hook. State precisely
-what will be written and ask with an `--approval` menu (`Approve` / `Not now`). The human's click
-or typed `Approve` opens the write window; nothing else does. An approval for unchanged content is
-reused while its window is open and asked again once it closes. A routing choice, Back, Pause,
-Resume, Cancel, or Complete never opens a write window.
+what will be written and ask the matching approval gate (`Approve` / `Not now`). The human's click
+or typed `Approve` opens an approval tied to what was reviewed: the drafts, the spec, one item,
+one branch, or one pull request. It holds until revoked, until the work session ends, or until that
+context changes; then the agent explains what changed and asks again. Nothing else opens one. A
+routing choice, Back, Pause, Resume, Cancel, or Complete never opens a write window.
 
 ## Language and setup
 

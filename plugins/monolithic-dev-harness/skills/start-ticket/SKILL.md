@@ -15,8 +15,9 @@ that this skill is unavailable until `/resume-tracker` restores it.
    local-only, verify the user explicitly chose that consequence. Complete missing breakdown first.
 2. Check out the work item's branch, named by `branch_template` in `.harness/settings.json` with the
    id in the form the tracker's `ids.branch_key` accepts (`branch-and-pr` → *Branch*).
-3. Move the item to `in_progress` with `tracker_transition_work_item` (a tracker write: it needs an
-   approval window).
+3. Move the item to `in_progress` with `tracker_transition_work_item`. It is a tracker write: ask the
+   `move-item` gate with `--value item=<title>`, `--value status=<in-progress name>`, and
+   `--value ref=<id>` first.
 4. Bind it to this checkout: `harness session start <work item>`. The command refuses when the
    branch carries a different id or the checkout already has an open session. Governed code
    changes are refused until a session is active; `harness session pause` / `resume` / `close`

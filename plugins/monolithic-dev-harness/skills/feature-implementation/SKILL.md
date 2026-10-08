@@ -24,7 +24,7 @@ skill is unavailable until `/resume-tracker`.
 1. **Read the Feature.** Fetch the Feature and its child Stories through the tracker. Confirm each
    Story's acceptance criteria and state, and the stack order (which Story builds on which).
 2. **Plan.** Publish an implementation plan on the Feature as a tracker artifact: the Stories in
-   stack order and what each one delivers. Publishing is a tracker write: approval batch.
+   stack order and what each one delivers. Publishing is a tracker write: the `publish-items` approval.
 3. **Create the Feature branch** from the base branch, named with the branch template selected at
    bootstrap (`branch_template` in `.harness/settings.json`). If the user wants a
    different name, ask; do not invent one.

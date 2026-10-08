@@ -799,21 +799,48 @@ def _answer_decision(
                 questions.approval_id(str(found["id"])),
                 str(found.get("question", "")),
                 conversation_scope,
+                decisions.approval_binds(found),
             )
         )
     return notes
 
 
 def _open_approval(
-    repo: Path, approval_id: str, question: str, scope: str | None
+    repo: Path,
+    approval_id: str,
+    question: str,
+    scope: str | None,
+    binds: dict[str, Any] | None = None,
 ) -> str:
-    """Open a window for the conversation that approved; it covers only that work session."""
+    """Open an approval for the conversation that approved; it covers only that work session.
+
+    A gate's approval is tied to what the human reviewed and lasts until it changes; a general one
+    is a short window.
+    """
     window = _window(repo)
-    state.open_approval(repo, approval_id, window, question, work_session_id=scope)
+    state.open_approval(
+        repo, approval_id, window, question, work_session_id=scope, binds=binds
+    )
+    lasts = (
+        "holds until it is revoked, the work session ends, or what was reviewed changes. "
+        "If it changes, tell the user what changed and ask again"
+        if binds
+        else f"is open for {window} minutes"
+    )
     return (
-        f"[harness] the user approved; approval {approval_id} is open for {window} minutes. "
+        f"[harness] the user approved; approval {approval_id} {lasts}. "
         "Make only the writes the question described."
         + _pin_approved_notes(repo, approval_id)
+    )
+
+
+def _answered_binds(repo: Path, scope: str | None, key: str) -> dict[str, Any] | None:
+    """The context of the gate this native answer resolved, when it was a prepared gate."""
+    record = decisions.record(repo, scope) or {}
+    return (
+        decisions.approval_binds(record)
+        if record.get("id") == key and record.get("status") == "answered"
+        else None
     )
 
 
@@ -903,7 +930,11 @@ def _apply_marker(
     if approved is None:
         return None
     return _open_approval(
-        repo, questions.approval_id(marker_id), approved[0], conversation_scope
+        repo,
+        questions.approval_id(marker_id),
+        approved[0],
+        conversation_scope,
+        _answered_binds(repo, decision_scope, marker_id),
     )
 
 

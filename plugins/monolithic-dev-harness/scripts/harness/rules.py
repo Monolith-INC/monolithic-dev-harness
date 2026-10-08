@@ -15,6 +15,7 @@ history-preserved   Branch history is never rewritten: no rebase, squash merge, 
 
 from __future__ import annotations
 
+import hashlib
 import os
 import posixpath
 import re
@@ -22,6 +23,8 @@ from dataclasses import dataclass, field
 from fnmatch import fnmatch
 from pathlib import Path
 from typing import Any
+
+from core.result import Ok
 
 from . import gitstate, globs, sessions, shellscan, state, tracker_policy
 from .settings import Settings
@@ -640,25 +643,147 @@ def _branch_paths(repo: Path, base: str) -> list[str]:
         return []
 
 
+# What a remote write is about: ("branch", name), ("pr", ref), ("item", ref) for an existing work
+# item, ("tracker", "") for a new one, or ("general", "").
+Target = tuple[str, str]
+_BRANCH_WRITES = frozenset({"scm_create_pull_request"})
+_PR_WRITES = frozenset({"scm_reply_to_thread", "scm_link_work_item"})
+# Pausing enforcement is a general permission: only a short general window covers it.
+_GENERAL_WRITES = frozenset({"workflow_skip_tracker"})
+
+
+def write_targets(call: ToolCall, repo: Path) -> tuple[Target, ...]:
+    """Every target a remote write touches, so an approval can be matched to its context."""
+    if call.kind == "shell":
+        return tuple(
+            ("branch", branch)
+            for directory, argv in git_invocations(
+                call.command, _shell_start(call, repo)
+            )
+            if argv and argv[0] == "push"
+            for branch in _pushed_branches(argv[1:], _git_dir(repo, directory))
+        )
+    if call.name in _BRANCH_WRITES:
+        return (("branch", str(call.tool_input.get("sourceBranch", ""))),)
+    if call.name in _PR_WRITES:
+        return (("pr", str(call.tool_input.get("pullRequestRef", ""))),)
+    if call.name in _GENERAL_WRITES:
+        return (("general", ""),)
+    return tuple(("item", ref) for ref in referenced_values(call.tool_input)) or (
+        ("tracker", ""),
+    )
+
+
+def _git_dir(repo: Path, directory: str | None) -> Path:
+    if not directory:
+        return repo
+    return Path(directory) if Path(directory).is_absolute() else repo / directory
+
+
+def _pushed_branches(args: list[str], where: Path) -> tuple[str, ...]:
+    """Branches a `git push` updates: its refspecs' destinations, else the current branch."""
+    positional = [arg for arg in args if not arg.startswith("-")]
+    refspecs = positional[1:]
+    if refspecs:
+        return tuple(
+            spec.lstrip("+").rsplit(":", 1)[-1].removeprefix("refs/heads/")
+            for spec in refspecs
+        )
+    try:
+        return (
+            gitstate.git(where, "symbolic-ref", "--quiet", "--short", "HEAD").strip(),
+        )
+    except gitstate.GitError:
+        return ("",)
+
+
+def _context_unchanged(repo: Path, binds: dict[str, Any]) -> bool:
+    for name, digest in binds.get("artifacts", ()):
+        path = repo / str(name)
+        try:
+            current = hashlib.sha256(path.read_bytes()).hexdigest()
+        except OSError:
+            return False
+        if current != digest:
+            return False
+    return True
+
+
+def _covers(record: dict[str, Any], target: Target) -> bool:
+    """Whether one open approval's context covers one write target (content not yet checked)."""
+    binds = record.get("binds")
+    if not isinstance(binds, dict) or not binds:
+        return True  # a general window covers any write while it lasts
+    kind, value = target
+    match binds.get("target"):
+        case [bound_kind, bound_value]:
+            return (bound_kind, bound_value) == (kind, value) and bool(value)
+        case _:
+            # Reviewed content with no target (drafts, an approved spec) covers tracker writes.
+            return kind in ("tracker", "item")
+
+
+def _session_ended(repo: Path, work_session_id: str | None) -> bool:
+    """Approvals end with their work session: a stopped or completed one covers nothing."""
+    if work_session_id is None:
+        return False
+    from . import work_sessions
+
+    match work_sessions.select(repo, work_session_id):
+        case Ok(session):
+            return session.status in (
+                work_sessions.Status.STOPPED,
+                work_sessions.Status.COMPLETE,
+            )
+        case _:
+            return True
+
+
+def covering_approval(
+    call: ToolCall, repo: Path, work_session_id: str | None
+) -> tuple[tuple[Path, dict[str, Any]] | None, bool]:
+    """The open approval whose context covers every target of this write, and whether an
+    approval for the same target exists but its reviewed content has since changed."""
+    targets = write_targets(call, repo) or (("tracker", ""),)
+    if _session_ended(repo, work_session_id):
+        return None, False
+    stale = False
+    for path, record in state.open_approvals(repo, work_session_id):
+        if not all(_covers(record, target) for target in targets):
+            continue
+        if _context_unchanged(repo, record.get("binds") or {}):
+            return (path, record), False
+        stale = True
+    return None, stale
+
+
 def rule_approval_required(
     call: ToolCall,
     repo: Path,
     policy: TrackerPolicy,
     work_session_id: str | None = None,
 ) -> Decision:
-    return (
-        Decision.deny(
-            "approval-required",
-            f"`{call.name}` writes to the tracker/SCM and no approval window is open. Tell the user in plain "
-            "words what will be written, then ask one question with an `Approve` option and a `Not now` "
-            "option; their click opens the window. Where questions cannot be asked (Cursor), give the "
-            "batch an id such as HB-7Q2K and ask them to reply `approve HB-7Q2K`. You cannot open the "
-            "window yourself.",
-        )
-        if is_remote_write(call, policy)
-        and state.active_approval(repo, work_session_id) is None
-        else Decision.allow()
-    )
+    if not is_remote_write(call, policy):
+        return Decision.allow()
+    match covering_approval(call, repo, work_session_id):
+        case (_, _), _:
+            return Decision.allow()
+        case None, True:
+            return Decision.deny(
+                "approval-required",
+                f"`{call.name}` is covered by an earlier approval, but what the user reviewed has "
+                "changed since. Tell the user in plain words what changed, then ask for approval "
+                "again for the current content. You cannot approve it yourself.",
+            )
+        case _:
+            return Decision.deny(
+                "approval-required",
+                f"`{call.name}` writes to the tracker/SCM and no approval covers it. Tell the user in "
+                "plain words what will be written, then ask the matching approval gate "
+                "(`harness decision present --gate ...`), which ties the approval to that content "
+                "or target. Where questions cannot be asked (Cursor), give the batch an id such as "
+                "HB-7Q2K and ask them to reply `approve HB-7Q2K`. You cannot approve it yourself.",
+            )
 
 
 def rule_generated_files(call: ToolCall, repo: Path, settings: Settings) -> Decision:
@@ -873,7 +998,7 @@ def evaluate(
         Decision.allow(),
     )
     approval = (
-        state.active_approval(repo, work_session_id)
+        covering_approval(call, repo, work_session_id)[0]
         if decision.allowed and is_remote_write(call, policy)
         else None
     )

@@ -184,17 +184,7 @@ publish tracker items.
 
 When the request names an existing task or ticket, follow the storyboard directly; do not ask whether
 to investigate or draft new work items. When the request is a feature idea with no clear starting
-point, ask this one structured question:
-
-- Header: `Starting point`
-- Question: `What would you like to do with this idea?`
-- Option `Investigate first`: `Review the repository and prepare a technical implementation plan.`
-- Option `Draft work items`: `Use the request as provided and prepare work items now.`
-- Option `Explore the idea`: `Shape or challenge the idea before planning the technical work.`
-
-Use the host adapter's supported blocking presentation or chat-and-wait fallback. Do not add an `Other` option; the Codex question UI supplies its default free-text field.
-Prepare this routing decision with `harness decision present --allow-free-text`; for a direct Codex
-control use id `starting_point`. The existing `plain-questions` hook validates the question before
+point, ask the `starting-point` gate: `harness decision present --gate starting-point`. The existing `plain-questions` hook validates the question before
 display. Use the available native control. If delivery fails, quietly run `harness decision fallback`
 and re-ask the same question by the next method, including ordinary chat when needed. Preserve
 the choices and progress and continue this same run after the reply; do not abandon it or expose
@@ -256,10 +246,10 @@ them:
 - Plain words. No file names, code, rule names, tool names, or batch ids unless they ask. Describe
   what a thing does instead ("the setting that hides local files from git").
 - Ask in one of two shapes only ([human-decisions.md](../../references/human-decisions.md)): a
-  **menu** through `harness decision present` (one choice, up to three options, each with
-  `--detail` saying what happens for them and the `--recommended` one marked), or a **question
-  batch** (every open question in one chat message, each with options and a recommendation).
-  Never ask batch questions one at a time.
+  **menu** through `harness decision present` (a standard question by its `--gate`, ready in the
+  project's language; a one-off question with `--question`, `--option`, `--detail`, and
+  `--recommended`), or a **question batch** (every open question in one chat message, each with
+  options and a recommendation). Never ask batch questions one at a time.
 - Every turn ends with a menu, a question batch, or a `Next:` line followed by continued work.
 - Apply `generate-plain-language-documentation` writing rules to labels, questions, updates, and
   artifact summaries as an inline prose pass; do not run its standalone intake for every message.
@@ -272,22 +262,33 @@ asks several things, or needs the harness's vocabulary to understand.
 ## The approval protocol (every tracker or SCM write)
 
 Hook `approval-required` blocks every write to a tracker or SCM (work items, links, comments, pull
-requests, threads, branches, `git push`) unless the user has opened an approval window. To open one:
+requests, threads, branches, `git push`) unless an approval covers it. Approvals come only from the
+standard approval gates in `config/gates.toml`; each is tied to what the user reviewed:
+
+| Write | Gate | Tied to | Pass |
+| --- | --- | --- | --- |
+| Create, update, or link items from reviewed drafts | `publish-items` | the drafts | `--artifact` per draft, `--value count=`, `--value tracker=` |
+| Move one existing item (start a Story, finish a Feature) | `move-item` | that item | `--value item=`, `--value status=`, `--value ref=` |
+| Build from a spec (Task transitions, publishing the spec) | `approve-spec` | the spec | `--artifact` the spec |
+| Push a branch and open its draft pull request | `publish-branch` | that branch | `--value branch=` |
+| Reply on or link to a pull request | `reply-pr` | that pull request and the reviewed replies | `--artifact`, `--value pr=` |
+| Pause tracker checks | `pause-tracking` | nothing: a short general window | — |
 
 1. Say in plain words what will be written: which items, with their titles, and what changes.
-2. Present the complete relevant artifact or batch through the best available host surface. Ask one
-   `--approval` menu with two options, labelled exactly `Approve` and `Not now`, passing the batch
-   with `--artifact`. The human's click or typed `Approve` opens the window for
-   `approvals.window_minutes` (default 20). The window covers only the work session it was opened
-   in; another session needs its own approval. Asking again for the same unchanged batch while the
-   window is open returns the earlier approval instead of a new question.
-3. Make only the writes you described. Anything new needs a new question.
+2. Present the complete relevant artifact or batch through the best available host surface, then
+   ask the gate: `harness decision present --gate <id> --value ... --artifact ...`. The harness
+   shows it in the project's language; never word or translate an approval yourself.
+3. The user's click or typed `Approve` opens the approval. It holds until the user revokes it, the
+   work session ends, or what it is tied to changes (an edited draft or spec, another branch, item,
+   or pull request). It covers only that work session. Asking the same gate again for the same,
+   unchanged content returns the earlier approval instead of a new question.
+4. Make only the writes you described. When the hook reports that the reviewed content changed,
+   tell the user what changed and ask the gate again.
 
-If a native control is unavailable, the menu falls back to chat: show the review and the returned
-`menu`, end the turn, and wait for the real human reply; do not write while approval is pending.
-`harness revoke` closes a window early.
+Where questions cannot be asked (Cursor without a menu), a typed `approve HB-…` still opens a
+general window of `approvals.window_minutes` (default 20). `harness revoke` ends approvals early.
 
-You cannot open the window yourself: approvals are recorded only from the user's own prompt or
+You cannot approve anything yourself: approvals are recorded only from the user's own prompt or
 click, a question that arrives with answers already filled in is refused, and hook `human-owned`
 blocks any agent write to the records. Gates G1, G2, and G4 map to these approvals.
 

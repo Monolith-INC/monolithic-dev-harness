@@ -12,9 +12,9 @@ tools, which work the same on Azure Repos and GitHub (`scm.name` in `.harness/se
 
 Branch creation belongs to implementation after the user has reviewed the plan and a tracker item
 exists. Do not create a branch or start a session during bootstrap, discovery, or ideation. If a
-decision or approval is needed, use the host's clickable question control. In the Codex editor,
-call `request_user_input` with selectable options; in the desktop app use
-the adapter's asynchronous buttons with the turn kept open while waiting when blocking controls are unavailable; use chat when no button tool is available. For Codex asynchronous buttons, keep the turn open with interruptible waits until the actual answer.
+decision or approval is needed, ask it as a menu ([human-decisions.md](../../references/human-decisions.md)):
+a standard gate where one exists, which the harness presents through the host's best control and
+falls back to chat on its own.
 
 1. The working tree is clean, or its changes are explicitly handled.
 2. Branch name: the repository's convention from `.harness/settings.json` →
@@ -32,7 +32,7 @@ Preconditions, all enforced by hooks:
 
 - the review stage recorded a `ready` verdict for HEAD (`draft-reviewed-prs`);
 - every applicable check passed for HEAD's tree (`draft-reviewed-prs`);
-- an approval window is open (`approval-required`): say in plain words what will be pushed and opened, and ask the user to approve it (the harness skill's approval protocol).
+- an approval covers this branch (`approval-required`): say in plain words what will be pushed and opened, then ask the `publish-branch` gate with `--value branch=<branch>` (the harness skill's approval protocol). It covers pushing that branch and opening its draft pull request.
 
 Then:
 

@@ -148,7 +148,7 @@ Present title, requirements, acceptance criteria, spec path, and draft path in c
 
 ## PHASE 5 — GATE & DESTINATION
 
-**── GATE —** WAIT for explicit approval (`proceed`, `create it`, `go ahead`) before any write.
+**── GATE —** Before any tracker write, ask the `publish-items` approval gate with the drafts as `--artifact`s (see the harness skill's approval protocol).
 Silence is not approval.
 
 Then ask **where to persist** (if the user has not already chosen):

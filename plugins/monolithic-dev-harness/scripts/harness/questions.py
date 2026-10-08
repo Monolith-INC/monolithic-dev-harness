@@ -315,7 +315,12 @@ def _answer_for(question: dict[str, Any], answers: Any) -> str | None:
 
 def choice_label(value: str) -> str:
     """Normalize Codex's recommended-option suffix while preserving the choice label."""
-    return re.sub(r"\s*\(recommended\)\s*$", "", value, flags=re.IGNORECASE).strip()
+    return re.sub(
+        r"\s*\((recommended|recomendado|recomendada)\)\s*$",
+        "",
+        value,
+        flags=re.IGNORECASE,
+    ).strip()
 
 
 _ORDINALS = {

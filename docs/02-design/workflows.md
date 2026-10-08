@@ -229,15 +229,20 @@ agent                          you                      prompt hook          pre
 ```
 
 The agent cannot open a window: approval records are human-owned. `harness revoke` closes windows.
-In Claude and Codex the agent asks with an `Approve` / `Not now` menu instead of a batch id; the
-click or a typed `Approve` opens the window the same way. Asking again for the same unchanged batch
-while the window is open returns the earlier approval instead of a second question.
+In Claude and Codex the agent asks a standard approval gate (`Approve` / `Not now`) instead of
+quoting a batch id; the click or a typed `Approve` opens the approval. A gate's approval is tied to
+what was reviewed (the drafts or spec, one item, one branch, or one pull request) and has no time
+limit: it holds until revoked, until its work session ends, or until that context changes, and then
+the agent explains what changed and asks again. A typed `approve HB-…` is a general approval and
+keeps the short window. See ADR-0003.
 
 ## Asking the human
 
 Every question is a **menu** (`harness decision present`: one choice, up to three options with what
 each means, the recommended one marked) or a **question batch** (all open questions in one chat
-message). A menu uses the best native control the host offers and falls back silently to the same
+message). Standard questions come from the catalog in `config/gates.toml`, written in English and
+Brazilian Portuguese; the agent names the gate and the harness shows the project's language
+(ADR-0011). A menu uses the best native control the host offers and falls back silently to the same
 numbered menu in chat. Replies are matched loosely on every transport (`2`, `the second`, the label,
 a unique part of it), but a loose reply never selects an approving option unless it says "approve".
 An answer about unchanged content is reused rather than asked again. The full contract is

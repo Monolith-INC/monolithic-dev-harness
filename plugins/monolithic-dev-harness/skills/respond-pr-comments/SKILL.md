@@ -17,7 +17,9 @@ That means:
 
 - It does not decide which comments to accept. `triage-pr-comments` produces the analysis; the user
   decides.
-- It does not post a reply the user has not approved.
+- It does not post a reply the user has not approved. Before posting, show the replies and ask the
+  `reply-pr` gate with the reply drafts as `--artifact` and `--value pr=<number>`; that approval
+  covers only that pull request and only those unchanged replies.
 - It does not implement a change the user has not asked for.
 - It does not act on remaining comments after handling the ones it was asked to handle.
 

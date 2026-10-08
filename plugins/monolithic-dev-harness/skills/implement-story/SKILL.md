@@ -24,7 +24,7 @@ also blocks governed writes without the spec.
    `adopt-existing-implementation`; do not manufacture TDD history or reconstruct commits by swapping
    partial file versions through the working tree.
 1. `start-ticket` on the Story: it confirms the tracker item, moves it to in progress (a tracker write:
-   ask for the approval batch), and returns the spec plan.
+   ask the `move-item` gate), and returns the spec plan.
 2. `branch-and-pr` → *Branch* section: create the Story branch from the fresh base.
 3. Read the repository routing (`AGENTS.md` → subproject router) once, and list the rules that apply
    to this Story (state management, layer boundaries, localization, PII masking, generated code,
@@ -45,8 +45,8 @@ one starts.
 6. **Commit** atomically (`commit-prep`): one Task, one commit, with a message that names the Task
    id. The hooks block commits that lack tests (`tests-with-code`), edit generated files (`generated-files`), or touch a guarded
    path without evidence (`guarded-paths`). Fix the cause; never work around the hook.
-7. **Transition the Task** to done in the tracker (an approval batch; group several Tasks into one
-   batch when they finish together).
+7. **Transition the Task** to done in the tracker. The `approve-spec` approval covers it while the
+   spec is unchanged; if the hook reports the spec changed, show what changed and ask again.
 
 ## 2. Story done
 

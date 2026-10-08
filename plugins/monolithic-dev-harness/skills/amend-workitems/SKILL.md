@@ -70,8 +70,8 @@ Produce a consolidated preview containing, for every selected placement:
 - backup location and source revisions.
 
 Re-read current revisions immediately before the approval prompt. If any revision changed since
-the scan, refresh that node and rebuild the affected proposal. Request explicit approval through
-the UI. Cancellation or rejection ends the run without writes.
+the scan, refresh that node and rebuild the affected proposal. Request approval with the `publish-items` approval gate with the drafts as `--artifact`s (see the harness skill's approval protocol), passing the
+consolidated change set. Cancellation or rejection ends the run without writes.
 
 ### 5. Apply using existing Agile Backlog Toolkit skills
 

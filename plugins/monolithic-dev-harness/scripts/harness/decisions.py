@@ -168,6 +168,8 @@ def begin(
     work_session_id: str | None = None,
     allow_free_text: bool = False,
     details: tuple[str, ...] = (),
+    gate: str = "",
+    binds: dict[str, Any] | None = None,
 ) -> Result[dict[str, Any]]:
     return bind(
         _path(repo, work_session_id, active=True),
@@ -184,6 +186,8 @@ def begin(
                 work_session_id,
                 allow_free_text,
                 details,
+                gate,
+                binds,
             ),
             "decision_invalid",
             "human decision",
@@ -205,6 +209,8 @@ def _begin(
     work_session_id: str | None,
     allow_free_text: bool,
     details: tuple[str, ...] = (),
+    gate: str = "",
+    binds: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     if waiting(repo, work_session_id):
         raise ValueError("answer the pending question before asking another")
@@ -232,6 +238,10 @@ def _begin(
         "allow_free_text": allow_free_text,
         "details": details,
     }
+    if gate:
+        value["gate"] = gate
+    if binds is not None:
+        value["binds"] = binds
     if work_session_id:
         value["work_session_id"] = work_session_id
     state.write_json(path, value)
@@ -335,15 +345,16 @@ def reusable(
     approval: bool,
     *,
     work_session_id: str | None = None,
+    target: tuple[str, str] | None = None,
 ) -> dict[str, Any] | None:
-    """An earlier answer to this same question about the same, unchanged content.
+    """An earlier answer to this same question about the same, unchanged content or target.
 
-    Only content-bound questions are reused: a question without reviewed files may mean something
-    new each time it is asked. A decline is never reused, so the human can change their mind. An
+    Only context-bound questions are reused: a question without reviewed files or a target may
+    mean something new each time it is asked. A decline is never reused, so the human can change their mind. An
     approval is reused only while the write window it opened is still open; once it closes, only a
     new human reply can open another (ADR-0003).
     """
-    if not artifacts:
+    if not artifacts and not target:
         return None
     match _path(repo, work_session_id):
         case Ok(path):
@@ -360,6 +371,7 @@ def reusable(
             == labels
             and bool(entry.get("approval")) == approval
             and [tuple(pair) for pair in entry.get("artifacts", ())] == list(artifacts)
+            and _entry_target(entry) == target
             and questions.choice_label(str(entry.get("answer", ""))).casefold()
             not in questions.DECLINE_LABELS
         ):
@@ -372,11 +384,31 @@ def reusable(
 
 
 def _window_open(repo: Path, entry: dict[str, Any], scope: str | None) -> bool:
-    match state.active_approval(repo, scope):
-        case (_, {"id": str() as window}):
-            return window == questions.approval_id(str(entry.get("id", "")))
+    """Whether the approval this answer opened still holds (not revoked, expired, or ended)."""
+    wanted = questions.approval_id(str(entry.get("id", "")))
+    return any(
+        record.get("id") == wanted for _, record in state.open_approvals(repo, scope)
+    )
+
+
+def _entry_target(entry: dict[str, Any]) -> tuple[str, str] | None:
+    match (entry.get("binds") or {}).get("target"):
+        case [kind, value]:
+            return (str(kind), str(value))
         case _:
-            return False
+            return None
+
+
+def approval_binds(record: dict[str, Any]) -> dict[str, Any] | None:
+    """What an answered gate's approval is tied to: its reviewed files and target, if any."""
+    match record.get("binds"):
+        case {"bound": True, "target": target}:
+            bound: dict[str, Any] = {"artifacts": list(record.get("artifacts", ()))}
+            if target:
+                bound["target"] = list(target)
+            return bound
+        case _:
+            return None
 
 
 def _free_text_allowed(current: dict[str, Any], answer: str) -> bool:

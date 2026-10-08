@@ -35,9 +35,9 @@ the bundled runtime locally without a session, installation, download, or extra 
 Preserve existing configuration. If preparation fails, report its actual output and stop.
 
 If `language_confirmed` is false, always ask which language this project should use, even when a
-different project previously saved a user-level preference. Offer **English** and **Português
-(Brasil)** as clickable choices, then save the click with `harness preference language <en|pt-br>
---repo .`. Never infer a user's preferred language from their operating system or an older project.
+different project previously saved a user-level preference. Ask the `language` gate
+(`harness decision present --gate language`), then save the answer with `harness preference
+language <en|pt-br> --repo .`. Never infer a user's preferred language from their operating system or an older project.
 
 If setup is ready, continue the original request. Otherwise, use the inspection output as the full
 setup checklist. A missing `tracker.storage` is repaired above, not presented as a choice. Never
@@ -66,18 +66,16 @@ settings are preserved. If proposal validation fails, use its error to correct t
 do not inspect implementation files to second-guess the command. Summarize only user-facing choices:
 the selected work-item tracker and artifact destination. Do not show raw settings, inferred remote,
 branch, or source-control fields. Show the selected language, work-item tracker, and planning
-folder once, then ask **Confirm?** with exactly **Yes** and **No** in the native question UI.
-Prepare this confirmation with `harness decision present --repo <project> --host <host>
---question "Confirm?" --option "Yes" --option "No"`, adding `--blocking-available` or
-`--async-available` according to the tools actually available. Invoke the returned question tool
-with the returned questions; plain chat labels do not count as clickable controls. This works
-before settings exist. Do not ask another confirmation after Yes. No returns to changing the
+folder once, then ask the `setup-confirm` gate: `harness decision present --repo <project> --host
+<host> --gate setup-confirm`, adding `--blocking-available` or `--async-available` according to the
+tools actually available. Invoke the returned control, or show the returned `menu` in chat. This
+works before settings exist. Do not ask another confirmation after Yes. No returns to changing the
 selected choices while keeping their current values.
 
 If delivery fails, quietly use `harness decision fallback` to re-ask the same confirmation by the
 next method: blocking buttons, asynchronous buttons, then ordinary chat. Keep the run and proposal;
-do not expose tool failures, demand a typed Apply command, or report onboarding blocked. Chat asks
-the same **Confirm? Yes / No** naturally and continues this run when the human replies. Silence,
+do not expose tool failures, demand a typed Apply command, or report onboarding blocked. Chat shows
+the same menu and continues this run when the human replies. Silence,
 dismissal, and elapsed time never count as Yes. Yes authorizes only this exact local proposal;
 it does not authorize tracker or source-control writes.
 
@@ -103,15 +101,10 @@ A read-only Codex configuration path or unavailable picker uses the next questio
 does not require restarting setup. Do not describe optional host configuration as fully applied
 when the command reports it was preserved or could not be written.
 
-After setup is ready, ask what to do next through the available native question control. Offer up to three
-clickable choices based on the current request: continue the named task, prepare work items, or
-explore an idea. When no task was supplied, use **Start feature work** as the first choice. Do not
-add a literal **Other** option: the question UI supplies its default **Other** text field. Route the
-clicked choice or the text entered through **Other** and continue in this same run; do not ask the
-user to invoke the harness again.
-Prepare this routing question through `harness decision present --allow-free-text` and the available
-native transport. For a direct Codex routing control use question id `next_step`. Other supplies
-the actual request; it never approves writes. Quietly fall back and re-ask if the control fails to
+After setup is ready, when the request did not already name what to do, ask the `next-step` gate
+(`harness decision present --gate next-step`). Route the chosen option or the typed request and
+continue in this same run; do not ask the user to invoke the harness again. A typed request never
+approves writes. Quietly fall back and re-ask if the control fails to
 land. Never abandon the run for a question delivery or capture failure.
 
 The next route starts product or engineering work. A named project file can be read directly; it is
@@ -119,7 +112,7 @@ not required to be a tracker-issued item before discovery. At this boundary, ret
 entry skill to select the project work session and start its workflow. Do not ask for a commit,
 branch, checkout-bound implementation session, or local-tracker initialization while planning.
 At every later decision, including permission to
-create a branch or commit, use a clickable question control. Use the adapter's chat-and-wait fallback when a blocking control is unavailable.
+create a branch or commit, use a menu ([human-decisions.md](../../references/human-decisions.md)).
 
 Repository settings are human-owned. Existing custom checks, paths, and host configuration survive
 setup. The user-level language preference and clone-local workflow checkpoints are separate from

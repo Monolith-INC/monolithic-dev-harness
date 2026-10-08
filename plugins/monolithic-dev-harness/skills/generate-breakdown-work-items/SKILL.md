@@ -42,7 +42,8 @@ artifact review surface. A path or short summary alone is insufficient. Show whe
 appear. Run `harness tracker preflight` immediately before publication. For Linear, missing
 `Story`/`Task` labels or team readiness block the first issue creation; include needed label
 creation in the reviewed batch and create labels before dependent issues. The provider must expose
-the needed write operations. Seek one clearly scoped approval for the external writes. Local drafts
+the needed write operations. Seek one approval for the external writes:
+the `publish-items` approval gate with the drafts as `--artifact`s (see the harness skill's approval protocol). Local drafts
 and deterministic checks need no additional approval.
 
 Publish through the active tracker adapter and read back each Task to verify its Story parent,

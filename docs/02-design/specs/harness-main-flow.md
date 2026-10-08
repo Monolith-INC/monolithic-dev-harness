@@ -34,7 +34,7 @@ BMAD has **no UI tool layer**. The chat itself is the interface:
 
 Decided 2026-10-06: keep native buttons and make them reliable. Record every approval once, never ask for it again, and close each series of decisions with a single final acknowledgement.
 
-1. **One gate model, several renderings.** `harness decision present` takes the gate content once (question, up to three options, `--detail` per option, `--recommended`) and stores it with the pending decision. Each transport renders that same content:
+1. **One gate model, several renderings.** Standard questions live in a catalog (`config/gates.toml`, ADR-0011) with ready English and Brazilian Portuguese text; the agent asks `harness decision present --gate <id>` and the harness picks the project's language. One-off questions pass their own text. Either way the content is stored with the pending decision. Each transport renders that same content:
    1. a blocking native control;
    2. an asynchronous native control;
    3. a chat menu block.
@@ -59,7 +59,7 @@ Decided 2026-10-06: keep native buttons and make them reliable. Record every app
    - a unique prefix or an unambiguous paraphrase ("the first", "feature").
 
    A loose reply never selects an approving option unless it says "approve" itself. An ambiguous reply, a question, or other conversation leaves the gate pending: the agent answers, then shows the same menu again. On gates that allow free text (routing, the plan checkpoint), other text comes back as the human's direction, so "Revise" needs no option of its own. Native controls allow at most three options.
-4. **Every answer is recorded once and not asked again.** A human-owned history keys each answer by question, options and artifact digests. Asking again about the same unchanged content returns `already_answered`. A decline is never reused. **Limit (ADR-0003):** a write approval is reused only while the window it opened is still open; after it closes, only a new human reply opens another.
+4. **Every answer is recorded once and not asked again.** A human-owned history keys each answer by question, options and artifact digests. Asking again about the same unchanged content returns `already_answered`. A decline is never reused. Decided 2026-10-07: **once approved, it stays approved, tied to its context.** A gate's approval is bound to what was reviewed (drafts or spec by digest, one item, one branch, one pull request), has no expiry, and ends only when revoked, when its work session ends, or when that context changes. Then the agent informs the user and asks again. General permissions (tied to nothing) keep a short window (ADR-0003 amended).
 5. **Final acknowledgement at the end of a series.** Individual product choices inside a Q-batch are answers, not approvals. When the series ends, a **recap gate** lists every choice made, with the option to change any of them, and the user acknowledges once. G1 is that recap for discovery; G2–G4 are recaps for publishing, the spec and delivery.
 6. **No-stall rule:** every turn ends with either a gate block or ongoing work. A status beat ends with `Next: <action>` and continues without waiting.
 
@@ -161,9 +161,10 @@ Every change in P1–P4 updates, in the same branch:
 |---|---|---|
 | ✅ | Loose reply matching on every transport | `questions.match_option`: number, ordinal (en/pt-br), label in any case or accents, `&` = and, unique prefix, unique word set. Never selects an approving option unless the reply says "approve". Typed replies now count after a dismissed picker or expired buttons. |
 | ✅ | One rendering | `decision present --detail --recommended`; options and details are stored with the decision, so every fallback returns the same numbered `menu` (en/pt-br). |
-| ✅ | Answer once | `decision-history.json` (human-owned); `already_answered` for unchanged content; approvals only while their window is open (ADR-0003 amended). |
+| ✅ | Answer once | `decision-history.json` (human-owned); `already_answered` for unchanged content or target. |
+| ✅ | Approvals tied to context | Gate approvals bind drafts/spec digests or an item, branch, or pull request; no expiry; end on revoke, session stop, or context change, with a "what changed" refusal. Write targets are read from each call (`rules.write_targets`). |
 | ✅ | Contract rewrite | `human-decisions.md` (menus vs. question batches, never stall), storyboard, harness skill, plan checkpoint as a three-option menu. |
-| ↪ | Gate catalog (`config/gates.toml`, `harness gate render`) | Not built: `decision present` with stored details already gives one rendering, and each gate's wording lives in the skill that owns it. Revisit if gate wording drifts between skills. |
+| ✅ | Gate catalog | `config/gates.toml` with 11 gates in en and pt-BR; `decision present --gate --value`; approvals only through gates; catalog tests for completeness, slots and plain wording (ADR-0011). Exceptions still asked natively by their skills: manual-check, adoption, and tracker-trust questions, whose hook pins require a native control. |
 | ⏳ | Per-host live reliability (click, number, name, paraphrase on Codex, Claude Code, Cursor) | Covered by hook-level tests; live hosts are part of the P4 replay. |
 
 ### P3: Flow continuity
@@ -187,6 +188,8 @@ Replay DAY-003 on test-project-template in Codex and Claude Code, and keep the r
 
 - ✅ Keep native buttons; make them reliable; fall back silently to the next transport.
 - ✅ Record every approval once; no repeated approvals; a final recap acknowledgement at the end of each decision series.
+- ✅ Once approved, approved: approvals are tied to their context and do not expire; general permissions stay short (2026-10-07).
+- ✅ Standard questions in a catalog with ready en/pt-BR text; the agent only picks the gate (2026-10-07).
 - ✅ BMAD depth is priority one.
 - ✅ Add upstream skills, vendored with subagents and memlog intact:
   - `bmad-correct-course` — change of direction mid-feature; re-enters at the earliest affected gate.

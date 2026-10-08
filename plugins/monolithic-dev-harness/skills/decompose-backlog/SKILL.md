@@ -109,8 +109,8 @@ narrative paragraphs inside sections (not emoji headings; not story-point driver
 Glossary-verify via `../generate-plain-language-documentation/references/assets/tech-glossary-en-pt-br.json`
 when locale is pt-BR.
 **── GATE 2 —** show the final bodies (in tree mode: each Feature followed by its Stories, with
-points) and WAIT for thumbs-up before any Azure write. One approval covers the whole batch; say so
-when you ask.
+points), then ask the `publish-items` approval gate with the drafts as `--artifact`s (see the harness skill's approval protocol). One approval covers the whole batch while the drafts are
+unchanged; say so when you ask.
 
 ### 5. CREATE
 

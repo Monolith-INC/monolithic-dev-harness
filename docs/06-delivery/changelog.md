@@ -13,7 +13,8 @@ last_reviewed: 2026-10-06
   memlog, Deepen), correct-course routing, end-to-end tests in Build, and the combined Verify audit.
 - Vendor manifest: four new bundled BMad skills and the harness adaptations of each.
 - Asking the human: menus and question batches (`workflows.md`), the rewritten decision contract,
-  and the ADR-0003 amendment for typed approvals and approval reuse.
+  the standard-questions catalog (ADR-0011), and the ADR-0003 amendment for approvals tied to
+  their context.
 - Spec: [harness-main-flow.md](../02-design/specs/harness-main-flow.md) maps stages, gates, and the interaction contract;
   its diagram lives in `docs/assets/diagrams/`.
 
