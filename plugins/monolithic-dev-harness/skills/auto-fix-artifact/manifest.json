@@ -4,14 +4,42 @@
   "input_schema": {
     "type": "object",
     "properties": {
-      "file_path": { "type": "string", "description": "Path to a draft markdown file" },
-      "draft_content": { "type": "string", "description": "Revised draft content from Actor" },
-      "attempt": { "type": "integer", "description": "Current reflection attempt number" },
-      "max_attempts": { "type": "integer", "description": "Circuit breaker threshold (default 3)" },
-      "record_mistake": { "type": "boolean", "description": "Persist flaws to _mistakes on block" }
+      "file_path": {
+        "type": "string",
+        "description": "Path to a draft markdown file"
+      },
+      "draft_content": {
+        "type": "string",
+        "description": "Revised draft content from Actor"
+      },
+      "attempt": {
+        "type": "integer",
+        "description": "Current reflection attempt number"
+      },
+      "max_attempts": {
+        "type": "integer",
+        "description": "Circuit breaker threshold (default 3)"
+      },
+      "record_mistake": {
+        "type": "boolean",
+        "description": "Persist flaws to _mistakes on block"
+      },
+      "last_critiques": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        },
+        "description": "Critiques returned by the preceding draft review."
+      }
     }
   },
   "output_signature": {
-    "required": ["ok", "mode", "report", "critiques", "reflection"]
+    "required": [
+      "ok",
+      "mode",
+      "report",
+      "critiques",
+      "reflection"
+    ]
   }
 }

@@ -252,7 +252,7 @@ class TestSessionScope(TrackedRepo):
             hook_runtime._evaluate_completion(done, "STORY-0001").reason,
         )
         self.assertIn(
-            "its own session",
+            "local work item not found",
             hook_runtime._evaluate_completion(done, "STORY-0009").reason,
         )
         for kind in ("resolution_report", "verification", "pull_request"):

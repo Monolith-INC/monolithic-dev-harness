@@ -136,3 +136,7 @@ creates no checkpoint; an interrupted projection is completed once on workflow r
 capture. Recovery never answers for the user or grants approval. A conflict preserves both records
 and stops advancement for inspection; do not replace either record or re-ask approval to bypass it.
 Questions without a workflow or in a paused workflow continue without an automatic checkpoint.
+
+## Native-first Codex delivery
+
+Codex `decision present` defaults to attempting the native blocking control. Invoke the returned tool with the returned questions. If only the asynchronous control is available, pass `--async-available`; if neither is callable, pass `--native-unavailable` and use the returned chat menu. If delivery or capture fails, preserve the decision and use `decision fallback`; never manufacture an answer or repeat an already captured choice. A same-workspace real native trial is required to establish live capture.

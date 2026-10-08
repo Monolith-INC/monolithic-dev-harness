@@ -47,7 +47,8 @@ A plan should target a **single user-facing goal** within **900–1600 tokens**:
 - **Single goal**: One cohesive feature, even if it spans multiple layers/files. Multi-goal means >=2 **top-level independent shippable deliverables** — each could be reviewed, tested, and merged as a separate PR without breaking the others. Never count surface verbs, "and" conjunctions, or noun phrases. Never split cross-layer implementation details inside one user goal.
   - Split: "add dark mode toggle AND refactor auth to JWT AND build admin dashboard"
   - Don't split: "add validation and display errors" / "support drag-and-drop AND paste AND retry"
-- **900–1600 tokens**: Optimal range for LLM consumption. Below 900 risks ambiguity; above 1600 risks context loss in later implementation work.
+- **900–1600 tokens**: An advisory length target. Edit repetition while preserving needed evidence;
+  length alone never blocks approval or justifies splitting a cohesive feature.
 - **Neither limit is a gate.** Both are proposals with user override.
 
 ## Conventions

@@ -88,11 +88,15 @@ def present(
             }
 
 
+def canonical_question_name(tool_name: str) -> str:
+    return tool_name.rsplit("__", 1)[-1].rsplit(".", 1)[-1]
+
+
 def question_transport(host: str, tool_name: str) -> str:
     return (
         "async"
         if host == "codex"
-        and tool_name.rsplit("__", 1)[-1] == "request_user_input_async"
+        and canonical_question_name(tool_name) == "request_user_input_async"
         else "blocking"
     )
 

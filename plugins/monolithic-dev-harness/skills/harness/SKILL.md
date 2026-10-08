@@ -29,6 +29,9 @@ Do not preload all references at startup.
 
 Use catalog gates in the selected language; keep native controls and gracefully fallback via
 `harness decision fallback`. A hook-recorded answer needs no `decision status` call;
+For Codex, invoke the native tool returned by `decision present`; do not replace it with a chat
+menu when callable. Use `--async-available` for async-only hosts, or `--native-unavailable` when
+no native control is callable. Default Codex presentation attempts blocking buttons.
 use status only for recovery when capture is uncertain. A gate with `--artifact` automatically saves
 its review checkpoint when a workflow exists. Save manual checkpoints at stage completion or material
 progress without a question. Communication works without any active session.

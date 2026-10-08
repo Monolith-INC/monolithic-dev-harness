@@ -23,7 +23,12 @@ def git_commands(command: str) -> list[list[str]]:
     return [argv for _directory, argv in shellscan.git_commands(command)]
 
 
-def is_code(relative: str, patterns: Sequence[str] | None, tree: bool = False) -> bool:
+def is_code(
+    relative: str,
+    patterns: Sequence[str] | None,
+    tree: bool = False,
+    planning: str = "",
+) -> bool:
     """Whether writing `relative` (repository-relative) could change code.
 
     `patterns` are the policy's source and test globs; `None` means the policy names none, and then
@@ -37,6 +42,15 @@ def is_code(relative: str, patterns: Sequence[str] | None, tree: bool = False) -
         return False
     if parts[:1] and parts[0] in _NOT_CODE:
         return False
+    match patterns, tree, "/".join(parts), planning:
+        case None, False, path, folder if (
+            folder
+            and path.startswith(folder.rstrip("/") + "/")
+            and Path(path).suffix.lower() == ".md"
+        ):
+            return False
+        case _:
+            pass
     if patterns is None:
         return True
     path = "/".join(parts)
@@ -52,7 +66,10 @@ def is_code(relative: str, patterns: Sequence[str] | None, tree: bool = False) -
 
 
 def writes_code(
-    command: str, root: str | Path | None, patterns: Sequence[str] | None
+    command: str,
+    root: str | Path | None,
+    patterns: Sequence[str] | None,
+    planning: str = "",
 ) -> bool:
     """Whether the command plainly writes a code file inside the repository.
 
@@ -69,17 +86,22 @@ def writes_code(
     ):
         for path in paths:
             relative = _inside(path, base)
-            if relative is not None and is_code(relative, patterns, tree):
+            if relative is not None and is_code(relative, patterns, tree, planning):
                 return True
     return False
 
 
 def _inside(path: str, base: Path | None) -> str | None:
-    if not path.startswith(("/", "~")):
-        return path
-    if base is None:
-        return None
-    try:
-        return Path(path).resolve().relative_to(base).as_posix()
-    except ValueError:
-        return None
+    match base:
+        case None:
+            return None if path.startswith(("/", "~")) else path
+        case Path() as root:
+            try:
+                return (
+                    (root / Path(path).expanduser())
+                    .resolve()
+                    .relative_to(root)
+                    .as_posix()
+                )
+            except ValueError:
+                return None

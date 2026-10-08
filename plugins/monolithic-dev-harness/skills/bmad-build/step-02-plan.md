@@ -34,16 +34,9 @@
 4. Read `{{ rendered("plan-template.md") }}` fully. Fill it out from the intent and investigation, resolving the template's `date` field to the current system date. Put the investigation into `## Code Map`: paths, symbols or lines, what to reuse, and what not to change. Implementation should work from the plan without being told the investigation again. If there are intent gaps, add a `## Open Questions` section with one entry per gap: the choice, the options, and what each option means. Never write an intent gap into the frozen block as an assumption. If `preserved_intent` is non-empty, replace the `<frozen-after-approval>` block with it before writing. Write the result to `{plan_file}`.
 5. Self-review against READY FOR DEVELOPMENT standard. For anything important that's missing: if the repository can tell you, go look and fix the plan; if a human has to decide, add an `## Open Questions` entry. Do not invent the answer.
 6. Resolve the gates before the checkpoint. Two things must be settled, in whatever order the conversation makes natural; combine them in one message when both apply.
-   - **Token count** (see SCOPE STANDARD). If the plan exceeds 1600 tokens, show the count and give the user a choice:
-     - **Split** — carve off secondary goals. Propose the split — name each secondary goal. For each deferred goal, append one new entry to `{{ config.output_folder }}/{active_initiative}/deferred-work.md` using the format below. Do not modify existing entries or look for duplicates. Rewrite the current plan to cover only the main goal — do not surgically carve sections out; regenerate the plan for the narrowed scope.
-     - **Keep full plan** — accept the risks.
-     ```markdown
-     - source_plan: `{plan_file}`
-       summary: <one sentence naming the deferred goal>
-       evidence: <why this was split from the current plan>
-     ```
+   - **Plan length** (see SCOPE STANDARD). Measure and report length as advisory. Edit repetition and irrelevant detail while preserving requirements and evidence. Length alone never creates a decision gate and never justifies splitting a cohesive goal.
    - **Open Questions.** Present every entry together in one message, as a numbered question with its options, what each option means in practice (the trade-off, not just the label), and your recommendation with a one-line reason. Never ask them one at a time. HALT for the human's answers. Accept answers in any form — `1b`, an option name, a paraphrase, or "your recommendations" for all of them — and ask again only about an answer you genuinely cannot place. Write each answer into the `<frozen-after-approval>` block as a decision, log it to the memlog, and delete the entry. An answer may expose a new intent gap — add it and ask again, batched the same way. When the last entry is gone, delete the section.
-   - **Scope after answers.** Answers can turn one goal into several (for example, a new platform target or an independent subsystem). Once Open Questions is empty, run the SCOPE STANDARD multi-goal check again against the decided plan and measure its token count honestly. Never compress, abbreviate, or move content out of the plan to get under 1600 tokens; the count is a signal about scope, not a formatting target. If either check fails, offer **Split** or **Keep full plan** as above, naming the independently shippable goals and recommending which to build first. Log the outcome to the memlog either way.
+   - **Scope after answers.** Answers can turn one goal into several (for example, a new platform target or an independent subsystem). Once Open Questions is empty, run the SCOPE STANDARD multi-goal check again against the decided plan and measure its token count honestly. Length is advisory. Offer **Split** or **Keep full plan** only when investigation identifies independently shippable goals; name each goal, explain the boundary, recommend which to build first and record deferred work. Do not offer an option that would merely discard acceptance checks. Log the outcome to the memlog either way.
 
 ### CHECKPOINT 1
 
@@ -51,7 +44,7 @@ Only when Open Questions is empty.
 
 Present summary. Display the plan file path in whatever form is clickable where you are presenting it (e.g. code citation in chat, CWD-relative path with no leading `/` in terminal). If unsure, use CWD-relative path.
 
-If token count exceeded 1600 and the user chose to keep the full plan, include the token count and explain why it may be a problem.
+Report the advisory length once; do not ask the user to approve a token estimate.
 
 The summary closes the series of decisions: list every decision recorded in this run (from the memlog), so the user can change any of them here instead of re-approving each one. Never re-ask a decision that is already recorded unless the user reopens it.
 

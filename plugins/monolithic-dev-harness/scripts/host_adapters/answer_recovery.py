@@ -9,6 +9,7 @@ from typing import Any
 from core.result import Ok, attempt, value_or
 from harness import decisions, questions
 from host_adapters.hook_bridge import answer_response
+from host_adapters.interactions import canonical_question_name
 
 
 def recorded_answer(
@@ -77,11 +78,11 @@ def _recorded_exchange(
         case (
             {
                 "type": "function_call",
-                "name": "request_user_input",
+                "name": str() as name,
                 "arguments": str() as arguments,
             },
             {"type": "function_call_output", "output": response},
-        ):
+        ) if canonical_question_name(name) == "request_user_input":
             return _read_answer(
                 value_or(
                     attempt(

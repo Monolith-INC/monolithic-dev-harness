@@ -110,7 +110,10 @@ def evaluate_event(event: CanonicalToolEvent) -> PolicyDecision:
         if checkout_decision.is_denied():
             return checkout_decision
         if _is_mutating_git(command) or writes_code(
-            command, event.workspace_root, _code_patterns(event.workspace_root)
+            command,
+            event.workspace_root,
+            _code_patterns(event.workspace_root),
+            _planning_folder(event.workspace_root),
         ):
             return _evaluate_work_context(event)
         return PolicyDecision.allow()
@@ -124,6 +127,16 @@ def evaluate_event(event: CanonicalToolEvent) -> PolicyDecision:
     if event.kind == "edit" and _edits_code(event):
         return _evaluate_work_context(event)
     return PolicyDecision.allow()
+
+
+def _planning_folder(project_root: str) -> str:
+    match artifacts_dir(Path(project_root)):
+        case Path() as folder if folder.resolve() != Path(
+            project_root
+        ).resolve() and folder.resolve().is_relative_to(Path(project_root).resolve()):
+            return folder.resolve().relative_to(Path(project_root).resolve()).as_posix()
+        case _:
+            return ""
 
 
 def _code_patterns(project_root: str) -> list[str] | None:
@@ -157,8 +170,15 @@ def _is_code_path(file_path: str, workspace_root: str) -> bool:
         except ValueError:
             return False
     else:
-        relative = path.as_posix()
-    return is_code(relative, _code_patterns(workspace_root))
+        try:
+            relative = (root / path).resolve().relative_to(root).as_posix()
+        except ValueError:
+            return False
+    return is_code(
+        relative,
+        _code_patterns(workspace_root),
+        planning=_planning_folder(workspace_root),
+    )
 
 
 def _decision(result: Result[None]) -> PolicyDecision:
@@ -342,10 +362,39 @@ def _evaluate_completion(event: CanonicalToolEvent, ref: str) -> PolicyDecision:
         return PolicyDecision.allow()
     return _decision(
         bind(
-            _session_item(root),
-            lambda found: _complete(found[0], found[1], found[2], ref),
+            registry.open_selected(root, settings.load(root)),
+            lambda ops: bind(
+                ops.get_work_item(ref),
+                lambda item: bind(
+                    ops.list_artifacts(item.id),
+                    lambda artifacts: _completion_route(
+                        root, ops, item, ref, artifacts
+                    ),
+                ),
+            ),
         )
     )
+
+
+def _completion_route(
+    root: Path, ops: TrackerOps, item: WorkItem, ref: str, artifacts: tuple
+) -> Result[object]:
+    from policy.planning_completion import current, verify
+
+    match tuple(
+        a for a in artifacts if _artifact_kind(a.kind) == "planning_completion"
+    ):
+        case (receipt,):
+            return bind(
+                current((receipt,)), lambda selected: verify(ops, item, selected)
+            )
+        case ():
+            return bind(
+                _session_item(root),
+                lambda found: _complete(found[0], found[1], found[2], ref),
+            )
+        case receipts:
+            return bind(current(receipts), lambda receipt: verify(ops, item, receipt))
 
 
 def _complete(

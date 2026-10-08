@@ -82,7 +82,15 @@ def _repository_snapshot(repo: Path) -> dict[str, Any]:
     present = _git(repo, "rev-parse", "--is-inside-work-tree") == "true"
     head = _git(repo, "rev-parse", "--verify", "HEAD") if present else ""
     return {
-        "git_present": present,
+        "git_present": present or (repo / ".git").exists(),
+        "git_access": "available"
+        if present
+        else "unavailable"
+        if (repo / ".git").exists()
+        else "absent",
+        "git_access_note": "Git metadata exists but cannot be read; inspect ownership/trust without changing global safe.directory automatically."
+        if not present and (repo / ".git").exists()
+        else "",
         "has_committed_head": bool(head),
         "head": head,
         "branch": _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD")

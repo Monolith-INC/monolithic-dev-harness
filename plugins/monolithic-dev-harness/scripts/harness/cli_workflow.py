@@ -165,6 +165,7 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     )
     decision_parser.add_argument("--blocking-available", action="store_true")
     decision_parser.add_argument("--async-available", action="store_true")
+    decision_parser.add_argument("--native-unavailable", action="store_true")
     decision_parser.add_argument("--question")
     decision_parser.add_argument("--option", action="append")
     decision_parser.add_argument(
@@ -368,7 +369,12 @@ def decision_command(args: argparse.Namespace) -> int:
                     "options": _choice_options(spec.options, spec.details),
                 },
                 args.host,
-                args.blocking_available,
+                args.blocking_available
+                or (
+                    args.host == "codex"
+                    and not args.async_available
+                    and not args.native_unavailable
+                ),
                 args.async_available,
                 free_text=spec.free_text,
                 language=_language(repo),
