@@ -1,6 +1,6 @@
 ---
 title: Handoff — six-stage onboarding trial remediation
-status: in-progress
+status: ready-for-live-trial
 owner: monolithic-dev-harness maintainers
 last_reviewed: 2026-10-09
 ---
@@ -32,20 +32,27 @@ acceptance run. Do not begin DAY-001 implementation or tracker publication.
 - This was a preconfigured fixture, not a clean project copy: it included a project-local plugin,
   Codex config, harness settings, local tracker/artifact configuration and custom briefing.
 
+## Completed in this pass
+
+- Replaced the advanced-elicitation prose menu with a paginated native-first decision contract,
+  preserving ordered method selection, catalog browsing, recommendations, reshuffle and Proceed
+  within the three-option limit.
+- Clarified visible artifact review and acceptance-boundary semantics; corrected the generic
+  approval detail and storyboard fallback wording; reduced redundant plan-length rechecking.
+- Added a regression for the elicitation UI contract and bilingual confirmation detail.
+- Commit: `bed8421` (`fix: keep planning elicitation on decision UI`).
+- Validation: focused suite 104 passed; full plugin suite 1,296 passed, 1 skipped, 296 subtests;
+  Ruff, targeted Markdown lint, TOML parse, and whitespace checks passed.
+
 ## Next actions
 
-1. Inspect decision presentation and the elicitation skill contract. The BMad skill asks for a
-   five-method menu plus Reshuffle/List all/Proceed, but formal gates allow at most three options.
-2. Implement a native-first paginated decision flow that preserves multi-select and all menu
-   actions. Same-decision fallback must remain available; do not silently replace formal UI with
-   prose.
-3. Align the storyboard and skill instructions so saved stage state/artifacts determine the next
-   action and reduce repeated CLI/path discovery.
-4. Ensure artifacts are visibly surfaced before a single correctly scoped Confirmation decision.
-   Keep tracker drafts distinct from tracker writes; this acceptance trial must stop before
-   execution.
-5. Add focused regressions, run required tests, then prepare a fresh test-project copy with no
-   preseeded session or trial-specific workflow state. Leave the interactive run for the user.
+1. Prepare a fresh test-project copy with no preseeded session or trial-specific workflow state,
+   using the supported fixture tool and a concise scenario-only briefing.
+2. Run the interactive trial in a fresh Desktop chat. Verify the method UI remains native or
+   explicitly falls back, the final plan and companions are visible before Confirmation, and the
+   approval matches the stop-at-execution-entry boundary.
+3. Preserve project-local evidence and report the result. Do not launch the trial from this parent
+   task unless the human is present to answer its decisions.
 
 ## Current checkout
 
@@ -55,5 +62,6 @@ acceptance run. Do not begin DAY-001 implementation or tracker publication.
 - Harness was placed in Free mode for this maintenance work because this checkout has no harness
   bootstrap/tracker configuration. Do not add a tracker or invoke onboarding setup just to make
   these local code/documentation changes.
-- No implementation source changes have been made yet. The plan and handoff were corrected to
-  point to the actual trial evidence.
+- The plan, handoff and checkpoint point to the actual `test-003` evidence. The current changes
+  have been committed locally as `bed8421`; they have not been pushed. No DAY-001 application code
+  or acceptance fixture was changed.
