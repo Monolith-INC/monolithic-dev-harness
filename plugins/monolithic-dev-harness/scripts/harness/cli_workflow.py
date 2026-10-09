@@ -42,6 +42,14 @@ COMMANDS = (
 )
 
 
+def _default_decision_host() -> str:
+    if os.environ.get("CODEX_THREAD_ID"):
+        return "codex"
+    if os.environ.get("ZED_WORKTREE_ROOT"):
+        return "zed"
+    return "text"
+
+
 def _control_parser(
     sub: argparse._SubParsersAction, family: str, help_text: str
 ) -> argparse.ArgumentParser:
@@ -172,8 +180,8 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     )
     decision_parser.add_argument(
         "--host",
-        choices=("codex", "claude", "cursor", "text"),
-        default="codex" if os.environ.get("CODEX_THREAD_ID") else "text",
+        choices=("codex", "claude", "cursor", "zed", "text"),
+        default=_default_decision_host(),
     )
     decision_parser.add_argument("--blocking-available", action="store_true")
     decision_parser.add_argument("--async-available", action="store_true")

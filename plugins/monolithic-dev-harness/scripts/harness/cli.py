@@ -147,6 +147,23 @@ def doctor(args: argparse.Namespace) -> int:
                 "Codex",
                 "plugin installed" if codex_installed else "plugin not installed",
             )
+    zed_settings = (
+        Path(os.environ.get("ZED_CONFIG_DIR", Path.home() / ".config" / "zed"))
+        / "settings.json"
+    )
+    zed_configured = False
+    if zed_settings.is_file():
+        try:
+            zed_configured = "backlog-orchestrator" in zed_settings.read_text(
+                encoding="utf-8"
+            )
+        except OSError:
+            zed_configured = False
+    report.line(
+        "ok" if zed_configured else "skip",
+        "Zed",
+        "MCP context servers registered" if zed_configured else "plugin not installed",
+    )
 
     print("Repository")
     repo = gitstate.repo_root(Path(args.repo)) or Path(args.repo).resolve()

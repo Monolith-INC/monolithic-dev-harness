@@ -28,6 +28,7 @@ def project_root() -> Path:
                 "CODEX_PROJECT_ROOT",
                 "CURSOR_PROJECT_DIR",
                 "CLAUDE_PROJECT_DIR",
+                "ZED_WORKTREE_ROOT",
             )
             if os.environ.get(key, "").strip()
         ),

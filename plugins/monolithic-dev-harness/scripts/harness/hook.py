@@ -1292,7 +1292,9 @@ def _save_captured_language(repo: Path, answer: str) -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--host", choices=("claude", "cursor", "codex"), required=True)
+    parser.add_argument(
+        "--host", choices=("claude", "cursor", "codex", "zed"), required=True
+    )
     parser.add_argument(
         "--event",
         choices=(

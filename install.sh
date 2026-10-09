@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-shot installer for monolithic-dev-harness (Claude Code, Cursor, and Codex).
+# One-shot installer for monolithic-dev-harness (Claude Code, Cursor, Codex, and Zed).
 #
 #   curl -fsSL https://github.com/Monolith-INC/monolithic-dev-harness/releases/latest/download/install.sh | bash
 #
@@ -8,7 +8,7 @@
 #   gh release download --repo Monolith-INC/monolithic-dev-harness --pattern install.sh --output - | bash
 #
 # Flags (after `bash -s --` when piping):
-#   --host auto|claude|cursor|codex|all   hosts to install into (default: every host found)
+#   --host auto|claude|cursor|codex|zed|all   hosts to install into (default: every host found)
 #   --version <x.y.z>               release to install (default: latest)
 #   --source <dir|archive.tar.gz>   install from a local build instead of downloading
 #   --uninstall                     remove the harness from every host and delete its files
@@ -16,7 +16,8 @@
 #
 # Environment: HARNESS_HOME (default ~/.local/share/monolithic-dev-harness), HARNESS_BIN_DIR
 # (default ~/.local/bin), CURSOR_PLUGIN_DIR (default ~/.cursor/plugins/local/monolithic-dev-harness),
-# GH_TOKEN / GITHUB_TOKEN (private downloads without the GitHub CLI), CLAUDE_CONFIG_DIR (respected).
+# ZED_CONFIG_DIR (default ~/.config/zed), GH_TOKEN / GITHUB_TOKEN (private downloads without the
+# GitHub CLI), CLAUDE_CONFIG_DIR (respected).
 #
 # Nothing is cloned: the installer downloads the release archive, verifies its SHA-256, and
 # registers it with each host.
@@ -29,6 +30,8 @@ readonly HARNESS_HOME="${HARNESS_HOME:-${HOME}/.local/share/${PLUGIN}}"
 readonly MARKETPLACE_DIR="${HARNESS_HOME}/marketplace"
 readonly BIN_DIR="${HARNESS_BIN_DIR:-${HOME}/.local/bin}"
 readonly CURSOR_DIR="${CURSOR_PLUGIN_DIR:-${HOME}/.cursor/plugins/local/${PLUGIN}}"
+readonly ZED_DIR="${ZED_CONFIG_DIR:-${HOME}/.config/zed}"
+readonly ZED_SETTINGS="${ZED_DIR}/settings.json"
 readonly CODEX_MARKETPLACE="${MARKETPLACE_DIR}/codex-marketplace"
 readonly CODEX_AGENTS_DIR="${CODEX_HOME:-${HOME}/.codex}/agents"
 readonly CODEX_CONFIG="${CODEX_HOME:-${HOME}/.codex}/config.toml"
@@ -65,7 +68,7 @@ usage() {
   cat <<'EOF'
 monolithic-dev-harness installer
 
-  --host auto|claude|cursor|codex|all   hosts to install into (default: every host found)
+  --host auto|claude|cursor|codex|zed|all   hosts to install into (default: every host found)
   --version <x.y.z>               release to install (default: latest)
   --source <dir|archive.tar.gz>   install from a local build instead of downloading
   --uninstall                     remove the harness from every host and delete its files
@@ -86,7 +89,7 @@ parse_args() {
     esac
   done
   VERSION="${VERSION#v}"
-  case "$HOSTS" in auto|claude|cursor|codex|all) ;; *) die "--host must be auto, claude, cursor, codex, or all" ;; esac
+  case "$HOSTS" in auto|claude|cursor|codex|zed|all) ;; *) die "--host must be auto, claude, cursor, codex, zed, or all" ;; esac
 }
 
 # --- preflight ---------------------------------------------------------------------------------
@@ -115,16 +118,18 @@ preflight() {
 }
 
 select_hosts() {
-  local want_claude=0 want_cursor=0 want_codex=0
+  local want_claude=0 want_cursor=0 want_codex=0 want_zed=0
   case "$HOSTS" in
     claude) want_claude=1 ;;
     cursor) want_cursor=1 ;;
     codex) want_codex=1 ;;
-    all) want_claude=1; want_cursor=1; want_codex=1 ;;
+    zed) want_zed=1 ;;
+    all) want_claude=1; want_cursor=1; want_codex=1; want_zed=1 ;;
     auto)
       have claude && want_claude=1
       { [[ -d "${HOME}/.cursor" ]] || have cursor; } && want_cursor=1
       have codex && want_codex=1
+      { [[ -f "$ZED_SETTINGS" ]] || have zed; } && want_zed=1
       ;;
   esac
   if [[ $want_claude -eq 1 ]] && ! have claude; then
@@ -133,10 +138,14 @@ select_hosts() {
   if [[ $want_codex -eq 1 ]] && ! have codex; then
     die "Codex (the \`codex\` CLI) is not on PATH; install it or select another host"
   fi
-  [[ $want_claude -eq 1 || $want_cursor -eq 1 || $want_codex -eq 1 ]] || die "no supported host was found; pass --host claude|cursor|codex|all"
+  if [[ $want_zed -eq 1 ]] && [[ ! -f "$ZED_SETTINGS" ]] && ! have zed; then
+    die "Zed was selected but no Zed config was found at ${ZED_SETTINGS}; install Zed or use --host cursor|codex"
+  fi
+  [[ $want_claude -eq 1 || $want_cursor -eq 1 || $want_codex -eq 1 || $want_zed -eq 1 ]] || die "no supported host was found; pass --host claude|cursor|codex|zed|all"
   INSTALL_CLAUDE=$want_claude
   INSTALL_CURSOR=$want_cursor
   INSTALL_CODEX=$want_codex
+  INSTALL_ZED=$want_zed
 }
 
 # --- download ----------------------------------------------------------------------------------
@@ -393,6 +402,181 @@ replacement.replace(path)
 PY
 }
 
+# Zed keeps its settings in JSON-with-comments; parse leniently, edit, and write pure JSON.
+# Zed reads plain JSON fine and rewrites this file itself, so dropping comments is acceptable.
+# A one-time .pre-harness backup is made before the first harness edit and restored on uninstall.
+zed_settings_edit() {  # zed_settings_edit <python-script> [args...]
+  "$PY" - "$ZED_SETTINGS" "$@"
+}
+
+install_zed() {
+  say "Zed: registering MCP context servers in ${ZED_SETTINGS}"
+  mkdir -p "$ZED_DIR"
+  [[ -f "$ZED_SETTINGS" ]] || printf '{}\n' > "$ZED_SETTINGS"
+  local plugin_root="${MARKETPLACE_DIR}/plugins/${PLUGIN}"
+  zed_settings_edit "$plugin_root" "$HARNESS_HOME" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+settings_path = Path(sys.argv[1])
+plugin_root = Path(sys.argv[2]).resolve()
+
+SERVERS = ("backlog-orchestrator", "workflow-orchestrator", "workflow-integrations")
+
+def strip_jsonc(text: str) -> str:
+    out, i, n = [], 0, len(text)
+    in_str = False
+    esc = False
+    while i < n:
+        ch = text[i]
+        if in_str:
+            out.append(ch)
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            i += 1
+        elif ch == '"':
+            in_str = True
+            out.append(ch)
+            i += 1
+        elif ch == "/" and i + 1 < n and text[i + 1] == "/":
+            while i < n and text[i] not in "\r\n":
+                i += 1
+        elif ch == "/" and i + 1 < n and text[i + 1] == "*":
+            i += 2
+            while i + 1 < n and not (text[i] == "*" and text[i + 1] == "/"):
+                i += 1
+            i += 2
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+raw = settings_path.read_text(encoding="utf-8") if settings_path.is_file() else "{}"
+try:
+    data = json.loads(strip_jsonc(raw) or "{}")
+except json.JSONDecodeError as exc:
+    print(f"zed settings are not valid JSON even after removing comments: {exc}", file=sys.stderr)
+    raise SystemExit(1)
+if not isinstance(data, dict):
+    print("zed settings root must be a JSON object", file=sys.stderr)
+    raise SystemExit(1)
+
+context_servers = data.get("context_servers")
+if context_servers is None:
+    context_servers = {}
+    data["context_servers"] = context_servers
+if not isinstance(context_servers, dict):
+    print("zed settings context_servers must be a JSON object", file=sys.stderr)
+    raise SystemExit(1)
+
+backup = settings_path.with_suffix(".json.pre-harness")
+if not backup.exists():
+    backup.write_text(raw, encoding="utf-8")
+
+zed_mcp = json.loads((plugin_root / "zed.mcp.json").read_text(encoding="utf-8"))
+for name in SERVERS:
+    entry = zed_mcp[name]
+    context_servers[name] = {
+        "command": entry["command"],
+        "args": [a.replace("${PLUGIN_ROOT}", str(plugin_root)) for a in entry["args"]],
+        "env": {k: v.replace("${PLUGIN_ROOT}", str(plugin_root)) for k, v in entry["env"].items()},
+    }
+
+settings_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+print(f"wrote {len(SERVERS)} context servers to {settings_path}")
+PY
+  [[ -f "$ZED_SETTINGS" ]] || die "Zed settings were not written"
+}
+
+uninstall_zed() {
+  [[ -f "$ZED_SETTINGS" ]] || return 0
+  zed_settings_edit <<'PY'
+import json
+import sys
+from pathlib import Path
+
+settings_path = Path(sys.argv[1])
+SERVERS = ("backlog-orchestrator", "workflow-orchestrator", "workflow-integrations")
+
+def strip_jsonc(text: str) -> str:
+    out, i, n = [], 0, len(text)
+    in_str = False
+    esc = False
+    while i < n:
+        ch = text[i]
+        if in_str:
+            out.append(ch)
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            i += 1
+        elif ch == '"':
+            in_str = True
+            out.append(ch)
+            i += 1
+        elif ch == "/" and i + 1 < n and text[i + 1] == "/":
+            while i < n and text[i] not in "\r\n":
+                i += 1
+        elif ch == "/" and i + 1 < n and text[i + 1] == "*":
+            i += 2
+            while i + 1 < n and not (text[i] == "*" and text[i + 1] == "/"):
+                i += 1
+            i += 2
+        else:
+            out.append(ch)
+            i += 1
+    return "".join(out)
+
+if not settings_path.is_file():
+    raise SystemExit(0)
+raw = settings_path.read_text(encoding="utf-8")
+try:
+    data = json.loads(strip_jsonc(raw) or "{}")
+except json.JSONDecodeError:
+    raise SystemExit(0)
+if not isinstance(data, dict):
+    raise SystemExit(0)
+context_servers = data.get("context_servers")
+if not isinstance(context_servers, dict):
+    raise SystemExit(0)
+for name in SERVERS:
+    context_servers.pop(name, None)
+if not context_servers:
+    data.pop("context_servers", None)
+settings_path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+PY
+  local backup="${ZED_SETTINGS%.json}.json.pre-harness"
+  # Restore the pre-harness file only if the current one carries no other changes.
+  if [[ -f "$backup" ]]; then
+    zed_settings_edit "$backup" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+settings_path = Path(sys.argv[1])
+backup = Path(sys.argv[2])
+try:
+    current = json.loads(settings_path.read_text(encoding="utf-8"))
+    original = json.loads(backup.read_text(encoding="utf-8"))
+except (OSError, json.JSONDecodeError):
+    raise SystemExit(0)
+original.pop("context_servers", None)
+current.pop("context_servers", None)
+if current == original:
+    backup.replace(settings_path)
+    print(f"restored pre-harness {settings_path}")
+PY
+  fi
+}
+
 install_cli() {
   mkdir -p "$BIN_DIR"
   ln -sfn "${MARKETPLACE_DIR}/plugins/${PLUGIN}/bin/harness" "${BIN_DIR}/harness"
@@ -419,6 +603,7 @@ uninstall() {
     claude plugin uninstall "$PLUGIN_ID" >/dev/null 2>&1 || true
     claude plugin marketplace remove "$PLUGIN" >/dev/null 2>&1 || true
   fi
+  uninstall_zed
   rm -rf "$CURSOR_DIR" "$HARNESS_HOME"
   if [[ -L "${BIN_DIR}/harness" ]]; then rm -f "${BIN_DIR}/harness"; fi
   say "Done. Repositories keep their .harness/ folders (settings and records); delete them if you no longer want them."
@@ -443,19 +628,21 @@ main() {
   [[ $INSTALL_CLAUDE -eq 1 ]] && targets+=("Claude Code")
   [[ $INSTALL_CURSOR -eq 1 ]] && targets+=("Cursor")
   [[ $INSTALL_CODEX -eq 1 ]] && targets+=("Codex")
+  [[ $INSTALL_ZED -eq 1 ]] && targets+=("Zed")
   confirm_action "Install ${PLUGIN} v${VERSION} for ${targets[*]}?"
   install_marketplace_copy
   if [[ $INSTALL_CLAUDE -eq 1 ]]; then install_claude; fi
   if [[ $INSTALL_CURSOR -eq 1 ]]; then install_cursor; fi
   if [[ $INSTALL_CODEX -eq 1 ]]; then install_codex; fi
+  if [[ $INSTALL_ZED -eq 1 ]]; then install_zed; fi
   install_cli
 
   cat <<EOF
 
-✓ ${PLUGIN} ${VERSION} installed ($( [[ $INSTALL_CLAUDE -eq 1 ]] && printf 'Claude Code ' )$( [[ $INSTALL_CURSOR -eq 1 ]] && printf 'Cursor ' )$( [[ $INSTALL_CODEX -eq 1 ]] && printf 'Codex' ))
+✓ ${PLUGIN} ${VERSION} installed ($( [[ $INSTALL_CLAUDE -eq 1 ]] && printf 'Claude Code ' )$( [[ $INSTALL_CURSOR -eq 1 ]] && printf 'Cursor ' )$( [[ $INSTALL_CODEX -eq 1 ]] && printf 'Codex ' )$( [[ $INSTALL_ZED -eq 1 ]] && printf 'Zed' ))
 
 Next:
-  1. Restart your host so the hooks and MCP servers load; trust Codex plugin hooks when prompted.
+  1. Restart your host so the hooks and MCP servers load; trust plugin hooks when prompted.
   2. In a repository you want governed:   harness bootstrap
   3. Check everything:                    harness doctor
 EOF

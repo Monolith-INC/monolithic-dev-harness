@@ -21,6 +21,7 @@ from .cursor_adapter import (
     format_cursor_decision,
     parse_cursor_payload,
 )
+from .zed_adapter import format_zed_decision, parse_zed_payload, zed_session_id
 
 
 def select_adapter(client: str):
@@ -29,6 +30,8 @@ def select_adapter(client: str):
             return parse_cursor_payload, format_cursor_decision
         case "codex":
             return parse_codex_payload, format_codex_decision
+        case "zed":
+            return parse_zed_payload, format_zed_decision
         case _:
             return parse_claude_payload, format_claude_decision
 
@@ -41,6 +44,8 @@ def native_session_id(client: str, payload):
             return claude_session_id(payload)
         case "cursor":
             return cursor_session_id(payload)
+        case "zed":
+            return zed_session_id(payload)
         case _:
             return ""
 

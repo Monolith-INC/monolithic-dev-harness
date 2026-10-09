@@ -72,6 +72,7 @@ _PROJECT_ENV = {
     "claude": "CLAUDE_PROJECT_DIR",
     "cursor": "CURSOR_PROJECT_DIR",
     "codex": "CODEX_PROJECT_ROOT",
+    "zed": "ZED_WORKTREE_ROOT",
 }
 
 
