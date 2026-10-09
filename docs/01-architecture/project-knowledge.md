@@ -1,6 +1,7 @@
 ---
 title: Project knowledge architecture and retrieval strategy
 status: current
+owner: monolithic-dev-harness maintainers
 last_reviewed: 2026-10-09
 ---
 

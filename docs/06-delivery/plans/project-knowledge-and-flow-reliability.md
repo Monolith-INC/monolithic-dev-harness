@@ -1,6 +1,8 @@
 ---
 title: Project knowledge and workflow reliability
 status: in-progress
+owner: monolithic-dev-harness maintainers
+last_reviewed: 2026-10-09
 created: 2026-10-09
 ---
 
