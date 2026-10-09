@@ -196,7 +196,9 @@ def write_zed_settings(project: Path) -> Path:
     context_servers = {
         name: {
             "command": entry["command"],
-            "args": [a.replace("${PLUGIN_ROOT}", str(plugin_root)) for a in entry["args"]],
+            "args": [
+                a.replace("${PLUGIN_ROOT}", str(plugin_root)) for a in entry["args"]
+            ],
             "env": {
                 k: v.replace("${PLUGIN_ROOT}", str(plugin_root))
                 for k, v in entry["env"].items()

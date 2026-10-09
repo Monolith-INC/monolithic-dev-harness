@@ -138,10 +138,9 @@ select_hosts() {
   if [[ $want_codex -eq 1 ]] && ! have codex; then
     die "Codex (the \`codex\` CLI) is not on PATH; install it or select another host"
   fi
-  if [[ $want_zed -eq 1 ]] && [[ ! -f "$ZED_SETTINGS" ]] && ! have zed; then
-    die "Zed was selected but no Zed config was found at ${ZED_SETTINGS}; install Zed or use --host cursor|codex"
-  fi
-  [[ $want_claude -eq 1 || $want_cursor -eq 1 || $want_codex -eq 1 || $want_zed -eq 1 ]] || die "no supported host was found; pass --host claude|cursor|codex|zed|all"
+  # Zed is a GUI editor with no CLI gate: install_zed creates ~/.config/zed when absent,
+  # so unlike claude/codex there is no hard "not found" error. Auto-detect only opts in
+  # when a config or binary is present; an explicit --host zed / --host all always installs.
   INSTALL_CLAUDE=$want_claude
   INSTALL_CURSOR=$want_cursor
   INSTALL_CODEX=$want_codex
