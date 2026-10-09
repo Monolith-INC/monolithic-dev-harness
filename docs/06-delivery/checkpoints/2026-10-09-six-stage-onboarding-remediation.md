@@ -30,4 +30,6 @@ last_reviewed: 2026-10-09
    seeded. Saved the minimal run request and setup provenance under
    `docs/06-delivery/acceptance/six-stage-41c4466-clean/`. Installed the committed 0.6.2 Codex
    plugin build from source revision `41c4466`; selected installed files match. Clickable
-   questions are enabled. Desktop restart is still required before the live run. Fixture preserved.
+   questions are enabled. Desktop restart is still required before the live run. At the user's
+   request, recreated the same clean fixture with the supported helper at `temp/test-004/project`;
+   it matches both the original `/tmp` copy and template. The original is pending safe cleanup.

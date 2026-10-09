@@ -48,7 +48,7 @@ acceptance run. Do not begin DAY-001 implementation or tracker publication.
 
 1. Restart Codex Desktop so it loads the installed plugin at revision `41c4466` and the clickable
    question control. Then open a fresh chat rooted at
-   `/tmp/monolithic-dev-harness-trial-80zre_yv/project` and use
+   `/home/monolith/projects/monolithic-dev-harness/temp/test-004/project` and use
    `docs/06-delivery/acceptance/six-stage-41c4466-clean/briefing.md` as the request.
 2. During the interactive trial, verify the method UI remains native or
    explicitly falls back, the final plan and companions are visible before Confirmation, and the
@@ -66,6 +66,6 @@ acceptance run. Do not begin DAY-001 implementation or tracker publication.
   these local code/documentation changes.
 - The plan, handoff and checkpoint point to the actual `test-003` evidence. The current changes
   have been committed locally as `bed8421` and `41c4466`; they have not been pushed. The fresh
-  `/tmp/monolithic-dev-harness-trial-80zre_yv/project` fixture was verified against the template,
+  `temp/test-004/project` fixture was verified against the template,
   and the current plugin build was installed for Codex. No DAY-001 application code or fixture
   contents have been changed since creation.
