@@ -113,3 +113,11 @@ last_reviewed: 2026-10-08
     24 cases; security and acceptance checks passed 70 tests. A fresh live acceptance trial remains
     required. Documentation follow-up: update the user guide and troubleshooting page to explain
     the local evidence record and transcript-export limitation before release.
+19. **Live decision recovery diagnosis.** Inspected the exact Desktop session record for trial
+    `test-002`. Its native question changed the staged question ID and paraphrased the staged text,
+    so the question hook correctly rejected it as a second decision. Recovery then added unsupported
+    `--decision-id`/`--reason` flags, which the narrow fallback allowlist correctly denied; the async
+    prompt also replaced the staged question. Updated the harness skill and decision protocol to
+    require verbatim native payloads and supported recovery syntax. Pending-question denials now
+    include the staged decision ID and an exact, scope-aware fallback command. Added regressions for
+    the observed mismatched question and malformed recovery command. Trial state remains untouched.

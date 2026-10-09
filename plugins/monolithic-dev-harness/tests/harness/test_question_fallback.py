@@ -106,6 +106,73 @@ def test_fallback_command_is_allowed_while_waiting_but_cannot_carry_a_write(
     )
 
 
+def test_rejected_native_question_explains_verbatim_recovery(tmp_path: Path) -> None:
+    write_settings(tmp_path)
+    shown = present(tmp_path, "--blocking-available")
+    offered = shown["questions"][0]
+    altered = {
+        **offered,
+        "id": "planning_scope",
+        "question": "Does this work belong to an initiative, or is it standalone?",
+    }
+
+    denied = native(
+        tmp_path,
+        "ask",
+        {
+            "tool_name": "request_user_input",
+            "tool_use_id": "altered-call",
+            "tool_input": {"questions": [altered]},
+        },
+    )
+
+    assert "decision-pending" in denied
+    assert "exact question" in denied
+    assert shown["decision_id"] in denied
+    assert f"harness decision fallback --repo {tmp_path}" in denied
+    assert "Do not add decision-id or reason flags" in denied
+    assert decisions.record(tmp_path)["id"] == shown["decision_id"]
+    assert decisions.waiting(tmp_path)
+
+    retried = native(
+        tmp_path,
+        "ask",
+        {
+            "tool_name": "request_user_input",
+            "tool_use_id": "exact-call",
+            "tool_input": {"questions": [offered]},
+        },
+    )
+
+    assert not retried
+    assert decisions.record(tmp_path)["presentation_id"] == shown["decision_id"]
+
+
+def test_pending_gate_names_supported_fallback_when_agent_adds_unknown_flags(
+    tmp_path: Path,
+) -> None:
+    write_settings(tmp_path)
+    shown = present(tmp_path, "--blocking-available")
+    command = (
+        f"{CLI} decision fallback --repo {tmp_path} --host codex "
+        f"--decision-id {shown['decision_id']} --reason retry --async-available"
+    )
+
+    denied = native(
+        tmp_path,
+        "pre-tool",
+        {"tool_name": "Bash", "tool_input": {"command": command}},
+    )
+
+    assert "decision-pending" in denied
+    assert "run this supported fallback command exactly" in denied
+    assert (
+        f"harness decision fallback --repo {tmp_path} --host codex --async-available"
+        in denied
+    )
+    assert decisions.waiting(tmp_path)
+
+
 def transcript(repo: Path, session: str, *, approval: bool = False) -> Path:
     (repo / "host-transcript.jsonl").write_text(
         "\n".join(

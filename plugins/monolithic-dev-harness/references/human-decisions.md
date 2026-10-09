@@ -53,7 +53,9 @@ The command returns one of:
   line so the human can reopen it. An approval is reused while it holds (not revoked, its work
   session still running, and what it is tied to unchanged).
 - `"state": "waiting_for_human"`, with a `transport`:
-  - `blocking` or `async`: invoke the returned native control. Show the review first.
+  - `blocking` or `async`: invoke the returned native control using its `questions` payload
+    verbatim. Keep each question ID, question text, option label, and description unchanged. Show
+    the review first.
   - `chat`: show the review, then `menu` exactly as written, and end the turn.
 
 ### Fallback
@@ -65,6 +67,11 @@ next transport (blocking → async → chat) with the same options, details, and
 replace the question, ask the human to diagnose hooks, or show internal errors. Reuse a captured
 answer rather than asking again. If an optional preference was not captured, continue with its
 default; do not keep retrying controls or repeat the preference question.
+
+The fallback command accepts only `--repo`, `--session-id`, `--host`, and transport-availability
+flags. Do not add a decision ID or a reason: the pending question is resolved from the saved
+project/session state. If a native presentation is rejected because its payload does not match,
+reuse the exact payload returned by `decision present`; do not invent a replacement question.
 
 ### Answers
 

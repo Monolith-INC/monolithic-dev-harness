@@ -26,6 +26,7 @@ import io
 import json
 import os
 import re
+import shlex
 import signal
 import sys
 from pathlib import Path
@@ -170,7 +171,7 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
         if call.kind == "shell"
         else None
     )
-    held = _held(repo, call, context, request)
+    held = _held(repo, call, context, request, host=host)
     if held is not None:
         _emit_decision(host, held)
         return 0
@@ -242,6 +243,8 @@ def _held(
     call: rules.ToolCall,
     context: Any,
     request: tuple[str, str] | None,
+    *,
+    host: str = "codex",
 ) -> rules.Decision | None:
     """Why a write must wait: the conversation's session or a pending decision, checked once."""
     match _onboarding_control(call, repo):
@@ -269,11 +272,46 @@ def _held(
         or decisions.fallback_command(call.command, Path(call.cwd or repo))
         or work_session_context.recovery_allowed(repo, current, request)
     ):
+        pending = decisions.pending(repo, current)
         return rules.Decision.deny(
             "decision-pending",
-            "Wait for the human's answer before continuing this run.",
+            _pending_decision_guidance(repo, pending, host),
         )
     return None
+
+
+def _pending_decision_guidance(
+    repo: Path, pending: decisions.Pending | None, host: str
+) -> str:
+    """Give the agent a valid recovery path without weakening the pending-decision gate."""
+    session = (
+        f" --session-id {shlex.quote(pending.scope)}"
+        if pending is not None and pending.scope
+        else ""
+    )
+    available = "--async-available" if host == "codex" else "--native-unavailable"
+    fallback = (
+        "harness decision fallback"
+        f" --repo {shlex.quote(str(repo.resolve()))}{session}"
+        f" --host {shlex.quote(host)} {available}"
+    )
+    match pending:
+        case decisions.Pending() as waiting:
+            return (
+                f"Wait for the human's answer before continuing. Decision {waiting.id} is "
+                "still pending. Present the exact "
+                "question ID, wording, option labels, and descriptions returned by `harness decision "
+                "present`; do not paraphrase it or create a replacement question. If that "
+                f"control failed, run this supported fallback command exactly: {fallback}. "
+                "Do not add decision-id or reason flags."
+            )
+        case _:
+            return (
+                "Wait for the human's answer before continuing. A decision is still pending. "
+                "Check it with `harness decision status` "
+                "using only --repo and --session-id. If its control failed, run the supported "
+                f"fallback command exactly: {fallback}. Do not add decision-id or reason flags."
+            )
 
 
 def _onboarding_control(call: rules.ToolCall, repo: Path) -> bool:
@@ -750,7 +788,7 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             host,
             rules.Decision.deny(
                 "decision-pending",
-                "Answer the current question before presenting another.",
+                _pending_decision_guidance(repo, pending, host),
             ),
         )
         return 0
