@@ -235,7 +235,8 @@ class SetupTests(unittest.TestCase):
         before = setup.inspect(self.repo).value
         self.assertEqual(before["status"], "ready")
         self.assertTrue(before["tracker_storage"]["ready"])
-        self.assertFalse(before["repository"]["has_committed_head"])
+        self.assertIsNone(before["repository"]["has_committed_head"])
+        self.assertEqual(before["repository"]["git_access"], "deferred")
         paused = workflow.pause(
             workflow.add_point(
                 workflow.start("DAY-001").value,
@@ -263,8 +264,8 @@ class SetupTests(unittest.TestCase):
             check=True,
         )
         after = setup.inspect(self.repo).value
-        self.assertTrue(after["repository"]["has_committed_head"])
-        self.assertTrue(after["repository"]["head"])
+        self.assertIsNone(after["repository"]["has_committed_head"])
+        self.assertEqual(after["repository"]["head"], "")
         self.assertEqual(after["workflow"]["pending"], "No first commit")
 
     def test_existing_local_settings_prepare_missing_folders_without_replacing_records(

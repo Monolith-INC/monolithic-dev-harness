@@ -268,6 +268,8 @@ _OWNED_DIRS = (
     (".harness", "state", "approvals"),
     (".harness", "state", "manual"),
     (".harness", "state", "asked"),
+    (".harness", "state", "control-questions"),
+    (".harness", "state", "question-observations"),
     (".harness", "state", "sessions"),
     (".harness", "state", "work_sessions"),
     (".harness", "state", "host_sessions"),

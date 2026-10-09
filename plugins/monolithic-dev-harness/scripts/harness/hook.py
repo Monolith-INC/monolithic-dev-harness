@@ -21,6 +21,8 @@ to be rewritten when it is not plain enough to show a person.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import re
@@ -41,8 +43,10 @@ from harness import (  # noqa: E402
     gates,
     gitstate,
     globs,
+    harness_controls,
     onboarding,
     preferences,
+    project_paths,
     questions,
     rules,
     settings,
@@ -95,7 +99,7 @@ def _workspace(payload: dict[str, Any], host: str = "claude") -> Path:
     for candidate in hook_bridge.workspace_candidates(host, payload):
         if isinstance(candidate, str) and candidate and Path(candidate).is_dir():
             start = Path(candidate)
-            return gitstate.repo_root(start) or start
+            return project_paths.root(start)
     return Path.cwd()
 
 
@@ -148,21 +152,25 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 
 
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
-    call = _tool_call(host, event, payload)
     repo = _workspace(payload, host)
+    match state.harness_mode(repo):
+        case "suspended":
+            _emit_decision(host, rules.Decision.allow())
+            return 0
+        case _:
+            pass
+    call = _tool_call(host, event, payload)
     entry = rules.rule_hook_entry(call)
     if not entry.allowed:
         _emit_decision(host, entry)
         return 0
-    # The user released the checks from their own prompt; only their records stay protected.
-    suspended = state.harness_mode(repo) == "suspended"
     context = work_session_context.for_payload(repo, host, payload)
     request = (
         work_session_context.requested(call.command, Path(call.cwd or repo))
         if call.kind == "shell"
         else None
     )
-    held = None if suspended else _held(repo, call, context, request)
+    held = _held(repo, call, context, request)
     if held is not None:
         _emit_decision(host, held)
         return 0
@@ -185,14 +193,12 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
         signal.setitimer(signal.ITIMER_REAL, RULES_BUDGET_SECONDS)
     try:
         loaded = settings.load(repo)
-        match suspended, loaded:
-            case True, _:
-                decision = rules.rule_human_owned(call, repo)
-            case False, Err(failure):
+        match loaded:
+            case Err(failure):
                 return _fail(
                     host, call, f"the settings cannot be used: {failure.message}"
                 )
-            case False, Ok(chosen):
+            case Ok(chosen):
                 decision = rules.evaluate(
                     call,
                     repo,
@@ -222,7 +228,7 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
                     pass
         case _:
             pass
-    if not decision.allowed or suspended:
+    if not decision.allowed:
         _emit_decision(host, decision)
         return 0
     if hook_bridge.delegates_workflow_policy(host, event):
@@ -253,6 +259,11 @@ def _held(
     mismatch = work_session_context.mismatch(current, request)
     if mismatch is not None:
         return rules.Decision.deny("work-session-mismatch", mismatch.message)
+    match _progress_control(call, repo):
+        case True:
+            return None
+        case _:
+            pass
     if decisions.blocking(repo, current) and not (
         decisions.status_command(call.command, Path(call.cwd or repo))
         or decisions.fallback_command(call.command, Path(call.cwd or repo))
@@ -269,6 +280,33 @@ def _onboarding_control(call: rules.ToolCall, repo: Path) -> bool:
     return call.kind == "shell" and onboarding.recovery_command(
         call.command, Path(call.cwd or repo), repo
     )
+
+
+def _progress_control(call: rules.ToolCall, repo: Path) -> bool:
+    """Saving progress and navigating do not answer or bypass the pending choice."""
+    from harness import commands
+
+    match call.kind, commands.harness_args(call.command, Path(call.cwd or repo)):
+        case "shell", ("workflow", operation, *args) if operation in {
+            "checkpoint",
+            "pause",
+            "resume",
+            "cancel",
+            "back",
+        }:
+            return (
+                all(
+                    sum(arg == name or arg.startswith(name + "=") for arg in args) <= 1
+                    for name in ("--repo", "--session-id")
+                )
+                and (
+                    Path(call.cwd or repo)
+                    / (commands.option(tuple(args), "--repo") or ".")
+                ).resolve()
+                == repo.resolve()
+            )
+        case _:
+            return False
 
 
 def _diagnostic_read(call: rules.ToolCall, repo: Path) -> bool:
@@ -450,7 +488,7 @@ def _switch_harness(repo: Path, operation: str) -> str:
         return "[harness] every harness check applies again in this repository."
     return (
         "[harness] every harness check is suspended in this repository at the user's request; "
-        "edits to the harness's own records stay blocked. Type `harness resume` to restore them."
+        "no harness guard will veto tools. Type `harness resume` to restore checks."
     )
 
 
@@ -462,9 +500,22 @@ def _print_prompt(host: str, notes: list[str]) -> None:
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     prompt = hook_bridge.prompt_text(payload)
     repo = _workspace(payload, host)
-    match SUSPEND_RE.fullmatch(prompt):
-        case re.Match() as switch:
-            _print_prompt(host, [_switch_harness(repo, switch.group(1).lower())])
+    from host_adapters import native_session_id
+
+    match harness_controls.prompt_operation(
+        repo, prompt, native_session_id(host, payload) or ""
+    ):
+        case "suspend" | "resume" as operation:
+            harness_controls.prompt(
+                repo, prompt, native_session_id(host, payload) or ""
+            )
+            _print_prompt(host, [_switch_harness(repo, operation)])
+            return 0
+        case "free":
+            harness_controls.prompt(
+                repo, prompt, native_session_id(host, payload) or ""
+            )
+            onboarding.control(repo, "mode", "free")
             return 0
         case _:
             pass
@@ -473,6 +524,17 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         _print_prompt(host, [context.failure.message])
         return 0
     work_session_id = context.value
+    match state.harness_mode(repo), decisions.pending(repo, work_session_id):
+        case "suspended", decisions.Pending(id=identifier):
+            from harness import question_observation
+
+            match question_observation.foreign_prompt(repo, identifier, prompt):
+                case True:
+                    return 0
+                case _:
+                    pass
+        case _:
+            pass
     match _recover_prompt_answer(repo, host, payload, work_session_id):
         case notes, pending:
             pass
@@ -571,8 +633,8 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
     """
     repo = _workspace(payload, host)
     message = hook_bridge.stop_message(payload)
-    match onboarding.mode(repo):
-        case "free":
+    match onboarding.status(repo):
+        case {"mode": "free"} | {"status": "paused"}:
             return 0
         case _:
             pass
@@ -580,15 +642,47 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
         message is None
         or not settings.governed(repo)
         or state.harness_mode(repo) == "suspended"
-        or asks_the_user(message)
     ):
         return 0
     context = work_session_context.for_payload(repo, host, payload)
     if isinstance(context, Err):
         return 0
     scope = context.value
-    if decisions.blocking(repo, scope):
-        return 0
+    from host_adapters import native_session_id
+
+    match harness_controls.waiting(repo, native_session_id(host, payload) or ""):
+        case True:
+            return 0
+        case _:
+            pass
+    match harness_controls.pending_native(repo, native_session_id(host, payload) or ""):
+        case True:
+            print(
+                hook_bridge.format_stop(
+                    "[harness] Present lifecycle controls before stopping. If blocking UI failed, repeat harness decision present --gate harness-controls with --async-available, then --native-unavailable. Preserve the work decision; do not fall back to it."
+                )
+            )
+            return 0
+        case _:
+            pass
+    match decisions.pending(repo, scope):
+        case decisions.Pending(transport="chat"):
+            return 0
+        case decisions.Pending(
+            transport="async", presentation_id=str() as identifier
+        ) if identifier:
+            return 0
+        case decisions.Pending():
+            print(
+                hook_bridge.format_stop(
+                    "[harness] Present the staged native decision before ending the turn. "
+                    "If its control failed or returned without a captured answer, preserve it with "
+                    "harness decision fallback and use async then chat. Do not abandon the run."
+                )
+            )
+            return 0
+        case _:
+            pass
     match workflow.load(repo, scope):
         case Ok(current) if current.status == "active":
             pass
@@ -600,7 +694,9 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
             "[harness] The workflow is still active, and this turn ends without a question "
             "for the user or a pending menu, so the user would have to ask what's next. "
             + (f"The saved next action is: {upcoming}. " if upcoming else "")
-            + "Continue with it now. If you need the user, ask with a menu or a question batch. "
+            + "Continue with it now. If you need the user, stage the decision and attempt native "
+            "controls. If unavailable, preserve it through async then chat fallback; a prose "
+            "question alone does not fulfill the presentation contract. "
             "If the requested outcome is finished, mark the workflow complete "
             "(`harness workflow complete`) and say so."
         )
@@ -609,7 +705,31 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
 
 
 def handle_ask(host: str, payload: dict[str, Any]) -> int:
+    """Observe real questions while suspended, without giving the observer a veto."""
+    match _workspace(payload, host):
+        case Path() as repo if state.harness_mode(repo) == "suspended":
+            from harness import question_observation
+
+            question_observation.ask(repo, host, payload)
+            with contextlib.redirect_stdout(io.StringIO()):
+                attempt(
+                    lambda: _handle_ask(host, payload),
+                    "question_observation",
+                    "suspended question",
+                    Exception,
+                )
+            return 0
+        case _:
+            return _handle_ask(host, payload)
+
+
+def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     """Before a question is shown: send it back if a person would have to decode it."""
+    match harness_controls.observe(_workspace(payload, host), host, payload):
+        case True:
+            return 0
+        case _:
+            pass
     repo = _question_repo(payload, host)
     if repo is None:
         return 0
@@ -635,7 +755,7 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
         )
         return 0
     found = questions.problems(tool_input)
-    # While suspended only the wording check is off: the checks below pin what a click approves.
+    # Suspended observation may retain a valid binding but never veto presentation.
     if found and state.harness_mode(repo) != "suspended":
         _emit_decision(
             host,
@@ -817,6 +937,37 @@ def _adoption_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any]
 
 def handle_answer(host: str, payload: dict[str, Any]) -> int:
     """After the user answers a question: record the decision, then what the question pinned."""
+    match harness_controls.answer(_workspace(payload, host), payload, host):
+        case "suspend" | "resume" as operation:
+            print(
+                hook_bridge.format_answer_context(
+                    _switch_harness(_workspace(payload, host), operation)
+                )
+            )
+            return 0
+        case "free":
+            onboarding.control(_workspace(payload, host), "mode", "free")
+            return 0
+        case _:
+            pass
+    match _workspace(payload, host):
+        case Path() as observed if state.harness_mode(observed) == "suspended":
+            from harness import question_observation
+
+            question_observation.answer(observed, host, payload)
+            match work_session_context.for_payload(observed, host, payload):
+                case Ok(scope):
+                    match decisions.pending(observed, scope):
+                        case decisions.Pending(id=identifier) if (
+                            identifier == hook_bridge.question_id(payload)
+                        ):
+                            pass
+                        case _:
+                            return 0
+                case _:
+                    return 0
+        case _:
+            pass
     repo = _question_repo(payload, host)
     tool_use_id = hook_bridge.question_id(payload)
     if repo is None or not tool_use_id:

@@ -109,6 +109,191 @@
       "outputs": ["suspension status", "preserved workflow and project settings"],
       "checks": ["after the user sends `harness suspend`, verify with `harness suspension status`", "confirm ordinary work can continue"],
       "recovery": ["report persistence failure; do not claim checks are suspended"]
+    },
+    "discovery": {
+      "knowledge": [
+        "references/six-stage-onboarding.md",
+        "references/human-decisions.md"
+      ],
+      "operations": [
+        "harness.workflow.status",
+        "harness.workflow.checkpoint"
+      ],
+      "recovery": [
+        "preserve evidence; pause, resume, reset or drop on user direction",
+        "native controls first; preserve the decision through async and chat fallback"
+      ],
+      "title": "Investigate before selecting planning depth",
+      "skills": [
+        {
+          "name": "bmad-build",
+          "when": "Understand request and relevant code before drafting."
+        }
+      ],
+      "outputs": [
+        "discovery digest",
+        "Code Map",
+        "constraints and consequential open choices"
+      ],
+      "checks": [
+        "no version-control prerequisites",
+        "inspect evidence before asking"
+      ]
+    },
+    "planning": {
+      "knowledge": [
+        "references/six-stage-onboarding.md",
+        "references/human-decisions.md"
+      ],
+      "operations": [
+        "harness.workflow.status",
+        "harness.workflow.checkpoint"
+      ],
+      "recovery": [
+        "preserve evidence; pause, resume, reset or drop on user direction",
+        "native controls first; preserve the decision through async and chat fallback"
+      ],
+      "title": "Choose depth and explore the approach before drafting",
+      "skills": [
+        {
+          "name": "bmad-advanced-elicitation",
+          "when": "Offer contextual methods, full catalog or recommendations."
+        }
+      ],
+      "outputs": [
+        "selected depth",
+        "accepted method findings",
+        "drafted approach"
+      ],
+      "checks": [
+        "reuse recorded depth",
+        "Light, Standard or Hardcore before drafting"
+      ]
+    },
+    "hardening": {
+      "knowledge": [
+        "references/six-stage-onboarding.md",
+        "references/human-decisions.md"
+      ],
+      "operations": [
+        "harness.workflow.status",
+        "harness.workflow.checkpoint"
+      ],
+      "recovery": [
+        "preserve evidence; pause, resume, reset or drop on user direction",
+        "native controls first; preserve the decision through async and chat fallback"
+      ],
+      "title": "Review and reconcile the plan",
+      "skills": [
+        {
+          "name": "bmad-review",
+          "when": "Use the chosen depth and triage substantive findings."
+        }
+      ],
+      "outputs": [
+        "hardened plan",
+        "review findings and deferred risks"
+      ],
+      "checks": [
+        "preserve requirements",
+        "resolve only consequential blockers"
+      ]
+    },
+    "preparation": {
+      "knowledge": [
+        "references/six-stage-onboarding.md",
+        "references/human-decisions.md"
+      ],
+      "operations": [
+        "harness.workflow.status",
+        "harness.workflow.checkpoint"
+      ],
+      "recovery": [
+        "preserve evidence; pause, resume, reset or drop on user direction",
+        "native controls first; preserve the decision through async and chat fallback"
+      ],
+      "title": "Assemble the reviewable bundle",
+      "skills": [
+        {
+          "name": "bmad-spec",
+          "when": "Distill requirements into a lean spec and companions."
+        },
+        {
+          "name": "generate-work-item",
+          "when": "Draft tracker artifacts locally."
+        }
+      ],
+      "outputs": [
+        "specification and relevant companions",
+        "reading manifest",
+        "tracker drafts",
+        "implementation plan"
+      ],
+      "checks": [
+        "manifest gives purpose, read trigger, owner and digest",
+        "no publication without exact authorization"
+      ]
+    },
+    "confirmation": {
+      "knowledge": [
+        "references/six-stage-onboarding.md",
+        "references/human-decisions.md"
+      ],
+      "operations": [
+        "harness.workflow.status",
+        "harness.workflow.checkpoint"
+      ],
+      "recovery": [
+        "preserve evidence; pause, resume, reset or drop on user direction",
+        "native controls first; preserve the decision through async and chat fallback"
+      ],
+      "title": "Confirm the complete implementation bundle once",
+      "skills": [
+        {
+          "name": "harness",
+          "when": "Present implementation-confirm with every reviewed artifact."
+        }
+      ],
+      "outputs": [
+        "recorded bundle decision"
+      ],
+      "checks": [
+        "show concrete actions and all recorded decisions",
+        "recheck reviewed content before execution"
+      ]
+    },
+    "execution": {
+      "knowledge": [
+        "references/six-stage-onboarding.md",
+        "references/human-decisions.md"
+      ],
+      "operations": [
+        "harness.workflow.status",
+        "harness.workflow.checkpoint"
+      ],
+      "recovery": [
+        "preserve evidence; pause, resume, reset or drop on user direction",
+        "native controls first; preserve the decision through async and chat fallback"
+      ],
+      "title": "Execute the approved plan",
+      "skills": [
+        {
+          "name": "implement-story",
+          "when": "Implement from the accepted plan."
+        },
+        {
+          "name": "thermos",
+          "when": "Review code correctness and quality."
+        }
+      ],
+      "outputs": [
+        "verified implementation",
+        "test and review evidence"
+      ],
+      "checks": [
+        "detect optional versioning now",
+        "external delivery remains context-bound"
+      ]
     }
   },
   "routes": {
@@ -117,6 +302,7 @@
     "prepare-artifacts": ["setup", "discover", "backlog", "technical-plan"],
     "implement-approved-item": ["setup", "build", "verify"],
     "resume-work": ["setup", "discover", "backlog", "technical-plan", "build", "verify"],
-    "suspend-checks": ["suspend"]
+    "suspend-checks": ["suspend"],
+    "onboarding": ["discovery", "planning", "hardening", "preparation", "confirmation", "execution"]
   }
 }

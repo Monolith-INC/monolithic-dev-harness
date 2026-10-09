@@ -19,6 +19,12 @@ steer it. The team's rules must hold anyway.
 
 ## Decision
 
+2026-10-08 clarification: enforcement applies only while the human has enabled it. User
+suspension bypasses every harness veto before tool parsing, settings or session checks. Optional
+question observation may preserve evidence, but has no veto and grants no unreviewed approval.
+Preparation has no version-control prerequisites. Consequential action boundaries remain enforced
+when active; language and other preferences never become required action gates.
+
 Every behavior that must always hold is a rule in the hook runtime with a deny test and an allow
 test. Skill text explains the rule and how to satisfy it; it is never the enforcement. Behavior no
 script can judge stays in the review stage and is documented as review-only.

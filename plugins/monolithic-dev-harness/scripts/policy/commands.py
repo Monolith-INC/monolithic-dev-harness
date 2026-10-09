@@ -46,7 +46,13 @@ def is_code(
         case None, False, path, folder if (
             folder
             and path.startswith(folder.rstrip("/") + "/")
-            and Path(path).suffix.lower() == ".md"
+            and (
+                Path(path).suffix.lower() == ".md"
+                or (
+                    path.startswith(folder.rstrip("/") + "/acceptance-evidence/")
+                    and Path(path).suffix.lower() in {".json", ".jsonl"}
+                )
+            )
         ):
             return False
         case _:

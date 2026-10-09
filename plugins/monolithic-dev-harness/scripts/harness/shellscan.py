@@ -1,16 +1,13 @@
 """What a shell command runs, and what it could write.
 
-The rules ask two questions about a `Bash` call. Which commands does it run (is this a `git push`)?
-Which paths could it write (is this a write to the policy)? A regex answers both badly, in both
-directions: `2>/dev/null` looks like a write, while `sudo git push` and `timeout 5 sh -c '…'` do not
-look like anything. This module tokenizes the command once and answers both.
+One shared tokenization answers which commands run and which paths can be written.
+Unlike regex-only scanning, this distinguishes `2>/dev/null` from writes and follows
+`sudo git push` and `timeout 5 sh -c '…'`.
 
-`invocations` walks every simple command the shell would run: across lines and continuations,
-through wrappers (`sudo`, `env`, `timeout`), subshells, `if`/`for` bodies, `sh -c`, `eval`, `xargs`,
-and `find -exec`. Each invocation knows the directory it runs in.
+`invocations` follows lines, continuations, wrappers, subshells, control bodies, `sh -c`,
+`eval`, `xargs` and `find -exec`, preserving each command's working directory.
 
-`scan` classifies those invocations into what they write:
-
+`scan` classifies writes:
 - `targets`: paths a command writes or removes.
 - `trees`: directories whose whole contents a command may write or remove (`rm -r`, `git clean`,
   `find -delete`, extracting an archive).
@@ -18,9 +15,8 @@ and `find -exec`. Each invocation knows the directory it runs in.
   script, `xargs` fed from a pipe, a path held in a variable). A caller treats a protected path
   among them as written: this fails closed, never open.
 
-Unknown commands are writers. A command not listed as reading is assumed to write every path it
-names, so a new reader naming a protected file is refused until it is added to `NON_WRITERS` —
-never the other way round.
+Unknown commands are writers of their named paths. Add verified readers to `NON_WRITERS`;
+never exempt an unknown command merely because it names a protected file.
 """
 
 from __future__ import annotations
@@ -35,6 +31,9 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from itertools import islice
 from pathlib import Path
+
+from harness.shell_literals import expansion_source
+from harness.shell_parse_cache import parse
 
 # Commands that never write a file's content. Anything else is a writer of what it names.
 NON_WRITERS = frozenset(
@@ -393,12 +392,18 @@ def _substitutions(command: str) -> list[str]:
 
 
 def invocations(command: str, cwd: str | None = "", depth: int = 0) -> list[Invocation]:
+    return parse(_invocations, command, cwd, depth)
+
+
+def _invocations(
+    command: str, cwd: str | None = "", depth: int = 0
+) -> list[Invocation]:
     """Every simple command `command` runs, in order, including nested and dispatched ones."""
     if depth > MAX_DEPTH:
         # Raising makes the hook refuse the call, as it does for any command it cannot read.
         raise ValueError(f"the command nests more than {MAX_DEPTH} levels deep")
     found: list[Invocation] = []
-    for inner in _substitutions(command):
+    for inner in _substitutions(expansion_source(command)):
         found.extend(invocations(inner, cwd, depth + 1))
     stack: list[str | None] = []
     pipeline: list[str] = []

@@ -130,6 +130,27 @@ def cancel_onboarding(repo: Path) -> Result[dict[str, Any]]:
             return Ok(current or {})
 
 
+def cancel_preparation(repo: Path, scope: str | None) -> Result[object]:
+    """A reset abandons a pending preparation question; it grants no approval."""
+    return bind(
+        _path(repo, scope),
+        lambda path: _cancel_preparation_at(path),
+    )
+
+
+def _cancel_preparation_at(path: Path) -> Result[object]:
+    match state.read_json(path):
+        case {"status": "pending"} as current:
+            return attempt(
+                lambda: _archive_dismissal(path, {**current, "status": "cancelled"}),
+                "decision_invalid",
+                "archive preparation question",
+                OSError,
+            )
+        case _:
+            return Ok(None)
+
+
 def _cancel_ready(repo: Path) -> Result[dict[str, Any]]:
     match record(repo):
         case {"status": "cancelled"} as current if onboarding_question(current):

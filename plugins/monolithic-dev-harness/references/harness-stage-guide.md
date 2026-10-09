@@ -1,5 +1,11 @@
 # Harness
 
+The authoritative preparation sequence is [six-stage onboarding](six-stage-onboarding.md):
+Discovery → Planning → Hardening → Preparation → Confirmation → Execution. The legacy stage
+names below remain supported for existing runs; they do not add preparation approval gates.
+Use the planning-depth choice after discovery and before drafting, then one final bundle
+confirmation. Versioning is detected only at execution entry and never required for preparation.
+
 Follow [the workflow storyboard](workflow-storyboard.md) for stage entry and exit,
 review surfaces, and Back/Pause/Resume/Cancel/Complete behavior. This skill supplies the
 stage-specific details. Each stage consumes the previous stage's output; none re-invents it. Hooks
@@ -67,9 +73,9 @@ provide the work-item capabilities for planning; do not start a second tracker o
 setup during discovery, ideation, or backlog drafting. Mark the workflow complete when its
 requested outcome is finished.
 
-Use the inspection's current `repository.has_committed_head`, `tracker_storage`, and `workflow`
-fields when resuming. A saved note about a missing commit describes the past. Recheck current
-state and continue the pending product or engineering step. If the bundled local tracker has missing
+Use the inspection's `tracker_storage` and `workflow` fields when resuming. Versioning is deferred
+until execution and is never a preparation prerequisite. Continue the pending product or
+engineering step. If the bundled local tracker has missing
 folders, bootstrap prepares them without a user question.
 
 `back`, `pause`, `resume`, and `cancel` are workflow actions. Use native controls; never ask the user
@@ -80,16 +86,16 @@ permission for an external write. Resume rechecks files, tracker, and approvals 
 ### Suspend harness checks on the human's request
 
 For skills without a session while retaining governance, use free mode rather than suspension.
-Only the human can suspend the harness: the hook records it when they send `harness suspend` as its
-own message, and no command lets an agent do it. When they want to continue ordinary work outside
-the harness, use `suspend-harness` to ask them to send it. It works before setup and with invalid
-settings or an unavailable tracker. Verify with `harness suspension status --repo <project>`; until
-it reports `"mode": "suspended"`, the checks still apply.
+Only the human can suspend checks. Present the `harness-controls` gate using native controls;
+its reply is recorded independently of pending decisions or sessions. If delivery fails, repeat
+that gate with async then chat fallback. Plain or fenced `harness suspend` user messages also work.
+Verify with `harness suspension status --repo <project>`. Free mode and workflow pause are separate.
 
 While suspended, continue the human's ordinary work without harness workflow, tracker, branch,
 commit, review, decision-wait, or question-wording checks. Approval and decision clicks are still
-recorded, a pending decision is kept rather than answered, and direct edits to human-owned
-control/evidence records remain protected; host permissions and other plugins are independent.
+recorded when capture succeeds, and a pending decision is kept rather than answered.
+No harness check vetoes tools, including protected-record checks; host permissions and other plugins
+are independent.
 Preserve the existing workflow, settings, tracker, and evidence. Workflow/session pause and
 `skip-tracker` are different operations and do not suspend all checks.
 
@@ -167,7 +173,18 @@ The choice is routing, not approval: it never opens an approval window. `Investi
 Continue directly when the user already chose a starting point, named an existing task, directly
 invoked a planning skill, or explicitly asked to create or modify a work item.
 
-## Stage 1: Backlog
+## Approved six-stage execution
+
+After `implementation-confirm`, `implement-story` consumes the reviewed implementation plan,
+manifest and technical specification without reopening outline, body or G2 approvals. Reuse
+that contextual authorization for exactly the tracker actions stated in the bundle. Recheck
+content digests; consult the user only for changed circumstances or genuinely missing contracts.
+Detect optional version control at execution; absence does not prevent local implementation.
+
+The following separate approval sequence applies only to legacy runs without this approved bundle.
+Do not mix it into the six-stage handoff.
+
+## Legacy preparation only: Backlog
 
 1. **Top ancestor.** `generate-work-item` drafts the highest item in the tree (usually an Epic) from
    the product spec, user's idea, or an existing item. When a product spec exists, preserve its
@@ -187,7 +204,7 @@ invoked a planning skill, or explicitly asked to create or modify a work item.
    labels, and required values before publishing the batch. In Linear, confirm Story and Task
    labels exist before the first item is created. Explain where every Task will be visible.
 
-## Stage 2: Technical plan
+## Legacy preparation only: Technical plan
 
 `start-ticket` on the Story (moves it to in progress), then `write-spec`. The spec takes the
 Story, its acceptance criteria, its covered `CAP-N` values, its Tasks, and any adopted UX and
@@ -280,11 +297,12 @@ blocks any agent write to the records. Gates G1, G2, and G4 map to these approva
 | `history-preserved` | rewriting branch history: rebase, squash merges, force-push, `filter-branch`, completing a pull request by squash or rebase |
 | workflow | code changes without an active session for this checkout (`harness session start`), new branches off the convention, the session's work item not in progress, code before an accepted spec, completion without evidence, protected branches |
 
-When a hook blocks you, read its reason and fix the cause. Never retry through another tool or
-route around it.
+When a hook denies the requested effect, respect that boundary. When it cannot classify a
+permitted read, use a narrow verified reader such as jq or a native file-read tool. Tool fallback
+must not broaden authorization. Preserve progress and continue unaffected work.
 
 When the user asks to work outside the harness, use `suspend-harness`: the user sends
-`harness suspend` as its own message, and the hook turns off every rule above except `human-owned`
+`harness suspend` as its own message, and the hook turns off every rule above
 while keeping the settings, tracker, and evidence. Only the user's own message can suspend the
 harness. `resume-harness` turns the checks back on.
 

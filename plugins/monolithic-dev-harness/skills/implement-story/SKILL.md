@@ -1,6 +1,6 @@
 ---
 name: implement-story
-description: Spec-driven implementation of one User Story after its spec is approved — branch, then for each Task in order architect → failing test → implement → check → deslop → atomic commit → Task transition — ending with the Story ready for the review stage. Use after write-spec is accepted (gate G2), from the harness flow or feature-implementation.
+description: Spec-driven implementation of one User Story after its spec is approved — branch, then for each Task in order architect → failing test → implement → check → deslop → atomic commit → Task transition — ending with the Story ready for the review stage. Use after the six-stage implementation bundle is accepted, or after legacy write-spec approval, from the harness flow or feature-implementation.
 ---
 
 # Implement Story
@@ -11,20 +11,30 @@ The execution half of the harness. Inputs come from earlier stages and are never
 | --- | --- |
 | Story, acceptance criteria, points | `decompose-backlog` (backlog stage, gate G1) |
 | Tasks in order, plus Staging / Review / Breakdown | `generate-breakdown-work-items` |
-| Technical specification (*how*) | `write-spec`, approved at gate G2 |
+| Technical specification (*how*) | Reviewed preparation bundle, or legacy `write-spec` |
 | Repository rules and commands | `AGENTS.md` routing, `.harness/settings.json` |
 
-If the spec is missing or unapproved, stop and run `write-spec` first. The workflow policy hook
-also blocks governed writes without the spec.
+## Approved-bundle handoff
+
+For six-stage onboarding, read the implementation plan and its manifest, then only the companion
+artifacts required for this Story. Verify the recorded `implementation-confirm` approval and the
+reviewed content digests. That approval replaces separate G1/G2/spec approvals for this unchanged
+bundle. Consume the existing technical specification; do not run `write-spec` or ask `approve-spec`
+again. If a required contract is missing or circumstances changed materially, explain the gap and
+consult the user about that specific change. Never invent or widen authorization.
+
+Only legacy runs without an approved six-stage bundle follow the separate `write-spec` / G2 path.
+Preserve the same authorization through start-ticket and tracker transitions: perform only actions
+stated in the bundle, reusing its approval. Unrelated actions and later merges need their own context.
 
 ## 0. Start
 
-0. Inspect the branch, index, working tree, untracked files, and commits since the intended base. If
+0. Detect version control automatically at execution. If present, inspect the branch, index, working tree, untracked files, and commits since the intended base. If absent, execute and verify locally without Git-specific branch, commit or PR steps. If
    implementation already exists, stop this fresh-build routine and use
    `adopt-existing-implementation`; do not manufacture TDD history or reconstruct commits by swapping
    partial file versions through the working tree.
 1. `start-ticket` on the Story: it confirms the tracker item, moves it to in progress (a tracker write:
-   ask the `move-item` gate), and returns the spec plan.
+   reuse the approved bundle when this transition is stated; otherwise ask the `move-item` gate), and returns the spec plan.
 2. `branch-and-pr` → *Branch* section: create the Story branch from the fresh base.
 3. Read the repository routing (`AGENTS.md` → subproject router) once, and list the rules that apply
    to this Story (state management, layer boundaries, localization, PII masking, generated code,
@@ -45,7 +55,7 @@ one starts.
 6. **Commit** atomically (`commit-prep`): one Task, one commit, with a message that names the Task
    id. The hooks block commits that lack tests (`tests-with-code`), edit generated files (`generated-files`), or touch a guarded
    path without evidence (`guarded-paths`). Fix the cause; never work around the hook.
-7. **Transition the Task** to done in the tracker. The `approve-spec` approval covers it while the
+7. **Transition the Task** to done in the tracker. The approved bundle (or legacy `approve-spec` approval) covers its stated transitions while the
    spec is unchanged; if the hook reports the spec changed, show what changed and ask again.
 
 ## 2. Story done

@@ -16,7 +16,25 @@ from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
 from harness import state
 
 VERSION = 1
-STAGES = ("setup", "discover", "ideate", "backlog", "technical-plan", "build", "verify")
+ONBOARDING_STAGES = (
+    "discovery",
+    "planning",
+    "hardening",
+    "preparation",
+    "confirmation",
+    "execution",
+)
+# Existing persisted checkpoints remain readable without rewriting their history.
+STAGES = (
+    *ONBOARDING_STAGES,
+    "setup",
+    "discover",
+    "ideate",
+    "backlog",
+    "technical-plan",
+    "build",
+    "verify",
+)
 STATUSES = ("active", "paused", "cancelled", "completed")
 TERMINAL_STATUSES = frozenset({"cancelled", "completed"})
 RELATIVE_PATH = Path(".harness/state/workflow.json")
@@ -83,7 +101,7 @@ def _archive_if_active(
     return bind(
         Ok(None)
         if session_id is None
-        else fmap(work_sessions.require_active(repo, session_id), lambda _: None),
+        else fmap(work_sessions.select(repo, session_id), lambda _: None),
         lambda _: attempt(
             lambda: _archive(repo, current, session_id),
             "workflow_unwritable",
@@ -116,7 +134,7 @@ def start(request: str, language: str = "") -> Result[Workflow]:
                         Point(
                             1,
                             "First request",
-                            "discover",
+                            "discovery",
                             next_action="Continue original request",
                         ),
                     ),
@@ -125,6 +143,73 @@ def start(request: str, language: str = "") -> Result[Workflow]:
             )
         case _:
             return err("invalid_workflow", "language must be en or pt-br")
+
+
+def restart_preparation(repo: Path) -> Result[object]:
+    """Archive only the current preparation, preserving approvals and completed writes."""
+    from harness import work_sessions
+
+    match work_sessions.current(repo):
+        case scope:
+            match load(repo, scope):
+                case Err(failure) if failure.code == "workflow_absent":
+                    return Ok(None)
+                case Err() as failure:
+                    return failure
+                case Ok(current) if current.current.stage in {
+                    "execution",
+                    "build",
+                    "verify",
+                }:
+                    return Ok(None)
+                case Ok(current):
+                    return bind(
+                        start(current.request, current.language),
+                        lambda fresh: bind(
+                            attempt(
+                                lambda: _retain_preparation(repo, current, scope),
+                                "workflow_unwritable",
+                                "archive preparation before reset",
+                                OSError,
+                            ),
+                            lambda _: save(
+                                repo,
+                                replace(
+                                    fresh,
+                                    points=(
+                                        replace(
+                                            fresh.current,
+                                            completed_writes=tuple(
+                                                dict.fromkeys(
+                                                    receipt
+                                                    for point in current.points
+                                                    for receipt in point.completed_writes
+                                                )
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                scope,
+                            ),
+                        ),
+                    )
+
+
+def _retain_preparation(repo: Path, current: Workflow, scope: str | None) -> Path:
+    from harness import decisions
+
+    destination = (
+        path(repo, scope).parent / "workflows" / f"{secrets.token_hex(8)}.json"
+    )
+    state.write_json(destination, asdict(current))
+    match decisions.cancel_preparation(repo, scope):
+        case Err(failure):
+            raise OSError(
+                failure.message
+            )  # isolated persistence edge; archive already retained
+        case Ok():
+            pass
+    return destination
 
 
 def add_point(
@@ -138,7 +223,9 @@ def add_point(
     completed_writes: tuple[str, ...] = (),
 ) -> Result[Workflow]:
     match workflow.status, label.strip(), stage:
-        case "active", str() as name, str() as selected if name and selected in STAGES:
+        case "active" | "paused", str() as name, str() as selected if (
+            name and selected in STAGES
+        ):
             kept = workflow.points[: workflow.cursor + 1]
             point = Point(
                 max(item.id for item in workflow.points) + 1,
@@ -162,10 +249,10 @@ def add_point(
                 ),
             )
             return Ok(replace(workflow, points=(*kept, point), cursor=len(kept)))
-        case "active", _, _:
+        case "active" | "paused", _, _:
             return err("invalid_workflow", "a label and known stage are required")
         case _:
-            return err("invalid_workflow", "resume the workflow before saving a point")
+            return err("invalid_workflow", "a finished workflow cannot save a point")
 
 
 def navigate(workflow: Workflow, point_id: int | None = None) -> Result[Workflow]:
@@ -184,7 +271,7 @@ def navigate(workflow: Workflow, point_id: int | None = None) -> Result[Workflow
 
 def pause(workflow: Workflow) -> Result[Workflow]:
     match workflow.status:
-        case "active":
+        case "active" | "paused":
             return Ok(replace(workflow, status="paused"))
         case _:
             return err("invalid_workflow", "only an active workflow can be paused")
@@ -321,8 +408,16 @@ def save(repo: Path, workflow: Workflow, session_id: str | None = None) -> Resul
         from harness import work_sessions
 
         return bind(
-            work_sessions.require_active(repo, session_id),
-            lambda selected: persist(repo, workflow, selected.folder / "workflow.json"),
+            work_sessions.select(repo, session_id),
+            lambda selected: bind(
+                require(
+                    selected.status
+                    in {work_sessions.Status.ACTIVE, work_sessions.Status.PAUSED},
+                    "session_not_active",
+                    "resume a stopped work session before advancing it",
+                ),
+                lambda _: persist(repo, workflow, selected.folder / "workflow.json"),
+            ),
         )
     return persist(repo, workflow, path(repo))
 

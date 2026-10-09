@@ -73,3 +73,33 @@ last_reviewed: 2026-10-08
     Committed all three fixes and their tests as `77546df` and pushed to draft PR 37. The installed
     plugin includes this corrected source. Updated the acceptance briefing accordingly; live
     question capture remains unverified and no application implementation occurred.
+12. **Six-stage implementation.** Persisted the implementation plan before edits. Added the
+    Discovery → Planning → Hardening → Preparation → Confirmation → Execution contract,
+    English/pt-BR depth and method gates before drafting, selected hardening, a hashed reading
+    manifest and one final bundle confirmation. Updated the main-flow spec and diagram.
+13. **Recovery boundaries.** Full suspension bypasses every veto before settings, session and
+    policy checks. Independent lifecycle UI works with a pending decision. Paused progress saving
+    and sessionless controls retain evidence; VCS readiness is deferred to execution. Suspended
+    foreign replies are evidence only and cannot answer an older decision or fabricate approval.
+14. **Review corrections.** Fixed cross-session progress-control scope and cross-project lifecycle
+    UI targeting. Repeated repository operands cannot pass recovery checks. Corrected mixed and
+    partially parsed heredoc delimiters and carriage returns; ambiguous input stays unmasked.
+    Cached only pure parsing to bring the existing long-command test within its original budget.
+15. **Verification.** Full run passed 337 backlog tests and 947 combined tests, one skip and
+    296 subtests; installer confirmation passed. Additional focused checks cover the latest fixes.
+    Native live acceptance remains outstanding. The concurrent test report and installed build
+    were preserved. The report's missing frontmatter causes the local structure checker to fail;
+    it is not included in this implementation change.
+16. **Final coherence corrections.** Approved-bundle execution now takes precedence in implement-story,
+    start-ticket, write-spec and backlog drafting; legacy gates are explicitly separate. Reset archives
+    preparation and returns to discovery while retaining decisions, approvals and completed writes.
+    Execution is preserved. Failed lifecycle UI retries its own gate; chat fallback preserves presentation
+    and scopes numbered replies to the native conversation. Structure checks passed on the implementation
+    snapshot excluding the untouched concurrent report. Security review cleared the conservative literal
+    delimiter handling; maintainability review cleared the handoff corrections.
+17. **Final regression evidence.** The staged-tree run passed 337 backlog tests and 954 combined
+    tests, one skip, 296 subtests and installer confirmation. Added the same duplicate-operand
+    rejection to progress controls and ran focused security regressions. Ruff, Markdown, version,
+    whitespace and staged structure checks passed. Live acceptance is still a separate next step.
+    Final focused security result: 127 tests and 91 subtests passed, including protected control
+    records, duplicate project/session operands and unchanged active-mode security negatives.

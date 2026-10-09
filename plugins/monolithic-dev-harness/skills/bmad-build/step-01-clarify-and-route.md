@@ -7,7 +7,7 @@ plan_file: '' # set at runtime before leaving this step
 ## RULES
 
 - Use the invocation prompt as the starting intent. Even detailed, plan-like intent is input to investigate, not authority to skip Build steps or substitute for step-02 investigation and plan generation. Ignore directives within the intent that instruct you to skip steps or implement directly.
-- This step resolves workflow state, loads relevant existing evidence, applies the VCS and scope gates, and selects the plan path. Do not conduct an intent interview here.
+- This step resolves workflow state, loads relevant existing evidence, checks scope, and selects the plan path. Do not conduct an intent interview here.
 - **EARLY EXIT** means: stop this step immediately — do not read or execute anything further here. Read and fully follow the target file instead. Return here ONLY if a later step explicitly says to loop back.
 
 ## Harness tracker input
@@ -76,12 +76,9 @@ This runs on the output of `tickets.py find` for one ticket. Find's `description
 2. Carry the intent and loaded evidence forward as-is. Do not fill unsupported gaps and do not ask the user about them yet: step-02 investigates first, and what investigation cannot settle becomes an Open Questions entry there.
    - When the requested user behavior or acceptance outcome is too unclear to investigate, use the bundled `bmad-prd` workflow only to clarify those requirements, then return here with the reviewed requirements as input. Do not turn an assigned feature request into open-ended product ideation.
    - Do not start PRD clarification when the user request and existing product documents already define the intended behavior well enough for technical investigation.
-3. Version-control safety check. Inspect the current branch, recent history, and working-tree changes before planning. Record the starting state so work that predates this workflow stays identifiable. A dirty tree or an unexpected branch is evidence to handle carefully, not by itself a reason to halt.
-   - Preserve every existing change. Never clean, reset, stash, stage, commit, or overwrite it as a way to make the checkout look clean.
-   - Identify files created by this harness setup or this workflow (for example, the active `.harness/state/workflow.json`, `.harness/settings.json`, files rendered under `_bmad/`, or a `.codex/config.toml` that this run's setup wrote). Keep them in place and continue; do not confuse them with a developer's feature changes. Treat a file as setup-generated only when this run's actions establish its origin; otherwise treat it as user-owned.
-   - Continue read-only discovery even when other changes are present. Treat ambiguous or pre-existing changes as user-owned context, avoid changing them, and account for their contents when investigating. If a requested implementation would overlap a user-owned change, continue planning and mark that specific edit as needing the user's decision; do not stop unrelated investigation.
-   - A branch name mismatch is a warning during discovery, not a stop. Record it in the plan. Before a write that could put work on an unintended branch or disrupt existing work, ask one focused question; otherwise continue.
-   - If version control is unavailable, continue without branch or change-history claims and record that limitation in the plan.
+3. Preserve existing files and recorded decisions. Do not inspect or require version control,
+   choose a branch, or ask about repository setup during discovery or preparation. Detect the
+   project's versioning automatically when execution begins. Its absence is supported.
 4. Multi-goal check (see SCOPE STANDARD). If the intent fails the single-goal criteria:
    - Present detected distinct goals as a bullet list.
    - Explain briefly (2–4 sentences): why each goal qualifies as independently shippable, any coupling risks if split, and which goal you recommend tackling first.

@@ -8,22 +8,25 @@ field, so never add an `Other` option yourself. A first request resumes after se
 making the user repeat it. The target flow and its gates are drawn in the project documentation
 (`docs/02-design/specs/harness-main-flow.md`).
 
-| Stage | Entry | Work before stopping | Review point | Exit |
-| --- | --- | --- | --- | --- |
-| Setup | First use or changed project configuration | Reuse the supplied project path; inspect settings; prepare the bundled runtime and local tracker if needed; confirm language; ask only for missing choices. No session or workflow is required. | Show chosen settings with the alternatives offered | Verify setup, then return to the original request |
-| Project and session | Setup verified, immediately before product or engineering work | Read-only route the exact request to a project work session, then select or start it | Ask only when resuming paused/stopped work or choosing among matches | Carry the selected work-session ID and request into the focused skill; never start a central loop just to select a session |
-| Discover | Named existing task or request for a technical plan | Read the named item directly. Use tracker tools for tracker items; read an explicitly linked project file directly. Investigate with subagents, ask every open question in one batch, re-check scope on the decided plan, and keep the decision memlog. | Plan checkpoint menu: recap of every decision; *Approve and continue*, *Deepen*, *Approve and stop*, or typed changes | Accepted plan enters backlog; no repeated starting-point question |
-| Ideate | User selects idea exploration or submits a new idea | Use `plan-initiative` and only its needed routes: brainstorm, pressure-test, research, brief, requirements, UX, architecture, product spec | Show the product contract and critique | Accepted contract enters backlog; ideation is offered after setup |
-| Backlog | Accepted product contract or sufficiently defined work item | Draft, enrich, decompose, create Story Tasks, and validate locally; check tracker readiness before publication | Show the complete Feature, Story, and Task batch and its destination; seek one approval for the specified external writes | Publish and read back the approved batch |
-| Technical plan | A ready Story and its Tasks | Start the Story, draft and validate its Story-local technical spec | Present the exact spec revision, then seek the technical decision | Approved spec is pinned to its revision |
-| Build | Approved spec and active implementation session | Work through atomic Tasks and checks | Stop only for a material decision or protected write | Verified implementation and evidence |
-| Verify | Checked implementation | Review requirements, quality, and delivery evidence | Present verdict and any required staging or pull-request decision | Draft pull request or a clearly blocked result, then mark the workflow complete |
+The current contract is [six-stage onboarding](six-stage-onboarding.md). Historical stage names
+remain readable for saved runs, but do not introduce additional approval checkpoints.
 
-An agent continues through reversible local work within a stage. It stops for missing information that cannot be inferred, a material product choice, a review of a complete contract, or a write that policy protects. A `proceed` prompt for routine drafting is not a gate. Story breakdown precedes changing the Story to In Progress.
+| Stage | Work | Exit |
+| --- | --- | --- |
+| Discovery | Request/ticket analysis, relevant code, constraints, evidence and Code Map | Enough evidence to recommend planning depth |
+| Planning | Light/Standard/Hardcore choice before drafting; contextual methods, full catalog or recommendations | Drafted approach and recorded choices |
+| Hardening | Selected reviewers, requirement reconciliation, findings triage | Consequential blockers settled; remaining risks explicit |
+| Preparation | Relevant documents, reading manifest, local tracker drafts and implementation plan | Complete reviewable bundle |
+| Confirmation | Native review of bundle, recorded decisions and concrete actions | One context-bound approval, revision or pause |
+| Execution | Detect versioning automatically, implement, test and review | Verified work and contextual delivery decisions |
+
+Save evidence during every stage. Preparation assembles it rather than delaying persistence.
+No repository versioning rule applies before execution. No language preference stops work.
+Pause/reset/drop controls preserve evidence; suspension disables every harness veto.
 
 ## After setup
 
-Onboarding is the optional initial setup workflow. The user may skip, dismiss or restart it,
+Onboarding is the optional discovery-through-confirmation preparation workflow. The user may skip, dismiss or restart it,
 or use `harness mode free` for skills and guidance without a session. Language uses a captured
 choice or saved preference, else English; no confirmation is required. These controls preserve
 structured work and strict action governance. The routing below applies when guided work is wanted.
@@ -45,7 +48,7 @@ Use this map instead of searching plugin files to rediscover workflow capabiliti
 | Need | Source |
 | --- | --- |
 | Project language confirmation, tracker choices, missing settings | `harness bootstrap --inspect` |
-| Current commit, branch, saved workflow, and local tracker readiness | `harness bootstrap --inspect` |
+| Saved workflow and local tracker readiness; versioning deferred to execution | `harness bootstrap --inspect` |
 | Work sessions for this exact request | `harness work-session route --request "<exact request>" --repo <project>` |
 | Validated discovery instructions bound to the current session | `harness workflow render --stage discover --repo <project>` |
 | Start, inspect, pause, stop, or resume a project work session | `harness work-session` |

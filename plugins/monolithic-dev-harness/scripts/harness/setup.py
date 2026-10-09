@@ -20,7 +20,7 @@ from harness import (
     state,
     workflow,
 )
-from integrations import registry, scm
+from integrations import registry
 
 
 def _raw(repo: Path) -> Result[dict[str, Any]]:
@@ -79,23 +79,13 @@ def inferred_base(repo: Path) -> str:
 
 
 def _repository_snapshot(repo: Path) -> dict[str, Any]:
-    present = _git(repo, "rev-parse", "--is-inside-work-tree") == "true"
-    head = _git(repo, "rev-parse", "--verify", "HEAD") if present else ""
     return {
-        "git_present": present or (repo / ".git").exists(),
-        "git_access": "available"
-        if present
-        else "unavailable"
-        if (repo / ".git").exists()
-        else "absent",
-        "git_access_note": "Git metadata exists but cannot be read; inspect ownership/trust without changing global safe.directory automatically."
-        if not present and (repo / ".git").exists()
-        else "",
-        "has_committed_head": bool(head),
-        "head": head,
-        "branch": _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD")
-        if present
-        else "",
+        "git_present": None,
+        "git_access": "deferred",
+        "git_access_note": "Versioning is detected automatically at execution entry; preparation does not depend on it.",
+        "has_committed_head": None,
+        "head": "",
+        "branch": "",
     }
 
 
@@ -207,26 +197,9 @@ def _readiness(
         else {}
     )
     current_scm = _selection(raw, "scm")
-    source = current_scm or {"name": "local", "values": {}}
-    scm_name = str(source.get("name", ""))
-    scm_missing = (
-        _missing(_values(source), scm.REQUIRED_VALUES[scm_name])
-        if scm_name in scm.REQUIRED_VALUES
-        else ()
-        if scm_name == "local"
-        else ("scm",)
-    )
     missing = (
         *(f"tracker.{item}" for item in tracker_missing),
         *(("tracker.storage",) if local_storage and not local_storage["ready"] else ()),
-        *(f"scm.{item}" for item in scm_missing),
-        *(
-            ("git.base_branch",)
-            if scm_name != "local"
-            and not _git_settings(raw).get("base_branch")
-            and not inferred_base(repo)
-            else ()
-        ),
         *(("artifacts_path",) if not raw.get("artifacts_path") else ()),
     )
     return selected, current_scm, local_storage, missing
@@ -353,11 +326,7 @@ def propose(
         old_scm = _selection(raw, "scm") or {"name": "local", "values": {}}
         chosen_tracker = tracker_name or str(old_tracker.get("name", ""))
         chosen_scm = scm_name or str(old_scm.get("name", ""))
-        chosen_base = (
-            base_branch
-            or _git_settings(raw).get("base_branch", "")
-            or (inferred_base(repo) if chosen_scm != "local" else "")
-        )
+        chosen_base = base_branch or _git_settings(raw).get("base_branch", "")
         revised = {
             **raw,
             "schemaVersion": 1,
@@ -379,29 +348,9 @@ def propose(
                 "choose where plans and drafts will be stored",
             ),
             lambda _: bind(
-                require(
-                    chosen_scm == "local" or bool(chosen_base),
-                    "setup_missing",
-                    "choose the repository base branch",
-                ),
-                lambda _: bind(
-                    settings.parse(revised),
-                    lambda chosen: bind(
-                        registry.selected(repo, Ok(chosen)),
-                        lambda _: bind(
-                            require(
-                                chosen_scm == "local"
-                                or chosen_scm in scm.REQUIRED_VALUES
-                                and not _missing(
-                                    _values(revised["scm"]),
-                                    scm.REQUIRED_VALUES.get(chosen_scm, ()),
-                                ),
-                                "setup_missing",
-                                "source-control provider and its required values are missing",
-                            ),
-                            lambda _: Ok(revised),
-                        ),
-                    ),
+                settings.parse(revised),
+                lambda chosen: fmap(
+                    registry.selected(repo, Ok(chosen)), lambda _: revised
                 ),
             ),
         )

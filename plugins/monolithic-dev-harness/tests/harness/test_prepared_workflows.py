@@ -58,6 +58,7 @@ class PreparedWorkflowTests(unittest.TestCase):
                 "implement-approved-item",
                 "resume-work",
                 "suspend-checks",
+                "onboarding",
             },
         )
         self.assertEqual(routes()["suspend-checks"], ("suspend",))
