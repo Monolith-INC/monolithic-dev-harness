@@ -103,3 +103,13 @@ last_reviewed: 2026-10-08
     whitespace and staged structure checks passed. Live acceptance is still a separate next step.
     Final focused security result: 127 tests and 91 subtests passed, including protected control
     records, duplicate project/session operands and unchanged active-mode security negatives.
+18. **Acceptance evidence and confirmation stage.** The six-stage trial's raw-transcript export
+    requirement caused a host security-review block after the project-local result and workflow
+    evidence were already available. The canonical onboarding contract and the next-trial briefing
+    now use project-local decisions, command outcomes, artifact paths and digests as evidence of
+    record; host transcripts stay in their original store, and export refusal is documented rather
+    than treated as a workflow blocker. The final `implementation-confirm` checkpoint now records
+    `confirmation`, and recovery validates that same stage. Focused decisions/workflow tests passed
+    24 cases; security and acceptance checks passed 70 tests. A fresh live acceptance trial remains
+    required. Documentation follow-up: update the user guide and troubleshooting page to explain
+    the local evidence record and transcript-export limitation before release.

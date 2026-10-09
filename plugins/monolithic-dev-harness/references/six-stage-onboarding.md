@@ -47,6 +47,7 @@ gate with all reviewed artifacts. One confirmation accepts this bundle and begin
 execution. This replaces separate preparation approvals; it does not authorize a future merge or
 unrelated external writes. Revision returns to the affected stage; stopping preserves the bundle.
 Recheck artifact digests before acting; a substantive change requires consultation.
+Record this gate as the `confirmation` workflow stage before execution begins.
 
 ## Execution
 
@@ -67,3 +68,13 @@ Lifecycle controls use `harness decision present --gate harness-controls` indepe
 pending work decision. Show them from the project's own workspace so a reply cannot affect a
 different project. Repeat this gate with async or chat capability flags on delivery failure;
 do not fall back to an unrelated pending work question. Paused onboarding permits ending a turn.
+
+Evidence of a run belongs in the project's reviewable result and artifacts: record actual decisions,
+saved decision IDs/status, relevant command outcomes, artifact paths and digests, and limitations as
+they occur. The host's complete conversation transcript is not a required project artifact. Leave
+it in the host's original store; do not copy it wholesale into a repository or another workspace.
+If transcript access or archival is unavailable or rejected, record that limitation in the result
+and continue or pause according to the user's workflow choice. An archival failure alone must never
+block progress, invalidate a captured decision, or trigger bypassing host security review. If the
+project-local evidence write itself is unavailable, retain concise factual notes in the conversation
+and report the evidence limitation; do not claim the record was saved.

@@ -29,7 +29,7 @@ def begin(
     binds: dict | None = None,
 ) -> Result[dict]:
     return bind(
-        _checkpoint(repo, work_session_id, question, artifacts),
+        _checkpoint(repo, work_session_id, question, artifacts, gate),
         lambda checkpoint: bind(
             decisions.begin(
                 repo,
@@ -55,7 +55,11 @@ def begin(
 
 
 def _checkpoint(
-    repo: Path, scope: str | None, question: str, artifacts: tuple[tuple[str, str], ...]
+    repo: Path,
+    scope: str | None,
+    question: str,
+    artifacts: tuple[tuple[str, str], ...],
+    gate: str,
 ) -> Result[dict | None]:
     match artifacts:
         case ():
@@ -69,11 +73,12 @@ def _checkpoint(
                 case Ok(current) if current.status != "active":
                     return Ok(None)
                 case Ok(current):
+                    stage = _checkpoint_stage(current.current.stage, gate)
                     return fmap(
                         workflow.add_point(
                             current,
                             question,
-                            current.current.stage,
+                            stage,
                             artifacts=artifacts,
                             pending=question,
                             next_action="Continue from the human's answer to: "
@@ -84,6 +89,16 @@ def _checkpoint(
                             "after": asdict(updated),
                         },
                     )
+
+
+def _checkpoint_stage(current_stage: str, gate: str) -> str:
+    """The final reviewed bundle is a confirmation checkpoint, not preparation."""
+    return (
+        "confirmation"
+        if gate == "implementation-confirm"
+        and current_stage in {"preparation", "confirmation"}
+        else current_stage
+    )
 
 
 def recover(repo: Path, scope: str | None = None) -> Result[object]:
@@ -128,7 +143,7 @@ def _validated(
                             and workflow.add_point(
                                 previous,
                                 intended.current.label,
-                                previous.current.stage,
+                                _recovered_stage(previous, decision),
                                 artifacts=intended.current.artifacts,
                                 pending=intended.current.pending,
                                 next_action=intended.current.next_action,
@@ -143,6 +158,11 @@ def _validated(
             )
         case _:
             return err("review_recovery_invalid", "saved review recovery is malformed")
+
+
+def _recovered_stage(previous: workflow.Workflow, decision: dict) -> str:
+    """Rebuild exactly the intended stage, including the final confirmation gate."""
+    return _checkpoint_stage(previous.current.stage, str(decision.get("gate", "")))
 
 
 def _project(
