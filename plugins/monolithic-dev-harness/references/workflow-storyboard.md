@@ -1,11 +1,12 @@
 # Harness workflow storyboard
 
 The harness owns the sequence and the meaning of each decision. Every question to the human is a
-**menu** (`harness decision present`, rendered the same way on every transport and falling back
-silently from native controls to chat) or a **question batch** (all open questions in one chat
+**menu** (`harness decision present`) or a **question batch** (all open questions in one chat
 message). Follow [human-decisions.md](human-decisions.md). Native controls supply their own **Other**
-field, so never add an `Other` option yourself. A first request resumes after setup instead of
-making the user repeat it. The target flow and its gates are drawn in the project documentation
+field, so never add an `Other` option yourself. When native delivery fails, explain the fallback
+and preserve the exact pending decision and options; never silently replace a formal menu with
+prose. A first request resumes after setup instead of making the user repeat it. The target flow
+and its gates are drawn in the project documentation
 (`docs/02-design/specs/harness-main-flow.md`).
 
 The current contract is [six-stage onboarding](six-stage-onboarding.md). Historical stage names

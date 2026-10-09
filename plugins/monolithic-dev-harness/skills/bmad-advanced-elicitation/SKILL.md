@@ -39,28 +39,45 @@ If `{workflow.additional_methods}` is non-empty, add `--extra '<its entries as a
 
 ## The Menu
 
-HALT and give the user a choice:
+For a harness-managed workflow, every choice is a formal `harness decision present` decision.
+Never print a prose menu and wait for an answer. Standard decisions allow at most three options, so
+present a short sequence of native decisions rather than squeezing the catalog into one screen:
 
-- The five offered methods, listed by name. The user may pick one or several.
-- **Reshuffle** — replace the list with five new options.
-- **List all** — show the full catalog with descriptions.
-- **Proceed** — no further elicitation.
+1. The caller first offers its contextual shortlist, full catalog, or agent recommendations using
+   the `planning-methods` gate. For direct use of this skill, start with the five contextual
+   methods and offer the actions below through one-off decisions.
+2. For a shortlist, offer up to two unselected method names and **More choices**. Choosing a method
+   adds it to the selected sequence and returns to the chooser with the remaining methods and
+   **Finish selection**. **Reshuffle** replaces the shortlist and preserves already selected
+   methods. **Show full catalog** switches to the catalog chooser. **Proceed** finishes without
+   selecting more methods. Page actions across decisions with no more than three choices.
+3. In the full catalog, show at most two method names and **Next page**. After selection, offer
+   **Finish selection** on the next decision. Selecting several methods records their order.
+   Include **Back to shortlist** when useful, without exceeding three choices.
+4. For agent recommendations, show the proposed methods and reasons, then let the user choose the
+   proposed set, revise it through the same chooser, or return. Never run recommendations silently.
+5. If native UI delivery is unavailable, use the harness's supported fallback for the same
+   pending decision and exact options. Explain the fallback briefly. Delivery failure is not an
+   answer; an unrelated reply must not satisfy the staged choice.
 
-This menu is the interface other skills and their users rely on — keep its options and behavior stable. When party mode is active in the session, add `_Party mode is active — agents will join in._` under the heading.
+After methods run, explain the finding and offer a decision with **Run another method**, **Proceed**,
+and **More choices**. More choices opens a second decision for **Reshuffle**, **Show full catalog**,
+and **Proceed**. Keep each decision to three options or fewer and reuse saved selections. When party
+mode is active, add `_Party mode is active — agents will join in._` to the explanatory text, not as
+an option.
 
-- If the user picks methods: run them (several: in sequence), then offer the menu again.
-- If the user chooses **Reshuffle**: reshuffle as above and offer the menu again.
-- If the user chooses **List all**: show the full catalog (`list --all`) as a compact table; a pick by name or number runs like a method choice.
-- If the user chooses **Proceed**: done. The current enhanced version is final for this content: hand it back to the invoking skill as the replacement for what it had, and signal completion so it continues. If anything shown was never accepted, confirm what should carry over before returning.
-- Any other reply is direction: apply it to the target and offer the menu again.
+On Proceed, hand the enhanced version back to the invoking skill and signal completion. If anything
+proposed was never accepted, continue with the last accepted version. For direct skill use outside
+a harness workflow, retain the same structured interaction, using a native host question when
+available and a clearly labeled chat fallback otherwise.
 
 ## Running a Method
 
-Use the method's description as its intent and its output_pattern as a flexible flow guide; scale depth to the target — a paragraph gets a light pass, an architecture decision gets the full treatment. Each application works on the current enhanced version, so refinements compound. Show what the method revealed and the changes it proposes, then HALT and give the user a choice:
+Use the method's description as its intent and its output_pattern as a flexible flow guide; scale depth to the target — a paragraph gets a light pass, an architecture decision gets the full treatment. Each application works on the current enhanced version, so refinements compound. Show what the method revealed and the changes it proposes, then present one formal decision:
 
 - **Apply** — accept the proposed changes.
 - **Reject** — drop the proposal entirely.
-- Or give different direction.
+- **Give direction** — route the host's free-text field as direction; if unavailable, resolve this decision before asking a separate follow-up.
 
 Never change the work unless the user accepts the proposal. If they reject it, drop the proposal entirely. Any other reply is instruction to follow.
 

@@ -28,10 +28,13 @@ not approval to implement. Explain the recommendation using the discovered risks
 
 For Standard or Hardcore present `harness decision present --gate planning-methods`:
 contextual shortlist, full catalog, or agent recommendations. Use `bmad-advanced-elicitation`:
-select categories from discovery, hand-pick five complementary methods with reasons, and retain
-Reshuffle, List all and Proceed. Agent recommendations present a proposed selection for the user
-to choose or revise, never silently run every method. Run chosen methods on the discovered approach
-before writing the plan. Save accepted decisions incrementally and return here when complete.
+select categories from discovery and hand-pick five complementary methods with reasons. Follow its
+paginated decision protocol: no more than three options per native decision, preserve ordered
+multi-selection, and retain Reshuffle, full-catalog browsing, recommendation review, and Proceed.
+Never replace these controls with a prose menu. Agent recommendations present a proposed selection
+for the user to choose or revise; never silently run every method. Run chosen methods on the
+discovered approach before writing the plan. Save accepted decisions incrementally and return here
+when complete.
 Native controls come first; delivery/capture failure uses the same decision's supported fallback,
 then a faithful chat menu. Neither failed delivery nor dismissal is an answer. Suspension does
 not remove the preference for native controls. Never require a session to communicate.
@@ -55,10 +58,11 @@ not remove the preference for native controls. Never require a session to commun
 {% if workflow.route != "oneshot" %}
 4. Read `{{ rendered("plan-template.md") }}` fully. Fill it out from the intent and investigation, resolving the template's `date` field to the current system date. Put the investigation into `## Code Map`: paths, symbols or lines, what to reuse, and what not to change. Implementation should work from the plan without being told the investigation again. If there are intent gaps, add a `## Open Questions` section with one entry per gap: the choice, the options, and what each option means. Never write an intent gap into the frozen block as an assumption. If `preserved_intent` is non-empty, replace the `<frozen-after-approval>` block with it before writing. Write the result to `{plan_file}`.
 5. Self-review against READY FOR DEVELOPMENT standard. For anything important that's missing: if the repository can tell you, go look and fix the plan; if a human has to decide, add an `## Open Questions` entry. Do not invent the answer.
-6. Resolve the gates before the checkpoint. Two things must be settled, in whatever order the conversation makes natural; combine them in one message when both apply.
-   - **Plan length** (see SCOPE STANDARD). Measure and report length as advisory. Edit repetition and irrelevant detail while preserving requirements and evidence. Length alone never creates a decision gate and never justifies splitting a cohesive goal.
-   - **Open Questions.** Show a concise overview of consequential unresolved choices, then stage one focused decision at a time using `harness decision present` with its question, options, explanations and recommendation. Attempt native controls and preserve the same choice through supported fallback. Accept an option name, number or understood paraphrase; ask again only when the answer genuinely cannot be placed. Independent work continues while a consequential choice is pending. Record genuine answers in the frozen intent and memlog, remove resolved entries, and revisit only new material gaps. Never replace staged controls with an unstaged prose menu.
-   - **Scope after answers.** Answers can turn one goal into several (for example, a new platform target or an independent subsystem). Once Open Questions is empty, run the SCOPE STANDARD multi-goal check again against the decided plan and measure its token count honestly. Length is advisory. Offer **Split** or **Keep full plan** only when investigation identifies independently shippable goals; name each goal, explain the boundary, recommend which to build first and record deferred work. Do not offer an option that would merely discard acceptance checks. Log the outcome to the memlog either way.
+6. Resolve the gates before the checkpoint, combining the following in one message when both apply. **Plan length** (see SCOPE STANDARD) is advisory: measure once after drafting, and again only after a material plan edit. Edit repetition and irrelevant detail while preserving requirements and evidence. Length alone never creates a decision gate or justifies splitting a cohesive goal.
+
+   **Open Questions:** show a concise overview of consequential unresolved choices, then stage one focused decision at a time using `harness decision present` with its question, options, explanations and recommendation. Attempt native controls and preserve the same choice through supported fallback. Accept an option name, number or understood paraphrase; ask again only when the answer genuinely cannot be placed. Independent work continues while a consequential choice is pending. Record genuine answers in the frozen intent and memlog, remove resolved entries, and revisit only new material gaps. Never replace staged controls with an unstaged prose menu.
+
+   **Scope after answers:** answers can turn one goal into several (for example, a new platform target or an independent subsystem). Once Open Questions is empty, run the SCOPE STANDARD multi-goal check again against the decided plan. Offer **Split** or **Keep full plan** only when investigation identifies independently shippable goals; name each goal, explain the boundary, recommend which to build first and record deferred work. Do not offer an option that would merely discard acceptance checks. Log the outcome to the memlog either way.
 
 ### Hardening and preparation handoff
 
@@ -69,8 +73,9 @@ assumption/security (when relevant), source-preservation and verification-gap re
 bundled bmad-review and advanced elicitation methods; preserve reviewer findings and triage them.
 The user decides substantive alternatives. Do not ask for implementation approval here.
 
-If the user wants further exploration, offer contextual methods, Reshuffle, List all, agent
-recommendations and Proceed. Otherwise continue automatically to preparation; an optional extra
+If the user wants further exploration, use the same paginated native decision protocol for
+contextual methods, Reshuffle, full-catalog browsing, agent recommendations and Proceed. Do not
+reopen completed choices. Otherwise continue automatically to preparation; an optional extra
 review is never required to finish. Record accepted changes once and reuse them.
 
 Follow [the six-stage contract](../../references/six-stage-onboarding.md). Assemble the relevant
@@ -88,7 +93,9 @@ all reviewed companion and tracker-draft files. Explain concrete tracker writes 
 scope. Native controls first, then supported async/chat fallback on delivery failure.
 
 On Approve, re-read reviewed artifacts and validate digests; changed circumstances require
-consultation. Close onboarding and hand the unchanged approved bundle to harness execution.
+consultation. The approval detail must name the actual next action and honor any user-set boundary
+(for example, an acceptance run that stops at execution entry). Close onboarding and hand the
+unchanged approved bundle to harness execution only when that is within the approved scope.
 On Revise, revisit only the affected stage. On Stop, preserve progress and pause immediately.
 No separate discovery, outline, body or spec reapproval is required for this same bundle.
 Merging and unrelated external actions remain independently context-bound.

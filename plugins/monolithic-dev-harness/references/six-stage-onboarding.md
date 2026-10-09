@@ -19,6 +19,9 @@ focused self-review; Standard means contextual methods, technical choices, risks
 Hardcore adds adversarial and preservation/verification reviewers. Present the planning-methods
 gate for contextual shortlist, full catalog or agent recommendations. The shortlist is selected
 from the discovered work, not random. Retain BMAD's Reshuffle, List all and Proceed controls.
+All method choices use native-first decisions with no more than three options at a time. Page the
+shortlist and full catalog; retain selected methods and their order between decisions. On transport
+failure, use the same decision's supported fallback and say that the surface changed.
 Save decisions and findings as they occur. A recorded choice is not asked again unless reopened
 by the user or materially changed circumstances.
 
@@ -48,6 +51,10 @@ execution. This replaces separate preparation approvals; it does not authorize a
 unrelated external writes. Revision returns to the affected stage; stopping preserves the bundle.
 Recheck artifact digests before acting; a substantive change requires consultation.
 Record this gate as the `confirmation` workflow stage before execution begins.
+The user must be able to inspect the actual reviewed files through the best available host surface
+before the gate. Tool success or an artifact link alone does not establish that the content was
+visible. For an acceptance run that stops at execution entry, say explicitly that the recorded
+approval ends at that boundary and does not authorize execution or tracker publication.
 
 ## Execution
 

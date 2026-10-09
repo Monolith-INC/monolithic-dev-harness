@@ -57,8 +57,8 @@ question.pt-br = "Aprovar este plano de implementação e suas ações descritas
 id = "approve"
 label.en = "Approve"
 label.pt-br = "Aprovar"
-detail.en = "Finish preparation and execute this reviewed bundle, including only its stated tracker writes."
-detail.pt-br = "Concluir a preparação e executar este conjunto revisado, incluindo só as escritas descritas no tracker."
+detail.en = "Proceed with the next steps described in this reviewed plan."
+detail.pt-br = "Prosseguir com as próximas etapas descritas neste plano revisado."
 [[gate.option]]
 id = "revise"
 label.en = "Revise"
