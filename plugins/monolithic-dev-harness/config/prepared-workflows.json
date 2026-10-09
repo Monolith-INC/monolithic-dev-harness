@@ -3,7 +3,7 @@
   "stages": {
     "setup": {
       "title": "Select a project and work session",
-      "knowledge": ["references/workflow-storyboard.md", "references/project-config.md"],
+        "knowledge": ["references/workflow-storyboard.md", "references/project-config.md"],
       "operations": ["harness.bootstrap.inspect", "harness.work-session.route", "harness.work-session.start", "harness.work-session.resume", "harness.doctor"],
       "skills": [
         {"name": "bootstrap", "when": "Inspect or apply project setup once."},
@@ -16,14 +16,14 @@
     "discover": {
       "title": "Investigate the named request",
       "required_inputs": ["original_request"],
-      "knowledge": ["references/workflow-storyboard.md", "skills/bmad-build/SKILL.md"],
-      "operations": ["harness.bootstrap.inspect", "harness.knowledge.find", "harness.knowledge.fetch", "tracker_describe", "tracker_search_work_items", "tracker_get_work_item"],
+      "knowledge": ["references/workflow-storyboard.md", "references/project-knowledge.md", "skills/bmad-build/SKILL.md"],
+      "operations": ["harness.bootstrap.inspect", "harness.knowledge.catalog", "harness.knowledge.find", "harness.knowledge.fetch", "tracker_describe", "tracker_search_work_items", "tracker_get_work_item"],
       "skills": [
         {"name": "knowledge-acquire", "when": "Before analysis, find source-backed project notes related to the exact request."},
         {"name": "bmad-build", "when": "Investigate the request and prepare the reviewed plan with BMad Build's clarify and plan steps."}
       ],
       "outputs": ["discovery findings", "code or artifact map", "open questions", "proposed next route"],
-      "checks": ["carry the exact request and selected project into the step", "inspect the matching source or work item and cite file paths", "separate observed facts, assumptions, and open questions"],
+      "checks": ["carry the exact request and selected project into the step", "query the bounded project knowledge catalog/find/fetch ladder before broad project reads", "inspect matching current source and cite file paths", "separate observed facts, derived conclusions, assumptions, and open questions", "empty, stale, or unavailable knowledge never blocks discovery"],
       "recovery": ["if a knowledge or tracker tool is unavailable, record that exact gap and continue only from project files actually inspected"]
     },
     "ideate": {
@@ -224,12 +224,14 @@
         }
       ],
       "outputs": [
-        "specification and relevant companions",
-        "reading manifest",
-        "tracker drafts",
+        "refined local tracker drafts and required child tasks",
+        "specification and risk companions",
+        "reading manifest covering all documents and tracker drafts",
         "implementation plan"
       ],
       "checks": [
+        "complete tracker hierarchy is refined and drafted before final implementation plan",
+        "implementation plan references the manifest and every load-bearing artifact",
         "manifest gives purpose, read trigger, owner and digest",
         "no publication without exact authorization"
       ]

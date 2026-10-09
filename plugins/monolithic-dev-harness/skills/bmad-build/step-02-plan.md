@@ -56,8 +56,8 @@ not remove the preference for native controls. Never require a session to commun
    For full, set `route: 'full'` and `route_source: 'auto'`, then continue.
 {% endif %}
 {% if workflow.route != "oneshot" %}
-4. Read `{{ rendered("plan-template.md") }}` fully. Fill it out from the intent and investigation, resolving the template's `date` field to the current system date. Put the investigation into `## Code Map`: paths, symbols or lines, what to reuse, and what not to change. Implementation should work from the plan without being told the investigation again. If there are intent gaps, add a `## Open Questions` section with one entry per gap: the choice, the options, and what each option means. Never write an intent gap into the frozen block as an assumption. If `preserved_intent` is non-empty, replace the `<frozen-after-approval>` block with it before writing. Write the result to `{plan_file}`.
-5. Self-review against READY FOR DEVELOPMENT standard. For anything important that's missing: if the repository can tell you, go look and fix the plan; if a human has to decide, add an `## Open Questions` entry. Do not invent the answer.
+4. Read `{{ rendered("plan-template.md") }}` fully and create a **planning approach draft**, not the final implementation plan. Save it as `approach-<slug>.md` beside `{plan_file}`, with `type: planning-approach` and `status: draft`. Include the Code Map, proposed approach, scope, constraints, provisional tasks and unresolved choices. If `preserved_intent` is non-empty, retain its frozen intent. Do not mark it approved or present it as the execution contract.
+5. Self-review the approach against READY FOR DEVELOPMENT. For anything important that's missing: if the repository can tell you, go look and fix the approach; if a human has to decide, add an `## Open Questions` entry. Do not invent the answer.
 6. Resolve the gates before the checkpoint, combining the following in one message when both apply. **Plan length** (see SCOPE STANDARD) is advisory: measure once after drafting, and again only after a material plan edit. Edit repetition and irrelevant detail while preserving requirements and evidence. Length alone never creates a decision gate or justifies splitting a cohesive goal.
 
    **Open Questions:** show a concise overview of consequential unresolved choices, then stage one focused decision at a time using `harness decision present` with its question, options, explanations and recommendation. Attempt native controls and preserve the same choice through supported fallback. Accept an option name, number or understood paraphrase; ask again only when the answer genuinely cannot be placed. Independent work continues while a consequential choice is pending. Record genuine answers in the frozen intent and memlog, remove resolved entries, and revisit only new material gaps. Never replace staged controls with an unstaged prose menu.
@@ -78,14 +78,15 @@ contextual methods, Reshuffle, full-catalog browsing, agent recommendations and 
 reopen completed choices. Otherwise continue automatically to preparation; an optional extra
 review is never required to finish. Record accepted changes once and reuse them.
 
-Follow [the six-stage contract](../../references/six-stage-onboarding.md). Assemble the relevant
-requirements, specification, risk findings, architecture/UX companions and verification matrix.
-Draft tracker artifacts locally. Build a reading manifest with `harness workflow manifest
---manifest-output <planning-folder>/artifact-manifest.md --document '<JSON entry>'`; each entry
-has path, purpose, read_when and owner. Add every load-bearing companion. Persist the implementation
-plan and reference the manifest. Do not start-ticket, inspect Git, or create a branch during
-preparation. If an existing plan is missing, recover it from real evidence or ask only for the
-missing consequential input; never synthesize approval.
+Follow [the six-stage contract](../../references/six-stage-onboarding.md). In Preparation, in order:
+(a) assemble requirements, specification, risk findings, architecture/UX companions and verification;
+(b) refine/decompose and locally draft the full tracker hierarchy and required child Tasks, then
+validate the batch against tracker capabilities; (c) create a manifest draft covering all companions
+and tracker drafts; (d) write `{plan_file}` as the final implementation plan, resolving it only after
+the tracker breakdown is known; (e) update the manifest with the final plan digest. The final plan
+references the manifest path and all load-bearing companion/tracker artifacts. Do not start-ticket,
+inspect Git, or create a branch during preparation. If an existing plan is missing, recover it from
+real evidence or ask only for missing consequential input; never synthesize approval.
 
 Present the complete bundle and all recorded decisions once. Use `harness decision present
 --gate implementation-confirm --artifact <implementation-plan> --artifact <manifest>` and include
@@ -93,7 +94,11 @@ all reviewed companion and tracker-draft files. Explain concrete tracker writes 
 scope. Native controls first, then supported async/chat fallback on delivery failure.
 
 On Approve, re-read reviewed artifacts and validate digests; changed circumstances require
-consultation. The approval detail must name the actual next action and honor any user-set boundary
+consultation. Treat this as the one durable approval for the unchanged bundle and its named local
+execution actions. Record approval in workflow state; do not edit plan/manifest/decision artifacts,
+change their status, add tracker records, or ask the same confirmation again after approval. If the
+human requests a substantive revision or an external action was not included, consult only about
+that changed scope. The approval detail must name the actual next action and honor any user-set boundary
 (for example, an acceptance run that stops at execution entry). Close onboarding and hand the
 unchanged approved bundle to harness execution only when that is within the approved scope.
 On Revise, revisit only the affected stage. On Stop, preserve progress and pause immediately.

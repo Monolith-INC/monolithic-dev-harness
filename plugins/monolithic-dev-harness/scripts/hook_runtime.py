@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -16,7 +17,15 @@ if _SCRIPTS_DIR not in sys.path:
 from spec_runtime import SPEC_KINDS
 
 from core.result import Err, Failure, Ok, Result, bind, fmap, recover
-from harness import gitstate, sessions, settings, state
+from harness import (
+    decisions,
+    gitstate,
+    sessions,
+    settings,
+    state,
+    work_sessions,
+    workflow,
+)
 from harness.local_artifacts import approved_kinds_for, artifacts_dir
 from host_adapters import select_adapter
 from host_adapters.hook_bridge import project_root_hint, should_emit_allow
@@ -241,6 +250,15 @@ def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
     boundary = "push" in {
         command[0] for command in git_commands(event.command or "") if command
     }
+    if (
+        not boundary
+        and not _contains_mutating_git(event.command or "")
+        and _approved_local_execution(root)
+    ):
+        return PolicyDecision.allow()
+    match sessions.resolve(root):
+        case _:
+            pass
     return _decision(
         bind(
             _active_session(root),
@@ -253,6 +271,77 @@ def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
                 else _live_ready(root)
             ),
         )
+    )
+
+
+def _approved_local_execution(root: Path) -> bool:
+    """An approved, unchanged implementation bundle can authorize local edits without Git binding."""
+    return _approved_bundle(root, work_sessions.current(root))
+
+
+def _approved_bundle(root: Path, scope: str | None) -> bool:
+    match scope:
+        case None:
+            return False
+        case identifier:
+            decision = decisions.record(root, identifier) or {}
+            match workflow.load(root, identifier):
+                case Ok(current) if (
+                    current.status == "active" and current.current.stage == "execution"
+                ):
+                    return (
+                        decision.get("status") == "answered"
+                        and decision.get("approval") is True
+                        and decision.get("gate") == "implementation-confirm"
+                        and _approved_answer(str(decision.get("answer", "")))
+                        and _reviewed_artifacts_match(
+                            root, decision.get("artifacts", ())
+                        )
+                    )
+                case _:
+                    return False
+
+
+def _approved_answer(answer: str) -> bool:
+    return answer.strip().casefold() in {
+        "approve",
+        "approved",
+        "yes",
+        "approve and continue",
+    }
+
+
+def _reviewed_artifacts_match(root: Path, artifacts: object) -> bool:
+    match artifacts:
+        case list() as entries if entries:
+            return all(
+                isinstance(entry, list)
+                and len(entry) == 2
+                and isinstance(entry[0], str)
+                and isinstance(entry[1], str)
+                and _artifact_digest_matches(root, entry[0], entry[1])
+                for entry in entries
+            )
+        case _:
+            return False
+
+
+def _artifact_digest_matches(root: Path, relative: str, expected: str) -> bool:
+    candidate = (root / relative).resolve()
+    try:
+        return (
+            candidate.is_relative_to(root.resolve())
+            and candidate.is_file()
+            and hashlib.sha256(candidate.read_bytes()).hexdigest() == expected
+        )
+    except OSError:
+        return False
+
+
+def _contains_mutating_git(command: str) -> bool:
+    return any(
+        argv and (argv[0] in _MUTATING_GIT or argv[0].startswith("commit"))
+        for argv in git_commands(command)
     )
 
 

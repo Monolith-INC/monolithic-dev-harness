@@ -17,7 +17,7 @@ remain readable for saved runs, but do not introduce additional approval checkpo
 | Discovery | Request/ticket analysis, relevant code, constraints, evidence and Code Map | Enough evidence to recommend planning depth |
 | Planning | Light/Standard/Hardcore choice before drafting; contextual methods, full catalog or recommendations | Drafted approach and recorded choices |
 | Hardening | Selected reviewers, requirement reconciliation, findings triage | Consequential blockers settled; remaining risks explicit |
-| Preparation | Relevant documents, reading manifest, local tracker drafts and implementation plan | Complete reviewable bundle |
+| Preparation | Requirements/spec/risk/verification, refined tracker drafts and child Tasks, validated batch, manifest, then implementation plan last | Complete reviewable bundle |
 | Confirmation | Native review of bundle, recorded decisions and concrete actions | One context-bound approval, revision or pause |
 | Execution | Detect versioning automatically, implement, test and review | Verified work and contextual delivery decisions |
 
@@ -80,9 +80,11 @@ planned directly even when it is not yet a tracker record.
 - **Complete:** mark the requested outcome finished. Starting a later workflow archives the completed record first.
 
 Project work sessions (`harness work-session`) hold one request and checkpoint path per ticket or
-problem. Checkout-bound implementation sessions (`harness session`) continue to protect code changes
-for one branch. They are separate records. A work-session pause or stop is local and should remain
-easy; it does not require closing the checkout-bound session or asking the tracker for approval.
+problem. The unchanged `implementation-confirm` approval in that active project work-session is
+sufficient context for local code edits. Checkout-bound implementation sessions (`harness session`)
+are optional and apply only when branch-based delivery is selected. A work-session pause or stop is
+local and should remain easy; it does not require closing a checkout-bound session or asking the
+tracker for approval.
 No command needs the work-session ID: the harness keeps track of the current session (the one last
 started, resumed, or selected) and uses it, so each ticket keeps its own checkpoints and questions.
 Without any session, questions and answers still work, project-wide.

@@ -61,6 +61,14 @@ This runs on the output of `tickets.py find` for one ticket. Find's `description
 ## INSTRUCTIONS
 
 1. Load context.
+   - **First project-information retrieval:** run `harness knowledge catalog --repo . --store project`,
+     then `harness knowledge find <request terms> --repo . --store project`, and fetch only the
+     relevant returned unit(s) with `harness knowledge fetch <logical-unit-id> --repo . --store project`.
+     Do this before broad repository searches or reading unrelated project documents. Treat the
+     catalog as routing, cite unit IDs and source evidence, prefer source-backed facts, and keep
+     unknowns open. This is a deterministic, bounded lookup, not a replacement for checking current
+     source files. If the store is absent, empty, stale, malformed, or unavailable, record the exact
+     limitation and continue with focused source inspection; knowledge lookup must never block work.
    - **A ticket from the tree** — when **Ticket resolution** set `plan_file`: the entry, its epic file and what that file's References name, and the story file when there is one are already the intent. For continuity, read the plans beside `plan_file` whose `ticket` is one of find's `after` ids that is a plain number (an entry of the same epic; a ref such as `1.5` is another epic's). Extract each one's **Code Map**, **Design Notes**, **Plan Change Log**, and task list as continuity context for step-02 planning.
    - **Anything else:**
      - No `{active_initiative}`: unless the user already said in this session, ask once whether this work belongs to an initiative or is standalone. For an initiative, use the user's answer as `{active_initiative}` for this run; do not invoke an external BMad setup or modify the project's config. For standalone work, leave it empty.

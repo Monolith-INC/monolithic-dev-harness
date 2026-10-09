@@ -29,21 +29,22 @@ stated in the bundle, reusing its approval. Unrelated actions and later merges n
 
 ## 0. Start
 
-0. Detect version control automatically at execution. If present, inspect the branch, index, working tree, untracked files, and commits since the intended base. If absent, execute and verify locally without Git-specific branch, commit or PR steps. If
+0. Detect version control automatically at execution. If present, inspect the branch, index, working tree, untracked files, and commits since the intended base. This is context for preservation only; never require a branch or make a Git write to begin local implementation. If absent, execute and verify locally without Git-specific branch, commit or PR steps. If
    implementation already exists, stop this fresh-build routine and use
    `adopt-existing-implementation`; do not manufacture TDD history or reconstruct commits by swapping
    partial file versions through the working tree.
 1. `start-ticket` on the Story: it confirms the tracker item, moves it to in progress (a tracker write:
    reuse the approved bundle when this transition is stated; otherwise ask the `move-item` gate), and returns the spec plan.
-2. `branch-and-pr` → *Branch* section: create the Story branch from the fresh base.
+2. Use `branch-and-pr` → *Branch* section only when the user selected branch-based delivery. Otherwise continue in the existing working copy; the approved project work-session is the work context.
 3. Read the repository routing (`AGENTS.md` → subproject router) once, and list the rules that apply
    to this Story (state management, layer boundaries, localization, PII masking, generated code,
    test layout). Carry the list through every Task.
 
 ## 1. Per Task, in the breakdown order
 
-Apply `sequence-verifiable-units`: every Task ends in a verified, committed state before the next
-one starts.
+Apply `sequence-verifiable-units` to verify each Task before advancing. Its advice about rebasing,
+branches, commits and PRs applies only when the user selected versioned delivery; no VCS action is a
+prerequisite for local implementation.
 
 1. **Architect** (`architect`) when the Task adds or reshapes an interface; skip it for mechanical
    Tasks and say why.
@@ -52,7 +53,7 @@ one starts.
 4. **Check** (`check --staged` for guarded paths; otherwise run the applicable checks). Fix until
    green; never silence a check.
 5. **Deslop** (`deslop`) the Task's diff.
-6. **Commit** atomically (`commit-prep`): one Task, one commit, with a message that names the Task
+6. **Commit** atomically (`commit-prep`) when versioned delivery was selected: one Task, one commit, with a message that names the Task
    id. The hooks block commits that lack tests (`tests-with-code`), edit generated files (`generated-files`), or touch a guarded
    path without evidence (`guarded-paths`). Fix the cause; never work around the hook.
 7. **Transition the Task** to done in the tracker. The approved bundle (or legacy `approve-spec` approval) covers its stated transitions while the

@@ -96,7 +96,7 @@ def check_package(
         "planning-depth" in plan_step and "one focused decision at a time" in plan_step
     )
     assert plan_step.index("planning-depth") < plan_step.index(
-        "Fill it out from the intent"
+        "planning approach draft"
     )
     assert "implementation-confirm" in plan_step
     assert shlex.split(package["context"]["status_command"])[-2:] == [

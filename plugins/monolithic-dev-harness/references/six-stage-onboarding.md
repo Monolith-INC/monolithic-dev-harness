@@ -34,13 +34,19 @@ work. Additional elicitation remains available but is not an endless default loo
 
 ## Preparation
 
-Assemble only relevant requirements, specification, risk analysis, architecture/UX companions and
-verification requirements. Create a manifest with each document's relative path, purpose, read
-trigger, owning skill and current digest. Keep source decisions in the memlog. Readers use the
-manifest to load relevant evidence rather than ingest everything. Draft tracker artifacts locally;
-publish only under an existing authorization for that exact bundle, otherwise include publication
-in the final confirmation. Persist the implementation plan locally unless the tracker explicitly
-supports storing it. It references the manifest and every load-bearing companion.
+Assemble in dependency order: (1) requirements and acceptance criteria; (2) technical/product
+specification, architecture/UX companions, risk analysis and verification; (3) refine and decompose
+the candidate tracker work-item hierarchy, then draft every item and required child Task locally;
+(4) validate the entire draft batch and tracker capabilities; (5) build the artifact manifest over
+all load-bearing documents and tracker drafts; (6) write the implementation plan last, referencing
+the manifest, draft items, and every companion. The final plan is the execution contract, not an
+input to work-item refinement. This follows the Scrum distinction between refining/ordering backlog
+items and the later plan for doing selected work.
+
+Publish tracker artifacts only under an existing authorization for that exact bundle; otherwise
+include concrete publication actions in the final confirmation. Keep local drafts reviewable even
+when tracker configuration or publication is unavailable. Keep source decisions in the memlog.
+Readers use the manifest to load relevant evidence rather than ingest everything.
 
 ## Confirmation
 
@@ -58,10 +64,14 @@ approval ends at that boundary and does not authorize execution or tracker publi
 
 ## Execution
 
-Close onboarding and begin work from the approved plan. Detect versioning automatically now;
-support projects without it. Preserve pre-existing files, isolate effects and verify the edge-case
-matrix against tests actually run. Use Thermos for code review and BMAD verification/claims checks
-where relevant. External delivery and merging remain separate, context-bound actions.
+Close onboarding and begin work from the approved plan. Detect versioning automatically now; its
+presence or absence never blocks local implementation. Branches, commits, pushes, and pull requests
+are optional delivery choices; never create or require them as a prerequisite to edit and verify
+locally. A project work-session plus the unchanged final bundle approval is sufficient context for
+local edits without a checkout-bound Git session. Preserve pre-existing files, isolate effects and
+verify the edge-case matrix against tests actually run. Use Thermos for code review and BMAD
+verification/claims checks where relevant. External delivery and merging remain separate,
+context-bound actions.
 
 ## Interaction and recovery
 

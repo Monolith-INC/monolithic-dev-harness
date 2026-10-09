@@ -31,6 +31,7 @@ LOCAL_OPERATIONS = {
     "harness.doctor": "Check local harness setup and required tools.",
     "harness.workflow.status": "Read the current saved workflow checkpoint.",
     "harness.workflow.checkpoint": "Save a workflow checkpoint without granting write approval.",
+    "harness.knowledge.catalog": "List the bounded project knowledge routing catalog.",
     "harness.knowledge.find": "Search the selected harness knowledge store.",
     "harness.knowledge.fetch": "Read a selected harness knowledge item.",
     "harness.suspension.status": "Read whether the user suspended the harness checks; only their own `harness suspend` message does.",

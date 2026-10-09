@@ -11,23 +11,22 @@ review surfaces, and Back/Pause/Resume/Cancel/Complete behavior. This skill supp
 stage-specific details. Each stage consumes the previous stage's output; none re-invents it. Hooks
 enforce the rules that must never depend on the model remembering them.
 
-```
- idea / work item
-      │
- 0 DISCOVER ──── bmad-build: read request → investigate (subagents) → plan + batched questions → Deepen → approve
-      │           plan-initiative: ideate or shape a product idea when selected
-      │
- 1 BACKLOG ───── generate-work-item → enrich-work-item → decompose-backlog → generate-breakdown-work-items
-      │           (top ancestor draft)  (team format)     (Epic→Features→Stories,  (Tasks + Staging/
-      │                                                     points)                  Review/Breakdown)
-      ├── G1  Feature Owner / PO reviews the complete batch before any tracker write
- 2 TECH PLAN ─── start-ticket → write-spec (Actor-Critic)
-      ├── G2  Tech Lead approves the spec
- 3 BUILD ─────── implement-story: per Task architect → tdd → implement → check → deslop → commit;
-      │           Story done: bmad-qa-generate-e2e-tests → prove-it-works
- 4 VERIFY ────── review: review-story-preflight → thermos ∥ bmad-review (edge cases, claims, gaps) → triage → fixes → verdict → branch-and-pr (draft)
-      ├── G3  Feature Owner validates in staging
-      └── G4  a human publishes and approves the pull request
+The operational flow is Discovery → Planning → Hardening → Preparation → Confirmation →
+Execution. During Preparation, create/refine and validate the local tracker draft hierarchy and
+required child Tasks before the manifest and final implementation plan. Git, branches and commits
+are optional execution/delivery tools; they never gate local work.
+
+```text
+Request / ticket / idea
+  └─ Discovery: knowledge catalog/find/fetch, request analysis, focused source investigation
+      └─ Planning: select depth and methods; compare approaches; record decisions
+          └─ Hardening: selected reviewers; reconcile requirements; triage findings
+              └─ Preparation: requirements/spec/risk/verification → refine and draft tracker items
+                  and child Tasks → validate batch → manifest → final implementation plan
+              └─ Confirmation: review complete bundle; one approval tied to the unchanged content
+                  └─ Execution: local implementation; Git, branches and commits are optional
+                      └─ Delivery: tracker publication, push, PR, deploy and merge are separately
+                         authorized actions when requested
 ```
 
 A change of direction at any stage (a new constraint, a failed assumption, a rescoped goal) goes
@@ -295,7 +294,7 @@ blocks any agent write to the records. Gates G1, G2, and G4 map to these approva
 | `guarded-paths` | commits to guarded paths without check or manual evidence for the staged tree |
 | `draft-reviewed-prs` | non-draft pull requests; pull requests without a `ready` verdict and passing checks for HEAD; publishing drafts or voting |
 | `history-preserved` | rewriting branch history: rebase, squash merges, force-push, `filter-branch`, completing a pull request by squash or rebase |
-| workflow | code changes without an active session for this checkout (`harness session start`), new branches off the convention, the session's work item not in progress, code before an accepted spec, completion without evidence, protected branches |
+| workflow | local code edits without an unchanged implementation-confirm approval or applicable active checkout session; optional branch convention for versioned delivery; tracker-backed status, accepted specification, completion evidence and protected-branch rules where those delivery actions are selected |
 
 When a hook denies the requested effect, respect that boundary. When it cannot classify a
 permitted read, use a narrow verified reader such as jq or a native file-read tool. Tool fallback
