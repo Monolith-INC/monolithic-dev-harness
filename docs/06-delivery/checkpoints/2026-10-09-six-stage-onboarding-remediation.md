@@ -24,3 +24,10 @@ last_reviewed: 2026-10-09
    trial record was left untouched. The remaining `HALT and give the user a choice`
    matches are in separate planning/review workflows outside the advanced-elicitation path and
    need triage before claiming a repository-wide UI cleanup.
+3. **Clean acceptance fixture prepared.** Created `/tmp/monolithic-dev-harness-trial-80zre_yv/project`
+   from the canonical template with the `unconfigured` profile. Recursive comparison against the
+   template passed (excluding Git metadata); no harness settings/state or BMad runtime were
+   seeded. Saved the minimal run request and setup provenance under
+   `docs/06-delivery/acceptance/six-stage-41c4466-clean/`. Installed the committed 0.6.2 Codex
+   plugin build from source revision `41c4466`; selected installed files match. Clickable
+   questions are enabled. Desktop restart is still required before the live run. Fixture preserved.
