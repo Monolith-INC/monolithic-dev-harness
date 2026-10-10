@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# One-shot installer for monolithic-dev-harness (Claude Code, Cursor, Codex, and Zed).
+# One-shot installer for monolithic-dev-harness (Claude Code, Cursor, Codex, Kimi Code CLI, and Zed).
 #
 #   curl -fsSL https://github.com/Monolith-INC/monolithic-dev-harness/releases/latest/download/install.sh | bash
 #
@@ -8,7 +8,7 @@
 #   gh release download --repo Monolith-INC/monolithic-dev-harness --pattern install.sh --output - | bash
 #
 # Flags (after `bash -s --` when piping):
-#   --host auto|claude|cursor|codex|zed|all   hosts to install into (default: every host found)
+#   --host auto|claude|cursor|codex|kimi|zed|all   hosts to install into (default: every host found)
 #   --version <x.y.z>               release to install (default: latest)
 #   --source <dir|archive.tar.gz>   install from a local build instead of downloading
 #   --uninstall                     remove the harness from every host and delete its files
@@ -16,7 +16,8 @@
 #
 # Environment: HARNESS_HOME (default ~/.local/share/monolithic-dev-harness), HARNESS_BIN_DIR
 # (default ~/.local/bin), CURSOR_PLUGIN_DIR (default ~/.cursor/plugins/local/monolithic-dev-harness),
-# ZED_CONFIG_DIR (default ~/.config/zed), GH_TOKEN / GITHUB_TOKEN (private downloads without the
+# ZED_CONFIG_DIR (default ~/.config/zed), KIMI_CONFIG_DIR (default ~/.kimi), AGENTS_SHARED_DIR (default ~/.agents),
+# GH_TOKEN / GITHUB_TOKEN (private downloads without the
 # GitHub CLI), CLAUDE_CONFIG_DIR (respected).
 #
 # Nothing is cloned: the installer downloads the release archive, verifies its SHA-256, and
@@ -32,6 +33,9 @@ readonly BIN_DIR="${HARNESS_BIN_DIR:-${HOME}/.local/bin}"
 readonly CURSOR_DIR="${CURSOR_PLUGIN_DIR:-${HOME}/.cursor/plugins/local/${PLUGIN}}"
 readonly ZED_DIR="${ZED_CONFIG_DIR:-${HOME}/.config/zed}"
 readonly ZED_SETTINGS="${ZED_DIR}/settings.json"
+readonly KIMI_DIR="${KIMI_CONFIG_DIR:-${HOME}/.kimi}"
+readonly KIMI_CONFIG="${KIMI_DIR}/config.toml"
+readonly AGENTS_SHARED_DIR="${AGENTS_SHARED_DIR:-${HOME}/.agents}"
 readonly CODEX_MARKETPLACE="${MARKETPLACE_DIR}/codex-marketplace"
 readonly CODEX_AGENTS_DIR="${CODEX_HOME:-${HOME}/.codex}/agents"
 readonly CODEX_CONFIG="${CODEX_HOME:-${HOME}/.codex}/config.toml"
@@ -68,7 +72,7 @@ usage() {
   cat <<'EOF'
 monolithic-dev-harness installer
 
-  --host auto|claude|cursor|codex|zed|all   hosts to install into (default: every host found)
+  --host auto|claude|cursor|codex|kimi|zed|all   hosts to install into (default: every host found)
   --version <x.y.z>               release to install (default: latest)
   --source <dir|archive.tar.gz>   install from a local build instead of downloading
   --uninstall                     remove the harness from every host and delete its files
@@ -89,7 +93,7 @@ parse_args() {
     esac
   done
   VERSION="${VERSION#v}"
-  case "$HOSTS" in auto|claude|cursor|codex|zed|all) ;; *) die "--host must be auto, claude, cursor, codex, zed, or all" ;; esac
+  case "$HOSTS" in auto|claude|cursor|codex|kimi|zed|all) ;; *) die "--host must be auto, claude, cursor, codex, kimi, zed, or all" ;; esac
 }
 
 # --- preflight ---------------------------------------------------------------------------------
@@ -118,17 +122,19 @@ preflight() {
 }
 
 select_hosts() {
-  local want_claude=0 want_cursor=0 want_codex=0 want_zed=0
+  local want_claude=0 want_cursor=0 want_codex=0 want_kimi=0 want_zed=0
   case "$HOSTS" in
     claude) want_claude=1 ;;
     cursor) want_cursor=1 ;;
     codex) want_codex=1 ;;
+    kimi) want_kimi=1 ;;
     zed) want_zed=1 ;;
-    all) want_claude=1; want_cursor=1; want_codex=1; want_zed=1 ;;
+    all) want_claude=1; want_cursor=1; want_codex=1; want_kimi=1; want_zed=1 ;;
     auto)
       have claude && want_claude=1
       { [[ -d "${HOME}/.cursor" ]] || have cursor; } && want_cursor=1
       have codex && want_codex=1
+      { [[ -f "$KIMI_CONFIG" ]] || have kimi; } && want_kimi=1
       { [[ -f "$ZED_SETTINGS" ]] || have zed; } && want_zed=1
       ;;
   esac
@@ -138,13 +144,18 @@ select_hosts() {
   if [[ $want_codex -eq 1 ]] && ! have codex; then
     die "Codex (the \`codex\` CLI) is not on PATH; install it or select another host"
   fi
-  # Zed is a GUI editor with no CLI gate: install_zed creates ~/.config/zed when absent,
-  # so unlike claude/codex there is no hard "not found" error. Auto-detect only opts in
-  # when a config or binary is present; an explicit --host zed / --host all always installs.
+  # Zed and Kimi are config-file hosts with no CLI gate: their installers create the
+  # config location when absent, so unlike claude/codex there is no hard "not found"
+  # error. Auto-detect only opts in when a config or binary is present; an explicit
+  # --host zed / --host kimi / --host all always installs.
   INSTALL_CLAUDE=$want_claude
   INSTALL_CURSOR=$want_cursor
   INSTALL_CODEX=$want_codex
+  INSTALL_KIMI=$want_kimi
   INSTALL_ZED=$want_zed
+  if [[ $INSTALL_KIMI -eq 1 ]] && ! have kimi; then
+    warn "Kimi Code CLI (the \`kimi\` command) is not on PATH; hooks are registered in ${KIMI_CONFIG} but cannot fire until it is installed"
+  fi
 }
 
 # --- download ----------------------------------------------------------------------------------
@@ -576,6 +587,162 @@ PY
   fi
 }
 
+# Kimi Code CLI discovers skills and agents at user level in the shared
+# ~/.agents/skills and ~/.agents/agents directories (its docs: "the generic
+# ~/.agents/ ... directory stays under the real OS home so it can be shared
+# across tools"), so one symlink set also serves other hosts reading them.
+# Existing entries that are not harness-managed are never touched.
+link_kimi_shared_files() {
+  local plugin_root="${MARKETPLACE_DIR}/plugins/${PLUGIN}"
+  local scope dest name target
+  for scope in skills agents; do
+    [[ -d "${plugin_root}/${scope}" ]] || continue
+    dest="${AGENTS_SHARED_DIR}/${scope}"
+    mkdir -p "$dest"
+    for target in "${plugin_root}/${scope}"/*; do
+      [[ -e "$target" ]] || continue
+      name="$(basename "$target")"
+      if [[ -L "${dest}/${name}" ]]; then
+        [[ "$(readlink "${dest}/${name}")" == "$target" ]] && continue
+        warn "shared ${scope}/${name} is a symlink to elsewhere; leaving it in place"
+        continue
+      fi
+      if [[ -e "${dest}/${name}" ]]; then
+        warn "shared ${scope}/${name} already exists and is not harness-managed; leaving it in place"
+        continue
+      fi
+      ln -s "$target" "${dest}/${name}"
+    done
+  done
+  say "Kimi Code CLI: harness skills and agents linked into ${AGENTS_SHARED_DIR} (user level)"
+}
+
+unlink_kimi_shared_files() {
+  local plugin_root="${MARKETPLACE_DIR}/plugins/${PLUGIN}"
+  local scope dest link
+  for scope in skills agents; do
+    dest="${AGENTS_SHARED_DIR}/${scope}"
+    [[ -d "$dest" ]] || continue
+    for link in "${dest}"/*; do
+      [[ -L "$link" ]] || continue
+      [[ "$(readlink "$link")" == "${plugin_root}/"* ]] && rm -f "$link"
+    done
+  done
+}
+
+install_kimi() {
+  say "Kimi Code CLI: registering PreToolUse hooks in ${KIMI_CONFIG}"
+  mkdir -p "$KIMI_DIR"
+  [[ -f "$KIMI_CONFIG" ]] || printf '\n' > "$KIMI_CONFIG"
+  local plugin_root="${MARKETPLACE_DIR}/plugins/${PLUGIN}"
+  local backup="${KIMI_CONFIG}.pre-harness"
+  [[ -f "$backup" ]] || cp "$KIMI_CONFIG" "$backup"
+  "$PY" - "$KIMI_CONFIG" "$plugin_root" <<'PY'
+import json
+import re
+import sys
+import tomllib
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+plugin_root = Path(sys.argv[2]).resolve()
+
+# Only tool names documented in the Kimi Code CLI hooks docs are matched
+# (Shell, WriteFile, StrReplaceFile), plus the mcp__* tool glob the agent
+# docs describe. Confirm against a live runtime before widening this.
+HOOKS = (
+    {
+        "event": "PreToolUse",
+        "matcher": "Shell|WriteFile|StrReplaceFile|mcp__.*",
+        "command": f'sh "{plugin_root}/bin/harness-python" "{plugin_root}/scripts/harness/hook.py" --host kimi --event pre-tool',
+        "timeout": 15,
+    },
+    {
+        "event": "UserPromptSubmit",
+        "matcher": "",
+        "command": f'sh "{plugin_root}/bin/harness-python" "{plugin_root}/scripts/harness/hook.py" --host kimi --event prompt',
+        "timeout": 10,
+    },
+    {
+        "event": "Stop",
+        "matcher": "",
+        "command": f'sh "{plugin_root}/bin/harness-python" "{plugin_root}/scripts/harness/hook.py" --host kimi --event stop',
+        "timeout": 10,
+    },
+)
+
+BEGIN = "# >>> monolithic-dev-harness hooks (managed: install.sh --host kimi) >>>"
+END = "# <<< monolithic-dev-harness hooks <<<"
+
+raw = config_path.read_text(encoding="utf-8")
+# Drop a previously managed block so reinstalls stay idempotent.
+raw = re.sub(re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n?", "", raw, flags=re.DOTALL)
+
+lines = ["", BEGIN]
+for hook in HOOKS:
+    lines.append("[[hooks]]")
+    lines.append(f'event = "{hook["event"]}"')
+    if hook["matcher"]:
+        lines.append(f'matcher = "{hook["matcher"]}"')
+    # json.dumps escaping is valid for TOML basic strings.
+    lines.append(f'command = {json.dumps(hook["command"])}')
+    lines.append(f'timeout = {hook["timeout"]}')
+    lines.append("")
+lines.append(END)
+block = "\n".join(lines) + "\n"
+
+updated = raw.rstrip("\n") + "\n" + block
+# Fail closed on our own edit: if we cannot parse it, Kimi must not either.
+tomllib.loads(updated)
+config_path.write_text(updated, encoding="utf-8")
+print(f"wrote {len(HOOKS)} harness hooks to {config_path}")
+PY
+  link_kimi_shared_files
+}
+
+uninstall_kimi() {
+  [[ -f "$KIMI_CONFIG" ]] || return 0
+  "$PY" - "$KIMI_CONFIG" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+BEGIN = "# >>> monolithic-dev-harness hooks (managed: install.sh --host kimi) >>>"
+END = "# <<< monolithic-dev-harness hooks <<<"
+if not config_path.is_file():
+    raise SystemExit(0)
+raw = config_path.read_text(encoding="utf-8")
+stripped = re.sub(re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n?", "", raw, flags=re.DOTALL)
+if stripped == raw:
+    raise SystemExit(0)
+config_path.write_text(stripped, encoding="utf-8")
+PY
+  # Restore the pre-harness file when nothing else has changed in it.
+  local backup="${KIMI_CONFIG}.pre-harness"
+  if [[ -f "$backup" ]]; then
+    "$PY" - "$KIMI_CONFIG" "$backup" <<'PY'
+import re
+import sys
+from pathlib import Path
+
+config_path = Path(sys.argv[1])
+backup = Path(sys.argv[2])
+BEGIN = "# >>> monolithic-dev-harness hooks (managed: install.sh --host kimi) >>>"
+END = "# <<< monolithic-dev-harness hooks <<<"
+try:
+    current = config_path.read_text(encoding="utf-8")
+    original = backup.read_text(encoding="utf-8")
+except OSError:
+    raise SystemExit(0)
+strip = lambda t: re.sub(re.escape(BEGIN) + r".*?" + re.escape(END) + r"\n?", "", t, flags=re.DOTALL)
+if strip(current) == original:
+    backup.replace(config_path)
+    print(f"restored pre-harness {config_path}")
+PY
+  fi
+}
+
 install_cli() {
   mkdir -p "$BIN_DIR"
   ln -sfn "${MARKETPLACE_DIR}/plugins/${PLUGIN}/bin/harness" "${BIN_DIR}/harness"
@@ -603,6 +770,8 @@ uninstall() {
     claude plugin marketplace remove "$PLUGIN" >/dev/null 2>&1 || true
   fi
   uninstall_zed
+  uninstall_kimi
+  unlink_kimi_shared_files
   rm -rf "$CURSOR_DIR" "$HARNESS_HOME"
   if [[ -L "${BIN_DIR}/harness" ]]; then rm -f "${BIN_DIR}/harness"; fi
   say "Done. Repositories keep their .harness/ folders (settings and records); delete them if you no longer want them."
@@ -627,18 +796,20 @@ main() {
   [[ $INSTALL_CLAUDE -eq 1 ]] && targets+=("Claude Code")
   [[ $INSTALL_CURSOR -eq 1 ]] && targets+=("Cursor")
   [[ $INSTALL_CODEX -eq 1 ]] && targets+=("Codex")
+  [[ $INSTALL_KIMI -eq 1 ]] && targets+=("Kimi Code CLI")
   [[ $INSTALL_ZED -eq 1 ]] && targets+=("Zed")
   confirm_action "Install ${PLUGIN} v${VERSION} for ${targets[*]}?"
   install_marketplace_copy
   if [[ $INSTALL_CLAUDE -eq 1 ]]; then install_claude; fi
   if [[ $INSTALL_CURSOR -eq 1 ]]; then install_cursor; fi
   if [[ $INSTALL_CODEX -eq 1 ]]; then install_codex; fi
+  if [[ $INSTALL_KIMI -eq 1 ]]; then install_kimi; fi
   if [[ $INSTALL_ZED -eq 1 ]]; then install_zed; fi
   install_cli
 
   cat <<EOF
 
-✓ ${PLUGIN} ${VERSION} installed ($( [[ $INSTALL_CLAUDE -eq 1 ]] && printf 'Claude Code ' )$( [[ $INSTALL_CURSOR -eq 1 ]] && printf 'Cursor ' )$( [[ $INSTALL_CODEX -eq 1 ]] && printf 'Codex ' )$( [[ $INSTALL_ZED -eq 1 ]] && printf 'Zed' ))
+✓ ${PLUGIN} ${VERSION} installed ($( [[ $INSTALL_CLAUDE -eq 1 ]] && printf 'Claude Code ' )$( [[ $INSTALL_CURSOR -eq 1 ]] && printf 'Cursor ' )$( [[ $INSTALL_CODEX -eq 1 ]] && printf 'Codex ' )$( [[ $INSTALL_KIMI -eq 1 ]] && printf 'Kimi Code CLI ' )$( [[ $INSTALL_ZED -eq 1 ]] && printf 'Zed' ))
 
 Next:
   1. Restart your host so the hooks and MCP servers load; trust plugin hooks when prompted.
