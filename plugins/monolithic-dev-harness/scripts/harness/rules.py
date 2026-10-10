@@ -268,6 +268,8 @@ _OWNED_DIRS = (
     (".harness", "state", "approvals"),
     (".harness", "state", "manual"),
     (".harness", "state", "asked"),
+    (".harness", "state", "control-questions"),
+    (".harness", "state", "question-observations"),
     (".harness", "state", "sessions"),
     (".harness", "state", "work_sessions"),
     (".harness", "state", "host_sessions"),
@@ -360,12 +362,52 @@ def runs_harness_hook(command: str) -> bool:
     stdin, so an agent that pipes a payload into them could answer for the user.
     """
     return any(
-        _invocation_mentions_hook(invocation)
+        _invocation_mentions_hook(
+            invocation, allow_staging=shellscan.plain_git_context(command)
+        )
         for invocation in shellscan.invocations(command)
     )
 
 
-def _invocation_mentions_hook(invocation: shellscan.Invocation) -> bool:
+def _stages_hook_source(args: tuple[str, ...]) -> bool:
+    """Allow index staging with directory/filemode options, never executable Git configuration."""
+    match args:
+        case ("add", *rest):
+            return _noninteractive_staging(tuple(rest))
+        case ("-C", _, *rest) | ("-c", "core.filemode=false", *rest):
+            return _stages_hook_source(tuple(rest))
+        case _:
+            return False
+
+
+def _noninteractive_staging(args: tuple[str, ...]) -> bool:
+    match args:
+        case () | ("--", *_):
+            return True
+        case (option, *rest) if not option.startswith("-") or option in {
+            "-A",
+            "--all",
+            "-u",
+            "--update",
+            "-f",
+            "--force",
+            "-N",
+            "--intent-to-add",
+            "--renormalize",
+            "-n",
+            "--dry-run",
+            "-v",
+            "--verbose",
+            "--ignore-errors",
+        }:
+            return _noninteractive_staging(tuple(rest))
+        case _:
+            return False
+
+
+def _invocation_mentions_hook(
+    invocation: shellscan.Invocation, *, allow_staging: bool
+) -> bool:
     """Readers may inspect hooks; execution and copying remain protected."""
     return (
         invocation.name not in shellscan.NON_WRITERS
@@ -375,8 +417,13 @@ def _invocation_mentions_hook(invocation: shellscan.Invocation) -> bool:
         )
         and not (
             invocation.name == "git"
-            and invocation.args[:1] in (("diff",), ("show",), ("status",))
-            and "--ext-diff" not in invocation.args
+            and (
+                (allow_staging and _stages_hook_source(invocation.args))
+                or (
+                    invocation.args[:1] in (("diff",), ("show",), ("status",))
+                    and "--ext-diff" not in invocation.args
+                )
+            )
         )
         and (
             invocation.name not in shellscan.IN_PLACE_FLAGS

@@ -5,8 +5,8 @@ description: Implement a Feature with several User Stories on stacked branches â
 
 # Feature implementation
 
-A Feature with several Stories runs the Story flow once per Story, on branches stacked under one
-Feature branch:
+A Feature with several Stories can run the Story flow once per Story. When the user selects
+versioned delivery, use branches stacked under one Feature branch:
 
 ```text
 <base branch>
@@ -18,6 +18,10 @@ Feature branch:
 
 Before using the tracker, call `workflow_tracking_status`. If tracking is paused, report that this
 skill is unavailable until `/resume-tracker`.
+
+If the approved bundle calls for local implementation without tracker/SCM delivery, execute its
+Stories in the stated dependency order in the current working copy. Do not create branches, commits,
+or PRs as a prerequisite.
 
 ## Procedure
 

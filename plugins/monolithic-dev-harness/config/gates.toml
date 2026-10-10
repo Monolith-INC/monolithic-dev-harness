@@ -23,6 +23,106 @@
 languages = ["en", "pt-br"]
 
 [[gate]]
+id = "harness-controls"
+kind = "preference"
+question.en = "How would you like to control the harness?"
+question.pt-br = "Como você quer controlar o harness?"
+[[gate.option]]
+id = "suspend"
+label.en = "Suspend harness"
+label.pt-br = "Suspender harness"
+detail.en = "Disable every harness check and continue your work freely."
+detail.pt-br = "Desativar todas as verificações do harness e continuar livremente."
+[[gate.option]]
+id = "resume"
+label.en = "Resume harness"
+label.pt-br = "Retomar harness"
+detail.en = "Restore checks while keeping the existing work and decisions."
+detail.pt-br = "Restaurar as verificações e manter o trabalho e as decisões existentes."
+[[gate.option]]
+id = "free"
+label.en = "Free mode"
+label.pt-br = "Modo livre"
+detail.en = "Use skills without guided onboarding; action checks remain enabled."
+detail.pt-br = "Usar skills sem onboarding guiado; verificações de ações continuam ativas."
+
+[[gate]]
+id = "implementation-confirm"
+approval = true
+artifact = true
+binds = "artifacts"
+question.en = "Approve this implementation plan and its stated actions?"
+question.pt-br = "Aprovar este plano de implementação e suas ações descritas?"
+[[gate.option]]
+id = "approve"
+label.en = "Approve"
+label.pt-br = "Aprovar"
+detail.en = "Proceed with the next steps described in this reviewed plan."
+detail.pt-br = "Prosseguir com as próximas etapas descritas neste plano revisado."
+[[gate.option]]
+id = "revise"
+label.en = "Revise"
+label.pt-br = "Revisar"
+detail.en = "Change the affected part before execution; keep the other recorded decisions."
+detail.pt-br = "Ajustar a parte afetada antes da execução; manter as outras decisões registradas."
+[[gate.option]]
+id = "stop"
+label.en = "Stop here"
+label.pt-br = "Parar aqui"
+detail.en = "Keep the prepared documents and decisions for a later return."
+detail.pt-br = "Guardar os documentos preparados e as decisões para retomar depois."
+
+[[gate]]
+id = "planning-depth"
+kind = "preference"
+recommended = "standard"
+question.en = "How thoroughly should we explore this work before drafting the plan?"
+question.pt-br = "Quanto devemos aprofundar este trabalho antes de escrever o plano?"
+[[gate.option]]
+id = "light"
+label.en = "Light"
+label.pt-br = "Leve"
+detail.en = "A focused review and self-check; faster, with fewer scenarios explored."
+detail.pt-br = "Revisão focada e autocheck; mais rápido, com menos cenários explorados."
+[[gate.option]]
+id = "standard"
+label.en = "Standard"
+label.pt-br = "Padrão"
+detail.en = "Explore relevant approaches, risks, edge cases and technical choices."
+detail.pt-br = "Explorar abordagens relevantes, riscos, casos limite e escolhas técnicas."
+[[gate.option]]
+id = "hardcore"
+label.en = "Hardcore"
+label.pt-br = "Intensivo"
+detail.en = "Add adversarial reviews and deeper checks of assumptions and verification."
+detail.pt-br = "Adicionar revisões adversariais e verificações profundas de premissas e validação."
+
+[[gate]]
+id = "planning-methods"
+kind = "preference"
+recommended = "shortlist"
+question.en = "How would you like to choose the planning methods?"
+question.pt-br = "Como você quer escolher os métodos de planejamento?"
+[[gate.option]]
+id = "shortlist"
+label.en = "Contextual shortlist"
+label.pt-br = "Seleção contextual"
+detail.en = "Choose from five methods selected for the discovered work and its risks."
+detail.pt-br = "Escolher entre cinco métodos selecionados para o trabalho e seus riscos."
+[[gate.option]]
+id = "all"
+label.en = "Full catalog"
+label.pt-br = "Catálogo completo"
+detail.en = "See every available method and choose one or several."
+detail.pt-br = "Ver todos os métodos disponíveis e escolher um ou vários."
+[[gate.option]]
+id = "recommend"
+label.en = "Agent recommendations"
+label.pt-br = "Recomendações do agente"
+detail.en = "Review a suggested combination with reasons, then select or revise it."
+detail.pt-br = "Revisar uma combinação sugerida com justificativas e selecionar ou ajustar."
+
+[[gate]]
 id = "language"
 kind = "preference"
 # Asked before the project has a language: shown in the user's saved preference, else English.

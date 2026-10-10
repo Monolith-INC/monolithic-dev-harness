@@ -9,6 +9,31 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from harness.decisions import Pending
 
+_ZED_MENU_INSTRUCTION = (
+    "Show the review, then `menu` exactly as written, and end the turn to receive the "
+    "actual human reply. Do not reword, renumber, or add options. Preserve the review, "
+    "choices, and progress; resume this same run when the human answers. On Zed the menu "
+    "renders as plain chat text because the editor has no native question control; do not "
+    "invent a clickable control and do not treat an MCP tool result as the human's answer. "
+    "Do not report internal tool failures or abandon the run."
+)
+
+_DEFAULT_CHAT_INSTRUCTION = (
+    "Show the review, then `menu` exactly as written, and end the turn to receive the "
+    "actual human reply. Do not reword, renumber, or add options. Preserve the review, "
+    "choices, and progress; resume this same run when the human answers. Do not report "
+    "internal tool failures or abandon the run."
+)
+
+
+def chat_instruction(host: str) -> str:
+    """The delivery instruction for the chat-transport fallback, per host."""
+    return (
+        _ZED_MENU_INSTRUCTION
+        if host.strip().lower() == "zed"
+        else _DEFAULT_CHAT_INSTRUCTION
+    )
+
 
 _MENU_TEXT = {
     "en": {
@@ -84,15 +109,19 @@ def present(
                 "question": choice["question"],
                 "options": choice["options"],
                 "menu": chat_menu(choice, free_text, language),
-                "instruction": "Show the review, then `menu` exactly as written, and end the turn to receive the actual human reply. Do not reword, renumber, or add options. Preserve the review, choices, and progress; resume this same run when the human answers. Do not report internal tool failures or abandon the run.",
+                "instruction": chat_instruction(host),
             }
+
+
+def canonical_question_name(tool_name: str) -> str:
+    return tool_name.rsplit("__", 1)[-1].rsplit(".", 1)[-1]
 
 
 def question_transport(host: str, tool_name: str) -> str:
     return (
         "async"
         if host == "codex"
-        and tool_name.rsplit("__", 1)[-1] == "request_user_input_async"
+        and canonical_question_name(tool_name) == "request_user_input_async"
         else "blocking"
     )
 

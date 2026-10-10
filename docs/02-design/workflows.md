@@ -9,55 +9,20 @@ last_reviewed: 2026-10-06
 
 ## End-to-end flow
 
-```text
-idea / work item
-  -> 0 DISCOVER  bmad-build: read assigned request -> investigate repository (subagents)
-                 -> plan + one batch of open questions -> scope check -> Deepen (optional)
-                 -> approve technical implementation plan -> checkpoint for backlog drafting
-                 optional plan-initiative remains for product ideation when requested
-  -> 1 BACKLOG   generate-work-item -> enrich-work-item -> decompose-backlog
-                 -> generate-breakdown-work-items
-                 G1: Feature Owner / PO approve the outline, then the bodies (one batch each)
-  -> 2 TECH PLAN start-ticket -> write-spec (Actor-Critic)
-                 G2: Tech Lead approves the spec
-  -> 3 BUILD     implement-story: one verified commit per Task; e2e tests at Story done
-  -> 4 VERIFY    review: preflight -> thermos + bmad-review lenses -> triage -> branch-and-pr (draft)
-                 G3: staging validation
-                 G4: a person publishes and approves the pull request
-```
+Discovery → Planning → Hardening → Preparation → Confirmation → Execution.
+See [the main-flow specification](specs/harness-main-flow.md) and
+[the implementation plan](specs/six-stage-onboarding-implementation.md).
 
-The target flow, its gates, and the interaction contract are specified in
-[specs/harness-main-flow.md](specs/harness-main-flow.md). The `harness` skill conducts this flow. Stage 0 is the default for assigned requests that need
-technical investigation; a user can go directly to backlog drafting when the request is ready.
-Stacked Features run stages 2–4 once per Story inside
-`feature-implementation`, on Story branches based on the Feature branch.
+Discovery investigates the request and relevant project evidence first. Planning then offers
+Light, Standard or Hardcore depth before drafting, with contextual methods, full catalog or agent
+recommendations. Hardening reconciles requirements and triages reviewer findings. Preparation
+assembles documents, a reading manifest, local tracker drafts and the implementation plan.
+One native confirmation of that bundle begins execution. Native failure falls back to async and
+then chat without discarding the decision. Decisions are saved throughout and reused unchanged.
 
-## Discovery stage
-
-For an assigned ticket or draft feature request, Stage 0 uses the bundled BMad Build workflow to
-inspect the repository, investigate feasible approaches, and produce a reviewed feature-level
-implementation plan. The plan is checkpointed and passed to backlog drafting. Tracker reads are
-read-only; no ticket state, branch, session, or tracker item is changed in this stage. BMad runtime
-files are bundled with this plugin and set up from those local files.
-
-Discovery follows BMad's depth model:
-
-- **Investigation** runs as subagent searches that return short summaries into the plan's Code Map.
-  `bmad-deep-recon` handles unfamiliar code or domains. Drift between the code and the project's
-  agent instructions is recorded and fixed with `bmad-project-context`.
-- **Questions** the investigation cannot settle are asked together in one message, each with its
-  trade-offs and a recommendation. Answers in any form (number, name, paraphrase) are accepted.
-- **Scope** is checked twice: on the request, and again on the decided plan. An over-long or
-  multi-goal plan is offered a split; it is never compressed to fit the token budget.
-- **Memory**: every answer, accepted proposal, and approval is appended to a memlog beside the
-  plan (`plan-<slug>.memlog.md`). Resume reads it first.
-- **Approval checkpoint** lists every recorded decision once and offers *Approve and continue*,
-  *Deepen*, *Revise*, or *Approve and stop*. *Deepen* runs `bmad-review` (adversarial and
-  edge-case lenses as parallel subagents), then `bmad-advanced-elicitation`, and offers
-  `bmad-party-mode` for contested decisions; it returns to the checkpoint.
-
-A change of direction at any later stage goes through `bmad-correct-course`, which proposes the
-changes and routes back to the earliest stage whose approved output is invalidated.
+Versioning is optional and detected only at execution entry. Pausing preserves progress;
+suspension disables every harness veto. Free mode remains available without a session.
+Legacy stage labels in saved checkpoints remain supported for continuity.
 
 Product ideation remains available when a user asks to explore which product or problem to pursue:
 

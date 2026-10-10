@@ -58,6 +58,7 @@ class PreparedWorkflowTests(unittest.TestCase):
                 "implement-approved-item",
                 "resume-work",
                 "suspend-checks",
+                "onboarding",
             },
         )
         self.assertEqual(routes()["suspend-checks"], ("suspend",))
@@ -155,7 +156,7 @@ class PreparedWorkflowTests(unittest.TestCase):
         references = {Path(item["path"]).name for item in package["harness_knowledge"]}
         self.assertEqual(
             references,
-            {"workflow-storyboard.md", "SKILL.md"},
+            {"workflow-storyboard.md", "project-knowledge.md", "SKILL.md"},
         )
         self.assertTrue(all(item["digest"] for item in package["harness_knowledge"]))
 

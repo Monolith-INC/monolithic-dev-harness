@@ -7,6 +7,16 @@ license: MIT
 
 # Decompose Backlog
 
+## Six-stage preparation mode
+
+When invoked during six-stage preparation, the outline and enriched bodies are local drafts.
+Continue through DECOMPOSE, DRAFT, ENRICH and local AUDIT without separate GATE 1/2 approvals.
+Include the drafts and hierarchy/coverage report in the final manifest and implementation-confirm
+bundle. Defer CREATE until that bundle is approved for those concrete tracker writes. Reuse that
+approval while its contents and target remain unchanged. The gates and publication rules below
+apply only to legacy standalone runs; they never prohibit saving preparation drafts.
+
+
 Conductor for turning a parent work item into its child tree in Azure DevOps: Feature → Stories
 (*story mode*), or Epic → Features → Stories (*tree mode*). Load the reference files
 as each phase needs them — they carry the self-contained rules so this file stays a score, not a
@@ -141,7 +151,7 @@ report. Any gap STOPS and reports — no silent patching.
 
 ## Operating rules
 
-- Two hard gates (after DECOMPOSE, after ENRICH), in both modes. Never write to the artifacts path or
+- Legacy standalone runs use two hard gates (after DECOMPOSE, after ENRICH), in both tree modes. Never write to the artifacts path or
   Azure without the matching approval. The harness approval hook enforces GATE 2 for Azure writes.
 - Tree mode is one run: no stop between the Feature level and the Story level.
 - Every Azure-mutating step is followed by a read-back assertion.

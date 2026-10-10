@@ -1,0 +1,47 @@
+{
+  "host": "zed",
+  "product": "Zed (editor agent panel, any model)",
+  "verified_on": "2026-10-09",
+  "subagents": {
+    "start": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "No way for the harness to start a Zed agent subagent has been verified."
+      }
+    },
+    "status": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "No way for the harness to read a running Zed agent's state has been verified."
+      }
+    },
+    "follow_up": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "No way for the harness to message a running Zed agent has been verified."
+      }
+    },
+    "cancel": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "No way for the harness to stop a running Zed agent has been verified."
+      }
+    },
+    "events": {
+      "supported": false,
+      "provenance": {
+        "level": "unsourced",
+        "caveat": "No Zed agent event stream has been verified."
+      }
+    }
+  },
+  "notes": [
+    "Zed has no hook/PreToolUse lifecycle, so the harness cannot deny tool calls itself; policy enforcement is delegated to Zed's agent.tool_permissions prompts.",
+    "Zed does not implement MCP Elicitation, so decisions render as the canonical chat menu; there is no native question control to bind to.",
+    "Zed exposes no thread/session id to MCP servers, so host-session binding is unavailable (zed_adapter.zed_session_id returns empty)."
+  ]
+}

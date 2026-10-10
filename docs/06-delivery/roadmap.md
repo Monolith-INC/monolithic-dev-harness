@@ -28,6 +28,7 @@ each team.
 | Live check of the Linear adapter | next | a read, a create, a transition, and a comment against a real workspace |
 | Live observation in Claude Code | next | a Story taken from idea to draft PR in a governed repository, every gate recorded |
 | Live observation in Cursor | next | the plugin loads; a denied write and an approved write observed |
+| Six-stage acceptance and recovery documentation | next | fresh live trial reaches execution entry; user guide and troubleshooting cover project-local evidence and optional host transcript export |
 | Cost per stage measured | next | token usage recorded per stage on at least three real Stories |
 | Triggers from Azure DevOps (service hooks / pipelines) | later | a validation comment posted when a card moves to Ready |
 | Public installer | later | the repository or its releases are public, so plain `curl` works |

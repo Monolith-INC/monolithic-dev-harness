@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -16,14 +17,22 @@ if _SCRIPTS_DIR not in sys.path:
 from spec_runtime import SPEC_KINDS
 
 from core.result import Err, Failure, Ok, Result, bind, fmap, recover
-from harness import gitstate, sessions, settings, state
+from harness import (
+    decisions,
+    gitstate,
+    sessions,
+    settings,
+    state,
+    work_sessions,
+    workflow,
+)
 from harness.local_artifacts import approved_kinds_for, artifacts_dir
 from host_adapters import select_adapter
 from host_adapters.hook_bridge import project_root_hint, should_emit_allow
 from integrations import branches, registry
 from integrations.contracts import LogicalState, TrackerOps, WorkItem
 from policy import CanonicalToolEvent, PolicyDecision
-from policy.commands import git_commands, is_code, writes_code
+from policy.commands import escapes_checkout, git_commands, is_code, writes_code
 from policy.git_branch_guard import evaluate_git_branch_guard
 
 LOG_FILE = "/tmp/harness_hook_debug.log"
@@ -110,7 +119,10 @@ def evaluate_event(event: CanonicalToolEvent) -> PolicyDecision:
         if checkout_decision.is_denied():
             return checkout_decision
         if _is_mutating_git(command) or writes_code(
-            command, event.workspace_root, _code_patterns(event.workspace_root)
+            command,
+            event.workspace_root,
+            _code_patterns(event.workspace_root),
+            _planning_folder(event.workspace_root),
         ):
             return _evaluate_work_context(event)
         return PolicyDecision.allow()
@@ -124,6 +136,16 @@ def evaluate_event(event: CanonicalToolEvent) -> PolicyDecision:
     if event.kind == "edit" and _edits_code(event):
         return _evaluate_work_context(event)
     return PolicyDecision.allow()
+
+
+def _planning_folder(project_root: str) -> str:
+    match artifacts_dir(Path(project_root)):
+        case Path() as folder if folder.resolve() != Path(
+            project_root
+        ).resolve() and folder.resolve().is_relative_to(Path(project_root).resolve()):
+            return folder.resolve().relative_to(Path(project_root).resolve()).as_posix()
+        case _:
+            return ""
 
 
 def _code_patterns(project_root: str) -> list[str] | None:
@@ -155,10 +177,17 @@ def _is_code_path(file_path: str, workspace_root: str) -> bool:
         try:
             relative = path.resolve().relative_to(root).as_posix()
         except ValueError:
-            return False
+            return escapes_checkout(file_path, root)
     else:
-        relative = path.as_posix()
-    return is_code(relative, _code_patterns(workspace_root))
+        try:
+            relative = (root / path).resolve().relative_to(root).as_posix()
+        except ValueError:
+            return escapes_checkout(file_path, root)
+    return is_code(
+        relative,
+        _code_patterns(workspace_root),
+        planning=_planning_folder(workspace_root),
+    )
 
 
 def _decision(result: Result[None]) -> PolicyDecision:
@@ -221,6 +250,15 @@ def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
     boundary = "push" in {
         command[0] for command in git_commands(event.command or "") if command
     }
+    if (
+        not boundary
+        and not _contains_mutating_git(event.command or "")
+        and _approved_local_execution(root)
+    ):
+        return PolicyDecision.allow()
+    match sessions.resolve(root):
+        case _:
+            pass
     return _decision(
         bind(
             _active_session(root),
@@ -233,6 +271,77 @@ def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
                 else _live_ready(root)
             ),
         )
+    )
+
+
+def _approved_local_execution(root: Path) -> bool:
+    """An approved, unchanged implementation bundle can authorize local edits without Git binding."""
+    return _approved_bundle(root, work_sessions.current(root))
+
+
+def _approved_bundle(root: Path, scope: str | None) -> bool:
+    match scope:
+        case None:
+            return False
+        case identifier:
+            decision = decisions.record(root, identifier) or {}
+            match workflow.load(root, identifier):
+                case Ok(current) if (
+                    current.status == "active" and current.current.stage == "execution"
+                ):
+                    return (
+                        decision.get("status") == "answered"
+                        and decision.get("approval") is True
+                        and decision.get("gate") == "implementation-confirm"
+                        and _approved_answer(str(decision.get("answer", "")))
+                        and _reviewed_artifacts_match(
+                            root, decision.get("artifacts", ())
+                        )
+                    )
+                case _:
+                    return False
+
+
+def _approved_answer(answer: str) -> bool:
+    return answer.strip().casefold() in {
+        "approve",
+        "approved",
+        "yes",
+        "approve and continue",
+    }
+
+
+def _reviewed_artifacts_match(root: Path, artifacts: object) -> bool:
+    match artifacts:
+        case list() as entries if entries:
+            return all(
+                isinstance(entry, list)
+                and len(entry) == 2
+                and isinstance(entry[0], str)
+                and isinstance(entry[1], str)
+                and _artifact_digest_matches(root, entry[0], entry[1])
+                for entry in entries
+            )
+        case _:
+            return False
+
+
+def _artifact_digest_matches(root: Path, relative: str, expected: str) -> bool:
+    candidate = (root / relative).resolve()
+    try:
+        return (
+            candidate.is_relative_to(root.resolve())
+            and candidate.is_file()
+            and hashlib.sha256(candidate.read_bytes()).hexdigest() == expected
+        )
+    except OSError:
+        return False
+
+
+def _contains_mutating_git(command: str) -> bool:
+    return any(
+        argv and (argv[0] in _MUTATING_GIT or argv[0].startswith("commit"))
+        for argv in git_commands(command)
     )
 
 
@@ -342,27 +451,53 @@ def _evaluate_completion(event: CanonicalToolEvent, ref: str) -> PolicyDecision:
         return PolicyDecision.allow()
     return _decision(
         bind(
-            _session_item(root),
-            lambda found: _complete(found[0], found[1], found[2], ref),
+            registry.open_selected(root, settings.load(root)),
+            lambda ops: bind(
+                ops.get_work_item(ref),
+                lambda item: bind(
+                    ops.list_artifacts(item.id),
+                    lambda artifacts: _completion_route(root, ops, item, artifacts),
+                ),
+            ),
         )
     )
+
+
+def _completion_route(
+    root: Path, ops: TrackerOps, item: WorkItem, artifacts: tuple
+) -> Result[object]:
+    from policy.planning_completion import current, verify
+
+    match tuple(
+        a for a in artifacts if _artifact_kind(a.kind) == "planning_completion"
+    ):
+        case (receipt,):
+            return bind(
+                current((receipt,)), lambda selected: verify(ops, item, selected)
+            )
+        case ():
+            return bind(
+                _active_session(root),
+                lambda session: _complete(session, item, artifacts),
+            )
+        case receipts:
+            return bind(current(receipts), lambda receipt: verify(ops, item, receipt))
 
 
 def _complete(
-    session: sessions.Session, ops: TrackerOps, item: WorkItem, ref: str
+    session: sessions.Session, item: WorkItem, artifacts: tuple
 ) -> Result[None]:
-    if ref.strip().upper() not in {item.id.upper(), item.key.upper()}:
-        return Err(
-            _failure(
-                f"this checkout's session is for {item.key}; {ref} is completed from its own session."
+    match session.work_item.strip().upper() in {item.id.upper(), item.key.upper()}:
+        case False:
+            return Err(
+                _failure(
+                    f"this checkout's session is for {session.work_item}; {item.key} is completed from its own session."
+                )
             )
-        )
-    return bind(
-        ops.list_artifacts(item.id),
-        lambda found: _completion_evidence(
-            item, {_artifact_kind(a.kind) for a in found}
-        ),
-    )
+        case True:
+            return _completion_evidence(
+                item, {_artifact_kind(a.kind) for a in artifacts}
+            )
 
 
 def _completion_evidence(item: WorkItem, kinds: set[str]) -> Result[None]:

@@ -23,6 +23,22 @@ def begin(
         case "free":
             return Ok(onboarding.free_payload(repo, request))
         case _:
+            return _begin_unpaused(repo, request, selected_id, new)
+
+
+def _begin_unpaused(
+    repo: Path, request: str, selected_id: str | None, new: bool
+) -> Result[dict]:
+    match onboarding.status(repo):
+        case {"status": "paused"}:
+            return Ok(
+                {
+                    "state": "paused",
+                    "request": request,
+                    "next": "Resume, reset or drop onboarding when the user chooses; preserve existing progress.",
+                }
+            )
+        case _:
             return bind(
                 setup.onboarding_status(repo),
                 lambda report: _begin_ready(repo, request, selected_id, new, report),
@@ -117,7 +133,7 @@ def _begin_output(
     report: dict,
 ) -> Result[dict]:
     match (current.status, current.current.stage):
-        case ["active", "discover"]:
+        case ["active", "discover" | "discovery"]:
             return fmap(
                 discovery.render(repo, selected.id),
                 lambda package: _begin_payload(

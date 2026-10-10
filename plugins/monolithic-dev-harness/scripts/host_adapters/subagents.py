@@ -35,6 +35,8 @@ ADAPTERS = {
     "claude": "host_adapters.claude_adapter",
     "codex": "host_adapters.codex_adapter",
     "cursor": "host_adapters.cursor_adapter",
+    "zed": "host_adapters.zed_adapter",
+    "kimi": "host_adapters.kimi_adapter",
 }
 
 

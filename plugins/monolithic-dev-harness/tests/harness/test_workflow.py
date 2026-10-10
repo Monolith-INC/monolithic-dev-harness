@@ -52,6 +52,14 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsInstance(workflow.resume(workflow.cancel(started).value), Err)
         self.assertIsInstance(workflow.from_dict({"version": 5}), Err)
 
+    def test_paused_checkpoint_preserves_pause_and_supports_six_stages(self) -> None:
+        paused = workflow.pause(workflow.start("Plan this", "en").value).value
+        for stage in workflow.ONBOARDING_STAGES:
+            saved = workflow.add_point(paused, "Evidence retained", stage).value
+            self.assertEqual(saved.status, "paused")
+            self.assertEqual(saved.current.stage, stage)
+            self.assertEqual(workflow.pause(saved), Ok(saved))
+
     def test_save_requires_no_settings_and_excludes_state_from_git(self) -> None:
         started = workflow.start("Plan this", "en").value
         self.assertIsInstance(workflow.save(self.repo, started), Ok)

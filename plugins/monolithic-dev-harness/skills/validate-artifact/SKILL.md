@@ -197,3 +197,7 @@ Do NOT include `status:` in frontmatter.
 - **Non-blocking.** Every check runs regardless of prior failures in the same category.
 - **SKIP over ERROR.** If a provider connector fails, log SKIP with reason and continue.
 - **One artifact per run.** Process only the first argument if multiple are given.
+
+## Draft-review recovery
+
+FAIL is a completed validation report. Revise the draft and evaluate it again without implementation authorization. CLI `resume` compiles a correction prompt; it does not resume an implementation task. Publication and saving retain their own approvals.

@@ -72,6 +72,7 @@ _PROJECT_ENV = {
     "claude": "CLAUDE_PROJECT_DIR",
     "cursor": "CURSOR_PROJECT_DIR",
     "codex": "CODEX_PROJECT_ROOT",
+    "zed": "ZED_WORKTREE_ROOT",
 }
 
 
@@ -248,6 +249,7 @@ def format_pre_tool(host: str, decision: Decision) -> str | None:
     from .claude_adapter import format_claude_decision
     from .codex_adapter import format_codex_decision
     from .cursor_adapter import format_cursor_decision
+    from .kimi_adapter import format_kimi_decision
 
     policy = (
         PolicyDecision.allow()
@@ -258,6 +260,7 @@ def format_pre_tool(host: str, decision: Decision) -> str | None:
         "claude": format_claude_decision,
         "cursor": format_cursor_decision,
         "codex": format_codex_decision,
+        "kimi": format_kimi_decision,
     }[host]
     return (
         json.dumps(formatter(policy))

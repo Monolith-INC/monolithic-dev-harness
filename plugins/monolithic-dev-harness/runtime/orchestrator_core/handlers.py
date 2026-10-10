@@ -96,12 +96,10 @@ def handle_auto_fix_artifact(
     max_attempts = int(arguments.get("max_attempts", 3))
     record_mistake = bool(arguments.get("record_mistake", True))
 
-    state = ReflectionState(attempt=attempt)
-    if state.last_critiques and attempt:
-        state = ReflectionState(
-            attempt=attempt,
-            last_critiques=tuple(arguments.get("last_critiques", [])),
-        )
+    state = ReflectionState(
+        attempt=attempt,
+        last_critiques=tuple(arguments.get("last_critiques", [])),
+    )
 
     if not file_path and not draft_override:
         mistakes = load_mistakes(state_dir, skill_name="auto-fix-artifact")

@@ -41,7 +41,7 @@ bin/agile-backlog-toolkit evaluate --skill auto-fix-artifact --file <path>
 
 For reflection retries, resubmit revised `draft_content` via MCP or re-run `evaluate` after saving.
 Circuit breaker trips after 3 attempts or identical critiques → `blocked_requires_review`.
-Resume only after human types `IMPLEMENTATION APPROVED` (or `ORCHESTRATOR_INTERACTIVE=1` CLI).
+Each call evaluates the supplied draft once and returns its findings. FAIL is a completed review, not a tool failure. The actor revises and resubmits the draft. If reflection stalls or exhausts its budget, review the findings and start a fresh draft-review cycle with `attempt=0`; pass returned `reflection.last_critiques` on continuing cycles. This does not authorize implementation, publication or saving. General implementation approval rules are unchanged.
 3. **Report:** Display the validation report to the user on the screen.
 
 ---

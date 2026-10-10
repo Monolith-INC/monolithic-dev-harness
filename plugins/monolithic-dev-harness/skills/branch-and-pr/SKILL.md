@@ -10,9 +10,10 @@ tools, which work the same on Azure Repos and GitHub (`scm.name` in `.harness/se
 
 ## Branch
 
-Branch creation belongs to implementation after the user has reviewed the plan and a tracker item
-exists. Do not create a branch or start a session during bootstrap, discovery, or ideation. If a
-decision or approval is needed, ask it as a menu ([human-decisions.md](../../references/human-decisions.md)):
+Branch creation is an optional delivery choice after the user has reviewed the plan. It is never a
+prerequisite for local implementation. Do not create a branch or start a session during bootstrap,
+discovery, or ideation. If the user did not choose branch-based delivery, skip this section and
+continue from the approved bundle in the existing working copy. If a decision or approval is needed, ask it as a menu ([human-decisions.md](../../references/human-decisions.md)):
 a standard gate where one exists, which the harness presents through the host's best control and
 falls back to chat on its own.
 

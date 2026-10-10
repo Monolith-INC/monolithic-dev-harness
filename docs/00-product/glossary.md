@@ -39,7 +39,7 @@ last_reviewed: 2026-09-30
 | Settings | `.harness/settings.json`, the repository's only settings file: tracker, SCM, branch template, rules. Human-owned: the harness changes only its `tracker` section, when the user chooses a tracker. |
 | Stacked branches | Story branches based on a Feature branch, landed into it in order. |
 | Subagent contract | `SubagentOps` in `scripts/host_adapters/subagents.py`: start, status, follow-up, cancel, and events for subagents on a host. An operation a host does not declare returns `unsupported_capability`; a malformed answer returns `invalid_host_result`. |
-| Suspension | The user's own `harness suspend` message turns off every harness check in one repository except `human-owned`; `harness resume` (or `harness suspension resume`) restores them. Kept in `.harness/state/suspension.json`. |
+| Suspension | The user's own `harness suspend` message turns off every harness veto in one project, including protected-record checks; `harness resume` (or `harness suspension resume`) restores them. Kept in `.harness/state/suspension.json`. |
 | Tracker contract | What every tracker meets: `tracker.json` checked against `config/tracker.schema.json`, and an adapter returning `TrackerOps`. |
 | Tracker manifest | A tracker folder's `tracker.json`: kinds, states, hierarchy, id formats, which tools write, how to connect, which settings it needs. |
 | Tracker policy | What the rules know about trackers for one hook call: which calls write (from every shipped and onboarded tracker folder, trusted or not), and how ids look and which text links (from every usable one). |

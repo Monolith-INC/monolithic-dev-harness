@@ -1,0 +1,16 @@
+flowchart TD
+  D[Discovery: request, code and evidence] --> P[Planning: choose depth before drafting]
+  P --> M[Contextual shortlist / full catalog / recommendations]
+  M --> H[Hardening: reconcile and triage selected reviews]
+  H --> A[Preparation: documents, manifest, tracker drafts, implementation plan]
+  A --> C{One final bundle confirmation}
+  C -->|Approve| E[Execution: detect optional VCS, implement, verify]
+  C -->|Revise| P
+  C -->|Pause| R[Preserve progress]
+  R -->|Resume| C
+  U[Native controls → async → chat fallback] -.-> P
+  U -.-> C
+  S[Pause / resume / reset / restart / drop anytime] -.-> D
+  S -.-> A
+  F[Suspend: every harness veto disabled] -.-> S
+  E --> W[Context-bound delivery / merge decisions]

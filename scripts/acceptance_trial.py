@@ -73,6 +73,7 @@ def prepare(
     root_prefix: str = ROOT_PREFIX,
     kind: str = "prepared",
     in_checkout: bool = False,
+    with_zed: bool = False,
 ) -> Path:
     if profile not in PROFILES:
         raise ValueError(f"Unknown starting profile: {profile}")
@@ -129,6 +130,8 @@ def prepare(
             )
             prepare_local_tracker(project)
             prepare_planning(project, str(settings.get("artifacts_path", "")))
+        if with_zed:
+            write_zed_settings(project)
         run_git(project, "add", "--all")
         run_git(project, "commit", "--quiet", "-m", "Starting project")
     except BaseException:
@@ -180,6 +183,37 @@ def prepare_local_tracker(project: Path) -> None:
 
 def run_git(project: Path, *args: str) -> None:
     subprocess.run(["git", *args], cwd=project, check=True)
+
+
+def write_zed_settings(project: Path) -> Path:
+    """Drop a project-level .zed/settings.json exposing the in-repo plugin's MCP servers.
+
+    Zed merges project settings over user settings, so the trial project carries its own
+    context_servers and never edits the user's real Zed configuration.
+    """
+    plugin_root = PLUGIN.resolve()
+    template = json.loads((plugin_root / "zed.mcp.json").read_text(encoding="utf-8"))
+    context_servers = {
+        name: {
+            "command": entry["command"],
+            "args": [
+                a.replace("${PLUGIN_ROOT}", str(plugin_root)) for a in entry["args"]
+            ],
+            "env": {
+                k: v.replace("${PLUGIN_ROOT}", str(plugin_root))
+                for k, v in entry["env"].items()
+            },
+        }
+        for name, entry in template.items()
+    }
+    zed_dir = project / ".zed"
+    zed_dir.mkdir(parents=True, exist_ok=True)
+    settings_path = zed_dir / "settings.json"
+    settings_path.write_text(
+        json.dumps({"context_servers": context_servers}, indent=2) + "\n",
+        encoding="utf-8",
+    )
+    return settings_path
 
 
 def discard(project_arg: str) -> Path:
@@ -481,6 +515,11 @@ def main() -> int:
         "--settings",
         help="JSON file whose values override the selected profile",
     )
+    prepare_parser.add_argument(
+        "--with-zed",
+        action="store_true",
+        help="write a project .zed/settings.json exposing the in-repo plugin's MCP servers",
+    )
     discard_parser = commands.add_parser(
         "discard", help="remove a helper-created project copy"
     )
@@ -513,7 +552,7 @@ def main() -> int:
                 )
                 if overrides is not None and not isinstance(overrides, dict):
                     raise ValueError("Settings override must contain a JSON object.")
-                print(prepare(args.profile, overrides))
+                print(prepare(args.profile, overrides, with_zed=args.with_zed))
             case "discard":
                 print(f"Discarded {discard(args.project_path)}")
             case "environment":

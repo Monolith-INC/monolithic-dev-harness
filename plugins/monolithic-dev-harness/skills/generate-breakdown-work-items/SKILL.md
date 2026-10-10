@@ -46,6 +46,16 @@ the needed write operations. Seek one approval for the external writes:
 the `publish-items` approval gate with the drafts as `--artifact`s (see the harness skill's approval protocol). Local drafts
 and deterministic checks need no additional approval.
 
+The publication review includes one `planning_completion` receipt on the Breakdown task and its
+Done transition after verification. The receipt has JSON content:
+`{"purpose":"breakdown","item_id":"<Breakdown id>","parent_id":"<Story id>","children":["<each other published child id>"]}`.
+Show this intended bookkeeping in the batch review; it authorizes no implementation. After readback,
+publish the receipt with `tracker_publish_artifact` (one stable title and a positive integer
+revision, starting at `1` and increasing for corrections), then transition
+only the Breakdown task to Done. The policy verifies its Task kind, Breakdown title, Story parent
+and complete child set. It needs no checkout branch/session or implementation artifacts.
+Ordinary Task and Story completion keeps its implementation evidence requirements.
+
 Publish through the active tracker adapter and read back each Task to verify its Story parent,
 state, and estimate fields where supported. After an uncertain response, search for the intended
 item before retrying so a timeout does not create a duplicate. Report the plan location, Task ids

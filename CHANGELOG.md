@@ -8,6 +8,10 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- Planning-only Markdown edits in the configured artifacts folder no longer require an
+  implementation session. Verified Breakdown completion uses a bounded publication receipt;
+  ordinary implementation completion keeps its session and evidence requirements.
+
 - Optional, restartable onboarding and sessionless free mode. Preferences use safe defaults;
   missing language capture never blocks work. Required decisions and action approvals retain their
   enforcement, and cancelled settings reviews require fresh confirmation of the exact proposal.
@@ -41,6 +45,16 @@ All notable changes to this project are documented here. The format follows
 - Approvals asked through a gate are tied to what was reviewed (drafts or spec, one item, branch,
   or pull request) and do not expire: they hold until revoked, the work session ends, or that
   context changes. A typed `approve HB-…` keeps the short general window.
+
+### Fixed
+
+- Draft critics evaluate each submitted draft once and retain findings without requesting
+  implementation approval. Reflection history survives revised submissions.
+- Codex presentation attempts native controls before chat; namespaced question tools are routed
+  by hooks and transcript recovery. Explicit unavailable controls retain graceful fallback.
+- Plan length is advisory; splitting is offered only for independently shippable goals.
+- Setup reports inaccessible Git metadata distinctly from an absent repository, without
+  automatically modifying global trust.
 
 ### Changed
 

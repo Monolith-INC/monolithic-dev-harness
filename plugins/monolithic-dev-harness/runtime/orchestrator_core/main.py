@@ -21,7 +21,12 @@ def _default_skills_dir() -> Path:
 
 
 def _project_root() -> Path:
-    for key in ("CODEX_PROJECT_ROOT", "CURSOR_PROJECT_DIR", "CLAUDE_PROJECT_DIR"):
+    for key in (
+        "CODEX_PROJECT_ROOT",
+        "CURSOR_PROJECT_DIR",
+        "CLAUDE_PROJECT_DIR",
+        "ZED_WORKTREE_ROOT",
+    ):
         value = os.environ.get(key, "").strip()
         if value:
             return Path(value)

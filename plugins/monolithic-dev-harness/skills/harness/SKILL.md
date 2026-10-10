@@ -5,6 +5,11 @@ description: Default entry point when the user asks to add, build, change, or fi
 
 # Harness
 
+Follow [six-stage onboarding](../../references/six-stage-onboarding.md): Discovery → Planning →
+Hardening → Preparation → Confirmation → Execution. Choose depth after discovery and before
+drafting. Present one final bundle confirmation; reuse its unchanged decisions and approvals.
+No versioning prerequisite applies before execution.
+
 Use the bundled `bin/harness` when `harness` is unavailable on PATH.
 Onboarding is optional. If the user wants skills or guidance without a session, use
 `harness mode free --repo <project>` and invoke the relevant skill directly. Free mode preserves
@@ -29,12 +34,20 @@ Do not preload all references at startup.
 
 Use catalog gates in the selected language; keep native controls and gracefully fallback via
 `harness decision fallback`. A hook-recorded answer needs no `decision status` call;
+For Codex, invoke the native tool returned by `decision present` with the returned question
+payload verbatim, including its question ID, wording, option labels, and descriptions. Do not
+rephrase it, invent a different ID, or replace it with a chat menu when callable. Use
+`--async-available` for async-only hosts, or `--native-unavailable` when no native control is
+callable. Default Codex presentation attempts blocking buttons. If the hook rejects a presentation,
+follow its recovery command exactly; `decision fallback` takes only the repository, optional
+session, host, and transport-availability flags. Do not add decision IDs or explanatory flags.
 use status only for recovery when capture is uncertain. A gate with `--artifact` automatically saves
 its review checkpoint when a workflow exists. Save manual checkpoints at stage completion or material
 progress without a question. Communication works without any active session.
 Language is optional: use the captured project choice, saved preference, or English. Never stop
 because language confirmation or capture is missing. Optional preferences do not block progress.
-`harness onboarding skip|dismiss|restart --repo <project>` controls onboarding only.
+`harness onboarding skip|dismiss|restart|reset|drop|pause|resume --repo <project>` controls onboarding
+without a session and preserves engineering evidence.
 
 `workflow prepare` is optional reference material, not a mandatory capability-declaration ceremony.
 Discover tools at the point of use and report genuinely missing capabilities. Explicit `--available`
