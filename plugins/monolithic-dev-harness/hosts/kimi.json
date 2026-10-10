@@ -1,0 +1,64 @@
+{
+ "host": "kimi",
+ "product": "Kimi Code CLI (Moonshot AI terminal agent)",
+ "verified_on": "2026-10-09",
+ "subagents": {
+  "start": {
+   "supported": false,
+   "provenance": {
+    "level": "first-party-doc",
+    "source": "https://moonshotai.github.io/kimi-code/en/customization/agents.html",
+    "retrieved": "2026-10-09",
+    "quote": "Sub-agents are scheduled automatically by the main Agent, based on task complexity, context consumption, and sub-task independence.",
+    "caveat": "Dispatch is runtime-internal to the Kimi session; the docs describe no transport by which the harness could start a subagent from its own process and receive a handle."
+   }
+  },
+  "status": {
+   "supported": false,
+   "provenance": {
+    "level": "first-party-doc",
+    "source": "https://moonshotai.github.io/kimi-code/en/customization/agents.html",
+    "retrieved": "2026-10-09",
+    "quote": "Sub-agent runtime state is persisted to the `agents/` subdirectory of the current session directory.",
+    "caveat": "State is observable only through session-directory files (wire.jsonl, tasks/); no API or command for an external reader has been verified."
+   }
+  },
+  "follow_up": {
+   "supported": false,
+   "provenance": {
+    "level": "first-party-doc",
+    "source": "https://moonshotai.github.io/kimi-code/en/customization/agents.html",
+    "retrieved": "2026-10-09",
+    "quote": "You can also call back an existing sub-agent instance to continue the same task.",
+    "caveat": "The callback is initiated by the main Agent in conversation; no external messaging channel into a running subagent is documented."
+   }
+  },
+  "cancel": {
+   "supported": false,
+   "provenance": {
+    "level": "first-party-doc",
+    "source": "https://www.kimi-cli.com/en/customization/hooks.html",
+    "retrieved": "2026-10-09",
+    "quote": "| `SubagentStop` | When subagent ends | Agent name | `agent_name`, `response` |",
+    "caveat": "SubagentStop is a notification hook carrying agent_name and response; no cancellation mechanism for a running subagent is documented."
+   }
+  },
+  "events": {
+   "supported": false,
+   "provenance": {
+    "level": "first-party-doc",
+    "source": "https://www.kimi-cli.com/en/customization/hooks.html",
+    "retrieved": "2026-10-09",
+    "quote": "| `SubagentStart` | When subagent starts | Agent name | `agent_name`, `prompt` |",
+    "caveat": "The subagent lifecycle surfaces only as start/stop notification hooks; no event stream for an external subscriber is documented."
+   }
+  }
+ },
+ "notes": [
+  "Hooks are configured in ~/.kimi/config.toml as [[hooks]] entries (event, matcher, command, timeout); the harness hook command plugs in as a PreToolUse hook command. The hooks system is beta and its configuration definitions may change. Docs: https://www.kimi-cli.com/en/customization/hooks.html",
+  "Hook stdin carries session_id, cwd, hook_event_name, tool_name, tool_input, and tool_call_id on PreToolUse; a deny is emitted as structured JSON hookSpecificOutput on exit code 0, or as exit code 2 with stderr fed back to the model. Hook failures fail open.",
+  "Kimi Code CLI reads shared cross-tool directories under ~/.agents/ (agents and skills; see the Agent Skills and Agents docs), and install.sh --host kimi links the plugin skills/ and agents/ into them, so the same files also serve other hosts that read ~/.agents (for example Zed agent panels). Entries that are not harness-managed are never replaced.",
+  "Moonshot models strictly validate tool JSON schemas (every property needs an explicit type); the workflow-integrations gateway satisfies this and any future kimi tool surface must too.",
+  "The agent docs place agent/skill discovery under $KIMI_CODE_HOME (default ~/.kimi-code/) while the hooks docs use ~/.kimi/config.toml; both homes are quoted verbatim from their pages and the relationship between them is not yet documented."
+ ]
+}

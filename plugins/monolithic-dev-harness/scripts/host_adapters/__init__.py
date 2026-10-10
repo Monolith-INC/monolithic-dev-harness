@@ -21,6 +21,7 @@ from .cursor_adapter import (
     format_cursor_decision,
     parse_cursor_payload,
 )
+from .kimi_adapter import format_kimi_decision, kimi_session_id, parse_kimi_payload
 from .zed_adapter import format_zed_decision, parse_zed_payload, zed_session_id
 
 
@@ -32,6 +33,8 @@ def select_adapter(client: str):
             return parse_codex_payload, format_codex_decision
         case "zed":
             return parse_zed_payload, format_zed_decision
+        case "kimi":
+            return parse_kimi_payload, format_kimi_decision
         case _:
             return parse_claude_payload, format_claude_decision
 
@@ -46,6 +49,8 @@ def native_session_id(client: str, payload):
             return cursor_session_id(payload)
         case "zed":
             return zed_session_id(payload)
+        case "kimi":
+            return kimi_session_id(payload)
         case _:
             return ""
 
@@ -54,9 +59,11 @@ __all__ = [
     "format_claude_decision",
     "format_codex_decision",
     "format_cursor_decision",
+    "format_kimi_decision",
     "parse_claude_payload",
     "parse_codex_payload",
     "parse_cursor_payload",
+    "parse_kimi_payload",
     "select_adapter",
     "native_session_id",
 ]

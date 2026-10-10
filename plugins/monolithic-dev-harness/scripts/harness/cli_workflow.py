@@ -180,7 +180,7 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     )
     decision_parser.add_argument(
         "--host",
-        choices=("codex", "claude", "cursor", "zed", "text"),
+        choices=("codex", "claude", "cursor", "zed", "kimi", "text"),
         default=_default_decision_host(),
     )
     decision_parser.add_argument("--blocking-available", action="store_true")
