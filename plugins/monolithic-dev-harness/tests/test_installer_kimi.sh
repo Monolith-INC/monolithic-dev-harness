@@ -22,6 +22,9 @@ EOF
 chmod +x "${TEMP_ROOT}/bin/kimi"
 # A foreign skill that must survive install and uninstall untouched.
 printf 'foreign\n' > "${TEMP_ROOT}/agents/skills/bootstrap"
+# A foreign symlink sorting last: uninstall must skip it without failing.
+mkdir -p "${TEMP_ROOT}/agents/agents"
+ln -s /dev/null "${TEMP_ROOT}/agents/agents/zz-foreign.md"
 
 INSTALL_ENV=(
   "HARNESS_HOME=${TEMP_ROOT}/harness"
@@ -59,5 +62,6 @@ env "${INSTALL_ENV[@]}" bash "$INSTALLER" --uninstall --yes >"${TEMP_ROOT}/unins
 [[ "$(find "${TEMP_ROOT}/agents/skills" -type l | wc -l)" -eq 0 ]]
 [[ "$(cat "${TEMP_ROOT}/agents/skills/bootstrap")" = "foreign" ]]
 [[ ! -e "${TEMP_ROOT}/agents/agents/thermo-nuclear-review-subagent.md" ]]
+[[ -L "${TEMP_ROOT}/agents/agents/zz-foreign.md" ]]
 
 printf 'installer kimi checks passed\n'

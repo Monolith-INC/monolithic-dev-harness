@@ -22,6 +22,9 @@ INSTALL_ENV=(
   "HARNESS_BIN_DIR=${TEMP_ROOT}/bin"
   "CURSOR_PLUGIN_DIR=${TEMP_ROOT}/cursor"
   "CODEX_HOME=${TEMP_ROOT}/codex"
+  "ZED_CONFIG_DIR=${TEMP_ROOT}/zed"
+  "KIMI_CONFIG_DIR=${TEMP_ROOT}/kimi"
+  "AGENTS_SHARED_DIR=${TEMP_ROOT}/agents"
   "PATH=${TEMP_ROOT}/bin:/usr/bin:/bin"
 )
 

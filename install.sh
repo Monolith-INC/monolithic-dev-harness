@@ -625,7 +625,7 @@ unlink_kimi_shared_files() {
     [[ -d "$dest" ]] || continue
     for link in "${dest}"/*; do
       [[ -L "$link" ]] || continue
-      [[ "$(readlink "$link")" == "${plugin_root}/"* ]] && rm -f "$link"
+      if [[ "$(readlink "$link")" == "${plugin_root}/"* ]]; then rm -f "$link"; fi
     done
   done
 }
