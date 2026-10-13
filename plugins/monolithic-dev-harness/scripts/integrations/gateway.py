@@ -62,7 +62,10 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
             "Create an epic, feature, user_story, task, or bug.",
             ("kind", "title"),
             {
-                "kind": {"type": "string", "enum": [kind.value for kind in WorkItemKind]},
+                "kind": {
+                    "type": "string",
+                    "enum": [kind.value for kind in WorkItemKind],
+                },
                 "title": STRING,
                 "description": STRING,
                 "parentRef": STRING,
@@ -73,7 +76,13 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
             "tracker_transition_work_item",
             "Move a work item to a harness state.",
             ("ref", "state"),
-            {"ref": STRING, "state": {"type": "string", "enum": [state.value for state in LogicalState]}},
+            {
+                "ref": STRING,
+                "state": {
+                    "type": "string",
+                    "enum": [state.value for state in LogicalState],
+                },
+            },
         ),
         (
             "tracker_publish_artifact",
