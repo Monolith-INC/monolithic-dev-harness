@@ -6,17 +6,18 @@
   "tracked_worktree": "clean at fixture creation",
   "installed_plugin_version": "0.6.2",
   "installed_plugin_source_revision": "ad13910d131a4a04263b74b832d842d5a9c87f01",
-  "install_command": "install.sh --source <checkout> --host codex --yes",
-  "installed_payload_comparison": "619 tracked plugin files (tests excluded) identical in the marketplace copy and the Codex cache, except .mcp.json, which the installer rewrites from codex.mcp.json",
+  "install_command": "install.sh --source <checkout> --host claude --yes (Codex install also present from the same revision)",
+  "installed_payload_comparison": "Claude Code plugin cache 0.6.2: 619 tracked plugin files (tests excluded) identical to source; Claude reports 72 skills, 2 agents, 4 hooks, 3 MCP servers",
   "doctor": "healthy: installation and repository configuration only; live question capture not checked",
-  "desktop_restart_required": true,
+  "desktop_restart_required": false,
   "fixture": "/home/monolith/projects/monolithic-dev-harness/temp/test-006/project",
   "fixture_profile": "unconfigured",
   "preseeded_harness_settings_or_state": false,
   "preseeded_bmad_runtime": false,
   "scenario": "Show active and completed task counts on the task screen.",
-  "interaction": "interactive Codex Desktop; human answers decisions",
+  "interaction": "interactive Claude Code CLI in the fixture, started with the trial's isolated TMPDIR and HARNESS_USER_STATE_DIR; human answers decisions",
   "stop_boundary": "Confirmation recorded; stop at execution entry",
   "allowed": "local setup and planning artifacts inside the disposable fixture",
-  "forbidden": "application implementation, tracker publication, remote writes"
+  "forbidden": "application implementation, tracker publication, remote writes",
+  "host": "claude-code"
 }

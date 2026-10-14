@@ -1,0 +1,17 @@
+Collecting Jinja2<4,>=3.1 (from -r /home/bhave/.local/share/monolithic-dev-harness/marketplace.new/plugins/monolithic-dev-harness/requirements-runtime.txt (line 1))
+  Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting MarkupSafe>=2.0 (from Jinja2<4,>=3.1->-r /home/bhave/.local/share/monolithic-dev-harness/marketplace.new/plugins/monolithic-dev-harness/requirements-runtime.txt (line 1))
+  Downloading markupsafe-3.0.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+Downloading markupsafe-3.0.4-cp312-cp312-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+Installing collected packages: MarkupSafe, Jinja2
+
+Successfully installed Jinja2-3.1.6 MarkupSafe-3.0.4
+[1m→[0m Claude Code: registering the plugin
+
+✓ monolithic-dev-harness 0.6.2 installed (Claude Code )
+
+Next:
+  1. Restart your host so the hooks and MCP servers load; trust plugin hooks when prompted.
+  2. In a repository you want governed:   harness bootstrap
+  3. Check everything:                    harness doctor
