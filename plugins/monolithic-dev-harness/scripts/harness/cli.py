@@ -8,7 +8,7 @@ harness session start <work item> [--workflow <name>] | status | pause | resume 
 harness work-session route --request <text> | start --request <text> | list | select <id> | pause|stop|resume|complete <id>
 harness workflow start | render | checkpoint | list | status | routes | prepare | back | pause | resume | cancel | complete --session-id <id>
 harness preference show | language <en|pt-br>
-harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...]
+harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...] | tree
 harness adoption assess | plan | status | materialize ...
 harness knowledge <operation> ...
 """
@@ -48,6 +48,7 @@ from harness import (  # noqa: E402
     sessions,
     settings,
     state,
+    tracker_tree,
 )
 from harness.cli_common import pairs, print_result, resolve_repo  # noqa: E402
 from integrations import (  # noqa: E402
@@ -451,6 +452,13 @@ def tracker_command(args: argparse.Namespace) -> int:
             )
         case "preflight":
             return _tracker_preflight(repo)
+        case "tree":
+            return print_result(
+                bind(
+                    registry.selected(repo, settings.load(repo)),
+                    lambda active: tracker_tree.render(repo, active.manifest),
+                )
+            )
     return 2
 
 
@@ -611,10 +619,11 @@ def main(argv: list[str] | None = None) -> int:
     preference_parser.add_argument("value", nargs="?")
     preference_parser.add_argument("--repo")
     tracker_parser = sub.add_parser(
-        "tracker", help="list or inspect trackers, check readiness, or stage a new one"
+        "tracker",
+        help="list or inspect trackers, check readiness, stage a new one, or print the work-item tree",
     )
     tracker_parser.add_argument(
-        "operation", choices=("list", "show", "stage", "preflight")
+        "operation", choices=("list", "show", "stage", "preflight", "tree")
     )
     tracker_parser.add_argument(
         "target", nargs="?", help="a tracker name (show) or folder (stage)"
