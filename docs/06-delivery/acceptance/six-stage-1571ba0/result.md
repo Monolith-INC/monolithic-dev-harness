@@ -27,6 +27,7 @@ Final outcome: native Approve captured, approval HB-Q14EBE379. All eight manifes
 Evidence retention failure: automatic approval review rejected copying result and full current-chat transcript to the requested evidence directory, citing possible disclosure and disputed archival authorization. No bypass attempted. Result and workflow outputs retained in /tmp pending explicit human archival approval.
 
 ## Authorized raw transcript archival — 2026-10-09
+
 Human approved the exact local cp operation. Normal host escalation allowed it; cp exited 0 with no textual approval-review response. No filtering, pseudonymization, wrappers, separate report, network transfer, publication or commit performed.
 Destination: project-agent-transcript.jsonl. Archived length: 1385297 bytes. Destination SHA-256: 865c4ade1e73280383ea01c0d73620212a1fcbb0619b88a1c019e42e1319ed5c.
 Post-copy live source SHA-256: 699f56e327868114ef0c7fc68d99943788d50e921a416263484a4c5330fcc40c. Full hashes did not match: the active session transcript appended subsequent tool interactions after the copy. A later read-only comparison found the live source was 1400229 bytes and the archived file matched its first 1385297 bytes exactly; source-prefix SHA-256 matched destination SHA-256. Thus an unchanged source prefix was retained, but equality with the subsequently growing full source was not achieved. No repeat copy attempted.
