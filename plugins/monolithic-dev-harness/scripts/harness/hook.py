@@ -792,6 +792,12 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             ),
         )
         return 0
+    match _unseen_bundle(repo, host, payload, pending if preparing else None):
+        case str() as reason:
+            _emit_decision(host, rules.Decision.deny("bundle-not-shown", reason))
+            return 0
+        case None:
+            pass
     found = questions.problems(tool_input)
     # Suspended observation may retain a valid binding but never veto presentation.
     if found and state.harness_mode(repo) != "suspended":
@@ -890,6 +896,28 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     state.mark_asked(repo, questions.marker_name(tool_use_id), detail, decision_scope)
     return 0
 
+
+
+def _unseen_bundle(
+    repo: Path, host: str, payload: dict[str, Any], pending: decisions.Pending | None
+) -> str | None:
+    """On Claude, the final approval waits until the bundle is in the agent's own reply."""
+    match host, pending, payload.get("transcript_path"):
+        case "claude", decisions.Pending(scope=scope), str() as transcript if (
+            (decisions.record(repo, scope) or {}).get("gate") == "implementation-confirm"
+        ):
+            from harness import bundle, settings
+            from integrations import registry
+
+            result = bind(
+                registry.selected(repo, settings.load(repo)),
+                lambda active: bundle.shown_in_chat(
+                    repo, scope, Path(transcript), active.manifest
+                ),
+            )
+            return result.failure.message if isinstance(result, Err) else None
+        case _:
+            return None
 
 def _artifacts(repo: Path, scope: str | None) -> tuple[tuple[str, str], ...]:
     """The reviewed files of the current checkpoint, so a changed one cannot be approved."""

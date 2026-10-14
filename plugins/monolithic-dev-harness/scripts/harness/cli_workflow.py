@@ -12,6 +12,7 @@ from pathlib import Path
 from core.result import Err, Failure, Ok, Result, attempt, bind, err, fmap, require
 from harness import (
     artifact_manifest,
+    bundle,
     decisions,
     discovery,
     gates,
@@ -21,6 +22,7 @@ from harness import (
     prepared_workflows,
     questions,
     review_decisions,
+    settings,
     startup,
     state,
     work_lifecycle,
@@ -29,6 +31,8 @@ from harness import (
 )
 from harness.cli_common import pairs, print_result, resolve_repo
 from host_adapters.interactions import present
+from integrations import registry
+from integrations.contracts import Manifest
 
 COMMANDS = (
     "plan",
@@ -128,6 +132,7 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
             "routes",
             "prepare",
             "manifest",
+            "show",
             "back",
             "pause",
             "resume",
@@ -366,6 +371,22 @@ def decision_command(args: argparse.Namespace) -> int:
                     print(failure.message, file=sys.stderr)
                     return 2
                 case Ok(spec):
+                    pass
+            # The final approval binds a refined bundle the human has actually been shown.
+            match (
+                bind(
+                    _selected_manifest(repo),
+                    lambda manifest: bundle.ready(
+                        repo, args.session_id, list(args.artifact or ()), manifest
+                    ),
+                )
+                if spec.gate == "implementation-confirm"
+                else Ok(None)
+            ):
+                case Err(failure):
+                    print(failure.message, file=sys.stderr)
+                    return 2
+                case Ok():
                     pass
             wording = questions.problems(
                 {
@@ -736,6 +757,7 @@ def workflow_command(args: argparse.Namespace) -> int:
             "list",
             "routes",
             "prepare",
+            "show",
             "checkpoint",
             "pause",
             "resume",
@@ -752,6 +774,15 @@ def workflow_command(args: argparse.Namespace) -> int:
         case _:
             pass
     match args.operation:
+        case "show":
+            return print_result(
+                bind(
+                    _selected_manifest(repo),
+                    lambda manifest: bundle.show(
+                        repo, args.session_id, list(args.artifact or ()), manifest
+                    ),
+                )
+            )
         case "manifest":
             return print_result(
                 artifact_manifest.save(
@@ -872,3 +903,9 @@ def workflow_command(args: argparse.Namespace) -> int:
             )
         case _:
             return 2
+
+
+def _selected_manifest(repo: Path) -> Result[Manifest]:
+    return fmap(
+        registry.selected(repo, settings.load(repo)), lambda active: active.manifest
+    )
