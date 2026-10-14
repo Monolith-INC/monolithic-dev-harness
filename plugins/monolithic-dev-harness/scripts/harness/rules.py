@@ -311,7 +311,16 @@ def is_human_owned(relative: str, tree: bool = False) -> bool:
 
 
 def _names_harness(word: str) -> bool:
-    return any(fnmatch(".harness", part) for part in word.split("/") if part)
+    """Whether a word from code the scanner cannot follow could name `.harness`.
+
+    A wildcard-only word such as `.**` (Markdown bold in a heredoc) is prose, not a target; a glob
+    counts once it spells part of the name, as `.h*` does.
+    """
+    return any(
+        fnmatch(".harness", part) and any(char.isalnum() for char in part)
+        for part in word.split("/")
+        if part
+    )
 
 
 def shell_human_owned_write(call: ToolCall, repo: Path) -> str | None:
