@@ -1,0 +1,20 @@
+{
+  "trial": "six-stage-05c206b-desktop",
+  "purpose": "Confirm on Claude Desktop that prepared menus show natively and the chat fallback runs (fixes in 467fe1c)",
+  "harness_checkout": "/home/monolith/projects/monolithic-dev-harness",
+  "source_revision": "05c206b24680e1498cb0340af13c6d5217893e03",
+  "branch": "codex/planning-and-interaction-reliability",
+  "host": "claude-desktop",
+  "installed_plugin_version": "0.6.2",
+  "installed_plugin_source_revision": "05c206b24680e1498cb0340af13c6d5217893e03",
+  "install_command": "install.sh --source <checkout> --host claude --yes, then claude plugin uninstall/install to refresh the same-version cache",
+  "installed_payload_comparison": "Claude plugin cache 0.6.2: 619 tracked plugin files (tests excluded) identical to source; 72 skills, 2 agents, 4 hooks, 3 MCP servers",
+  "fixture": "/home/monolith/projects/monolithic-dev-harness/temp/test-007/project",
+  "fixture_profile": "unconfigured",
+  "preseeded_harness_settings_or_state": false,
+  "scenario": "Show active and completed task counts on the task screen.",
+  "interaction": "new Claude Desktop Code session opened on the fixture folder; human answers decisions",
+  "stop_boundary": "Confirmation recorded; stop at execution entry",
+  "allowed": "local setup and planning artifacts inside the disposable fixture",
+  "forbidden": "application implementation, tracker publication, remote writes"
+}
