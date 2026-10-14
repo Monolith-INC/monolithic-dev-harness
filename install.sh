@@ -301,17 +301,31 @@ install_claude() {
   else
     claude plugin marketplace add "$MARKETPLACE_DIR" >/dev/null
   fi
+  # Claude caches the plugin by version, so `plugin update` keeps stale code when a source install
+  # reuses the version. Reinstalling replaces the cache; --keep-data preserves the plugin's data.
   if claude plugin list --json 2>/dev/null | grep -q "\"${PLUGIN_ID}\""; then
-    claude plugin update "$PLUGIN_ID" >/dev/null
-  else
-    claude plugin install "$PLUGIN_ID" >/dev/null
+    claude plugin uninstall --keep-data "$PLUGIN_ID" >/dev/null
   fi
+  claude plugin install "$PLUGIN_ID" >/dev/null
   claude plugin list --json 2>/dev/null | grep -q "\"${PLUGIN_ID}\"" || die "Claude Code did not report the plugin as installed"
+  verify_claude_cache
   local details
   details="$(claude plugin details "$PLUGIN_ID" 2>/dev/null || true)"
   if grep -q "Hooks (0)" <<<"$details" || grep -q "MCP servers (0)" <<<"$details"; then
     die "Claude Code loaded the plugin without its hooks or MCP servers; the release is incomplete"
   fi
+}
+
+verify_claude_cache() {
+  local cached
+  cached="$(claude plugin list --json 2>/dev/null | "$PY" -c '
+import json, sys
+plugins = json.load(sys.stdin)
+print(next((p.get("installPath", "") for p in plugins if p.get("id") == sys.argv[1]), ""))
+' "$PLUGIN_ID")" || cached=""
+  [[ -n "$cached" && -d "$cached" ]] || die "Claude Code did not report where it keeps the plugin"
+  diff -rq "${MARKETPLACE_DIR}/plugins/${PLUGIN}" "$cached" >/dev/null \
+    || die "Claude Code is still loading an older copy of the plugin from ${cached}; run \`claude plugin uninstall ${PLUGIN_ID}\` and install again"
 }
 
 install_cursor() {

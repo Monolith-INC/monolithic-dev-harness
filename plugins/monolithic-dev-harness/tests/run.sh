@@ -11,3 +11,4 @@ PYTHONPATH=runtime:tests/backlog:. "$PY" -m pytest tests/backlog -q -p no:cachep
 PYTHONPATH=.:scripts "$PY" -m pytest tests/core tests/integrations tests/delivery tests/harness -q -p no:cacheprovider
 bash tests/test_installer_confirmation.sh
 bash tests/test_installer_kimi.sh
+bash tests/test_installer_claude.sh
