@@ -1,6 +1,8 @@
 ---
 title: Direct-workspace planning interaction acceptance
 status: in-progress-under-user-suspension
+owner: monolithic-dev-harness maintainers
+last_reviewed: 2026-10-08
 observed_on: 2026-10-08
 session: WS-1a2a430a504d
 model: gpt-6.1-sol
