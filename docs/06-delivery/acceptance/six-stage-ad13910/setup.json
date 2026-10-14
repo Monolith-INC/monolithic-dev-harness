@@ -1,0 +1,22 @@
+{
+  "trial": "six-stage-ad13910",
+  "harness_checkout": "/home/monolith/projects/monolithic-dev-harness",
+  "source_revision": "ad13910d131a4a04263b74b832d842d5a9c87f01",
+  "branch": "codex/planning-and-interaction-reliability",
+  "tracked_worktree": "clean at fixture creation",
+  "installed_plugin_version": "0.6.2",
+  "installed_plugin_source_revision": "ad13910d131a4a04263b74b832d842d5a9c87f01",
+  "install_command": "install.sh --source <checkout> --host codex --yes",
+  "installed_payload_comparison": "619 tracked plugin files (tests excluded) identical in the marketplace copy and the Codex cache, except .mcp.json, which the installer rewrites from codex.mcp.json",
+  "doctor": "healthy: installation and repository configuration only; live question capture not checked",
+  "desktop_restart_required": true,
+  "fixture": "/home/monolith/projects/monolithic-dev-harness/temp/test-006/project",
+  "fixture_profile": "unconfigured",
+  "preseeded_harness_settings_or_state": false,
+  "preseeded_bmad_runtime": false,
+  "scenario": "Show active and completed task counts on the task screen.",
+  "interaction": "interactive Codex Desktop; human answers decisions",
+  "stop_boundary": "Confirmation recorded; stop at execution entry",
+  "allowed": "local setup and planning artifacts inside the disposable fixture",
+  "forbidden": "application implementation, tracker publication, remote writes"
+}
