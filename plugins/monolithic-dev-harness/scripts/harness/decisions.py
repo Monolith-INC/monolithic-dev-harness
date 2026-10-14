@@ -55,7 +55,11 @@ class Pending:
             and self.transport == transport
             and (
                 question.get("id") == self.id
-                or (transport == "async" and question.get("question") == self.question)
+                # Async questions and Claude's AskUserQuestion carry no id; match the wording.
+                or (
+                    (transport == "async" or "id" not in question)
+                    and question.get("question") == self.question
+                )
             )
             and not self.presentation_id
         )
@@ -731,7 +735,7 @@ def _fallback_options(options: tuple[str, ...]) -> bool:
     match options:
         case ():
             return True
-        case ("--async-available", *rest):
+        case ("--async-available" | "--native-unavailable", *rest):
             return _fallback_options(tuple(rest))
         case ("--repo" | "--session-id" | "--host", value, *rest) if (
             not value.startswith("--")

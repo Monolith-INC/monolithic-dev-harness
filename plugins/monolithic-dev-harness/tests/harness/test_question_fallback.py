@@ -5,13 +5,14 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
 from pathlib import Path
 
 from core.result import Err, Ok
 from harness import decisions, state
 from tests.harness.test_bootstrap_confirmation import present
 from tests.harness.test_codex_answer_capture import answer, ask, question
-from tests.harness.test_decisions import CLI, native
+from tests.harness.test_decisions import CLI, HOOK, native
 from tests.settings_fixture import write_settings
 
 
@@ -353,3 +354,98 @@ def test_alternative_buttons_capture_and_consume_the_new_call_only(
             assert state.active_approval(tmp_path) is None
         case _:
             raise AssertionError("fallback did not offer the same question")
+
+
+def claude_hook(repo: Path, event: str, payload: dict) -> str:
+    return subprocess.run(
+        [sys.executable, str(HOOK), "--host", "claude", "--event", event],
+        input=json.dumps({"cwd": str(repo), **payload}),
+        cwd=repo,
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=True,
+    ).stdout
+
+
+def test_claude_shows_the_prepared_question_without_an_id(tmp_path: Path) -> None:
+    write_settings(tmp_path)
+    shown = present(tmp_path, "--blocking-available")
+    offered = {k: v for k, v in shown["questions"][0].items() if k != "id"}
+
+    assert "decision-pending" in claude_hook(
+        tmp_path,
+        "ask",
+        {
+            "tool_name": "AskUserQuestion",
+            "tool_input": {"questions": [{**offered, "question": "Approve all?"}]},
+        },
+    )
+    assert "deny" not in claude_hook(
+        tmp_path,
+        "ask",
+        {
+            "tool_name": "AskUserQuestion",
+            "tool_use_id": "toolu_exact",
+            "tool_input": {"questions": [offered]},
+        },
+    )
+    assert decisions.record(tmp_path)["presentation_id"] == shown["decision_id"]
+
+
+def test_claude_fallback_command_named_by_the_gate_may_run(tmp_path: Path) -> None:
+    write_settings(tmp_path)
+    present(tmp_path, "--blocking-available")
+    command = (
+        f"{CLI} decision fallback --repo {tmp_path} --host claude --native-unavailable"
+    )
+
+    assert "deny" not in claude_hook(
+        tmp_path, "pre-tool", {"tool_name": "Bash", "tool_input": {"command": command}}
+    )
+
+
+def test_claude_free_text_menu_from_the_trial_is_shown_verbatim(tmp_path: Path) -> None:
+    write_settings(tmp_path)
+    shown = json.loads(
+        subprocess.run(
+            [
+                str(CLI),
+                "decision",
+                "present",
+                "--repo",
+                str(tmp_path),
+                "--host",
+                "claude",
+                "--blocking-available",
+                "--question",
+                "How should the two counts appear on the task screen?",
+                "--option",
+                "One line",
+                "--detail",
+                "Example: '2 tasks left · 1 done'.",
+                "--option",
+                "Two lines",
+                "--detail",
+                "Stacked.",
+                "--recommended",
+                "One line",
+                "--allow-free-text",
+            ],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    )
+
+    assert "deny" not in claude_hook(
+        tmp_path,
+        "ask",
+        {
+            "tool_name": "AskUserQuestion",
+            "tool_use_id": "toolu_trial",
+            "tool_input": {"questions": shown["questions"]},
+        },
+    )
+    assert decisions.record(tmp_path)["presentation_id"] == shown["decision_id"]
