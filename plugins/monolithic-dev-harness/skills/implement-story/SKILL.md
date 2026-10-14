@@ -22,6 +22,8 @@ reviewed content digests. That approval replaces separate G1/G2/spec approvals f
 bundle. Consume the existing technical specification; do not run `write-spec` or ask `approve-spec`
 again. If a required contract is missing or circumstances changed materially, explain the gap and
 consult the user about that specific change. Never invent or widen authorization.
+Create the approved work items first with `harness tracker publish --drafts <tracker-drafts.json>
+--session-id <id> --repo <project>`; it creates each draft once and prints the keys to start.
 
 Only legacy runs without an approved six-stage bundle follow the separate `write-spec` / G2 path.
 Preserve the same authorization through start-ticket and tracker transitions: perform only actions

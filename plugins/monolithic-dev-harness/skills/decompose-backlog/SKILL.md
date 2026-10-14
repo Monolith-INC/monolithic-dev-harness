@@ -15,6 +15,8 @@ Include the drafts and hierarchy/coverage report in the final manifest and imple
 bundle. Defer CREATE until that bundle is approved for those concrete tracker writes. Reuse that
 approval while its contents and target remain unchanged. The gates and publication rules below
 apply only to legacy standalone runs; they never prohibit saving preparation drafts.
+Record the outline in the work's `tracker-drafts.json` as described in
+[tracker drafts](../../references/tracker-drafts.md); CREATE is `harness tracker publish` after approval.
 
 
 Conductor for turning a parent work item into its child tree in Azure DevOps: Feature → Stories

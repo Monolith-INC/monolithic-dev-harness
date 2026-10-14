@@ -35,8 +35,10 @@ work. Additional elicitation remains available but is not an endless default loo
 ## Preparation
 
 Assemble in dependency order: (1) requirements and acceptance criteria; (2) technical/product
-specification, architecture/UX companions, risk analysis and verification; (3) refine and decompose
-the candidate tracker work-item hierarchy, then draft every item and required child Task locally;
+specification, architecture/UX companions, risk analysis and verification; (3) refine the work into its
+tracker hierarchy with the refinement skills (`generate-work-item`, `decompose-backlog`,
+`generate-breakdown-work-items`) in draft mode, recorded in `tracker-drafts.json` (see
+[tracker drafts](tracker-drafts.md)); refinement always follows Hardening;
 (4) validate the entire draft batch and tracker capabilities; (5) build the artifact manifest over
 all load-bearing documents and tracker drafts; (6) write the implementation plan last, referencing
 the manifest, draft items, and every companion. The final plan is the execution contract, not an
@@ -57,9 +59,10 @@ execution. This replaces separate preparation approvals; it does not authorize a
 unrelated external writes. Revision returns to the affected stage; stopping preserves the bundle.
 Recheck artifact digests before acting; a substantive change requires consultation.
 Record this gate as the `confirmation` workflow stage before execution begins.
-The user must be able to inspect the actual reviewed files through the best available host surface
-before the gate. Tool success or an artifact link alone does not establish that the content was
-visible. For an acceptance run that stops at execution entry, say explicitly that the recorded
+The user must be able to inspect the actual reviewed files before the gate. `harness workflow show`
+prints the bundle and records what it showed; put its output in the reply. The harness refuses the
+gate for an unrefined batch, for files changed since they were shown and, on Claude, until the
+reply carries the shown bundle. After approval, `harness tracker publish` creates the drafted items. For an acceptance run that stops at execution entry, say explicitly that the recorded
 approval ends at that boundary and does not authorize execution or tracker publication.
 
 ## Execution

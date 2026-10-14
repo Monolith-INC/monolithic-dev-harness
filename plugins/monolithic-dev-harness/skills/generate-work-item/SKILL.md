@@ -7,6 +7,15 @@ license: MIT
 
 # Generate Work Item
 
+## Six-stage preparation mode
+
+When invoked during six-stage preparation, draft the top item of the batch (or name the existing tracker item
+it belongs under) in the team format, as a local draft only. Do not create tracker items or ask separate
+approval gates: the `implementation-confirm` bundle replaces them. Record the result in the work's
+`tracker-drafts.json` as described in [tracker drafts](../../references/tracker-drafts.md); the
+harness validates that file and publishes it only after the bundle is approved. The rules below
+for creating items apply only to legacy standalone runs.
+
 Conductor for turning a title + description into a **raw** spec, local draft, and (on approval)
 provider work item. Load references as each phase needs them — this file is the score, not the
 textbook.

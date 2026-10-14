@@ -35,11 +35,11 @@ class KnowledgeAndBundleOrderTests(unittest.TestCase):
             "## Confirmation", 1
         )[0]
         self.assertLess(
-            preparation.index("draft every item"),
+            preparation.index("tracker-drafts.json"),
             preparation.index("write the implementation plan last"),
         )
         self.assertLess(
-            preparation.index("draft every item"), preparation.index("manifest over")
+            preparation.index("tracker-drafts.json"), preparation.index("manifest over")
         )
 
     def test_bmad_preparation_preserves_final_plan_order_and_single_confirmation(

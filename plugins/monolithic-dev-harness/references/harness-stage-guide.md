@@ -12,8 +12,11 @@ stage-specific details. Each stage consumes the previous stage's output; none re
 enforce the rules that must never depend on the model remembering them.
 
 The operational flow is Discovery → Planning → Hardening → Preparation → Confirmation →
-Execution. During Preparation, create/refine and validate the local tracker draft hierarchy and
-required child Tasks before the manifest and final implementation plan. Git, branches and commits
+Execution. During Preparation, right after Hardening, refine the work with `generate-work-item`,
+`decompose-backlog` and `generate-breakdown-work-items` in draft mode into `tracker-drafts.json`
+([tracker drafts](tracker-drafts.md)) before the manifest and final implementation plan. Show the
+bundle with `harness workflow show` before `implementation-confirm`; publish the approved drafts with
+`harness tracker publish` at execution. Git, branches and commits
 are optional execution/delivery tools; they never gate local work.
 
 ```text

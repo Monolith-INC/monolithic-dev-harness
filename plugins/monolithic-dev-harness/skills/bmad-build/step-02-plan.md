@@ -80,18 +80,24 @@ review is never required to finish. Record accepted changes once and reuse them.
 
 Follow [the six-stage contract](../../references/six-stage-onboarding.md). In Preparation, in order:
 (a) assemble requirements, specification, risk findings, architecture/UX companions and verification;
-(b) refine/decompose and locally draft the full tracker hierarchy and required child Tasks, then
-validate the batch against tracker capabilities; (c) create a manifest draft covering all companions
+(b) refine the work into tracker items with the refinement skills in their six-stage draft mode:
+`generate-work-item` for the top item, `decompose-backlog` for an Epic or Feature, then
+`generate-breakdown-work-items` for every Story's Tasks, recording the batch in
+`tracker-drafts.json` ([tracker drafts](../../references/tracker-drafts.md)); the harness refuses an
+unrefined batch; (c) create a manifest draft covering all companions
 and tracker drafts; (d) write `{plan_file}` as the final implementation plan, resolving it only after
 the tracker breakdown is known; (e) update the manifest with the final plan digest. The final plan
 references the manifest path and all load-bearing companion/tracker artifacts. Do not start-ticket,
 inspect Git, or create a branch during preparation. If an existing plan is missing, recover it from
 real evidence or ask only for missing consequential input; never synthesize approval.
 
-Present the complete bundle and all recorded decisions once. Use `harness decision present
---gate implementation-confirm --artifact <implementation-plan> --artifact <manifest>` and include
-all reviewed companion and tracker-draft files. Explain concrete tracker writes and execution
-scope. Native controls first, then supported async/chat fallback on delivery failure.
+Show the complete bundle before asking. Run `harness workflow show --artifact <implementation-plan>
+--artifact <tracker-drafts.json> --artifact <manifest>` plus every reviewed companion, plan first, and
+put its output in your reply unchanged: tool output is hidden from the human, and the approval is
+refused until the reply carries the bundle. Add the recorded decisions, remaining limitations and the
+concrete tracker writes (`harness tracker publish` of the drafts) and execution scope. Then use
+`harness decision present --gate implementation-confirm` with the same `--artifact` files. Native
+controls first, then supported async/chat fallback on delivery failure.
 
 On Approve, re-read reviewed artifacts and validate digests; changed circumstances require
 consultation. Treat this as the one durable approval for the unchanged bundle and its named local
