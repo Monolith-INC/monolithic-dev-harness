@@ -1,0 +1,35 @@
+{
+  "status": "prepared-not-run",
+  "source_commit": "eef44fe747bbde6eecff8fc8971c96b9781b7ab3",
+  "project": "/home/monolith/projects/monolithic-dev-harness/temp/test-003/project",
+  "settings_file": "docs/06-delivery/acceptance/six-stage-eef44fe/settings.json",
+  "settings_sha256": "4240cbd778f172340da8a5ade21e01042d6ec4732e8f03486b3d20e76b4d3187",
+  "plugin_marketplace": "mdh-acceptance-eef44fe",
+  "plugin_source_relative": ".agents/plugins/monolithic-dev-harness",
+  "plugin_manifest_sha256": "bc96df43aba2e3abc7c3d658da43c8f55f5d33ec30ee30187fa24ed52b2c7244",
+  "hook_source_sha256": "2fb45a130028dfc85772eae5fd4af4c6a9572cdfb6bd8de683b163ef34ac6c6b",
+  "briefing_inside_project": "docs/planning/acceptance-briefing.md",
+  "result_inside_project": "docs/planning/acceptance-result.md",
+  "briefing_sha256": "ca410103f0cfe98309bf406e2fbba2417064168e2d1ceb2eb12b5d99277b26c9",
+  "transcript_policy": "keep host transcript in its original host store; do not export full transcript",
+  "previous_trial": "/home/monolith/projects/monolithic-dev-harness/temp/test-002/project (preserved, pending decision untouched)",
+  "recovery_target": "exercise staged native question reuse and exact-command fallback guidance; stop at execution entry",
+  "global_configuration": "unchanged",
+  "bootstrap_inspect": {
+    "status": "ready",
+    "bmad_runtime_ready": true,
+    "tracker": "local",
+    "scm": "local",
+    "tracker_storage_ready": true,
+    "workflow": "absent",
+    "pending_question": null,
+    "language": "en",
+    "language_confirmed": false,
+    "versioning": "deferred",
+    "git_access": "deferred"
+  },
+  "live_desktop_plugin_loading": "not yet verified; human should confirm the eef44fe project-scoped plugin is enabled in Desktop before starting",
+  "project_worktree_before_trial": [
+    "?? docs/planning/acceptance-briefing.md"
+  ]
+}

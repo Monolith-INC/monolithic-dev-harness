@@ -1,0 +1,9 @@
+{
+  "cache_path": "/home/bhave/.codex/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2",
+  "matches": {
+    "scripts/harness/hook.py": true,
+    "scripts/harness/harness_controls.py": true,
+    "config/gates.toml": true,
+    "skills/bmad-build/step-02-plan.md": true
+  }
+}

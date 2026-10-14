@@ -9,3 +9,7 @@ temp/
 !plugins/monolithic-dev-harness/hooks/
 !plugins/monolithic-dev-harness/hooks/**
 !plugins/monolithic-dev-harness/.mcp.json
+
+# Raw acceptance transcripts and archives stay local; their summaries are committed.
+docs/06-delivery/acceptance/**/*.jsonl
+docs/06-delivery/acceptance/**/*.tar.gz
