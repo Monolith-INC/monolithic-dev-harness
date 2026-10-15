@@ -1,0 +1,173 @@
+{
+  "scope": "main-session execution of changed CLI and hook processes against the existing disposable project; not native desktop hook activation",
+  "human_choice": "Suspend harness checks",
+  "passed": true,
+  "settings_and_checkpoint_preserved": true,
+  "scratch_probe_removed": true,
+  "final_mode": "suspended",
+  "events": [
+    {
+      "args": [
+        "python3",
+        "/home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/scripts/harness/hook.py",
+        "--host",
+        "codex",
+        "--event",
+        "pre-tool"
+      ],
+      "input": "{\"cwd\": \"/tmp/monolithic-dev-harness-trial-locw4ixf/project\", \"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"/tmp/monolithic-dev-harness-trial-locw4ixf/project/policy-suspension-probe.py\", \"content\": \"probe = \\\"ordinary work continues\\\"\\n\"}}",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"governed changes need an active session: no open session on branch 'master' in this checkout. Start one with `harness session start <work item>` on the work item's branch.\"}}\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "/home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/bin/harness",
+        "policies",
+        "suspend"
+      ],
+      "input": null,
+      "exit_code": 0,
+      "stdout": "{\"mode\": \"suspended\"}\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "/home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/bin/harness",
+        "policies",
+        "status"
+      ],
+      "input": null,
+      "exit_code": 0,
+      "stdout": "{\"mode\": \"suspended\"}\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "python3",
+        "/home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/scripts/harness/hook.py",
+        "--host",
+        "codex",
+        "--event",
+        "pre-tool"
+      ],
+      "input": "{\"cwd\": \"/tmp/monolithic-dev-harness-trial-locw4ixf/project\", \"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"/tmp/monolithic-dev-harness-trial-locw4ixf/project/policy-suspension-probe.py\", \"content\": \"probe = \\\"ordinary work continues\\\"\\n\"}}",
+      "exit_code": 0,
+      "stdout": "",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "/home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/bin/harness",
+        "policies",
+        "resume"
+      ],
+      "input": null,
+      "exit_code": 0,
+      "stdout": "{\"mode\": \"active\"}\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "python3",
+        "/home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/scripts/harness/hook.py",
+        "--host",
+        "codex",
+        "--event",
+        "pre-tool"
+      ],
+      "input": "{\"cwd\": \"/tmp/monolithic-dev-harness-trial-locw4ixf/project\", \"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"/tmp/monolithic-dev-harness-trial-locw4ixf/project/policy-suspension-probe.py\", \"content\": \"probe = \\\"ordinary work continues\\\"\\n\"}}",
+      "exit_code": 0,
+      "stdout": "{\"hookSpecificOutput\": {\"hookEventName\": \"PreToolUse\", \"permissionDecision\": \"deny\", \"permissionDecisionReason\": \"governed changes need an active session: no open session on branch 'master' in this checkout. Start one with `harness session start <work item>` on the work item's branch.\"}}\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "/home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/bin/harness",
+        "policies",
+        "suspend"
+      ],
+      "input": null,
+      "exit_code": 0,
+      "stdout": "{\"mode\": \"suspended\"}\n",
+      "stderr": ""
+    },
+    {
+      "args": [
+        "/home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/bin/harness",
+        "policies",
+        "status"
+      ],
+      "input": null,
+      "exit_code": 0,
+      "stdout": "{\"mode\": \"suspended\"}\n",
+      "stderr": ""
+    }
+  ],
+  "named_command_retest": {
+    "passed": true,
+    "events": [
+      {
+        "command": [
+          "harness",
+          "policies",
+          "resume"
+        ],
+        "input": null,
+        "stdout": "{\"mode\": \"active\"}\n",
+        "stderr": "",
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "/home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/scripts/harness/hook.py",
+          "--host",
+          "codex",
+          "--event",
+          "pre-tool"
+        ],
+        "input": "{\"cwd\": \"/tmp/monolithic-dev-harness-trial-locw4ixf/project\", \"tool_name\": \"Bash\", \"tool_input\": {\"command\": \"harness policies suspend\"}}",
+        "stdout": "",
+        "stderr": "",
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "harness",
+          "policies",
+          "suspend"
+        ],
+        "input": null,
+        "stdout": "{\"mode\": \"suspended\"}\n",
+        "stderr": "",
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "harness",
+          "policies",
+          "status"
+        ],
+        "input": null,
+        "stdout": "{\"mode\": \"suspended\"}\n",
+        "stderr": "",
+        "exit_code": 0
+      },
+      {
+        "command": [
+          "python3",
+          "/home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/scripts/harness/hook.py",
+          "--host",
+          "codex",
+          "--event",
+          "pre-tool"
+        ],
+        "input": "{\"cwd\": \"/tmp/monolithic-dev-harness-trial-locw4ixf/project\", \"tool_name\": \"Write\", \"tool_input\": {\"file_path\": \"/tmp/monolithic-dev-harness-trial-locw4ixf/project/ordinary-work-probe.py\", \"content\": \"ordinary_work = True\\n\"}}",
+        "stdout": "",
+        "stderr": "",
+        "exit_code": 0
+      }
+    ]
+  }
+}

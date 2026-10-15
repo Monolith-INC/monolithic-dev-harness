@@ -1,0 +1,40 @@
+{
+  "session_date": "2026-10-05",
+  "project_root": "/tmp/monolithic-dev-harness-trial-locw4ixf/project",
+  "user_state_dir": "/tmp/monolithic-dev-harness-trial-locw4ixf/user-state",
+  "candidate_cli": "/home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/bin/harness",
+  "existing_question_process_fixture": "/tmp/harness-async-decision-ready.BYqCms",
+  "reuse_required": true,
+  "rules": [
+    "Use the existing project and setup for this session; do not make another copy for each fix.",
+    "Inspect only the state needed for the focused step. Preserve the original ended run and retained evidence.",
+    "Do not repeat setup choices or treat unrelated messages as answers.",
+    "The small question fixture is process-only; retain it for the current question test, not as the realistic application project.",
+    "Record actual package, model, project, reads, operations, and evidence. Native installed-host behavior remains unverified."
+  ],
+  "focused_test": {
+    "status": "stopped_by_human",
+    "question": "Should this focused test continue to its next step?",
+    "answer": "Stop",
+    "native_ui_call_id": "call_ofFyiXSyX2uDO50TA4LYFSah",
+    "capture": "actual button reply in main chat",
+    "limits": "No workflow advancement. Candidate process fixture uses a different test call id; do not claim installed-hook resolution or alter that identity."
+  },
+  "work_session_lifecycle_trial": {
+    "candidate_status": "passed_local_cli_process_test",
+    "records": [
+      {"id": "WS-22ebb757709f", "request": "Investigate DAY-001 task counts and prepare its plan.", "status": "stopped"},
+      {"id": "WS-66b279ef2af9", "request": "Investigate a separate task-count issue, DAY-002.", "status": "stopped"}
+    ],
+    "settings_workflow_tracker_unchanged": true,
+    "evidence": "AI_Codex/Agent_Sessions/2026-10-05-work-session-lifecycle-trial.md",
+    "installed_host_trial": "AI_Codex/Agent_Sessions/2026-10-05-lower-tier-work-session-entry-trial.md"
+  },
+  "session_workflow_isolation_trial": {
+    "candidate_status": "passed_local_cli_process_test",
+    "sessions": ["WS-22ebb757709f", "WS-66b279ef2af9"],
+    "legacy_state_unchanged": true,
+    "final_status": "stopped",
+    "evidence": "AI_Codex/Agent_Sessions/2026-10-05-session-workflow-isolation-trial.md"
+  }
+}
