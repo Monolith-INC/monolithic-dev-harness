@@ -319,20 +319,20 @@ detail.pt-br = "Manter o rascunho e não salvar nada."
 
 [[gate]]
 id = "refined-start"
-question.en = "{story} already has Tasks and an approved plan. How should we start?"
-question.pt-br = "{story} já tem Tasks e um plano aprovado. Como devemos começar?"
+question.en = "{item} is already refined. Rework it, or use it as it is?"
+question.pt-br = "{item} já está refinado. Retrabalhar ou usar como está?"
 [[gate.option]]
-id = "investigate"
-label.en = "Investigate first"
-label.pt-br = "Investigar antes"
-detail.en = "Run discovery, planning and hardening; any change updates the work items before the plan."
-detail.pt-br = "Fazer descoberta, planejamento e revisão; qualquer mudança atualiza os itens antes do plano."
+id = "rework"
+label.en = "Rework it"
+label.pt-br = "Retrabalhar"
+detail.en = "Run discovery, planning and hardening; the result updates its refined text, keeping the original."
+detail.pt-br = "Fazer descoberta, planejamento e revisão; o resultado atualiza o texto refinado, mantendo o original."
 [[gate.option]]
-id = "deliver"
-label.en = "Go to delivery"
-label.pt-br = "Ir para a entrega"
-detail.en = "Start the Story now and implement its approved plan."
-detail.pt-br = "Iniciar a Story agora e implementar o plano aprovado."
+id = "as-is"
+label.en = "Use it as it is"
+label.pt-br = "Usar como está"
+detail.en = "Validate it and its children, then break down any Story without Tasks."
+detail.pt-br = "Validar o item e seus filhos, depois quebrar em Tasks as Stories que ainda não têm."
 
 [[gate]]
 id = "idea-continue"

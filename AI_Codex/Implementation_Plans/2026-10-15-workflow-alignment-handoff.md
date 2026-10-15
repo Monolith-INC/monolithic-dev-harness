@@ -8,6 +8,9 @@ pr: https://github.com/Monolith-INC/monolithic-dev-harness/pull/37 (draft)
 
 # Handoff: catalog gates, Git independence, DAY-001 trials, workflow alignment
 
+Read the [constitution](../../CONSTITUTION.md) first: the owner's settled rules for this work (what
+each source project owns, what refinement is, approvals, tracker writes, no dead material).
+
 ## Where things stand
 
 Branch `codex/planning-and-interaction-reliability`, pushed. Draft PR

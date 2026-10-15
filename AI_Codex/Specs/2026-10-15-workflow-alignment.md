@@ -19,6 +19,7 @@ The harness is assembled from three sources. Each one brings a workflow, not onl
 Today the harness keeps the skills but drops much of the workflow that links them. This document
 sets out how the three workflows run end to end inside the harness, and the sequences a user goes
 through depending on what they start with. It is a working draft to refine into the alignment plan.
+The settled rules from these decisions are kept in the [constitution](../../CONSTITUTION.md).
 
 Rendered diagrams: [2026-10-15-workflow-alignment-diagrams/](2026-10-15-workflow-alignment-diagrams/).
 
@@ -89,9 +90,9 @@ flowchart TD
     GO -- "yes" --> DISC
     GO -- "no" --> STOP["Stop with the brief or spec"]
     ROUTE -- "a request, draft, or work item" --> DISC
-    ROUTE -- "an already-refined Story" --> ASK{"Run the BMad<br/>front half first?"}
-    ASK -- "yes" --> DISC
-    ASK -- "no" --> EXE
+    ROUTE -- "an already-refined Epic,<br/>Feature or Story" --> ASK{"Rework it, or<br/>use it as it is?"}
+    ASK -- "rework" --> DISC
+    ASK -- "use as it is" --> REF
 
     subgraph BMAD["BMad: the approach"]
         DISC["Discovery<br/>bmad-build step 1: clarify and route"] --> PLAN["Planning<br/>bmad-build step 2: approach draft<br/>bmad-advanced-elicitation methods"]
@@ -333,17 +334,22 @@ sequenceDiagram
     Note over H,T: delivery for this Story
 ```
 
-### A Story that is already refined
+### An item that is already refined
 
-When the Story already has its Tasks in the tracker and an approved Implementation Plan, the harness
-asks the user whether to run the BMad front half or go straight to delivery.
+Refinement is defined in the [constitution](../../CONSTITUTION.md), Article 3: an item is refined
+when its text was worked into the template for its type with `enrich-work-item`, keeping the
+original as Original Description, so it passes `validate-artifact`. Tasks are not part of it
+(Article 4).
 
-- **Straight to delivery:** the workflow moves to `execution`; `start-ticket` links the Story, which
-  meets the code-change requirements, and execution and verify run.
-- **Front half first:** if discovery, planning or hardening changes anything, the work items are
-  updated first, as the toolkit does it: `amend-workitems` for an Epic or Feature tree (backup, one
-  approved change set, the plan updated before its Tasks, hours recomputed), or `enrich-work-item`
-  plus the breakdown rules for a single Story. The updated plan and Tasks are approved again.
+When the item the user starts from (Epic, Feature or Story) is already refined, the harness asks
+`refined-start`: rework it, or use it as it is. A draft goes through the BMad stages without asking.
+
+- **Rework:** discovery, planning and hardening run. Their result updates the refined text through
+  `enrich-work-item` (one item) or `amend-workitems` (an Epic or Feature tree, with a backup and one
+  approved change set); the Original Description is kept.
+- **Use it as it is:** the workflow goes to refinement, which validates the item, handles its
+  children through `decompose-backlog` (creating them, or only validating those already refined),
+  and breaks down any Story that has no Tasks yet.
 
 ## Approval mechanics for one Story
 
@@ -419,7 +425,7 @@ locally takes one approval.
 | Sessions | A work session tracks the entry item (Epic, Feature or Story); code baselines stay per work item. |
 | Feature close | `finish-feature-development` gains a local mode: every child Story done, closing evidence recorded, one approval, Feature moved to done. |
 | Idea route | Ends with a decision: continue into technical discovery, or stop with the brief or spec. |
-| Refined Story | `harness begin` asks whether to run the BMad front half; changes to existing items go through `amend-workitems` or `enrich-work-item` before plan and Tasks. |
+| Refined entry item | When the Epic, Feature or Story the user starts from passes `validate-artifact`, discovery asks `refined-start` (rework it, or use it as it is); reworked text reaches the item through `enrich-work-item` or `amend-workitems` before any plan or Tasks. |
 | Gates | Add `refinement-split` (required, no writes) for Gate 1. Reuse `publish-items` for Gate 2 and for each Story's Tasks. `implementation-confirm` wording drops "create work items" and names one Story's plan. |
 | Local tracker | The toolkit's `local` destination is the harness local tracker, written through the gateway; readable drafts in `Tickets/Ready/` stay the review surface. |
 | Docs | `six-stage-onboarding.md`, `workflow-storyboard.md`, `harness-stage-guide.md`, the harness skill, changelog. |
@@ -450,9 +456,10 @@ locally takes one approval.
    catalog wiring for `review-pr`, `resolve-ticket` and the Feature-stack skills.
 6. Every created document or work item is shown for approval, then saved through the selected
    tracker. Work items are the source of truth; plans, specs and Tasks derive from them.
-7. An already-refined Story: ask the user whether to run the BMad front half. If it changes anything,
-   amend the work items first (`amend-workitems` for a tree, `enrich-work-item` for one Story), then
-   the plan and Tasks, and approve them again.
+7. An already-refined entry item (an Epic, Feature or Story whose text is in its type's template and
+   passes `validate-artifact`; Tasks play no part): ask whether to rework it with the BMad stages or
+   use it as it is. Reworked text updates the item first (`enrich-work-item`, or `amend-workitems`
+   for a tree), keeping the Original Description, then the plan and Tasks follow.
 8. Spec ownership: the toolkit's Implementation Plan is the Story's contract (every acceptance
    criterion mapped, Tasks derived from it). `write-spec` owns the technical specs with its critic
    review and drops its weaker `implementation-plan` kind. `bmad-spec` stays on the idea route.

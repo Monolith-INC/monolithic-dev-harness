@@ -10,7 +10,7 @@ design: ../Specs/2026-10-15-workflow-alignment.md
 # Implementation plan: workflow alignment
 
 Implements the [workflow alignment design](../Specs/2026-10-15-workflow-alignment.md) and its owner
-decisions 1–12. Paths are under `plugins/monolithic-dev-harness/` unless they start with `docs/` or
+decisions 1–12, under the rules of the [constitution](../../CONSTITUTION.md). Paths are under `plugins/monolithic-dev-harness/` unless they start with `docs/` or
 `AI_Codex/`. No compatibility path: removed files, commands and fields go outright.
 
 Two rules apply throughout (owner, 2026-10-15): "six-stage onboarding" is renamed **onboarding**
@@ -80,8 +80,8 @@ Git delivery.
   options approve / revise / stop; still `binds = "artifacts"`.
 - `approve-document` (approval, artifact, binds artifacts): any created document that is not a
   work item, plan or technical spec (preparation's risk and verification documents).
-- `refined-start` (required): "This Story already has Tasks and an approved plan. Run discovery,
-  planning and hardening first, or go straight to delivery?"
+- `refined-start` (required): "{item} is already refined. Rework it, or use it as it is?" — for an
+  Epic, Feature or Story whose text passes `validate-artifact` (constitution, Article 3).
 - `idea-continue` (required): "Continue into technical discovery, or stop with this brief or spec?"
 - `publish-items` and `approve-spec` unchanged.
 
@@ -167,19 +167,24 @@ profile rejects it.
 **Tests:** track sets the entry item; link inside the tree succeeds; link outside is refused;
 relinking Story to Story within one session keeps each Story's own baseline.
 
-### 7. Refined Story and the idea route
+### 7. Refined entry item and the idea route
 
-- Discovery (`skills/bmad-build/` step 1 and `discovery.render`): when the request names a Story
-  that has Tasks and an approved plan, present `refined-start`. "Deliver" saves a checkpoint at
-  `execution` with `start-ticket` as next action; "front half" continues discovery.
+Refinement as defined in the [constitution](../../CONSTITUTION.md), Article 3; Tasks play no part
+(Article 4).
+
+- Discovery (`skills/bmad-build/` step 1 and `discovery.render`): when the request names an Epic,
+  Feature or Story that passes `validate-artifact` for its type, present `refined-start`. "Use it as
+  it is" saves a checkpoint at `refinement`; "rework" continues discovery. A draft continues
+  discovery without the question.
 - Refinement starts by asking whether the approach changed existing items, then routes to
-  `amend-workitems` (Epic or Feature tree) or `enrich-work-item` plus the breakdown rules (one
-  Story); the changed plan and Tasks are approved again.
+  `enrich-work-item` (one item) or `amend-workitems` (an Epic or Feature tree), keeping each item's
+  Original Description; the plan and Tasks follow from the updated items.
 - `ideate` ends with `idea-continue`; "stop" completes the workflow with the brief or spec as its
   output.
 
-**Tests:** discovery render carries the refined-Story check; a `deliver` answer lands the workflow
-at `execution`; `idea-continue` "stop" completes the workflow.
+**Tests:** discovery render carries the refined-item check for all three kinds; a "use it as it is"
+answer lands the workflow at `refinement`; a draft gets no question; `idea-continue` "stop" completes
+the workflow.
 
 ### 8. Feature close without Git
 

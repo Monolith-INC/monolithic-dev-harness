@@ -151,7 +151,7 @@ def test_a_created_document_is_approved_before_it_is_saved() -> None:
 @pytest.mark.parametrize(
     ("gate_id", "options"),
     [
-        ("refined-start", ["investigate", "deliver"]),
+        ("refined-start", ["rework", "as-is"]),
         ("idea-continue", ["continue", "stop"]),
     ],
 )
@@ -161,3 +161,7 @@ def test_route_choices_are_required_answers_without_writes(
     gate = CATALOG[gate_id]
     assert (gate.kind, gate.approval, gate.binds) == ("required", False, "")
     assert [option.id for option in gate.options] == options
+
+
+def test_the_refined_question_names_any_entry_item() -> None:
+    assert gates._slots(CATALOG["refined-start"], "en") == {"item"}
