@@ -118,3 +118,46 @@ def test_a_gate_brings_its_own_wording() -> None:
         timeout=30,
     )
     assert result.returncode == 2 and "supplies its own question" in result.stderr
+
+
+def test_refinement_asks_for_the_split_before_drafting_anything() -> None:
+    split = CATALOG["refinement-split"]
+    assert (split.kind, split.approval, split.artifact) == ("required", False, True)
+    assert [option.id for option in split.options] == ["approve", "revise", "stop"]
+
+
+def test_the_plan_approval_names_one_story() -> None:
+    confirm = CATALOG["implementation-confirm"]
+    assert gates._slots(confirm, "en") == {"story"}
+    assert (confirm.approval, confirm.artifact, confirm.binds) == (
+        True,
+        True,
+        "artifacts",
+    )
+    rendered = gates.render("implementation-confirm", "en", {"story": "DAY-1"}).value
+    assert "DAY-1" in rendered.question
+    assert isinstance(gates.render("implementation-confirm", "en", {}), Err)
+
+
+def test_a_created_document_is_approved_before_it_is_saved() -> None:
+    document = CATALOG["approve-document"]
+    assert (document.approval, document.artifact, document.binds) == (
+        True,
+        True,
+        "artifacts",
+    )
+
+
+@pytest.mark.parametrize(
+    ("gate_id", "options"),
+    [
+        ("refined-start", ["investigate", "deliver"]),
+        ("idea-continue", ["continue", "stop"]),
+    ],
+)
+def test_route_choices_are_required_answers_without_writes(
+    gate_id: str, options: list[str]
+) -> None:
+    gate = CATALOG[gate_id]
+    assert (gate.kind, gate.approval, gate.binds) == ("required", False, "")
+    assert [option.id for option in gate.options] == options

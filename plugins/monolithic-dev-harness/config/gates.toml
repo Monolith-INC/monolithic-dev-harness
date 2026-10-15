@@ -51,26 +51,26 @@ id = "implementation-confirm"
 approval = true
 artifact = true
 binds = "artifacts"
-question.en = "Approve this implementation plan and its stated actions?"
-question.pt-br = "Aprovar este plano de implementação e suas ações descritas?"
+question.en = "Approve the implementation plan for {story}?"
+question.pt-br = "Aprovar o plano de implementação de {story}?"
 [[gate.option]]
 id = "approve"
 label.en = "Approve"
 label.pt-br = "Aprovar"
-detail.en = "Proceed with the next steps described in this reviewed plan."
-detail.pt-br = "Prosseguir com as próximas etapas descritas neste plano revisado."
+detail.en = "Propose its Tasks next. Changing the plan needs a new approval."
+detail.pt-br = "Propor as Tasks em seguida. Mudar o plano exige nova aprovação."
 [[gate.option]]
 id = "revise"
 label.en = "Revise"
 label.pt-br = "Revisar"
-detail.en = "Change the affected part before execution; keep the other recorded decisions."
-detail.pt-br = "Ajustar a parte afetada antes da execução; manter as outras decisões registradas."
+detail.en = "Change the affected part of the plan; keep the other recorded decisions."
+detail.pt-br = "Ajustar a parte afetada do plano; manter as outras decisões registradas."
 [[gate.option]]
 id = "stop"
 label.en = "Stop here"
 label.pt-br = "Parar aqui"
-detail.en = "Keep the prepared documents and decisions for a later return."
-detail.pt-br = "Guardar os documentos preparados e as decisões para retomar depois."
+detail.en = "Keep the plan and decisions for a later return."
+detail.pt-br = "Guardar o plano e as decisões para retomar depois."
 
 [[gate]]
 id = "planning-depth"
@@ -270,6 +270,87 @@ label.en = "Not now"
 label.pt-br = "Agora não"
 detail.en = "Keep the drafts and publish nothing."
 detail.pt-br = "Manter os rascunhos e não publicar nada."
+
+[[gate]]
+id = "refinement-split"
+artifact = true
+recommended = "approve"
+question.en = "Approve this split of the work?"
+question.pt-br = "Aprovar esta divisão do trabalho?"
+[[gate.option]]
+id = "approve"
+label.en = "Approve"
+label.pt-br = "Aprovar"
+detail.en = "Write the content of these items next; nothing is created yet."
+detail.pt-br = "Escrever em seguida o conteúdo destes itens; nada é criado ainda."
+[[gate.option]]
+id = "revise"
+label.en = "Revise"
+label.pt-br = "Revisar"
+detail.en = "Change the split before writing the items."
+detail.pt-br = "Mudar a divisão antes de escrever os itens."
+[[gate.option]]
+id = "stop"
+label.en = "Stop here"
+label.pt-br = "Parar aqui"
+detail.en = "Keep the proposed split for a later return."
+detail.pt-br = "Guardar a divisão proposta para retomar depois."
+
+[[gate]]
+id = "approve-document"
+question.en = "Approve this document and save it?"
+question.pt-br = "Aprovar este documento e salvá-lo?"
+approval = true
+artifact = true
+binds = "artifacts"
+recommended = "approve"
+[[gate.option]]
+id = "approve"
+label.en = "Approve"
+label.pt-br = "Aprovar"
+detail.en = "Save it as reviewed. Changing it needs a new approval."
+detail.pt-br = "Salvar como revisado. Mudá-lo exige nova aprovação."
+[[gate.option]]
+id = "not-now"
+label.en = "Not now"
+label.pt-br = "Agora não"
+detail.en = "Keep the draft and save nothing."
+detail.pt-br = "Manter o rascunho e não salvar nada."
+
+[[gate]]
+id = "refined-start"
+question.en = "{story} already has Tasks and an approved plan. How should we start?"
+question.pt-br = "{story} já tem Tasks e um plano aprovado. Como devemos começar?"
+[[gate.option]]
+id = "investigate"
+label.en = "Investigate first"
+label.pt-br = "Investigar antes"
+detail.en = "Run discovery, planning and hardening; any change updates the work items before the plan."
+detail.pt-br = "Fazer descoberta, planejamento e revisão; qualquer mudança atualiza os itens antes do plano."
+[[gate.option]]
+id = "deliver"
+label.en = "Go to delivery"
+label.pt-br = "Ir para a entrega"
+detail.en = "Start the Story now and implement its approved plan."
+detail.pt-br = "Iniciar a Story agora e implementar o plano aprovado."
+
+[[gate]]
+id = "idea-continue"
+recommended = "continue"
+question.en = "Continue into technical discovery, or stop here?"
+question.pt-br = "Continuar para a descoberta técnica ou parar aqui?"
+[[gate.option]]
+id = "continue"
+label.en = "Continue"
+label.pt-br = "Continuar"
+detail.en = "Investigate the code and plan the technical work for this idea."
+detail.pt-br = "Investigar o código e planejar o trabalho técnico desta ideia."
+[[gate.option]]
+id = "stop"
+label.en = "Stop here"
+label.pt-br = "Parar aqui"
+detail.en = "Keep the brief or spec as the result; nothing else is planned."
+detail.pt-br = "Manter o resumo ou a especificação como resultado; nada mais é planejado."
 
 [[gate]]
 id = "approve-spec"

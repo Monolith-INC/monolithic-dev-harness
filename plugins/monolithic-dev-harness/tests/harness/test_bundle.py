@@ -69,6 +69,8 @@ def _confirm(repo: Path, names: list[str]) -> subprocess.CompletedProcess[str]:
         "--blocking-available",
         "--gate",
         "implementation-confirm",
+        "--value",
+        "story=S1",
         *(arg for name in names for arg in ("--artifact", name)),
     )
 
