@@ -293,6 +293,10 @@
           "when": "Link the work session and move the Story to in progress."
         },
         {
+          "name": "feature-implementation",
+          "when": "Deliver a Feature's Stories in dependency order, each from its approved plan, then close the Feature."
+        },
+        {
           "name": "write-spec",
           "when": "Write the technical spec kinds the Story still lacks."
         },

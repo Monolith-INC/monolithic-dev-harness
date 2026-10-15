@@ -1,7 +1,7 @@
 ---
 title: Implementation plan — workflow alignment
 type: implementation-plan
-status: draft
+status: implemented (packages 1–11); package 12 trials pending
 created: 2026-10-15
 branch: codex/planning-and-interaction-reliability
 design: ../Specs/2026-10-15-workflow-alignment.md
