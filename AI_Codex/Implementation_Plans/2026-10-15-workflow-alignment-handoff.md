@@ -45,27 +45,23 @@ scripts; `ruff check`, `ruff format --check`, `check_repo.py`, markdownlint clea
 
 ## The alignment design
 
-[`AI_Codex/Specs/2026-10-15-workflow-alignment.md`](../Specs/2026-10-15-workflow-alignment.md) with
-seven diagrams (rendered in `2026-10-15-workflow-alignment-diagrams/`), plus the companion
-[backlog design](../Specs/2026-10-15-backlog-workflow-in-six-stage-design.md).
+[`AI_Codex/Specs/2026-10-15-workflow-alignment.md`](../Specs/2026-10-15-workflow-alignment.md), with
+its diagrams rendered in `2026-10-15-workflow-alignment-diagrams/`. It also carries the problem
+statement (today's six-stage route, where trial 02 stalled) and the approval mechanics.
 
-- BMad owns the approach (discovery, planning, hardening, idea route, preparation spec companions).
+- BMad owns the approach: discovery, planning, hardening, and the idea route (with `bmad-spec`),
+  which may stop at a brief or spec.
 - agile-backlog-toolkit owns the backlog: a new **refinement** stage after hardening runs its
-  workflow as written — format check, enrich only what fails, decompose with Gate 1 and Gate 2,
-  create and read back, audit, split, breakdown with Staging/Review/Breakdown and hours.
-- The harness owns the contract: preparation and one `implementation-confirm` over the Story plans.
-- codex-workflows owns delivery: `start-ticket`, `write-spec` with Actor-Critic review,
-  `implement-story`, review, `review-pr` (Git delivery), `resolve-ticket`, Feature close.
-- Sequences for each starting point (idea/draft, Epic, Feature, User Story) and an approvals table.
+  workflow as written — amend items the approach changed, format check, enrich only what fails,
+  decompose with Gate 1 and Gate 2, create and read back, audit, split, then per Story the plan
+  approval (`implementation-confirm`) and the Task approval.
+- The harness owns the contract: preparation documents (risk, verification, manifest), each approved
+  when created.
+- codex-workflows owns delivery: `start-ticket`, `write-spec` for missing technical specs,
+  `implement-story`, review, `review-pr` (Git delivery), `resolve-ticket`, Feature close (with a
+  local mode).
 
-Owner decisions recorded there: Stories and Tasks approved separately; no compatibility path
-(remove `tracker-drafts.json` and `harness tracker publish` outright); one plan per User Story;
-formatted items are only validated; `codex_workflows` step lists not restored. Six open questions
-were settled on 2026-10-15 as decisions 6–12 (no open questions remain): every created document or
-work item is approved then saved; a refined Story asks whether to run BMad, and changes amend the
-work items first; the Implementation Plan is the Story contract and `write-spec` owns technical specs;
-a session tracks the entry item; `finish-feature-development` gains a local mode; the idea route may
-stop; each Story's plan approval is its `implementation-confirm` (no aggregate confirmation).
+All questions are settled as owner decisions 1–12 in that document.
 
 ## Source repositories read
 
@@ -87,11 +83,11 @@ stop; each Story's plan approval is its `implementation-confirm` (no aggregate c
 1. ~~Settle the six open questions~~ — done (decisions 6–12).
 2. Turn the alignment document into an implementation plan (catalog `refinement` stage and
    execution/verify wiring; skills without draft mode; remove drafts/publish/`bundle.covers`;
-   confirmation over Story plans with pinned plan notes; `refinement-split` gate; docs).
+   per-Story plan approval with pinned plan notes; `refinement-split` gate; docs).
 3. Implement test-first.
 4. Trial setup: prepare hook trust and MCP tool approval for the isolated Codex home through a
    recorded, human-approved step; never the bypass flags.
-5. Rerun DAY-001 on a fresh fixture through refinement, confirmation and `start-ticket`, with one
+5. Rerun DAY-001 on a fresh fixture through refinement, plan approval and `start-ticket`, with one
    code edit attempted before and after linking; stop before implementation.
 6. Thermos review of the branch, then take PR #37 out of draft.
 

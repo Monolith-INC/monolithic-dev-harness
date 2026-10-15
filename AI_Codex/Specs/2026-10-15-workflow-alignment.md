@@ -20,10 +20,48 @@ Today the harness keeps the skills but drops much of the workflow that links the
 sets out how the three workflows run end to end inside the harness, and the sequences a user goes
 through depending on what they start with. It is a working draft to refine into the alignment plan.
 
-Companions: [backlog design detail](2026-10-15-backlog-workflow-in-six-stage-design.md) (today's
-six-stage route, where trial 02 stalled, who approves what, and what the code-change gate reads).
-Rendered diagrams: [this document](2026-10-15-workflow-alignment-diagrams/),
-[the backlog design](2026-10-15-backlog-workflow-diagrams/).
+Rendered diagrams: [2026-10-15-workflow-alignment-diagrams/](2026-10-15-workflow-alignment-diagrams/).
+
+## Problem: today's six-stage route
+
+On the six-stage route, the default for feature work, three toolkit skills run in a harness "draft
+mode" that skips their own phases and gates, writes a harness-invented `tracker-drafts.json`, and
+leaves creation to `harness tracker publish` after the final approval. Work items should instead be
+created in the tracker first, by the toolkit's own workflow, before the Story plans and before code.
+The draft mode also caused the deadlock in trial `20261015-day001-planning-gate-02`: the plan needs
+a linked Story, and the Story exists only after the final approval.
+
+| What | Where (under `plugins/monolithic-dev-harness/`) |
+| --- | --- |
+| Draft mode replaces each skill's phases and gates with `implementation-confirm` | `skills/generate-work-item/SKILL.md`, `skills/decompose-backlog/SKILL.md`, `skills/generate-breakdown-work-items/SKILL.md`, section "Six-stage preparation mode" |
+| Preparation prepares only `generate-work-item` and `bmad-spec` | `config/prepared-workflows.json`, stage `preparation` |
+| Publication writes description, acceptance criteria and estimate only; no hours, iteration, Breakdown state, read-back, or id write-back | `scripts/harness/bundle.py` `_create_all`, `_description` |
+| The refinement check requires one Task per Story, not Staging/Review/Breakdown; no coverage audit or Definition of Ready | `scripts/harness/bundle.py` `check_drafts` |
+| `tracker-drafts.json` in the planning folder counts as code when no source globs are set, so the code-change gate refuses it | `scripts/policy/commands.py` `is_code`; trial 02 parent report, finding 4 |
+
+```mermaid
+flowchart TD
+    D[Discovery] --> P[Planning] --> H[Hardening]
+    H --> PR["Preparation<br/>skills in draft mode, gates skipped"]
+    PR --> TD["tracker-drafts.json<br/>harness-invented hierarchy file"]
+    TD --> PL[Implementation plan written last]
+    PL --> CF{{"implementation-confirm<br/>one approval for everything"}}
+    CF --> PUB["harness tracker publish<br/>items created now, without hours,<br/>Breakdown state, or read-back"]
+    PUB --> ST["start-ticket: link the Story,<br/>move it to in progress"]
+    ST --> EX[Execution]
+```
+
+Where trial 02 stalled:
+
+```mermaid
+flowchart LR
+    W["Write tracker-drafts.json<br/>(planning folder, JSON)"] --> GATE{"code-change gate:<br/>work item linked?"}
+    GATE -- "no Story yet" --> X[Refused]
+    LINK["Link the Story"] --> NEED["needs a Story key"]
+    NEED --> PUBL["Story exists only after<br/>harness tracker publish"]
+    PUBL --> CONF["publish needs the approved bundle"]
+    CONF --> W
+```
 
 ## Principles
 
@@ -307,6 +345,55 @@ asks the user whether to run the BMad front half or go straight to delivery.
   approved change set, the plan updated before its Tasks, hours recomputed), or `enrich-work-item`
   plus the breakdown rules for a single Story. The updated plan and Tasks are approved again.
 
+## Approval mechanics for one Story
+
+Each toolkit gate is presented with `harness decision present` and bound to the content shown, so a
+tracker write is allowed only for what the user approved.
+
+```mermaid
+sequenceDiagram
+    actor U as User
+    participant A as Agent (toolkit skill)
+    participant H as Harness (hooks, decisions)
+    participant T as Tracker (gateway)
+
+    A->>H: decision present --gate refinement-split
+    H->>U: Gate 1: approve the split?
+    U->>H: Approve
+    A->>H: decision present --gate publish-items (Story bodies)
+    U->>H: Approve (bound to the shown bodies)
+    A->>T: create Stories, read back
+    loop each Story
+        A->>H: decision present --gate implementation-confirm (the saved plan)
+        U->>H: Approve
+        H->>H: pin the plan note (plan_approved holds)
+        A->>H: decision present --gate publish-items (Tasks, hours)
+        U->>H: Approve
+        A->>T: create Tasks, Breakdown Done + receipt
+    end
+    A->>T: start-ticket: move the Story to in progress
+    A->>H: work-session link --work-item STORY
+    Note over A,H: code-change requirements now hold
+```
+
+What the code-change gate reads (`execution.requires` in `config/prepared-workflows.json`) and where
+each requirement comes from:
+
+```mermaid
+flowchart LR
+    subgraph Catalog["execution.requires"]
+        L[work_item_linked]
+        TP[tasks_parented]
+        PA[plan_approved]
+        WS[work_item_started]
+    end
+    BRKP["Refinement:<br/>generate-breakdown-work-items"] --> TP
+    BRKP --> PLN["Story's Implementation Plan note"]
+    PLN --> CONF2["implementation-confirm<br/>pins the approved note"] --> PA
+    STK["start-ticket"] --> WS
+    STK --> L
+```
+
 ## Approvals per starting point
 
 | Starting point | Split | Create items | Story plan | Create Tasks |
@@ -324,8 +411,8 @@ locally takes one approval.
 
 | Area | Change |
 | --- | --- |
-| Catalog | New `refinement` stage after `hardening` preparing the toolkit skills and tracker operations. `execution` prepares `start-ticket`, `write-spec`, `implement-story`; `verify` prepares the review stage, `review-pr` (Git delivery), `resolve-ticket`, and the Feature-close skills. Stack skills are prepared only with Git delivery. |
-| Skills | Remove the three six-stage "draft mode" sections; restore the toolkit phases and gates through `harness decision present` and `publish-items`. |
+| Catalog | New `refinement` stage after `hardening` preparing `generate-work-item`, `enrich-work-item`, `amend-workitems`, `decompose-backlog`, `split-story`, `generate-breakdown-work-items`, `validate-artifact`, `auto-fix-artifact` and `generate-plain-language-documentation`, with tracker operations; the `onboarding` route gains the stage. `preparation` keeps risk, verification and the manifest. `execution` prepares `start-ticket`, `write-spec`, `implement-story`; `verify` prepares the review stage, `review-pr` (Git delivery), `resolve-ticket`, and the Feature-close skills. Stack skills are prepared only with Git delivery. |
+| Skills | Remove the three "Six-stage preparation mode" sections; restore the toolkit phases and gates through `harness decision present` and `publish-items`. Keep the harness tracker contract wording (gateway tools, not Azure calls). |
 | Removed | `tracker-drafts.json`, `bundle.load_drafts`/`check_drafts`/`publish`/`_create_all`, `harness tracker publish`, `references/tracker-drafts.md`, `bundle.covers` and `tracker-published.json`. |
 | Confirmation | `implementation-confirm` is the approval of one Story's Implementation Plan in breakdown (the toolkit's optional plan wait, made required). It requires the Story to exist in the tracker; on approval the hook pins the plan note, which satisfies `plan_approved`. No approval bundles several Stories. |
 | Specs | `write-spec` owns technical specs (tech-spec, design doc, ADR, API contract) and drops its `implementation-plan` kind; it treats the approved plan as covering that kind and writes only missing kinds. `bmad-spec` leaves preparation. A spec that changes scope sends the work back to refinement. |
@@ -333,14 +420,26 @@ locally takes one approval.
 | Feature close | `finish-feature-development` gains a local mode: every child Story done, closing evidence recorded, one approval, Feature moved to done. |
 | Idea route | Ends with a decision: continue into technical discovery, or stop with the brief or spec. |
 | Refined Story | `harness begin` asks whether to run the BMad front half; changes to existing items go through `amend-workitems` or `enrich-work-item` before plan and Tasks. |
-| Gates | Add `refinement-split` (required, no writes). Reuse `publish-items`. Reword `implementation-confirm`. |
+| Gates | Add `refinement-split` (required, no writes) for Gate 1. Reuse `publish-items` for Gate 2 and for each Story's Tasks. `implementation-confirm` wording drops "create work items" and names one Story's plan. |
 | Local tracker | The toolkit's `local` destination is the harness local tracker, written through the gateway; readable drafts in `Tickets/Ready/` stay the review surface. |
 | Docs | `six-stage-onboarding.md`, `workflow-storyboard.md`, `harness-stage-guide.md`, the harness skill, changelog. |
 | Trial setup | Prepare hook trust and MCP tool approval for the isolated Codex home through a recorded, human-approved step. |
 
+## Verification
+
+- Unit tests: catalog stage and requirement wiring; `implementation-confirm` refuses a Story that is
+  not in the tracker; the hook pins the plan note on approval; `publish-items` binds toolkit writes
+  to the shown content; removed commands and files are gone; `write-spec` skips kinds the approved
+  plan covers; `finish-feature-development` local mode refuses while a child Story is open.
+- Retire or rewrite `tests/harness/test_bundle.py` and the bundle-order contract test.
+- Live: rerun DAY-001 on a fresh fixture with hook trust and MCP approval prepared, through
+  refinement, plan approval and `start-ticket`, with one code edit attempted before and after
+  linking. Stop before implementation.
+
 ## Decisions (owner, 2026-10-15)
 
-1. Stories and Tasks are approved separately, in the toolkit's order.
+1. Stories and Tasks are approved separately, in the toolkit's order: one `publish-items` for the
+   Stories, then, per Story, its plan and its Tasks.
 2. No compatibility path: everything is still testing. `tracker-drafts.json` and
    `harness tracker publish` are removed outright.
 3. One plan per User Story; no aggregate plan.
