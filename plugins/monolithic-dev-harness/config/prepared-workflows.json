@@ -250,12 +250,8 @@
       ],
       "skills": [
         {
-          "name": "sequence-verifiable-units",
-          "when": "Write the verification document: ordered units, each with one focused check."
-        },
-        {
           "name": "generate-plain-language-documentation",
-          "when": "Write the risk document in plain language."
+          "when": "Write the risk and verification documents in plain language."
         }
       ],
       "outputs": [
@@ -301,6 +297,10 @@
         {
           "name": "implement-story",
           "when": "Implement the Story Task by Task."
+        },
+        {
+          "name": "sequence-verifiable-units",
+          "when": "Work through each Task in small steps that each end in a passing check, and order commits so a reviewer sees the failing test before the fix."
         },
         {
           "name": "tdd",

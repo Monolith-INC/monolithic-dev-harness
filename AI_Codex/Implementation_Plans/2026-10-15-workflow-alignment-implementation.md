@@ -37,8 +37,9 @@ reachable only through `harness workflow prepare --route`. Remove it.
 - Stages: delete `setup`, `discover`, `backlog`, `technical-plan`, `build` and `suspend`; the
   onboarding `verify` stage replaces the old one. Before deleting, move what the onboarding stages
   lack: `knowledge-acquire` and the read-only tracker operations from `discover` into `discovery`;
-  `sequence-verifiable-units` from `technical-plan` into `preparation`, where it writes the
-  verification document; the `build` checks and recovery text into `execution`. Suspension stays a harness control (`harness suspend`), not a
+  `sequence-verifiable-units` (the discipline of working in small steps that each end in a passing
+  check, and ordering commits so a reviewer sees the failing test before the fix) from
+  `technical-plan` into `execution`; the `build` checks and recovery text into `execution`. Suspension stays a harness control (`harness suspend`), not a
   stage.
 - `scripts/harness/workflow.py`: one `STAGES` tuple — `ideate`, `discovery`, `planning`,
   `hardening`, `refinement`, `preparation`, `execution`, `verify` — and the comment about keeping
@@ -51,9 +52,8 @@ reachable only through `harness workflow prepare --route`. Remove it.
     `generate-breakdown-work-items`, `generate-plain-language-documentation`; tracker operations
     `tracker_describe`, `tracker_search_work_items`, `tracker_get_work_item`,
     `tracker_list_children`, `tracker_create_work_item`, `tracker_publish_artifact`.
-  - `preparation`: drop `bmad-spec` and `generate-work-item`; `sequence-verifiable-units` writes
-    the verification document, `generate-plain-language-documentation` the risk document, and the
-    harness the reading manifest.
+  - `preparation`: drop `bmad-spec` and `generate-work-item`; `generate-plain-language-documentation`
+    writes the risk and verification documents, and the harness the reading manifest.
   - `confirmation` stage removed; `onboarding` route updated.
   - `execution`: `start-ticket`, `write-spec`, `implement-story`, `tdd`, `check`.
   - Onboarding `verify`: `review`, `branch-and-pr`, `review-pr`, `resolve-ticket`,
@@ -122,10 +122,24 @@ note and `plan_approved` holds. `harness tracker publish` is an unknown command.
   `implementation-confirm --value story=<key>`), PHASE 3 Task selection → `publish-items`; fan-out
   runs plan and Tasks per Story.
 - `amend-workitems`, `split-story`, `auto-fix-artifact`: approvals through `decision present`.
+- Add a tracker operation that changes an existing work item. The toolkit has none of its own:
+  its skills call each tracker's native tool after an approval (Azure DevOps `wit_update_work_item`
+  with field paths such as `/fields/System.Description`, `RemainingWork`, `AssignedTo`,
+  `IterationPath`, `State`; a Linear issue update; rewriting the local draft), then read the item
+  back. Its orchestrator only plans such writes as a list of field changes shown to the user before
+  any is made. The harness allows tracker writes only through its gateway, so add
+  `update_work_item(key, changes)` to `TrackerOps` in `scripts/integrations/contracts.py`, implement
+  it in the local, Azure DevOps and Linear adapters, and expose it as `tracker_update_work_item` in
+  `scripts/integrations/gateway.py`. It covers title, description, acceptance criteria, estimate,
+  hours, assignee and iteration; the change list is what the user approves, and the item is read
+  back after the write. Refinement then also sets hours, iteration and the Breakdown Task's state,
+  which the removed `harness tracker publish` never did.
 - Fix the copy defects from the toolkit's find-and-replace: `backup-and-artifacts path.md`, the
   `split-story` and `auto-fix-artifact` canonical paths, the `parent_id_artifacts path` field.
 
-**Tests:** a contract test that no skill or reference mentions `tracker-drafts`,
+**Tests:** `update_work_item` per adapter changes only the named fields and the read-back shows
+them; the gateway refuses it without an approval that covers that item and those changes; a
+contract test that no skill or reference mentions `tracker-drafts`,
 `harness tracker publish` or "Six-stage preparation mode"; `generate-breakdown-work-items` names
 `implementation-confirm` before Task creation; no broken relative links in the toolkit skills.
 
