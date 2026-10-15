@@ -61,8 +61,11 @@ seven diagrams (rendered in `2026-10-15-workflow-alignment-diagrams/`), plus the
 Owner decisions recorded there: Stories and Tasks approved separately; no compatibility path
 (remove `tracker-drafts.json` and `harness tracker publish` outright); one plan per User Story;
 formatted items are only validated; `codex_workflows` step lists not restored. Six open questions
-remain (refined-Story short path, spec ownership between `write-spec`/`bmad-spec`/the Story plan,
-sessions across multi-Story work, local Feature close, idea route end, confirmation scope for an Epic).
+were settled on 2026-10-15 as decisions 6–12 (no open questions remain): every created document or
+work item is approved then saved; a refined Story asks whether to run BMad, and changes amend the
+work items first; the Implementation Plan is the Story contract and `write-spec` owns technical specs;
+a session tracks the entry item; `finish-feature-development` gains a local mode; the idea route may
+stop; each Story's plan approval is its `implementation-confirm` (no aggregate confirmation).
 
 ## Source repositories read
 
@@ -81,7 +84,7 @@ sessions across multi-Story work, local Feature close, idea route end, confirmat
 
 ## Next, in order
 
-1. Settle the six open questions in the alignment document.
+1. ~~Settle the six open questions~~ — done (decisions 6–12).
 2. Turn the alignment document into an implementation plan (catalog `refinement` stage and
    execution/verify wiring; skills without draft mode; remove drafts/publish/`bundle.covers`;
    confirmation over Story plans with pinned plan notes; `refinement-split` gate; docs).

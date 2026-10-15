@@ -8,6 +8,11 @@ owner: monolithic-dev-harness maintainers
 
 # Run the agile-backlog-toolkit workflow inside six-stage onboarding
 
+> **Superseded in part.** The alignment document's decisions 6–12 replace this design's single
+> `implementation-confirm` over all Story plans and its one Task batch across Stories: each Story's
+> plan approval is its `implementation-confirm`, followed by its own Task approval. Where the two
+> documents disagree, the alignment document wins.
+
 ## Problem
 
 The harness ships the nine agile-backlog-toolkit skills (copied at `e7ae82c`), but not the workflow
