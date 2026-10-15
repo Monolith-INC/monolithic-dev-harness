@@ -25,7 +25,9 @@ class BootstrapTest(unittest.TestCase):
         subprocess.run(["git", "init", "-q", str(self.repo)], check=True)
         (self.repo / ".gitignore").write_text("node_modules/\n")
 
-    def bootstrap(self, source: Path) -> subprocess.CompletedProcess[str]:
+    def bootstrap(
+        self, source: Path, host: str = "codex"
+    ) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
                 sys.executable,
@@ -34,6 +36,8 @@ class BootstrapTest(unittest.TestCase):
                 str(self.repo),
                 "--settings-from",
                 str(source),
+                "--host",
+                host,
             ],
             capture_output=True,
             text=True,
@@ -86,6 +90,11 @@ class BootstrapTest(unittest.TestCase):
             content.index("default_mode_request_user_input"),
             content.index("[projects]"),
         )
+
+    def test_other_hosts_get_no_codex_config(self) -> None:
+        done = self.bootstrap(EXAMPLE, host="claude")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertFalse((self.repo / ".codex").exists())
 
     def test_disabled_codex_picker_is_not_overwritten(self) -> None:
         config = self.repo / ".codex" / "config.toml"

@@ -85,10 +85,11 @@ dismissal, and elapsed time never count as Yes. Yes authorizes only this exact l
 it does not authorize tracker or source-control writes.
 
 After the user chooses Yes, repeat the proposal arguments with `--apply-digest <digest>
---source-digest <source_digest>`. A change to the candidate or existing settings makes application
+--source-digest <source_digest> --host <host>`, naming the host running this setup (as for
+`decision present`); only `--host codex` adds the project's Codex picker setting. A change to the candidate or existing settings makes application
 fail and requires a new review. The controlled command adds the local Git ignore, writes settings
-atomically, prepares every local-tracker folder when selected, preserves an explicit disabled Codex
-picker, and initializes knowledge. It works in a
+atomically, prepares every local-tracker folder when selected, enables the Codex picker for Codex
+only (preserving an explicit disabled setting), and initializes knowledge. It works in a
 folder without Git; it never asks for a branch or initial commit. Never tell the user to paste or
 modify JSON manually.
 

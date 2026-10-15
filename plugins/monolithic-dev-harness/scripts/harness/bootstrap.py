@@ -147,6 +147,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--repo", default=".")
     parser.add_argument(
+        "--host",
+        default="",
+        help="the host running setup; only codex gets the project's Codex picker setting",
+    )
+    parser.add_argument(
         "--settings-from",
         help="legacy one-time import of a reviewed settings file",
     )
@@ -198,9 +203,11 @@ def main(argv: list[str] | None = None) -> int:
         case None, True, None, False, False:
             return _report(setup.review(repo, **choices))
         case None, _, str() as approved, False, False:
-            return _apply_reviewed(repo, choices, approved, args.source_digest or "")
+            return _apply_reviewed(
+                repo, choices, approved, args.source_digest or "", args.host
+            )
         case str() as source, False, None, False, False:
-            return _legacy_install(repo, Path(source))
+            return _legacy_install(repo, Path(source), args.host)
         case _:
             print("choose one bootstrap operation", file=sys.stderr)
             return 2
@@ -217,7 +224,7 @@ def _report(result: Result[dict]) -> int:
 
 
 def _apply_reviewed(
-    repo: Path, choices: dict, approved: str, source_digest: str
+    repo: Path, choices: dict, approved: str, source_digest: str, host: str
 ) -> int:
     match setup.review(repo, **choices):
         case Err(failure):
@@ -230,10 +237,10 @@ def _apply_reviewed(
                     return 2
                 case Ok(file):
                     print(f"wrote {file}")
-                    return _finish(repo)
+                    return _finish(repo, host)
 
 
-def _legacy_install(repo: Path, source: Path) -> int:
+def _legacy_install(repo: Path, source: Path, host: str) -> int:
     # State stays out of git before anything can write it: the settings opt the repository in.
     added = state.ensure_local_exclude(repo)
     if added:
@@ -264,10 +271,10 @@ def _legacy_install(repo: Path, source: Path) -> int:
             return 2
         case Ok(note):
             print(note)
-    return _finish(repo)
+    return _finish(repo, host)
 
 
-def _finish(repo: Path) -> int:
+def _finish(repo: Path, host: str) -> int:
     chosen = settings.load(repo)
     match chosen:
         case Err(failure):
@@ -290,7 +297,8 @@ def _finish(repo: Path) -> int:
             )
         case Ok(report):
             print(f"bmad: setup {report['setup']}, output folder {report['output']}")
-    match _ensure_codex_config(repo):
+    # Only Codex reads the project's picker setting; other hosts get no .codex folder.
+    match _ensure_codex_config(repo) if host == "codex" else None:
         case Err(failure):
             print(
                 f"warning: {failure.message}; clickable choices require host support",
@@ -298,6 +306,8 @@ def _finish(repo: Path) -> int:
             )
         case Ok(note):
             print(note)
+        case None:
+            pass
     active = registry.selected(repo, settings.load(repo)).value
     print(f"tracker: {active.manifest.label} ({active.manifest.source})")
     from harness.knowledge import initialize as initialize_knowledge
