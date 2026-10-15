@@ -17,10 +17,11 @@ matching section. Both close the Feature only on evidence read from the tracker.
    `tracker_list_children`).
 2. **Verify every Story is done:** each one is in the done state and holds its verification and
    resolution artifacts. Stop and name each Story that is not, without changing anything.
-3. **Publish closing evidence** on the Feature with `tracker_publish_artifact`, kind
-   `closing-report`: which Stories it holds, what was verified for each, and how each was resolved.
+3. **Publish the closeout** on the Feature with `tracker_publish_artifact`: a `resolution_report`
+   (which Stories it holds and how each was resolved) and a `verification` artifact (what was
+   verified for each).
 4. **Move the Feature to done** with `tracker_transition_work_item`. One `move-item` approval for
-   the Feature covers its closing evidence and the move.
+   the Feature covers its closeout and the move.
 
 ## With Git-based delivery
 
@@ -31,15 +32,16 @@ matching section. Both close the Feature only on evidence read from the tracker.
 4. **Reconcile** first if an ancestor update is still pending (`reconcile-feature-stack`).
 5. **Open the Feature pull request** into the base branch through the SCM adapter, as a **draft**,
    and link it to the Feature. Push and pull request are one `publish-branch` approval.
-6. **Publish closing evidence** on the Feature with `tracker_publish_artifact`, kind
-   `closing-report`: what was verified and how it was resolved.
-7. **Move the Feature to done** only after the evidence and the pull-request link exist. One
-   `move-item` approval for the Feature covers both its closing evidence and the move.
+6. **Publish the closeout** on the Feature with `tracker_publish_artifact`: a `resolution_report`
+   and a `verification` artifact, as in the local mode.
+7. **Move the Feature to done** only after the closeout and the pull-request link exist. One
+   `move-item` approval for the Feature covers both its closeout and the move.
 
 ## Rules
 
 - Verify every Story's completion through the tracker, not from memory.
 - With Git-based delivery, create and link the Feature pull request through the configured SCM
   adapter.
-- Publish the closing evidence before requesting done. The harness moves a Feature or Epic to done
-  only when it has child items, every one is done or cancelled, and it holds a `closing-report`.
+- Publish the closeout before requesting done. The harness moves a Feature or Epic to done only
+  when it has child items, every one is done or cancelled, and it holds a `resolution_report` and a
+  `verification` artifact, plus its pull-request link with Git-based delivery.

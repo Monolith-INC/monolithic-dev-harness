@@ -18,7 +18,13 @@ def _sections() -> tuple[str, str]:
 
 def test_the_local_mode_closes_on_tracker_evidence_alone() -> None:
     local, _ = _sections()
-    for needed in ("every Story", "done", "closing evidence", "move-item"):
+    for needed in (
+        "every Story",
+        "done",
+        "resolution_report",
+        "verification",
+        "move-item",
+    ):
         assert needed in local
     for git_only in ("pull request", "branch", "merge"):
         assert git_only not in local.casefold()

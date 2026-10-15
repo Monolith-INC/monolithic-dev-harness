@@ -350,7 +350,7 @@ class Verified(Project):
 
 
 class TestContainerCompletion(Verified):
-    """A Feature or Epic is done once every child is done and it holds its closing report."""
+    """A Feature or Epic is done once every child is done and its closeout is published."""
 
     def feature(self) -> tuple[str, str]:
         feature = self.ops.create_work_item(WorkItemKind.FEATURE, "F", "", "").value.key
@@ -360,9 +360,8 @@ class TestContainerCompletion(Verified):
         return feature, story
 
     def close(self, ref: str) -> None:
-        self.ops.add_artifact(
-            ref, ArtifactDraft("closing-report", "Closing", "evidence", "1")
-        )
+        for kind in ("resolution_report", "verification"):
+            self.ops.add_artifact(ref, ArtifactDraft(kind, kind, "evidence", "1"))
 
     def test_a_feature_with_its_stories_done_and_a_closing_report_is_done(self) -> None:
         feature, story = self.feature()
@@ -383,12 +382,21 @@ class TestContainerCompletion(Verified):
         self.close(feature)
         self.assertFalse(self.done(feature).is_denied())
 
-    def test_the_closing_report_is_required(self) -> None:
+    def test_the_closeout_is_required(self) -> None:
         feature, story = self.feature()
         self.ops.transition_work_item(story, LogicalState.DONE)
         decision = self.done(feature)
         self.assertTrue(decision.is_denied())
-        self.assertIn("closing-report", decision.reason)
+        self.assertIn("resolution_report, verification", decision.reason)
+
+    def test_with_git_delivery_the_feature_also_needs_its_pull_request(self) -> None:
+        write_settings(self.root, artifacts_path="Vault", git={"delivery": True})
+        feature, story = self.feature()
+        self.ops.transition_work_item(story, LogicalState.DONE)
+        self.close(feature)
+        self.assertIn("pull_request", self.done(feature).reason)
+        self.ops.add_artifact(feature, ArtifactDraft("pull_request", "PR", "url", "1"))
+        self.assertFalse(self.done(feature).is_denied())
 
     def test_a_feature_without_children_is_not_done(self) -> None:
         feature = self.ops.create_work_item(WorkItemKind.FEATURE, "F", "", "").value.key
