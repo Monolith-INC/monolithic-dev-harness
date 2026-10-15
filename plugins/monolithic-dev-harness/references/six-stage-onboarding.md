@@ -63,10 +63,14 @@ each item, plan and document is shown and approved when it is created.
 
 ## Preparation
 
-Write the risk and verification documents with `generate-plain-language-documentation`; show each
-and approve it with `approve-document` before it is saved. Build the reading manifest over the
-approved plans and documents so later stages load only what they need. Keep source decisions in the
-memlog.
+Write the risk and verification documents with `generate-plain-language-documentation`, as notes in
+the artifacts path that name their Story (`story: <key>`). For each one, when it is complete: set
+`status: approved`, show it, and ask `harness decision present --gate approve-document --artifact
+<document>`. Approving pins its exact content; editing it afterwards needs a new approval. With a
+remote tracker, then publish it to its Story with `tracker_publish_artifact` so the team sees it
+where the work item lives. Build the reading manifest over the approved plans and documents so later
+stages load only what they need; the manifest is harness state, not a document to approve. Keep
+source decisions in the memlog.
 
 ## Execution
 
