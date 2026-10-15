@@ -123,7 +123,7 @@ def evaluate_event(
     command = event.command or ""
     root = Path(event.workspace_root or ".")
     if event.kind == "shell":
-        delivery = _git_delivery(root)
+        delivery = settings.git_delivery(root)
         if delivery:
             branch_decision = evaluate_git_branch_guard(command, event.workspace_root)
             if branch_decision.is_denied():
@@ -157,15 +157,6 @@ def evaluate_event(
     if event.kind == "edit" and _edits_code(event):
         return _evaluate_code_change(event, work_session_id)
     return PolicyDecision.allow()
-
-
-def _git_delivery(root: Path) -> bool:
-    """Whether the user chose Git-based delivery; only then do rules about Git commands apply."""
-    match settings.load(root):
-        case Ok(chosen):
-            return chosen.git_delivery
-        case Err():
-            return False
 
 
 def _evaluate_code_change(

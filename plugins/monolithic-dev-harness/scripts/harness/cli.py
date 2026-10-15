@@ -221,11 +221,10 @@ def _repository(report: Report, repo: Path, args: argparse.Namespace) -> None:
     for problem in registry.problems(repo):
         report.line("warn", "tracker folder", problem.message)
     report.line("ok", "tracking", state.tracking_mode(repo))
-    match settings.load(repo):
-        case Ok(chosen) if chosen.git_delivery:
-            report.line("ok", "session", sessions.describe(sessions.resolve(repo)))
-        case _:
-            report.line("skip", "session", "Git-based delivery is not selected")
+    if settings.git_delivery(repo):
+        report.line("ok", "session", sessions.describe(sessions.resolve(repo)))
+    else:
+        report.line("skip", "session", "Git-based delivery is not selected")
     if args.tools and isinstance(selected, Ok):
         report.line(*_tools(repo, selected.value))
 

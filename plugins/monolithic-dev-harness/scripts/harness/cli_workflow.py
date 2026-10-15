@@ -325,18 +325,10 @@ def work_session_command(args: argparse.Namespace) -> int:
                 work_lifecycle.resume(project, args.session_id or ""),
                 work_sessions.as_json,
             )
-        case "track":
+        case "track" | "link" as operation:
+            bound = {"track": work_lifecycle.track, "link": work_lifecycle.link}
             result = fmap(
-                work_lifecycle.track(
-                    project,
-                    args.session_id or work_sessions.current(project) or "",
-                    args.work_item or "",
-                ),
-                work_sessions.as_json,
-            )
-        case "link":
-            result = fmap(
-                work_lifecycle.link(
+                bound[operation](
                     project,
                     args.session_id or work_sessions.current(project) or "",
                     args.work_item or "",
@@ -867,7 +859,7 @@ def workflow_command(args: argparse.Namespace) -> int:
                         args.prepared_stage or "",
                         original_request=args.request or "",
                         available_operations=args.available,
-                        git_delivery=_git_delivery(repo),
+                        git_delivery=settings.git_delivery(repo),
                     ),
                     lambda package: json.dumps(
                         package, ensure_ascii=False, indent=2, sort_keys=True
@@ -965,12 +957,3 @@ def workflow_command(args: argparse.Namespace) -> int:
             )
         case _:
             return 2
-
-
-def _git_delivery(repo: Path) -> bool:
-    """Whether the user chose Git-based delivery; a project without settings has not."""
-    match settings.load(repo):
-        case Ok(chosen):
-            return chosen.git_delivery
-        case _:
-            return False

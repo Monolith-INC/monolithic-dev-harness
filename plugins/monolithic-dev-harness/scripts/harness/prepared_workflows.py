@@ -251,7 +251,7 @@ def prepare_stage(
     plugin_root: Path = PLUGIN_ROOT,
     original_request: str = "",
     available_operations: Iterable[str] | None = None,
-    git_delivery: bool = False,
+    git_delivery: bool,
 ) -> Result[dict[str, Any]]:
     """A read-only step package with verified references and skill guidance.
 

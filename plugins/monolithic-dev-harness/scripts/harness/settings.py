@@ -84,6 +84,15 @@ def governed(repo: Path) -> bool:
     return path(repo).is_file()
 
 
+def git_delivery(repo: Path) -> bool:
+    """Whether the user chose Git-based delivery; a project without usable settings has not."""
+    match load(repo):
+        case Ok(chosen):
+            return chosen.git_delivery
+        case _:
+            return False
+
+
 def load(repo: Path) -> Result[Settings]:
     """The repository's settings, or why they cannot be used.
 

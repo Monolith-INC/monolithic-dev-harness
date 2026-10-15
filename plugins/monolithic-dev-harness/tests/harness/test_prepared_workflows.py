@@ -29,8 +29,8 @@ def _value(result):
             raise PreparedFailed(failure.message)
 
 
-def prepare(*args, **kwargs):
-    return _value(prepared.prepare_stage(*args, **kwargs))
+def prepare(*args, git_delivery: bool = False, **kwargs):
+    return _value(prepared.prepare_stage(*args, git_delivery=git_delivery, **kwargs))
 
 
 def routes(*args):

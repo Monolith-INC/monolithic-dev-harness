@@ -67,6 +67,13 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn(".harness/state/", (self.repo / ".git/info/exclude").read_text())
         self.assertFalse((self.repo / ".harness/settings.json").exists())
 
+    def test_the_stage_list_is_the_catalogs_route(self) -> None:
+        from harness import prepared_workflows
+
+        self.assertEqual(
+            workflow.STAGES, prepared_workflows.routes().value["explore-idea"]
+        )
+
     def test_only_onboarding_stages_take_a_checkpoint(self) -> None:
         self.assertEqual(
             workflow.STAGES,

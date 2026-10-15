@@ -281,7 +281,7 @@ class TestCatalog(unittest.TestCase):
                 ("explore-idea", "verify"),
             ):
                 package = prepared_workflows.prepare_stage(
-                    Path(directory), route, stage
+                    Path(directory), route, stage, git_delivery=False
                 ).value
                 self.assertEqual(
                     [entry["id"] for entry in package["completion_requirements"]],
@@ -291,7 +291,7 @@ class TestCatalog(unittest.TestCase):
     def test_the_prepared_step_shows_its_entry_requirements(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             package = prepared_workflows.prepare_stage(
-                Path(directory), "onboarding", "execution"
+                Path(directory), "onboarding", "execution", git_delivery=False
             ).value
         self.assertEqual(
             [entry["id"] for entry in package["entry_requirements"]],
