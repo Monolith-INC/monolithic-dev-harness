@@ -1,6 +1,6 @@
 ---
 name: start-ticket
-description: Start a tracker work item on its branch: move it to in progress, bind it to this checkout with a session, and plan its specification artifacts. Use at the start of work on a Story, from the harness flow or feature-implementation.
+description: Start a tracker work item: move it to in progress, link the work session to it (and check out its branch with Git-based delivery), and report which technical spec kinds it still lacks. Use at the start of work on a Story, from the harness flow or feature-implementation.
 ---
 
 # Start ticket

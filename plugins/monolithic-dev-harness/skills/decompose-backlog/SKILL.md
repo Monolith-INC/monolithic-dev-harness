@@ -7,6 +7,32 @@ license: MIT
 
 # Decompose Backlog
 
+Conductor for turning a parent work item into its child tree in the selected tracker: Feature →
+Stories (*story mode*), or Epic → Features → Stories (*tree mode*). Load the reference files as
+each phase needs them — they carry the self-contained rules so this file stays a score, not a
+textbook.
+
+## References
+
+In `../../references/`:
+
+- `decomposition-rules.md` — hierarchy, Feature sizing (Epic → Feature), Story sizing (1 Story = 1 sprint = 1 PR), story-point heuristic, DoR, parent-type branch.
+- `ticket-structure.md` — draft format + draft file constraints (frontmatter, filename regex).
+- `azure-mechanics.md` — Azure DevOps rules (linking gotchas, rendering) when Azure is the tracker.
+- `audit-checklist.md` — fidelity / coverage / DoR postflight.
+
+Shape contracts and sub-pass notes:
+
+- `../../common/templates/canonical-feature.md` — **read-only shape contract** for Feature drafts in
+  tree mode (Objetivo, Escopo, Critérios de Sucesso, Áreas/Módulos, Descrição Original).
+- `../../common/templates/canonical-user-story.md` — **read-only shape contract** for enriched Story drafts (seven
+  emoji sections per `ticket-structure.md`, pt-BR labels). Do not edit; validate every draft against
+  this template when `language` is `pt-BR`.
+- `../../common/contracts/decompose-backlog/canonical-user-story.en.md` — same shape contract with English section labels. Use when
+  `language` is `en`.
+- `../generate-plain-language-documentation/references/integration-notes.md` — prose polish sub-pass
+  in DRAFT and ENRICH phases.
+
 ## Input
 
 A parent work item **id** (Epic or Feature). Optional: target iteration, story-point ceiling override,

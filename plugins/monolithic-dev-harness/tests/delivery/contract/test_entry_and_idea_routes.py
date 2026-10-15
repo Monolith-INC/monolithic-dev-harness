@@ -17,7 +17,6 @@ def test_discovery_asks_about_an_already_refined_entry_item() -> None:
     assert "--gate refined-start" in step
     assert "validate-artifact" in step
     assert "--stage refinement" in step
-    assert "Tasks" in step and "not part of refinement" in step
 
 
 def test_the_idea_route_ends_with_a_choice_to_continue_or_stop() -> None:

@@ -1,6 +1,6 @@
 ---
 name: feature-implementation
-description: Implement a Feature with several User Stories on stacked branches — a Feature branch, one Story branch per Story, each Story through spec, implementation, and review — then land the stack and close the Feature. Use when the user wants to build a whole Feature rather than a single Story.
+description: Implement a Feature with several User Stories in dependency order, each Story through spec, implementation, and review — on stacked branches (a Feature branch, one Story branch per Story) with Git-based delivery, in the working copy without it — then close the Feature. Use when the user wants to build a whole Feature rather than a single Story.
 ---
 
 # Feature implementation

@@ -31,8 +31,14 @@ harness decision present --repo <project> --host <host> \
 | `setup-confirm` | The setup proposal is ready |
 | `next-step` | Setup is done and the request did not say what to do |
 | `starting-point` | An idea arrives with no clear starting point |
+| `idea-continue` | The idea route ends: continue into technical discovery, or stop with the brief or spec |
+| `refined-start` | The item the user started from is already refined: rework it, or use it as it is (`--value item=`) |
+| `planning-depth` | Discovery is done and the depth (Light, Standard, Hardcore) is not chosen yet |
+| `planning-methods` | Standard or Hardcore depth: shortlist, full catalog, or recommended methods |
 | `plan-checkpoint` | The discovery plan is ready (`--artifact` the plan) |
-| `publish-items`, `move-item`, `approve-spec`, `publish-branch`, `reply-pr`, `pause-tracking` | Approvals; see the harness skill's approval protocol |
+| `refinement-split` | A proposed split of an Epic, Feature or Story is ready (`--artifact` the outline); no write |
+| `harness-controls` | The user wants to suspend, resume, or use free mode |
+| `publish-items`, `move-item`, `approve-spec`, `implementation-confirm`, `approve-document`, `publish-branch`, `reply-pr`, `pause-tracking` | Approvals; see the harness skill's approval protocol. `implementation-confirm` and `approve-document` require the files shown first with `harness workflow show` |
 
 - Never pass a session id: the harness asks in the project's current work session, or
   project-wide when there is none. Asking never requires a session to exist.

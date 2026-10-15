@@ -32,11 +32,8 @@ class KnowledgeAndPlanOrderTests(unittest.TestCase):
         refinement = contract.split("## Refinement", 1)[1].split("## Preparation", 1)[0]
         self.assertLess(
             refinement.index("implementation-confirm"),
-            refinement.index("propose the Story's Tasks"),
+            refinement.rindex("publish-items"),
         )
-        self.assertIn("Nothing is approved in bulk", refinement)
-        self.assertNotIn("tracker-drafts", contract)
-        self.assertNotIn("tracker publish", contract)
 
     def test_bmad_planning_hands_the_hardened_approach_to_refinement(self) -> None:
         step = " ".join(

@@ -57,6 +57,12 @@ with `harness work-session link`, which refuses a Story outside that item's tree
 Every tracker write goes through the harness gateway and is read back. Nothing is approved in bulk:
 each item, plan and document is shown and approved when it is created.
 
+Planning files are not code. When the project sets no source globs, every file counts as code except
+documents and data in the planning folder (`.md`, `.json`, `.jsonl`, `.yaml`, `.yml`, `.csv`,
+`.txt`), so refinement can write outlines and hour sheets before any Story is linked; a script there
+still counts as code. A project that keeps files its application reads in the planning folder should
+set source globs, which then decide what is code.
+
 ## Preparation
 
 Write the risk and verification documents with `generate-plain-language-documentation`, as notes in

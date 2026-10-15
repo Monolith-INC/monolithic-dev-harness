@@ -1,6 +1,6 @@
 ---
 name: implement-story
-description: Spec-driven implementation of one User Story after its spec is approved — branch, then for each Task in order architect → failing test → implement → check → deslop → atomic commit → Task transition — ending with the Story ready for the review stage. Use once the Story's implementation plan is approved and its Tasks exist, from the harness flow or feature-implementation.
+description: Implementation of one User Story from its approved implementation plan — branch (with Git-based delivery), then for each Task in order architect → failing test → implement → check → deslop → atomic commit → Task transition — ending with the Story ready for the review stage. Use once the Story's implementation plan is approved and its Tasks exist, from the harness flow or feature-implementation.
 ---
 
 # Implement Story

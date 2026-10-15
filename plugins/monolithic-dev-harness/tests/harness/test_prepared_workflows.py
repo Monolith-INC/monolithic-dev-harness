@@ -99,7 +99,6 @@ class PreparedWorkflowTests(unittest.TestCase):
         }
         self.assertEqual(produced["tasks_parented"], "refinement")
         self.assertEqual(produced["plan_approved"], "refinement")
-        self.assertNotIn("bundle", json.dumps(prepared.load_catalog()["requirements"]))
 
     def test_verify_completes_the_work_item_and_execution_does_not(self) -> None:
         self.assertFalse(

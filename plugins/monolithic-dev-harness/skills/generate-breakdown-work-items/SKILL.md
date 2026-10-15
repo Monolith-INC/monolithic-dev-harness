@@ -6,6 +6,14 @@ license: MIT
 
 # Generate Breakdown Work Items
 
+Read `../../references/workflow-storyboard.md` and the selected
+[tracker contract](../../references/tracker-contract.md). Use the configured artifacts path and the
+user's effective harness language. The active tracker defines where Tasks live. The local
+Implementation Plan is always saved, and approved, before Tasks are proposed.
+
+References in this skill: `references/plan-generation.md`, `references/atomic-tasks.md`, and
+`references/fan-out.md`. Use `../../references/azure-mechanics.md` only for an Azure-backed Story.
+
 ## 1. Resolve and inspect
 
 Accept a Story id, URL, or local path; ask only when none was supplied. Call `tracker_describe` to

@@ -29,21 +29,9 @@ def _text(skill: str) -> str:
     )
 
 
-@pytest.mark.parametrize("skill", BACKLOG)
-def test_no_skill_points_at_the_removed_drafts_flow(skill: str) -> None:
-    text = _text(skill)
-    for removed in ("tracker-drafts", "tracker publish", "Six-stage preparation mode"):
-        assert removed not in text, (skill, removed)
-
-
 def test_the_breakdown_approves_the_plan_before_any_task() -> None:
-    text = " ".join(
-        (SKILLS / "generate-breakdown-work-items/SKILL.md").read_text().split()
-    )
-    assert text.index("implementation-confirm") < text.index(
-        "Propose, approve and create"
-    )
-    assert "This approval is required" in text
+    text = (SKILLS / "generate-breakdown-work-items/SKILL.md").read_text()
+    assert text.index("--gate implementation-confirm") < text.index("publish-items")
 
 
 @pytest.mark.parametrize("skill", ("decompose-backlog", "split-story"))

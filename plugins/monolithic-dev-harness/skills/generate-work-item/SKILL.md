@@ -7,6 +7,31 @@ license: MIT
 
 # Generate Work Item
 
+Conductor for turning a title + description into a **raw** spec, local draft, and (on approval)
+provider work item. Load references as each phase needs them — this file is the score, not the
+textbook.
+
+## References
+
+Start at `../../common/workflows/generate-work-item.md`:
+
+- `../../common/workflows/generate-work-item.md` — type map, artifacts paths, Context7 protocol.
+- `../../common/templates/output-formats.md` — **uniform ticket body**.
+- `../../common/templates/` — **read-only shape contracts**. Validate every draft
+  against the matching template before presenting.
+- `../../common/specs/generate-work-item/` — spec forms written to `<artifacts>/Specs/`:
+  - `spec-epic.md`, `spec-feature.md`, `spec-work-item.md`
+- `../../references/decomposition-rules.md` — hierarchy and parent rules.
+- `../../references/ticket-structure.md` — draft file constraints (frontmatter, filename).
+- `../../common/providers.md` — neutral artifact contract and provider translations.
+- `../generate-plain-language-documentation/references/integration-notes.md` — prose polish sub-pass
+  (PHASE 4).
+
+Context7: read `context7-mcp` skill; server `plugin-context7-plugin-context7`.
+
+**Not in scope:** enricher templates, emoji section layouts, or story-point driver tables — use the
+`enrich-work-item` skill after drafting if the host team requires that format.
+
 ## Active tracker
 
 Call `tracker_describe` before choosing a hierarchy, destination, provider call, or id format, and
