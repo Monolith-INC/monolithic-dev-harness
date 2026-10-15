@@ -51,7 +51,7 @@ Use this map instead of searching plugin files to rediscover workflow capabiliti
 | Project language confirmation, tracker choices, missing settings | `harness bootstrap --inspect` |
 | Saved workflow and local tracker readiness; versioning deferred to execution | `harness bootstrap --inspect` |
 | Work sessions for this exact request | `harness work-session route --request "<exact request>" --repo <project>` |
-| Validated discovery instructions bound to the current session | `harness workflow render --stage discover --repo <project>` |
+| Validated discovery instructions bound to the current session | `harness workflow render --stage discovery --repo <project>` |
 | Start, inspect, pause, stop, or resume a project work session | `harness work-session` |
 | Prepare missing bundled local tracker folders | `harness bootstrap --prepare-local-tracker` |
 | Setup health | `harness doctor` |

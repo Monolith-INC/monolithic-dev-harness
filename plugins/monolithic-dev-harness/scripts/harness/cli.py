@@ -580,7 +580,8 @@ def knowledge_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def parser() -> argparse.ArgumentParser:
+    """Every `harness` command and its arguments."""
     parser = argparse.ArgumentParser(
         prog="harness",
         description=__doc__,
@@ -669,10 +670,15 @@ def main(argv: list[str] | None = None) -> int:
     knowledge_parser.add_argument("terms", nargs="*")
     knowledge_parser.add_argument("--repo", default=".")
     knowledge_parser.add_argument("--store", default="project")
-    args, extra = parser.parse_known_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    command_line = parser()
+    args, extra = command_line.parse_known_args(argv)
     match args.command, extra:
         case "workflow", [*unknown] if unknown:
-            parser.error("unrecognized workflow arguments: " + " ".join(unknown))
+            command_line.error("unrecognized workflow arguments: " + " ".join(unknown))
         case _:
             pass
     if args.command in cli_workflow.COMMANDS:

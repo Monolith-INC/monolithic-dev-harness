@@ -91,8 +91,8 @@ ambiguous reply, a question, or other conversation leaves the menu pending: answ
 the same menu again. Delivery, silence, timers, and default selections are never answers.
 
 The prompt and answer hooks record answers. There is no agent-facing command to record one; never
-forge a hook event or reconstruct an answer from assistant prose. `harness revoke`, `harness
-suspend`, and typed `approve HB-…` keep working while a menu waits.
+forge a hook event or reconstruct an answer from assistant prose. `harness suspend`, `harness
+resume`, and typed `approve HB-…` keep working while a menu waits.
 
 ### While a menu waits
 
