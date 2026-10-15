@@ -264,7 +264,7 @@ story tasks; `ids.pattern`, `ids.branch_key` (with a named group `id`), and ever
 | Tool | Write (needs approval) |
 | --- | --- |
 | `tracker_describe`, `tracker_get_work_item`, `tracker_search_work_items`, `tracker_list_children`, `tracker_list_artifacts` | no |
-| `tracker_create_work_item`, `tracker_transition_work_item`, `tracker_publish_artifact`, `tracker_link_development_artifact` | yes |
+| `tracker_create_work_item`, `tracker_update_work_item`, `tracker_transition_work_item`, `tracker_publish_artifact`, `tracker_link_development_artifact` | yes |
 | `scm_get_pull_request`, `scm_list_review_threads` | no |
 | `scm_create_pull_request` (drafts only), `scm_reply_to_thread`, `scm_link_work_item` | yes |
 | `workflow_tracking_status`, `workflow_resume_tracker` | no |

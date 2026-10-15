@@ -85,6 +85,7 @@ class PreparedWorkflowTests(unittest.TestCase):
         self.assertLessEqual(
             {
                 "tracker_create_work_item",
+                "tracker_update_work_item",
                 "tracker_list_children",
                 "tracker_publish_artifact",
             },

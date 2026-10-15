@@ -10,6 +10,7 @@ these provider-neutral operations into native Azure MCP calls internally.
 | Search work items | `tracker_search_work_items` | Supply `query`; use `cursor` for pagination when returned. |
 | Read child items | `tracker_list_children` | Supply the parent `ref`. |
 | Create a work item | `tracker_create_work_item` | Use harness kinds and optional `parentRef`. |
+| Update a work item | `tracker_update_work_item` | Supply `ref` and only the fields to change: `title`, `description` (the whole refined body), `storyPoints`, `hours` and `firstEstimate` (a Task's effort), `assignee`, `iteration`. The item is read back. |
 | Transition a work item | `tracker_transition_work_item` | Use a harness logical state. |
 | List or publish workflow artifacts | `tracker_list_artifacts`, `tracker_publish_artifact` | Publishing is revision-aware and idempotent. |
 | Link branch or PR | `tracker_link_development_artifact` | Supply work item `ref`, artifact `url`, and optional `type`. |

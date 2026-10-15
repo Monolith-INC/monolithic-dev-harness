@@ -8,8 +8,8 @@ and payloads internal.
 
 - Work-item reads and searches: `tracker_get_work_item`, `tracker_search_work_items`,
   `tracker_list_children`.
-- Work-item creation and state transitions: `tracker_create_work_item`,
-  `tracker_transition_work_item`.
+- Work-item creation, field updates and state transitions: `tracker_create_work_item`,
+  `tracker_update_work_item`, `tracker_transition_work_item`.
 - Artifact and development links: `tracker_list_artifacts`, `tracker_publish_artifact`,
   `tracker_link_development_artifact`.
 - Pull requests and review threads: `scm_get_pull_request`, `scm_create_pull_request`,

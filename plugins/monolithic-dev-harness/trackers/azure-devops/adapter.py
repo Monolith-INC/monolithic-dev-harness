@@ -32,6 +32,7 @@ from integrations.contracts import (
     Page,
     TrackerOps,
     WorkItem,
+    WorkItemChanges,
     WorkItemKind,
 )
 from integrations.payloads import as_float, first_number, parse_date
@@ -174,6 +175,9 @@ def adapter(context: AdapterContext) -> TrackerOps:
         search_work_items=lambda query, cursor: _search(context, call, query),
         create_work_item=lambda kind, title, description, parent: _create(
             context, call, read, kind, title, description, parent
+        ),
+        update_work_item=lambda ref, changes: _update(
+            call, read, ref, changes, process
         ),
         transition_work_item=lambda ref, state: _transition(
             context, call, read, ref, state
@@ -411,6 +415,46 @@ def _read_created(read, reply: Any) -> Result[WorkItem]:
             return err(
                 "provider_error", "Azure DevOps did not return the created work item"
             )
+
+
+def _update(
+    call, read, ref: str, changes: WorkItemChanges, process: str
+) -> Result[WorkItem]:
+    """One JSON-Patch update with only the named fields, then the item read back."""
+    named = {
+        TITLE: changes.title,
+        DESCRIPTION: changes.description,
+        _points_field(process): changes.story_points,
+        ASSIGNED_TO: changes.assignee,
+        ITERATION_PATH: changes.iteration,
+    }
+    updates = [
+        {
+            "op": "add",
+            "path": _field_ref(name),
+            "value": value,
+            **({"format": "Markdown"} if name == DESCRIPTION else {}),
+        }
+        for name, value in named.items()
+        if value is not None
+    ]
+    if changes.hours is not None:
+        updates += [
+            {"op": "add", "path": path, "value": value}
+            for path, value in _hour_fields(process)(
+                changes.hours, changes.first_estimate
+            ).items()
+        ]
+    return bind(
+        require(bool(updates), "invalid_request", "name at least one field to change"),
+        lambda _: bind(
+            payloads.number(ref, "work item"),
+            lambda number: bind(
+                call("write", "update", {"id": number, "updates": updates}),
+                lambda _: read(ref),
+            ),
+        ),
+    )
 
 
 def _transition(

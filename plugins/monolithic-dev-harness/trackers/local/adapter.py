@@ -34,11 +34,14 @@ from integrations.contracts import (
     Page,
     TrackerOps,
     WorkItem,
+    WorkItemChanges,
     WorkItemKind,
 )
 from integrations.planning import IterationReading, is_current
 from integrations.planning_files import (
+    ASSIGNED_TO,
     ITERATION,
+    POINTS,
     RECORDED_HOURS,
     planning_item,
     read_capacity_file,
@@ -67,6 +70,16 @@ def adapter(context: AdapterContext) -> TrackerOps:
         ),
         create_work_item=lambda kind, title, description, parent: _create(
             context, root, kind, title, description, parent
+        ),
+        update_work_item=lambda ref, changes: bind(
+            require(
+                not changes.empty(),
+                "invalid_request",
+                "name at least one field to change",
+            ),
+            lambda _: bind(
+                _find(context, root, ref), lambda found: _update(found, changes)
+            ),
         ),
         transition_work_item=lambda ref, state: bind(
             _find(context, root, ref), lambda found: _move(context, root, found, state)
@@ -286,6 +299,32 @@ def _write(path: Path, record: Mapping[str, Any]) -> Result[None]:
         "local_storage_error",
         f"could not write {path.name}",
         OSError,
+    )
+
+
+def _update(found: Record, changes: WorkItemChanges) -> Result[WorkItem]:
+    """Write the named fields, then read the record back from disk."""
+    path, record = found
+    named = {
+        "title": changes.title,
+        "description": changes.description,
+        POINTS: changes.story_points,
+        ASSIGNED_TO: changes.assignee,
+        ITERATION: changes.iteration,
+    }
+    hours = (
+        RECORDED_HOURS(changes.hours, changes.first_estimate)
+        if changes.hours is not None
+        else {}
+    )
+    updated = {
+        **record,
+        **{name: value for name, value in named.items() if value is not None},
+        **hours,
+        "updatedAt": _now(),
+    }
+    return bind(
+        _write(path, updated), lambda _: fmap(_read(path), lambda read: _item(read[1]))
     )
 
 

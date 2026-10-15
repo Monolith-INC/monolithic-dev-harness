@@ -797,6 +797,13 @@ class TestApproval(HookTestCase):
         )
         self.assertDenied(
             self.claude(
+                "mcp__plugin_monolithic-dev-harness_workflow-integrations__tracker_update_work_item",
+                {"ref": "12", "title": "Refined"},
+            ),
+            "approval-required",
+        )
+        self.assertDenied(
+            self.claude(
                 "mcp__plugin_monolithic-dev-harness_workflow-integrations__workflow_skip_tracker",
                 {},
             ),

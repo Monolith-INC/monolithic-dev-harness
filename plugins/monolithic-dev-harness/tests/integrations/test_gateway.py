@@ -62,6 +62,24 @@ class GatewayTest(unittest.TestCase):
         )
         self.assertEqual(self.call("tracker_describe").value["name"], "local")
 
+    def test_an_existing_item_is_updated_and_read_back(self) -> None:
+        story = self.call(
+            "tracker_create_work_item", kind="user_story", title="S"
+        ).value
+        updated = self.call(
+            "tracker_update_work_item",
+            ref=story["key"],
+            title="Refined",
+            description="refined text",
+            storyPoints=3,
+        ).value
+        self.assertEqual(
+            (updated["title"], updated["description"]), ("Refined", "refined text")
+        )
+        self.assertIsInstance(
+            self.call("tracker_update_work_item", ref=story["key"]).failure.message, str
+        )
+
     def test_arguments_are_checked_against_the_tool_schema(self) -> None:
         self.assertIn(
             "missing 'title'",

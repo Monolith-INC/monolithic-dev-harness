@@ -21,6 +21,7 @@ from integrations.contracts import (
     Page,
     TrackerOps,
     WorkItem,
+    WorkItemChanges,
     WorkItemKind,
 )
 from integrations.payloads import as_float, first_number, parse_date
@@ -61,6 +62,10 @@ def adapter(context: AdapterContext) -> TrackerOps:
             ),
             issue,
         ),
+        update_work_item=lambda ref, changes: bind(
+            _changes(changes),
+            lambda fields: bind(call("save", {"id": ref.upper(), **fields}), issue),
+        ),
         transition_work_item=lambda ref, state: bind(
             call("save", {"id": ref.upper(), "state": context.manifest.states[state]}),
             issue,
@@ -100,6 +105,25 @@ def adapter(context: AdapterContext) -> TrackerOps:
             ),
         ),
         hour_fields=no_hours,
+    )
+
+
+def _changes(changes: WorkItemChanges) -> Result[Mapping[str, Any]]:
+    """The issue fields to save; Linear keeps no hours, so a change of hours is refused."""
+    if changes.hours is not None:
+        return err("unsupported", "Linear records no hours on an issue")
+    named = {
+        "title": changes.title,
+        "description": changes.description,
+        "estimate": changes.story_points,
+        "assignee": changes.assignee,
+        "cycle": changes.iteration,
+    }
+    fields = {name: value for name, value in named.items() if value is not None}
+    return (
+        Ok(fields)
+        if fields
+        else err("invalid_request", "name at least one field to change")
     )
 
 

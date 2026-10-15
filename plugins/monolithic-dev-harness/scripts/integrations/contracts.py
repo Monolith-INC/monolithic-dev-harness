@@ -198,10 +198,43 @@ class AdapterContext:
 
 
 @dataclass(frozen=True)
+class WorkItemChanges:
+    """The fields of an existing work item to change; `None` leaves a field as it is.
+
+    `description` carries the whole refined body, acceptance criteria included. `hours` is a
+    Task's effort; `first_estimate` also records it as the original estimate where the tracker
+    keeps one.
+    """
+
+    title: str | None = None
+    description: str | None = None
+    story_points: float | None = None
+    hours: float | None = None
+    first_estimate: bool = False
+    assignee: str | None = None
+    iteration: str | None = None
+
+    def empty(self) -> bool:
+        return all(
+            value is None
+            for value in (
+                self.title,
+                self.description,
+                self.story_points,
+                self.hours,
+                self.assignee,
+                self.iteration,
+            )
+        )
+
+
+@dataclass(frozen=True)
 class TrackerOps:
     get_work_item: Callable[[str], Result[WorkItem]]
     search_work_items: Callable[[str, str], Result[Page]]
     create_work_item: Callable[[WorkItemKind, str, str, str], Result[WorkItem]]
+    # Changes the named fields of an existing item and returns it as the tracker now holds it.
+    update_work_item: Callable[[str, WorkItemChanges], Result[WorkItem]]
     transition_work_item: Callable[[str, LogicalState], Result[WorkItem]]
     list_children: Callable[[str], Result[tuple[WorkItem, ...]]]
     list_artifacts: Callable[[str], Result[tuple[ArtifactRef, ...]]]

@@ -48,6 +48,7 @@ from .tracker_policy import TrackerPolicy
 GATEWAY_WRITES = frozenset(
     {
         "tracker_create_work_item",
+        "tracker_update_work_item",
         "tracker_transition_work_item",
         "tracker_publish_artifact",
         "tracker_link_development_artifact",

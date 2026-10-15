@@ -29,10 +29,13 @@ from .contracts import (
     PullRequestDraft,
     ScmOps,
     TrackerOps,
+    WorkItemChanges,
     WorkItemKind,
 )
 
 STRING = {"type": "string"}
+NUMBER = {"type": "number"}
+BOOLEAN = {"type": "boolean"}
 TOOLS: tuple[Mapping[str, Any], ...] = tuple(
     {
         "name": name,
@@ -69,6 +72,23 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
                 "title": STRING,
                 "description": STRING,
                 "parentRef": STRING,
+            },
+        ),
+        (
+            "tracker_update_work_item",
+            "Change the named fields of an existing work item, then read it back. The description "
+            "is the whole refined body. hours is a Task's effort; firstEstimate also records it "
+            "as the original estimate where the tracker keeps one.",
+            ("ref",),
+            {
+                "ref": STRING,
+                "title": STRING,
+                "description": STRING,
+                "storyPoints": NUMBER,
+                "hours": NUMBER,
+                "firstEstimate": BOOLEAN,
+                "assignee": STRING,
+                "iteration": STRING,
             },
         ),
         ("tracker_list_children", "List child work items.", ("ref",), {"ref": STRING}),
@@ -304,6 +324,18 @@ def _tracker_call(name: str, args: Mapping[str, Any], ops: TrackerOps) -> Result
             args["title"],
             args.get("description", ""),
             args.get("parentRef", ""),
+        ),
+        "tracker_update_work_item": lambda: ops.update_work_item(
+            args["ref"],
+            WorkItemChanges(
+                title=args.get("title"),
+                description=args.get("description"),
+                story_points=args.get("storyPoints"),
+                hours=args.get("hours"),
+                first_estimate=bool(args.get("firstEstimate", False)),
+                assignee=args.get("assignee"),
+                iteration=args.get("iteration"),
+            ),
         ),
         "tracker_list_children": lambda: ops.list_children(args["ref"]),
         "tracker_transition_work_item": lambda: ops.transition_work_item(

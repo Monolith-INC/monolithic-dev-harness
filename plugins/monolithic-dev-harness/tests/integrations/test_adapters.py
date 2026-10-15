@@ -9,7 +9,12 @@ from pathlib import Path
 
 from core.result import Err, Ok
 from integrations import artifacts
-from integrations.contracts import ArtifactDraft, LogicalState, WorkItemKind
+from integrations.contracts import (
+    ArtifactDraft,
+    LogicalState,
+    WorkItemChanges,
+    WorkItemKind,
+)
 
 from .fakes import FakeTransport, ops
 
@@ -100,6 +105,44 @@ class AzureTest(unittest.TestCase):
         self.assertEqual(
             self.call.sent("wit_work_item_write")[-1]["updates"][0]["value"], "Active"
         )
+
+    def test_update_writes_only_the_named_fields_then_reads_back(self) -> None:
+        updated = self.tracker.update_work_item(
+            "10",
+            WorkItemChanges(
+                title="Refined",
+                description="body",
+                story_points=3,
+                hours=5,
+                assignee="ana@example.com",
+                iteration="proj\\Sprint 2",
+            ),
+        ).value
+        [sent] = self.call.sent("wit_work_item_write")
+        self.assertEqual((sent["action"], sent["id"]), ("update", 10))
+        self.assertEqual(
+            {update["path"]: update["value"] for update in sent["updates"]},
+            {
+                "/fields/System.Title": "Refined",
+                "/fields/System.Description": "body",
+                "/fields/Microsoft.VSTS.Scheduling.StoryPoints": 3,
+                "/fields/Microsoft.VSTS.Scheduling.RemainingWork": 5,
+                "/fields/System.AssignedTo": "ana@example.com",
+                "/fields/System.IterationPath": "proj\\Sprint 2",
+            },
+        )
+        self.assertEqual(updated.key, "10")
+        self.tracker.update_work_item("10", WorkItemChanges(title="Only"))
+        self.assertEqual(
+            [u["path"] for u in self.call.sent("wit_work_item_write")[-1]["updates"]],
+            ["/fields/System.Title"],
+        )
+
+    def test_an_update_that_changes_nothing_is_refused(self) -> None:
+        self.assertIsInstance(
+            self.tracker.update_work_item("10", WorkItemChanges()), Err
+        )
+        self.assertEqual(self.call.sent("wit_work_item_write"), [])
 
     def test_only_enveloped_comments_are_artifacts(self) -> None:
         [artifact] = self.tracker.list_artifacts("10").value
@@ -261,6 +304,31 @@ class LinearTest(unittest.TestCase):
             ).value.id,
             "c9",
         )
+
+    def test_update_saves_the_named_fields_and_refuses_hours(self) -> None:
+        self.tracker.update_work_item(
+            "eng-4",
+            WorkItemChanges(
+                title="Refined",
+                description="body",
+                story_points=3,
+                assignee="ana",
+                iteration="Cycle 2",
+            ),
+        )
+        self.assertEqual(
+            self.call.sent("save_issue")[-1],
+            {
+                "id": "ENG-4",
+                "title": "Refined",
+                "description": "body",
+                "estimate": 3,
+                "assignee": "ana",
+                "cycle": "Cycle 2",
+            },
+        )
+        refused = self.tracker.update_work_item("ENG-4", WorkItemChanges(hours=2))
+        self.assertIn("no hours", refused.failure.message)
 
     def test_a_reply_without_an_issue_is_a_provider_error(self) -> None:
         tracker = ops(
@@ -445,6 +513,44 @@ class LocalTest(unittest.TestCase):
             self.assertEqual(
                 self.tracker.iteration_items({}, ref).failure.code, "invalid_request"
             )
+
+    def test_update_changes_the_record_and_reads_it_back(self) -> None:
+        story = self.tracker.create_work_item(
+            WorkItemKind.USER_STORY, "Draft", "draft text", ""
+        ).value
+        task = self.tracker.create_work_item(
+            WorkItemKind.TASK, "Step", "", story.key
+        ).value
+        updated = self.tracker.update_work_item(
+            story.key,
+            WorkItemChanges(
+                title="Refined",
+                description="refined text",
+                story_points=3,
+                assignee="ana",
+                iteration="Sprint 2",
+            ),
+        ).value
+        self.assertEqual(
+            (updated.title, updated.description), ("Refined", "refined text")
+        )
+        stored = json.loads(
+            (self.repo / ".harness/tracker/backlog/STORY-0001.json").read_text()
+        )
+        self.assertEqual(
+            (stored["story_points"], stored["assigned_to"], stored["iteration"]),
+            (3, "ana", "Sprint 2"),
+        )
+        self.tracker.update_work_item(
+            task.key, WorkItemChanges(hours=4, first_estimate=True)
+        )
+        hours = json.loads(
+            (self.repo / ".harness/tracker/backlog/TASK-0001.json").read_text()
+        )
+        self.assertEqual((hours["remaining_hours"], hours["effort_hours"]), (4, 4))
+        self.assertIsInstance(
+            self.tracker.update_work_item("STORY-0042", WorkItemChanges(title="x")), Err
+        )
 
     def test_search_pages_and_missing_items(self) -> None:
         tuple(
