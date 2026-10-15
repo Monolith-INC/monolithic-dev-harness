@@ -18,13 +18,22 @@ from scripts.policy.commands import is_code, writes_code
     "path,tree,expected",
     [
         ("docs/planning/Tickets/draft.md", False, False),
+        ("docs/planning/split.json", False, False),
+        ("docs/planning/risks.yaml", False, False),
+        ("docs/planning/capacity.yml", False, False),
+        ("docs/planning/hours.csv", False, False),
+        ("docs/planning/notes.txt", False, False),
+        ("docs/planning/evidence/reply.jsonl", False, False),
         ("docs/planning/source.py", False, True),
+        ("docs/planning/run.sh", False, True),
         ("docs/planning", True, True),
         ("docs/planning-other/draft.md", False, True),
         ("lib/source.dart", False, True),
     ],
 )
-def test_planning_markdown_is_not_code_without_source_globs(path, tree, expected):
+def test_planning_documents_and_data_are_not_code_without_source_globs(
+    path, tree, expected
+):
     assert is_code(path, None, tree, "docs/planning") is expected
 
 

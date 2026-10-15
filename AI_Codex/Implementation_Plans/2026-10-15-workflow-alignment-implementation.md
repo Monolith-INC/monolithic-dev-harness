@@ -208,12 +208,13 @@ approval.
 
 ### 10. Planning-folder files as code
 
-- `scripts/policy/commands.py` `is_code`: with no source globs, nothing in the planning folder
-  counts as code (today only `.md` and `acceptance-evidence/*.json[l]` are exempt) — trial 02
-  finding 4.
+- `scripts/policy/commands.py` `is_code`: with no source globs, documents and data in the planning
+  folder (`.md`, `.json`, `.jsonl`, `.yaml`, `.yml`, `.csv`, `.txt`) are not code; any other file
+  there, such as a script, still is, so the planning folder cannot carry code past the gate (an
+  earlier deliberate rule the tests keep). Trial 02 finding 4.
 
-**Tests:** a `.json`, `.yaml` and `.csv` file in the planning folder is not code; a file outside it
-still is.
+**Tests:** those formats in the planning folder are not code; `.py` and `.sh` there still are; a
+file outside it still is.
 
 ### 11. Rename and docs
 
