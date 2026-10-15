@@ -1,0 +1,25 @@
+{
+  "trial": "20261015-day001-planning-gate-02",
+  "follows": "20261015-day001-planning-gate-01 (stopped at the first decision; knowledge store missing from the fixture, fixed in addd129)",
+  "harness_checkout": "/home/monolith/projects/monolithic-dev-harness",
+  "source_revision": "addd12951d5ce2c449a074bb12d02cff33224bae",
+  "dirty_state": "untracked AI_Codex/ notes and .root-architect/ mailbox only",
+  "testing": "current source, installed from source into the fixture's isolated Codex home",
+  "fixture": "/tmp/monolithic-dev-harness-trial-ed0k7v76/project (acceptance_trial.py prepare --profile local-planning; kept between rounds; discard when the trial ends)",
+  "mode": "relayed: codex exec, then codex exec resume with each human answer (human chose this over a single headless run)",
+  "host": "Codex CLI",
+  "model": "gpt-6-luna",
+  "capability_tier": "economical general-purpose coding tier (skill default)",
+  "reasoning_effort": "low",
+  "sandbox": "workspace-write (first round flag; resumed rounds via -c sandbox_mode)",
+  "python": "/home/monolith/.local/bin/python3.14",
+  "scenario": "I can see how many tasks I still need to do, but I also want to see how many I have finished. Show both counts on the task screen.",
+  "stopping_checkpoint": "the point where the next step would change application source or tests; no implementation",
+  "human_answers": {
+    "standalone or initiative": "Standalone (human, in chat; not asked in this trial: the agent treated the work as standalone)",
+    "planning-depth": "2 / Standard (human)",
+    "planning-methods": "1 / Contextual shortlist (human)"
+  },
+  "isolation_limits": "rounds run from the parent's shell with the fixture's isolated CODEX_HOME, preferences and TMPDIR; parent host variables unset",
+  "delegation": "From round 5 on, the human delegated answers to the parent (2026-10-15): recommended option unless evidence argues otherwise; approvals only after reading the shown artifacts; each recorded in delegated-answers.md; stop before implementation unchanged."
+}

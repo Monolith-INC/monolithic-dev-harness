@@ -1,0 +1,163 @@
+{
+  "installed": [
+    {
+      "pluginId": "monolithic-dev-harness@monolithic-dev-harness",
+      "name": "monolithic-dev-harness",
+      "marketplaceName": "monolithic-dev-harness",
+      "version": "0.6.2",
+      "installed": true,
+      "enabled": true,
+      "source": {
+        "source": "local",
+        "path": "/tmp/monolithic-dev-harness-test-run-5_drvn8m/harness-install/marketplace/codex-marketplace/plugins/monolithic-dev-harness"
+      },
+      "marketplaceSource": {
+        "sourceType": "local",
+        "source": "/tmp/monolithic-dev-harness-test-run-5_drvn8m/harness-install/marketplace/codex-marketplace"
+      },
+      "installPolicy": "AVAILABLE",
+      "authPolicy": "ON_INSTALL"
+    },
+    {
+      "pluginId": "github@openai-curated-remote",
+      "name": "github",
+      "marketplaceName": "openai-curated-remote",
+      "version": "0.1.12-5f7cd798dc99",
+      "installed": true,
+      "enabled": true,
+      "source": {
+        "source": "remote",
+        "id": "plugin_connector_1p_1a69035c238881919c4190932b2df699"
+      },
+      "installPolicy": "AVAILABLE",
+      "authPolicy": "ON_INSTALL"
+    },
+    {
+      "pluginId": "canva@openai-curated-remote",
+      "name": "canva",
+      "marketplaceName": "openai-curated-remote",
+      "version": "17.0.1",
+      "installed": true,
+      "enabled": true,
+      "source": {
+        "source": "remote",
+        "id": "plugin_connector_68df33b1a2d081918778431a9cfca8ba"
+      },
+      "installPolicy": "AVAILABLE",
+      "authPolicy": "ON_INSTALL"
+    },
+    {
+      "pluginId": "linear@openai-curated-remote",
+      "name": "linear",
+      "marketplaceName": "openai-curated-remote",
+      "version": "5.0.1",
+      "installed": true,
+      "enabled": true,
+      "source": {
+        "source": "remote",
+        "id": "plugin_asdk_app_69a089a326dc8191b32a3f2553f5be2c"
+      },
+      "installPolicy": "AVAILABLE",
+      "authPolicy": "ON_INSTALL"
+    },
+    {
+      "pluginId": "app-69ef18c674308191a2f952431f91ea61@openai-curated-remote",
+      "name": "app-69ef18c674308191a2f952431f91ea61",
+      "marketplaceName": "openai-curated-remote",
+      "version": "1.0.0",
+      "installed": true,
+      "enabled": true,
+      "source": {
+        "source": "remote",
+        "id": "plugin_asdk_app_69ef18c674308191a2f952431f91ea61"
+      },
+      "installPolicy": "AVAILABLE",
+      "authPolicy": "ON_INSTALL"
+    },
+    {
+      "pluginId": "product-design@openai-curated-remote",
+      "name": "product-design",
+      "marketplaceName": "openai-curated-remote",
+      "version": "0.1.56",
+      "installed": true,
+      "enabled": true,
+      "source": {
+        "source": "remote",
+        "id": "Plugin_fa77aec24fc08191bc6e57f377126d76"
+      },
+      "installPolicy": "AVAILABLE",
+      "authPolicy": "ON_USE"
+    },
+    {
+      "pluginId": "openai-developers@openai-curated-remote",
+      "name": "openai-developers",
+      "marketplaceName": "openai-curated-remote",
+      "version": "1.3.6",
+      "installed": true,
+      "enabled": true,
+      "source": {
+        "source": "remote",
+        "id": "plugin_connector_1p_32dba5a7095c8191adca04ee30276304"
+      },
+      "installPolicy": "AVAILABLE",
+      "authPolicy": "ON_INSTALL"
+    },
+    {
+      "pluginId": "fullstack-dev-kit@openai-curated-remote",
+      "name": "fullstack-dev-kit",
+      "marketplaceName": "openai-curated-remote",
+      "version": "0.19.10",
+      "installed": true,
+      "enabled": true,
+      "source": {
+        "source": "remote",
+        "id": "plugins_6a82e3d1df508191bfffcec222b18433"
+      },
+      "installPolicy": "AVAILABLE",
+      "authPolicy": "ON_INSTALL"
+    },
+    {
+      "pluginId": "openai-templates@openai-curated-remote",
+      "name": "openai-templates",
+      "marketplaceName": "openai-curated-remote",
+      "version": "0.1.1",
+      "installed": true,
+      "enabled": true,
+      "source": {
+        "source": "remote",
+        "id": "plugin_connector_1p_2330815c823c8191941e5dc465bb899f"
+      },
+      "installPolicy": "INSTALLED_BY_DEFAULT",
+      "authPolicy": "ON_USE"
+    },
+    {
+      "pluginId": "plugin-management@openai-curated-remote",
+      "name": "plugin-management",
+      "marketplaceName": "openai-curated-remote",
+      "version": "0.1.0",
+      "installed": true,
+      "enabled": true,
+      "source": {
+        "source": "remote",
+        "id": "plugin_connector_1p_b3438d6beb9081918fba3625bc988128"
+      },
+      "installPolicy": "INSTALLED_BY_DEFAULT",
+      "authPolicy": "ON_USE"
+    },
+    {
+      "pluginId": "work-pets@openai-curated-remote",
+      "name": "work-pets",
+      "marketplaceName": "openai-curated-remote",
+      "version": "0.1.6",
+      "installed": true,
+      "enabled": true,
+      "source": {
+        "source": "remote",
+        "id": "plugin_connector_1p_bccf6c8660c08191ae4470d9ae4877fa"
+      },
+      "installPolicy": "INSTALLED_BY_DEFAULT",
+      "authPolicy": "ON_USE"
+    }
+  ],
+  "available": []
+}

@@ -1,0 +1,24 @@
+{
+  "context": {
+    "bmad_config_sha256": "6f5fdaa7c4fc848fd992653a7ddc67e3c3991e182ef6143cbb45693c929aae1d",
+    "checkpoint_command": "env HARNESS_USER_STATE_DIR=/tmp/monolithic-dev-harness-trial-ed0k7v76/preferences /tmp/monolithic-dev-harness-trial-ed0k7v76/codex-home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2/bin/harness workflow checkpoint --repo /tmp/monolithic-dev-harness-trial-ed0k7v76/project --session-id WS-58ca71971aca",
+    "config_command": "/home/monolith/.local/bin/python3.14 /tmp/monolithic-dev-harness-trial-ed0k7v76/project/_bmad/scripts/resolve_config.py --project-root /tmp/monolithic-dev-harness-trial-ed0k7v76/project --key core.active_initiative",
+    "language": "en",
+    "memlog_command": "/home/monolith/.local/bin/python3.14 /tmp/monolithic-dev-harness-trial-ed0k7v76/project/_bmad/scripts/memlog.py",
+    "original_request": "I can see how many tasks I still need to do, but I also want to see how many I have finished. Show both counts on the task screen.",
+    "preferences_path": "/tmp/monolithic-dev-harness-trial-ed0k7v76/preferences/preferences.json",
+    "project_root": "/tmp/monolithic-dev-harness-trial-ed0k7v76/project",
+    "python_command": "/home/monolith/.local/bin/python3.14",
+    "review": "none",
+    "route": "full",
+    "scm": "local",
+    "session_id": "WS-58ca71971aca",
+    "settings_sha256": "4240cbd778f172340da8a5ade21e01042d6ec4732e8f03486b3d20e76b4d3187",
+    "status_command": "env HARNESS_USER_STATE_DIR=/tmp/monolithic-dev-harness-trial-ed0k7v76/preferences /tmp/monolithic-dev-harness-trial-ed0k7v76/codex-home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2/bin/harness workflow status --repo /tmp/monolithic-dev-harness-trial-ed0k7v76/project --session-id WS-58ca71971aca",
+    "tickets_command": "/home/monolith/.local/bin/python3.14 /tmp/monolithic-dev-harness-trial-ed0k7v76/project/_bmad/method/scripts/tickets.py --project-root /tmp/monolithic-dev-harness-trial-ed0k7v76/project",
+    "tracker": "local"
+  },
+  "entry": "/tmp/monolithic-dev-harness-trial-ed0k7v76/project/_bmad/render/bmad-build/project-4c9482f48a70/e278b859dfb564adbef5/workflow.md",
+  "manifest_sha256": "12c9e3824706339f1aeb6069488ed6aef33138a270c459b20ad94a7997850971",
+  "version": 1
+}

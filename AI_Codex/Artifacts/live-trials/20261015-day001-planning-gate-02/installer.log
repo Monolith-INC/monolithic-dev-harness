@@ -1,0 +1,19 @@
+Collecting Jinja2<4,>=3.1 (from -r /tmp/monolithic-dev-harness-trial-ed0k7v76/harness-install/marketplace.new/plugins/monolithic-dev-harness/requirements-runtime.txt (line 1))
+  Downloading jinja2-3.1.6-py3-none-any.whl.metadata (2.9 kB)
+Collecting MarkupSafe>=2.0 (from Jinja2<4,>=3.1->-r /tmp/monolithic-dev-harness-trial-ed0k7v76/harness-install/marketplace.new/plugins/monolithic-dev-harness/requirements-runtime.txt (line 1))
+  Downloading markupsafe-3.0.4-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+Downloading jinja2-3.1.6-py3-none-any.whl (134 kB)
+Downloading markupsafe-3.0.4-cp314-cp314-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (23 kB)
+Installing collected packages: MarkupSafe, Jinja2
+
+Successfully installed Jinja2-3.1.6 MarkupSafe-3.0.4
+[1m→[0m Codex: registering the plugin marketplace
+Under-development features enabled: default_mode_request_user_input. Under-development features are incomplete and may behave unpredictably. To suppress this warning, set `suppress_unstable_features_warning = true` in /tmp/monolithic-dev-harness-trial-ed0k7v76/codex-home/config.toml.
+Warning: failed to list remote marketplace plugins: remote plugin catalog request to https://chatgpt.com/backend-api/ps/plugins/list?scope=GLOBAL&limit=200&pageToken=eyJzY29wZSI6IkdMT0JBTCIsIndvcmtzcGFjZV9pZCI6bnVsbCwiY3JlYXRvcl9hY2NvdW50X3VzZXJfaWQiOm51bGwsImNvbGxlY3Rpb24iOm51bGwsImluY2x1ZGVfcmVzdHJpY3RlZF9wbHVnaW5zIjp0cnVlLCJpbmNsdWRlX3VubGlzdGVkX2dsb2JhbF9wbHVnaW5zIjp0cnVlLCJlbGlnaWJsZV9wbGFuX3R5cGUiOiJnbyIsImVuZm9yY2VfcGxhbl9lbGlnaWJpbGl0eSI6ZmFsc2UsInJhbmtfYnlfcG9wdWxhcml0eSI6dHJ1ZSwiY29udGludWF0aW9uIjp7ImRlcGxveW1lbnRfdHlwZSI6InByaW1hcnkiLCJxdWVyeV9pZCI6InJzNDozZWI0N2FjZC0zYzYzLTQ1ZmEtYjFlMS1iMjc3NjJhNmIxOGQ6ellCQVVvbjowOmxlYWYtZGI3ODIyMTAtOTMwYy00ODc3LTg0ODMtNTdlYzY3OTc3MjBjIiwiY3Vyc29yIjoiWkg2OWRYQzRnTHZ2ZUhMcGhKVUs2ZmppMk5HalBOUzBHc1ZDcEpWWmdfdlVOZUVGY1o1Y2RqUzRDSmdwUlpaZ0k4SXFkSnBVNFo0R2h1MTkydFZjSVRvUWl5c2xvUmJ0dVk1TUFma1gyTnVJaWpVby1zQTREbDh5eHI4dE1Sa0ZPRmQ3cmlTdzJKaklNS1FnX1ZDeXhueHVBYlB3eS1NNU4xYUNZSDloTlFBc2c0c3ZRVWR6YllEOVNkeVllZjg3bDZZTjhsSDVfQWc9In19 failed with status 503 Service Unavailable: {"detail":"Plugin directory is temporarily unavailable"}
+
+✓ monolithic-dev-harness 0.6.2 installed (Codex )
+
+Next:
+  1. Restart your host so the hooks and MCP servers load; trust plugin hooks when prompted.
+  2. In a repository you want governed:   harness bootstrap
+  3. Check everything:                    harness doctor
