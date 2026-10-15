@@ -37,7 +37,11 @@ work. Additional elicitation remains available but is not an endless default loo
 Right after Hardening, refine the backlog in the selected tracker with the agile-backlog-toolkit
 skills, run as their workflow is written. An item is refined when its text is in its type's template
 (`enrich-work-item` writes it, keeping the draft as Original Description) and it passes
-`validate-artifact`; Tasks are a Story's breakdown into steps, not part of refinement:
+`validate-artifact`; Tasks are a Story's breakdown into steps, not part of refinement.
+
+The work session tracks the item the user started from: once that Epic, Feature or Story exists in
+the tracker, run `harness work-session track --work-item <key>`. Later, each Story is linked in turn
+with `harness work-session link`, which refuses a Story outside that item's tree. The steps:
 
 1. Carry approach changes into items that already exist first: `enrich-work-item` for one item,
    `amend-workitems` for an Epic or Feature tree. The original text stays in Original Description.

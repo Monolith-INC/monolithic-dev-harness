@@ -111,6 +111,7 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
             "stop",
             "resume",
             "complete",
+            "track",
             "link",
         ),
     )
@@ -119,7 +120,9 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
         "--request", help="the exact request for a new work session"
     )
     work_session_parser.add_argument(
-        "--work-item", help="the Story or Bug the work session implements (link only)"
+        "--work-item",
+        help="track: the Epic, Feature, Story or Bug the work started from; link: the Story or "
+        "Bug being implemented, under that item",
     )
     work_session_parser.add_argument("--repo", default=".")
     workflow_parser = sub.add_parser(
@@ -319,6 +322,15 @@ def work_session_command(args: argparse.Namespace) -> int:
         case "resume":
             result = fmap(
                 work_lifecycle.resume(project, args.session_id or ""),
+                work_sessions.as_json,
+            )
+        case "track":
+            result = fmap(
+                workflow_requirements.track(
+                    project,
+                    args.session_id or work_sessions.current(project) or "",
+                    args.work_item or "",
+                ),
                 work_sessions.as_json,
             )
         case "link":

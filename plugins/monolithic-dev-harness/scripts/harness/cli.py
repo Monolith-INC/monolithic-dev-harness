@@ -6,7 +6,7 @@ harness doctor [--repo <dir>] [--tools]
 harness bootstrap --repo <dir> [--inspect | --propose | --apply-digest <hash>]
 harness session start <work item> [--workflow <name>] | status | pause | resume | close
 harness work-session route --request <text> | start --request <text> | list | select <id> | pause|stop|resume|complete <id>
-                    | link [<id>] --work-item <key>
+                    | track [<id>] --work-item <key> | link [<id>] --work-item <key>
 harness workflow start | render | checkpoint | list | status | requirements | routes | prepare | back | pause | resume | cancel | complete --session-id <id>
 harness preference show | language <en|pt-br>
 harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...] | tree

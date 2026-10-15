@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from core.result import Err, Failure, Ok, Result, bind, fmap
+from core.result import Err, Failure, Ok, Result, bind, err, fmap
 from harness import (
     code_content,
     globs,
@@ -93,14 +93,75 @@ class _Wrong(Exception):
     """A requirement does not hold; the message says what was found."""
 
 
-def link(repo: Path, session_id: str, work_item: str) -> Result[work_sessions.Session]:
-    """Link the work session to its Story or Bug; the first link records the code as it is."""
+_ENTRY_KINDS = frozenset(
+    {WorkItemKind.EPIC, WorkItemKind.FEATURE, WorkItemKind.USER_STORY, WorkItemKind.BUG}
+)
+
+
+def track(
+    repo: Path, session_id: str, entry_item: str
+) -> Result[work_sessions.Session]:
+    """Record the Epic, Feature, Story or Bug the user started from, once it is in the tracker."""
     return bind(
-        work_sessions.link(repo, session_id, work_item),
-        lambda session: fmap(
-            _record_baseline(repo, session.work_item), lambda _: session
+        _ops(repo),
+        lambda ops: bind(
+            ops.get_work_item(entry_item.strip()),
+            lambda item: (
+                work_sessions.track(repo, session_id, item.key)
+                if item.kind in _ENTRY_KINDS
+                else err(
+                    "invalid_request",
+                    f"{item.key} is a {item.kind.value}; work starts from an Epic, Feature, "
+                    "Story or Bug",
+                )
+            ),
         ),
     )
+
+
+def link(repo: Path, session_id: str, work_item: str) -> Result[work_sessions.Session]:
+    """Link the work session to its Story or Bug, which must sit under the item it tracks; each
+    work item's first link records the code as it is."""
+    return bind(
+        work_sessions.select(repo, session_id),
+        lambda session: bind(
+            _under_entry(repo, session.entry_item, work_item.strip()),
+            lambda _: bind(
+                work_sessions.link(repo, session_id, work_item),
+                lambda linked: fmap(
+                    _record_baseline(repo, linked.work_item), lambda _: linked
+                ),
+            ),
+        ),
+    )
+
+
+def _ops(repo: Path) -> Result[TrackerOps]:
+    return registry.open_selected(repo, settings.load(repo))
+
+
+def _under_entry(repo: Path, entry: str, key: str) -> Result[None]:
+    """`key` is the entry item or one of its descendants, following parents in the tracker."""
+    if not entry or key.casefold() == entry.casefold():
+        return Ok(None)
+
+    def climb(ops: TrackerOps, ref: str, seen: frozenset[str]) -> Result[None]:
+        return bind(
+            ops.get_work_item(ref),
+            lambda item: (
+                Ok(None)
+                if item.parent_id.casefold() == entry.casefold()
+                else climb(ops, item.parent_id, seen | {ref.casefold()})
+                if item.parent_id and item.parent_id.casefold() not in seen
+                else err(
+                    "invalid_request",
+                    f"{key} is not under {entry}, the item this work session tracks; start a "
+                    "new work session for it",
+                )
+            ),
+        )
+
+    return bind(_ops(repo), lambda ops: climb(ops, key, frozenset()))
 
 
 def _record_baseline(repo: Path, work_item: str) -> Result[None]:

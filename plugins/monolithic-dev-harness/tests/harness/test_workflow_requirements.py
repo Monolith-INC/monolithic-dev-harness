@@ -17,7 +17,7 @@ for path in (ROOT, SCRIPTS_DIR):
     if str(path) not in sys.path:
         sys.path.insert(0, str(path))
 
-from core.result import Ok, err
+from core.result import Err, Ok, err
 from harness import (
     code_content,
     local_artifacts,
@@ -203,6 +203,60 @@ class TestRequirements(Project):
     def test_skipped_tracking_releases_the_gate(self) -> None:
         state.set_tracking_mode(self.root, "skipped")
         self.assertFalse(self.edit().is_denied())
+
+
+class TestEntryItem(Project):
+    """A work session tracks the item the user started from; its Stories are linked one by one."""
+
+    def tree(self) -> tuple[str, str]:
+        feature = self.ops.create_work_item(WorkItemKind.FEATURE, "F", "", "").value.key
+        story = self.ops.create_work_item(
+            WorkItemKind.USER_STORY, "Inside", "", feature
+        ).value.key
+        return feature, story
+
+    def track(self, key: str):
+        return workflow_requirements.track(self.root, self.session, key)
+
+    def test_the_session_records_the_item_the_user_started_from(self) -> None:
+        feature, _ = self.tree()
+        self.assertEqual(self.track(feature).value.entry_item, feature)
+        self.assertEqual(
+            work_sessions.select(self.root, self.session).value.entry_item, feature
+        )
+
+    def test_a_story_under_the_entry_item_may_be_linked(self) -> None:
+        feature, story = self.tree()
+        self.track(feature)
+        linked = workflow_requirements.link(self.root, self.session, story)
+        self.assertEqual(linked.value.work_item, story)
+
+    def test_a_story_outside_the_entry_item_is_refused(self) -> None:
+        feature, _ = self.tree()
+        self.track(feature)
+        refused = workflow_requirements.link(self.root, self.session, self.story)
+        self.assertIn(feature, refused.failure.message)
+
+    def test_a_session_tracks_one_entry_item(self) -> None:
+        feature, story = self.tree()
+        self.track(feature)
+        self.assertIsInstance(self.track(story), Err)
+        self.assertIsInstance(self.track(feature), Ok)
+
+    def test_a_task_is_not_an_entry_item(self) -> None:
+        task = self.ops.list_children(self.story).value[0].key
+        self.assertIsInstance(self.track(task), Err)
+
+    def test_relinking_story_by_story_keeps_each_baseline(self) -> None:
+        feature, inside = self.tree()
+        second = self.ops.create_work_item(
+            WorkItemKind.USER_STORY, "Second", "", feature
+        ).value.key
+        self.track(feature)
+        workflow_requirements.link(self.root, self.session, inside)
+        workflow_requirements.link(self.root, self.session, second)
+        self.assertIsNotNone(code_content.baseline(self.root, inside))
+        self.assertIsNotNone(code_content.baseline(self.root, second))
 
 
 class TestCatalog(unittest.TestCase):
