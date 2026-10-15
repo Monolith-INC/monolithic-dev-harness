@@ -278,8 +278,8 @@ class TestCatalog(unittest.TestCase):
         catalog = prepared_workflows.load_catalog()
         with tempfile.TemporaryDirectory() as directory:
             for route, stage in (
-                ("onboarding", "execution"),
-                ("implement-approved-item", "verify"),
+                ("onboarding", "verify"),
+                ("explore-idea", "verify"),
             ):
                 package = prepared_workflows.prepare_stage(
                     Path(directory), route, stage

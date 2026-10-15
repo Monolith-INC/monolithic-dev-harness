@@ -16,23 +16,14 @@ from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
 from harness import state
 
 VERSION = 1
-ONBOARDING_STAGES = (
+STAGES = (
+    "ideate",
     "discovery",
     "planning",
     "hardening",
+    "refinement",
     "preparation",
-    "confirmation",
     "execution",
-)
-# Existing persisted checkpoints remain readable without rewriting their history.
-STAGES = (
-    *ONBOARDING_STAGES,
-    "setup",
-    "discover",
-    "ideate",
-    "backlog",
-    "technical-plan",
-    "build",
     "verify",
 )
 STATUSES = ("active", "paused", "cancelled", "completed")
@@ -156,11 +147,7 @@ def restart_preparation(repo: Path) -> Result[object]:
                     return Ok(None)
                 case Err() as failure:
                     return failure
-                case Ok(current) if current.current.stage in {
-                    "execution",
-                    "build",
-                    "verify",
-                }:
+                case Ok(current) if current.current.stage in {"execution", "verify"}:
                     return Ok(None)
                 case Ok(current):
                     return bind(

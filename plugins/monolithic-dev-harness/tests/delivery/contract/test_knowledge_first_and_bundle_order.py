@@ -13,7 +13,7 @@ PLUGIN = ROOT / "plugins" / "monolithic-dev-harness"
 class KnowledgeAndBundleOrderTests(unittest.TestCase):
     def test_discovery_routes_catalog_find_fetch_before_repository_reads(self) -> None:
         config = json.loads((PLUGIN / "config/prepared-workflows.json").read_text())
-        discovery = config["stages"]["discover"]
+        discovery = config["stages"]["discovery"]
         operations = discovery["operations"]
         self.assertLess(
             operations.index("harness.knowledge.catalog"),

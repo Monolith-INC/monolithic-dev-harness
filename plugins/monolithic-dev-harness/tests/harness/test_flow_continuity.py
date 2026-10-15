@@ -28,7 +28,7 @@ def repo(tmp_path: Path) -> Path:
     )
     started = workflow.start("DAY-003: share a list").value
     planned = workflow.add_point(
-        started, "Plan drafted", "discover", (), (), "", "Ask the open questions", ()
+        started, "Plan drafted", "discovery", (), (), "", "Ask the open questions", ()
     ).value
     assert isinstance(workflow.save(tmp_path, planned, session), Ok)
     return tmp_path

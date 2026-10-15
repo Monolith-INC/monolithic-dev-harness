@@ -29,14 +29,14 @@ class WorkflowTests(unittest.TestCase):
 
     def test_navigation_keeps_earlier_points_and_invalidates_later_path(self) -> None:
         started = workflow.start("Build a route guard", "en").value
-        one = workflow.add_point(started, "Idea review", "discover").value
+        one = workflow.add_point(started, "Idea review", "discovery").value
         two = workflow.add_point(
-            one, "Backlog review", "backlog", completed_writes=("LIN-1",)
+            one, "Backlog review", "refinement", completed_writes=("LIN-1",)
         ).value
         self.assertEqual(tuple(point.id for point in two.points), (1, 2, 3))
         earlier = workflow.navigate(two, 2).value
         self.assertEqual(earlier.current.label, "Idea review")
-        revised = workflow.add_point(earlier, "Revised idea", "discover").value
+        revised = workflow.add_point(earlier, "Revised idea", "discovery").value
         self.assertEqual(
             tuple(point.label for point in revised.points),
             ("First request", "Idea review", "Revised idea"),
@@ -52,9 +52,9 @@ class WorkflowTests(unittest.TestCase):
         self.assertIsInstance(workflow.resume(workflow.cancel(started).value), Err)
         self.assertIsInstance(workflow.from_dict({"version": 5}), Err)
 
-    def test_paused_checkpoint_preserves_pause_and_supports_six_stages(self) -> None:
+    def test_paused_checkpoint_preserves_pause_at_every_stage(self) -> None:
         paused = workflow.pause(workflow.start("Plan this", "en").value).value
-        for stage in workflow.ONBOARDING_STAGES:
+        for stage in workflow.STAGES:
             saved = workflow.add_point(paused, "Evidence retained", stage).value
             self.assertEqual(saved.status, "paused")
             self.assertEqual(saved.current.stage, stage)
@@ -67,11 +67,31 @@ class WorkflowTests(unittest.TestCase):
         self.assertIn(".harness/state/", (self.repo / ".git/info/exclude").read_text())
         self.assertFalse((self.repo / ".harness/settings.json").exists())
 
+    def test_only_onboarding_stages_take_a_checkpoint(self) -> None:
+        self.assertEqual(
+            workflow.STAGES,
+            (
+                "ideate",
+                "discovery",
+                "planning",
+                "hardening",
+                "refinement",
+                "preparation",
+                "execution",
+                "verify",
+            ),
+        )
+        started = workflow.start("Build a route guard", "en").value
+        for removed in ("discover", "backlog", "build", "confirmation", "setup"):
+            self.assertIsInstance(
+                workflow.add_point(started, "Old stage", removed), Err
+            )
+
     def test_stale_document_is_detected(self) -> None:
         target = self.repo / "plan.md"
         target.write_text("first")
         digest = workflow.file_digest(target).value
-        point = workflow.Point(2, "Review", "discover", (("plan.md", digest),))
+        point = workflow.Point(2, "Review", "discovery", (("plan.md", digest),))
         self.assertEqual(workflow.stale_artifacts(self.repo, point), ())
         target.write_text("changed")
         self.assertEqual(workflow.stale_artifacts(self.repo, point), ("plan.md",))

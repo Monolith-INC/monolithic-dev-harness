@@ -22,19 +22,12 @@ PROJECT_CONTEXT_TOTAL_LIMIT = 96_000
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 LOCAL_OPERATIONS = {
     "harness.bootstrap.inspect": "Inspect project settings, saved progress, and repository state.",
-    "harness.work-session.route": "Match the exact request to saved project work or present a new-session choice.",
-    "harness.work-session.start": "Start a separate project work session for the selected request.",
-    "harness.work-session.resume": "Resume a paused project work session.",
-    "harness.work-session.pause": "Pause project work while preserving its saved context.",
-    "harness.work-session.stop": "Stop a project work session without deleting its history.",
-    "harness.work-session.select": "Bind this host conversation to one project work session.",
     "harness.doctor": "Check local harness setup and required tools.",
     "harness.workflow.status": "Read the current saved workflow checkpoint.",
     "harness.workflow.checkpoint": "Save a workflow checkpoint without granting write approval.",
     "harness.knowledge.catalog": "List the bounded project knowledge routing catalog.",
     "harness.knowledge.find": "Search the selected harness knowledge store.",
     "harness.knowledge.fetch": "Read a selected harness knowledge item.",
-    "harness.suspension.status": "Read whether the user suspended the harness checks; only their own `harness suspend` message does.",
 }
 
 
@@ -258,11 +251,13 @@ def prepare_stage(
     plugin_root: Path = PLUGIN_ROOT,
     original_request: str = "",
     available_operations: Iterable[str] | None = None,
+    git_delivery: bool = False,
 ) -> Result[dict[str, Any]]:
     """A read-only step package with verified references and skill guidance.
 
     The step is `ready` only when its inputs are present and the host confirmed, through
-    `available_operations`, every tracker or SCM operation it needs.
+    `available_operations`, every tracker or SCM operation it needs. Skills marked
+    `"delivery": "git"` are recommended only when the user chose Git-based delivery.
     """
     return attempt(
         lambda: _prepare_stage(
@@ -272,6 +267,7 @@ def prepare_stage(
             plugin_root,
             original_request,
             available_operations,
+            git_delivery,
         ),
         "prepared_workflow_invalid",
         "prepared workflow",
@@ -286,6 +282,7 @@ def _prepare_stage(
     plugin_root: Path,
     original_request: str,
     available_operations: Iterable[str] | None,
+    git_delivery: bool,
 ) -> dict[str, Any]:
     canonical_repo = repo.resolve()
     if not canonical_repo.is_dir():
@@ -306,6 +303,8 @@ def _prepare_stage(
     )
     skill_entries: list[dict[str, str]] = []
     for recommendation in stage.get("skills", ()):
+        if recommendation.get("delivery") == "git" and not git_delivery:
+            continue
         name = recommendation.get("name", "")
         when = recommendation.get("when", "")
         skill_file = _inside(

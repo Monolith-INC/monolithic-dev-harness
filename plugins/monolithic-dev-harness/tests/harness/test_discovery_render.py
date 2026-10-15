@@ -243,7 +243,7 @@ def check_cli_render(project: Path, selected: work_sessions.Session) -> None:
         "workflow",
         "render",
         "--stage",
-        "discover",
+        "discovery",
         "--session-id",
         selected.id,
     )
@@ -343,7 +343,7 @@ def test_cli_rejects_unknown_render_options(project: Path) -> None:
             "workflow",
             "render",
             "--stage",
-            "discover",
+            "discovery",
             "--sessoin-id",
             "WS-MISSING",
         ).returncode

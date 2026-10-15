@@ -133,7 +133,7 @@ def _begin_output(
     report: dict,
 ) -> Result[dict]:
     match (current.status, current.current.stage):
-        case ["active", "discover" | "discovery"]:
+        case ["active", "discovery"]:
             return fmap(
                 discovery.render(repo, selected.id),
                 lambda package: _begin_payload(

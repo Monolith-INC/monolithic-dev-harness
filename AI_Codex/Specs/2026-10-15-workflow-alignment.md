@@ -338,8 +338,8 @@ sequenceDiagram
 When the Story already has its Tasks in the tracker and an approved Implementation Plan, the harness
 asks the user whether to run the BMad front half or go straight to delivery.
 
-- **Straight to delivery:** `start-ticket` links it, which meets the code-change requirements, and
-  the `implement-approved-item` route (setup → build → verify) runs.
+- **Straight to delivery:** the workflow moves to `execution`; `start-ticket` links the Story, which
+  meets the code-change requirements, and execution and verify run.
 - **Front half first:** if discovery, planning or hardening changes anything, the work items are
   updated first, as the toolkit does it: `amend-workitems` for an Epic or Feature tree (backup, one
   approved change set, the plan updated before its Tasks, hours recomputed), or `enrich-work-item`

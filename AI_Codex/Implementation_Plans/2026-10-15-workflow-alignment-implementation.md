@@ -37,8 +37,8 @@ reachable only through `harness workflow prepare --route`. Remove it.
 - Stages: delete `setup`, `discover`, `backlog`, `technical-plan`, `build` and `suspend`; the
   onboarding `verify` stage replaces the old one. Before deleting, move what the onboarding stages
   lack: `knowledge-acquire` and the read-only tracker operations from `discover` into `discovery`;
-  `sequence-verifiable-units` from `technical-plan` into `planning`; the `build` checks and
-  recovery text into `execution`. Suspension stays a harness control (`harness suspend`), not a
+  `sequence-verifiable-units` from `technical-plan` into `preparation`, where it writes the
+  verification document; the `build` checks and recovery text into `execution`. Suspension stays a harness control (`harness suspend`), not a
   stage.
 - `scripts/harness/workflow.py`: one `STAGES` tuple — `ideate`, `discovery`, `planning`,
   `hardening`, `refinement`, `preparation`, `execution`, `verify` — and the comment about keeping
@@ -51,8 +51,9 @@ reachable only through `harness workflow prepare --route`. Remove it.
     `generate-breakdown-work-items`, `generate-plain-language-documentation`; tracker operations
     `tracker_describe`, `tracker_search_work_items`, `tracker_get_work_item`,
     `tracker_list_children`, `tracker_create_work_item`, `tracker_publish_artifact`.
-  - `preparation`: drop `bmad-spec` and `generate-work-item`; it writes risk and verification
-    documents and the reading manifest.
+  - `preparation`: drop `bmad-spec` and `generate-work-item`; `sequence-verifiable-units` writes
+    the verification document, `generate-plain-language-documentation` the risk document, and the
+    harness the reading manifest.
   - `confirmation` stage removed; `onboarding` route updated.
   - `execution`: `start-ticket`, `write-spec`, `implement-story`, `tdd`, `check`.
   - Onboarding `verify`: `review`, `branch-and-pr`, `review-pr`, `resolve-ticket`,

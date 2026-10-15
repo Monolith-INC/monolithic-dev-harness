@@ -38,7 +38,7 @@ class SetupTests(unittest.TestCase):
             current = workflow.add_point(
                 workflow.start("Continue DAY-001 task counts", "en").value,
                 "Review the plan",
-                "discover",
+                "discovery",
                 pending="Plan review",
                 next_action="Present the saved plan",
             ).value
@@ -241,7 +241,7 @@ class SetupTests(unittest.TestCase):
             workflow.add_point(
                 workflow.start("DAY-001").value,
                 "Old blocker",
-                "discover",
+                "discovery",
                 pending="No first commit",
             ).value
         ).value

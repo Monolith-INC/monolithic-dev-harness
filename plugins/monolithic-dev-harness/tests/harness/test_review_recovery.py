@@ -117,7 +117,7 @@ def test_recovery_refuses_to_overwrite_unrelated_workflow_changes(context, monke
             review_decisions, "_project", lambda *_: err("fault", "interrupted")
         )
         assert isinstance(ask(repo, scope), Err)
-    changed = workflow.add_point(before, "Other progress", "build").value
+    changed = workflow.add_point(before, "Other progress", "execution").value
     state.write_json(workflow.path(repo, scope), asdict(changed))
     assert isinstance(workflow.load(repo, scope), Err)
     assert workflow.from_dict(state.read_json(workflow.path(repo, scope))) == Ok(

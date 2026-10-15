@@ -816,9 +816,9 @@ def workflow_command(args: argparse.Namespace) -> int:
             return print_result(
                 bind(
                     require(
-                        args.stage in {"discover", "discovery"},
+                        args.stage == "discovery",
                         "invalid_request",
-                        "runtime rendering supports the discover stage",
+                        "runtime rendering supports the discovery stage",
                     ),
                     lambda _: fmap(
                         discovery.render(repo, args.session_id),
@@ -844,6 +844,7 @@ def workflow_command(args: argparse.Namespace) -> int:
                         args.prepared_stage or "",
                         original_request=args.request or "",
                         available_operations=args.available,
+                        git_delivery=_git_delivery(repo),
                     ),
                     lambda package: json.dumps(
                         package, ensure_ascii=False, indent=2, sort_keys=True
@@ -947,3 +948,12 @@ def _selected_manifest(repo: Path) -> Result[Manifest]:
     return fmap(
         registry.selected(repo, settings.load(repo)), lambda active: active.manifest
     )
+
+
+def _git_delivery(repo: Path) -> bool:
+    """Whether the user chose Git-based delivery; a project without settings has not."""
+    match settings.load(repo):
+        case Ok(chosen):
+            return chosen.git_delivery
+        case _:
+            return False

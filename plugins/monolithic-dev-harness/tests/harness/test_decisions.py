@@ -95,14 +95,14 @@ def test_pending_gate_blocks_workflow_and_gateway_before_configuration(
     assert result.failure.code == "decision_pending"
 
 
-def test_implementation_confirmation_records_confirmation_stage_and_recovers(
+def test_implementation_confirmation_keeps_the_refinement_stage_and_recovers(
     tmp_path: Path,
 ) -> None:
     plan = tmp_path / "plan.md"
     plan.write_text("Reviewed implementation plan\n", encoding="utf-8")
     started = workflow.start("Build the reviewed plan", "en").value
-    preparation = workflow.add_point(started, "Bundle prepared", "preparation").value
-    assert isinstance(workflow.save(tmp_path, preparation), Ok)
+    refinement = workflow.add_point(started, "Plan saved", "refinement").value
+    assert isinstance(workflow.save(tmp_path, refinement), Ok)
 
     assert isinstance(
         review_decisions.begin(
@@ -119,14 +119,14 @@ def test_implementation_confirmation_records_confirmation_stage_and_recovers(
     )
 
     checkpoint = workflow.load(tmp_path).value
-    assert checkpoint.current.stage == "confirmation"
+    assert checkpoint.current.stage == "refinement"
     assert checkpoint.current.artifacts == (
         ("plan.md", workflow.file_digest(plan).value),
     )
 
     # Re-running recovery is idempotent and retains the truthful stage label.
     assert isinstance(review_decisions.recover(tmp_path), Ok)
-    assert workflow.load(tmp_path).value.current.stage == "confirmation"
+    assert workflow.load(tmp_path).value.current.stage == "refinement"
 
 
 def test_only_a_plain_status_query_passes_the_pending_gate(tmp_path: Path) -> None:
