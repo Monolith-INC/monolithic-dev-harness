@@ -78,41 +78,13 @@ contextual methods, Reshuffle, full-catalog browsing, agent recommendations and 
 reopen completed choices. Otherwise continue automatically to preparation; an optional extra
 review is never required to finish. Record accepted changes once and reuse them.
 
-Follow [the six-stage contract](../../references/six-stage-onboarding.md). In Preparation, in order:
-(a) assemble requirements, specification, risk findings, architecture/UX companions and verification;
-(b) refine the work into tracker items with the refinement skills in their six-stage draft mode:
-`generate-work-item` for the top item, `decompose-backlog` for an Epic or Feature, then
-`generate-breakdown-work-items` for every Story's Tasks, recording the batch in
-`tracker-drafts.json` ([tracker drafts](../../references/tracker-drafts.md)); the harness refuses an
-unrefined batch; (c) create a manifest draft covering all companions
-and tracker drafts; (d) write `{plan_file}` as the final implementation plan, resolving it only after
-the tracker breakdown is known; (e) update the manifest with the final plan digest. The final plan
-references the manifest path and all load-bearing companion/tracker artifacts. Do not start-ticket,
-inspect Git, or create a branch during preparation. If an existing plan is missing, recover it from
-real evidence or ask only for missing consequential input; never synthesize approval.
-
-Show the complete bundle before asking. Run `harness workflow show --artifact <implementation-plan>
---artifact <tracker-drafts.json> --artifact <manifest>` plus every reviewed companion, plan first, and
-put its output in your reply unchanged: tool output is hidden from the human, and the approval is
-refused until the reply carries the bundle. Add the recorded decisions, remaining limitations and the
-concrete tracker writes (`harness tracker publish` of the drafts) and execution scope. Then use
-`harness decision present --gate implementation-confirm` with the same `--artifact` files. Native
-controls first, then supported async/chat fallback on delivery failure.
-
-On Approve, re-read reviewed artifacts and validate digests; changed circumstances require
-consultation. Treat this as the one durable approval for the unchanged bundle and its named local
-execution actions. Record approval in workflow state; do not edit plan/manifest/decision artifacts,
-change their status, add tracker records, or ask the same confirmation again after approval. If the
-human requests a substantive revision or an external action was not included, consult only about
-that changed scope. The approval detail must name the actual next action and honor any user-set boundary
-(for example, an acceptance run that stops at execution entry). Close onboarding and hand the
-unchanged approved bundle to harness execution only when that is within the approved scope.
-On Revise, revisit only the affected stage. On Stop, preserve progress and pause immediately.
-No separate discovery, outline, body or spec reapproval is required for this same bundle.
-Merging and unrelated external actions remain independently context-bound.
+Follow [the six-stage contract](../../references/six-stage-onboarding.md). The hardened approach
+is the input to the Refinement stage, which runs the agile-backlog-toolkit skills against the
+selected tracker and approves each Story's implementation plan on its own. Do not write work items
+or an implementation plan here, and do not start-ticket, inspect Git, or create a branch. If the approach changes an existing work item, Refinement updates that item first.
 
 ## NEXT
 
-The harness owns execution after the final bundle confirmation. Do not follow upstream Build's
-implementation steps from this preparation workflow.
+Refinement follows; the harness owns execution after each Story's plan is approved. Do not follow
+upstream Build's implementation steps from this preparation workflow.
 {% endif %}

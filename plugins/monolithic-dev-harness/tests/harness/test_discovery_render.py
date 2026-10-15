@@ -98,7 +98,7 @@ def check_package(
     assert plan_step.index("planning-depth") < plan_step.index(
         "planning approach draft"
     )
-    assert "implementation-confirm" in plan_step
+    assert "Refinement" in plan_step and "implementation-confirm" not in plan_step
     assert shlex.split(package["context"]["status_command"])[-2:] == [
         "--session-id",
         selected.id,

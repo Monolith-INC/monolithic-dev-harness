@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import os
 import subprocess
 import tempfile
@@ -15,7 +14,7 @@ for path in (ROOT, SCRIPTS_DIR):
     if str(path) not in os.sys.path:
         os.sys.path.insert(0, str(path))
 
-from harness import settings, state, work_sessions, workflow
+from harness import local_artifacts, settings, state, work_sessions
 from integrations import registry
 from integrations.contracts import LogicalState, WorkItemKind
 from scripts import hook_runtime
@@ -45,36 +44,12 @@ class OptionalVcsExecutionContextTests(unittest.TestCase):
             ],
             check=True,
         )
-        write_settings(self.root)
+        write_settings(self.root, artifacts_path="Vault")
         state.set_tracking_mode(self.root, "enforced")
         self.scope = work_sessions.start(
             self.root, "Implement the approved plan"
         ).value.id
-        self.plan = self.root / "docs" / "plan.md"
-        self.plan.parent.mkdir(parents=True)
-        self.plan.write_text("approved plan\n", encoding="utf-8")
-        self.digest = hashlib.sha256(self.plan.read_bytes()).hexdigest()
-        self._authorize()
-
-    def _authorize(self) -> None:
-        current = workflow.start("Implement the approved plan").value
-        execution = workflow.add_point(
-            current,
-            "Execution authorized",
-            "execution",
-            artifacts=(("docs/plan.md", self.digest),),
-        ).value
-        workflow.save(self.root, execution, self.scope)
-        state.write_json(
-            work_sessions.root(self.root) / self.scope / "decision.json",
-            {
-                "status": "answered",
-                "approval": True,
-                "gate": "implementation-confirm",
-                "answer": "Approve",
-                "artifacts": [["docs/plan.md", self.digest]],
-            },
-        )
+        self.plan = self.root / "Vault" / "Implementation_Plans" / "plan.md"
 
     def _edit_decision(self):
         return hook_runtime.evaluate_event(
@@ -89,32 +64,41 @@ class OptionalVcsExecutionContextTests(unittest.TestCase):
             work_session_id=self.scope,
         )
 
-    def _publish_story(self) -> None:
+    def _start_story(self) -> None:
+        """A Story in progress with a Task, linked, whose approved plan is pinned."""
         ops = registry.open_selected(self.root, settings.load(self.root)).value
         story = ops.create_work_item(WorkItemKind.USER_STORY, "Story", "", "").value
         ops.transition_work_item(story.key, LogicalState.IN_PROGRESS)
         ops.create_work_item(WorkItemKind.TASK, "Task", "", story.key)
-        state.write_json(
-            work_sessions.root(self.root) / self.scope / "tracker-published.json",
-            {"keys": {"S1": story.key}},
-        )
         work_sessions.link(self.root, self.scope, story.key)
+        self.plan.parent.mkdir(parents=True)
+        self.plan.write_text(
+            f'---\ntype: implementation-plan\nstory: "{story.key}"\nstatus: approved\n'
+            "---\n\n# Plan\n",
+            encoding="utf-8",
+        )
+        state.open_approval(self.root, "HB-Q0001", 20)
+        state.pin_notes(
+            self.root, "HB-Q0001", local_artifacts.approved_notes(self.root)
+        )
 
-    def test_approved_unchanged_bundle_allows_local_edit_on_main(self) -> None:
-        self._publish_story()
+    def test_an_approved_unchanged_plan_allows_local_edit_on_main(self) -> None:
+        self._start_story()
         self.assertFalse(self._edit_decision().is_denied())
 
     def test_the_branch_alone_never_allows_a_local_edit(self) -> None:
         self.assertTrue(self._edit_decision().is_denied())
 
-    def test_changed_reviewed_artifact_does_not_authorize_local_edit(self) -> None:
-        self._publish_story()
-        self.plan.write_text("changed after approval\n", encoding="utf-8")
+    def test_a_plan_changed_after_approval_does_not_authorize_local_edit(self) -> None:
+        self._start_story()
+        self.plan.write_text(
+            self.plan.read_text(encoding="utf-8") + "changed\n", encoding="utf-8"
+        )
         self.assertTrue(self._edit_decision().is_denied())
 
-    def test_with_git_delivery_a_bundle_approval_does_not_commit_on_main(self) -> None:
-        write_settings(self.root, git={"delivery": True})
-        self._publish_story()
+    def test_with_git_delivery_a_plan_approval_does_not_commit_on_main(self) -> None:
+        write_settings(self.root, artifacts_path="Vault", git={"delivery": True})
+        self._start_story()
         event = CanonicalToolEvent(
             client="claude",
             tool_name="Bash",

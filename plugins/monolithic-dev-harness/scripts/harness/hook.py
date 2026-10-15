@@ -799,9 +799,9 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             ),
         )
         return 0
-    match _unseen_bundle(repo, host, payload, pending if preparing else None):
+    match _unseen_plan(repo, host, payload, pending if preparing else None):
         case str() as reason:
-            _emit_decision(host, rules.Decision.deny("bundle-not-shown", reason))
+            _emit_decision(host, rules.Decision.deny("plan-not-shown", reason))
             return 0
         case None:
             pass
@@ -906,23 +906,17 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     return 0
 
 
-def _unseen_bundle(
+def _unseen_plan(
     repo: Path, host: str, payload: dict[str, Any], pending: decisions.Pending | None
 ) -> str | None:
-    """On Claude, the final approval waits until the bundle is in the agent's own reply."""
+    """On Claude, a Story's plan approval waits until the plan is in the agent's own reply."""
     match host, pending, payload.get("transcript_path"):
         case "claude", decisions.Pending(scope=scope), str() as transcript if (
             decisions.record(repo, scope) or {}
         ).get("gate") == "implementation-confirm":
-            from harness import bundle, settings
-            from integrations import registry
+            from harness import plan_review
 
-            result = bind(
-                registry.selected(repo, settings.load(repo)),
-                lambda active: bundle.shown_in_chat(
-                    repo, scope, Path(transcript), active.manifest
-                ),
-            )
+            result = plan_review.shown_in_chat(repo, scope, Path(transcript))
             return result.failure.message if isinstance(result, Err) else None
         case _:
             return None

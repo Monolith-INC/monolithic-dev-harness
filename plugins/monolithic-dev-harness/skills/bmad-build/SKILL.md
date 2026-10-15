@@ -19,10 +19,10 @@ Harness boundaries:
 - For a tracker item, read it with `tracker_get_work_item` (and its parent with
   `tracker_list_children` when relevant) and use that record as the intent. Do not move the item,
   create a branch, start a session, or publish anything from this stage.
-- Follow the six-stage onboarding contract: discovery, pre-draft depth selection, planning,
-  hardening, preparation and final bundle confirmation. Persist artifacts and decisions throughout.
-  On the one final approval, hand the complete implementation plan and manifest to harness
-  execution. This preparation skill never implements application code itself.
+- Follow the onboarding contract: discovery, pre-draft depth selection, planning and hardening.
+  Persist artifacts and decisions throughout, then hand the hardened approach to Refinement, which
+  writes the work items and approves each Story's plan. This skill never implements application
+  code itself.
 - `harness bootstrap` prepares BMad's runtime (`_bmad/`) during session-free onboarding.
   Rendering requires verified setup; it never installs or fetches BMad or repairs project settings.
 - Planning needs no Git metadata, commit, branch, or implementation session.

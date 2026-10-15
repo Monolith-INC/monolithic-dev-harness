@@ -11,23 +11,18 @@ The execution half of the harness. Inputs come from earlier stages and are never
 | --- | --- |
 | Story, acceptance criteria, points | `decompose-backlog` (backlog stage, gate G1) |
 | Tasks in order, plus Staging / Review / Breakdown | `generate-breakdown-work-items` |
-| Technical specification (*how*) | Reviewed preparation bundle, or legacy `write-spec` |
+| Implementation plan | `generate-breakdown-work-items`, approved with `implementation-confirm` |
+| Technical specification (*how*) | `write-spec`, for the kinds the Story still lacks |
 | Repository rules and commands | `AGENTS.md` routing, `.harness/settings.json` |
 
-## Approved-bundle handoff
+## Approved-plan handoff
 
-For six-stage onboarding, read the implementation plan and its manifest, then only the companion
-artifacts required for this Story. Verify the recorded `implementation-confirm` approval and the
-reviewed content digests. That approval replaces separate G1/G2/spec approvals for this unchanged
-bundle. Consume the existing technical specification; do not run `write-spec` or ask `approve-spec`
-again. If a required contract is missing or circumstances changed materially, explain the gap and
-consult the user about that specific change. Never invent or widen authorization.
-Create the approved work items first with `harness tracker publish --drafts <tracker-drafts.json>
---session-id <id> --repo <project>`; it creates each draft once and prints the keys to start.
-
-Only legacy runs without an approved six-stage bundle follow the separate `write-spec` / G2 path.
-Preserve the same authorization through start-ticket and tracker transitions: perform only actions
-stated in the bundle, reusing its approval. Unrelated actions and later merges need their own context.
+Read the Story's approved implementation plan and the reading manifest, then only the documents this
+Story needs. The plan was approved on its own with `implementation-confirm`; the harness refuses
+code changes if it changed since. Every tracker write (moving the Story or a Task) is asked with its
+own `move-item` approval. If a required contract is missing or circumstances changed materially,
+explain the gap and consult the user about that specific change. Never invent or widen
+authorization.
 
 ## 0. Start
 
@@ -36,7 +31,7 @@ stated in the bundle, reusing its approval. Unrelated actions and later merges n
    `adopt-existing-implementation`; do not manufacture TDD history or reconstruct commits by swapping
    partial file versions through the working tree.
 1. `start-ticket` on the Story: it confirms the tracker item, moves it to in progress (a tracker write:
-   reuse the approved bundle when this transition is stated; otherwise ask the `move-item` gate), and returns the spec plan.
+   ask the `move-item` gate), and returns the spec plan.
 2. Use `branch-and-pr` → *Branch* section only when the user selected branch-based delivery. Otherwise continue in the existing working copy; the approved project work-session is the work context.
 3. Before the first code change, run `harness workflow requirements --repo <project>`. Continue only
    when it reports `ready`; otherwise do the step it names for the first missing requirement. The
@@ -63,8 +58,8 @@ prerequisite for local implementation.
    and guarded-path evidence are completion requirements: the Story cannot be marked done without
    them (`harness workflow requirements --gate completion`). Fix the cause; never work around a
    hook.
-7. **Transition the Task** to done in the tracker. The approved bundle (or legacy `approve-spec` approval) covers its stated transitions while the
-   spec is unchanged; if the hook reports the spec changed, show what changed and ask again.
+7. **Transition the Task** to done in the tracker, with its `move-item` approval. If the hook
+   reports the plan or spec changed, show what changed and ask again.
 
 ## 2. Story done
 

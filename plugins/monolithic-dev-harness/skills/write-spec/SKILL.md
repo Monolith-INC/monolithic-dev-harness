@@ -14,15 +14,6 @@ Pass prior critic history explicitly between attempts. The orchestrator keeps re
 
 The result identifies artifact scope, required and missing kinds, source hints, the template, critiques, and the next action.
 
-## Six-stage preparation
-
-When used during six-stage preparation, draft and review the technical specification locally.
-Tracker pause does not prevent local preparation. Include the accepted draft in the reading
-manifest and final implementation-confirm bundle. Do not publish or ask G2 separately: the single
-final confirmation covers the unchanged specification and only the external writes it states.
-During execution consume that approved specification; do not regenerate it or repeat its approval.
-The separate publication/G2 sequence below applies only to legacy standalone runs.
-
 ## Legacy harness handoff
 
 In a harness run, the backlog stage has already produced the *what*: the Story, its acceptance

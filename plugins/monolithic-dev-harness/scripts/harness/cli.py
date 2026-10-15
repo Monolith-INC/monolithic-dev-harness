@@ -10,7 +10,6 @@ harness work-session route --request <text> | start --request <text> | list | se
 harness workflow start | render | checkpoint | list | status | requirements | routes | prepare | back | pause | resume | cancel | complete --session-id <id>
 harness preference show | language <en|pt-br>
 harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...] | tree
-harness tracker publish --drafts <tracker-drafts.json> --session-id <id> [--repo <dir>]
 harness adoption assess | plan | status | materialize ...
 harness knowledge <operation> ...
 """
@@ -42,7 +41,6 @@ from core.result import (  # noqa: E402
 from harness import (  # noqa: E402
     adoption,
     bmad,
-    bundle,
     cli_workflow,  # noqa: E402
     gitstate,
     knowledge,
@@ -457,22 +455,6 @@ def tracker_command(args: argparse.Namespace) -> int:
             )
         case "preflight":
             return _tracker_preflight(repo)
-        case "publish":
-            return print_result(
-                bind(
-                    registry.selected(repo, settings.load(repo)),
-                    lambda active: bind(
-                        registry.open_selected(repo, settings.load(repo)),
-                        lambda ops: bundle.publish(
-                            repo,
-                            args.session_id,
-                            args.drafts or "",
-                            active.manifest,
-                            ops,
-                        ),
-                    ),
-                )
-            )
         case "tree":
             return print_result(
                 bind(
@@ -644,7 +626,7 @@ def main(argv: list[str] | None = None) -> int:
         help="list or inspect trackers, check readiness, stage a new one, or print the work-item tree",
     )
     tracker_parser.add_argument(
-        "operation", choices=("list", "show", "stage", "preflight", "tree", "publish")
+        "operation", choices=("list", "show", "stage", "preflight", "tree")
     )
     tracker_parser.add_argument(
         "target", nargs="?", help="a tracker name (show) or folder (stage)"
@@ -655,12 +637,6 @@ def main(argv: list[str] | None = None) -> int:
         action="append",
         metavar="KEY=VALUE",
         help="a value the tracker's settings need (stage only); repeat for each",
-    )
-    tracker_parser.add_argument(
-        "--drafts", help="the approved tracker-drafts.json to create (publish only)"
-    )
-    tracker_parser.add_argument(
-        "--session-id", help="the work session whose bundle was approved (publish only)"
     )
     adoption_parser = sub.add_parser(
         "adoption",

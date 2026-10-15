@@ -6,23 +6,6 @@ license: MIT
 
 # Generate Breakdown Work Items
 
-## Six-stage preparation mode
-
-When invoked during six-stage preparation, draft the atomic Tasks of every Story and Bug in the batch, each
-aligned to its acceptance criteria, as local drafts only. Do not create tracker items or ask separate
-approval gates: the `implementation-confirm` bundle replaces them. Record the result in the work's
-`tracker-drafts.json` as described in [tracker drafts](../../references/tracker-drafts.md); the
-harness validates that file and publishes it only after the bundle is approved. The rules below
-for creating items apply only to legacy standalone runs.
-
-Read `../../references/workflow-storyboard.md` and the selected
-[tracker contract](../../references/tracker-contract.md). Use the configured artifacts path and the
-user's effective harness language. The active tracker, not an Azure-specific intake choice, defines
-where published Tasks live. The local Implementation Plan is always saved before Tasks are created.
-
-References in this skill: `references/plan-generation.md`, `references/atomic-tasks.md`, and
-`references/fan-out.md`. Use `../../references/azure-mechanics.md` only for an Azure-backed Story.
-
 ## 1. Resolve and inspect
 
 Accept a Story id, URL, or local path; ask only when none was supplied. Call `tracker_describe` to

@@ -12,12 +12,12 @@ from pathlib import Path
 from core.result import Err, Failure, Ok, Result, attempt, bind, err, fmap, require
 from harness import (
     artifact_manifest,
-    bundle,
     decisions,
     discovery,
     gates,
     harness_controls,
     onboarding,
+    plan_review,
     preferences,
     prepared_workflows,
     questions,
@@ -33,7 +33,6 @@ from harness import (
 from harness.cli_common import pairs, print_result, resolve_repo
 from host_adapters.interactions import present
 from integrations import registry
-from integrations.contracts import Manifest
 
 COMMANDS = (
     "plan",
@@ -393,12 +392,16 @@ def decision_command(args: argparse.Namespace) -> int:
                     return 2
                 case Ok(spec):
                     pass
-            # The final approval binds a refined bundle the human has actually been shown.
+            # A Story's plan is approved only once the human has been shown it as it reads now.
             match (
                 bind(
-                    _selected_manifest(repo),
-                    lambda manifest: bundle.ready(
-                        repo, args.session_id, list(args.artifact or ()), manifest
+                    registry.open_selected(repo, settings.load(repo)),
+                    lambda ops: plan_review.ready(
+                        repo,
+                        args.session_id,
+                        list(args.artifact or ()),
+                        dict(pairs(args.value)).get("story", ""),
+                        ops,
                     ),
                 )
                 if spec.gate == "implementation-confirm"
@@ -799,12 +802,7 @@ def workflow_command(args: argparse.Namespace) -> int:
     match args.operation:
         case "show":
             return print_result(
-                bind(
-                    _selected_manifest(repo),
-                    lambda manifest: bundle.show(
-                        repo, args.session_id, list(args.artifact or ()), manifest
-                    ),
-                )
+                plan_review.show(repo, args.session_id, list(args.artifact or ()))
             )
         case "manifest":
             return print_result(
@@ -942,12 +940,6 @@ def workflow_command(args: argparse.Namespace) -> int:
             )
         case _:
             return 2
-
-
-def _selected_manifest(repo: Path) -> Result[Manifest]:
-    return fmap(
-        registry.selected(repo, settings.load(repo)), lambda active: active.manifest
-    )
 
 
 def _git_delivery(repo: Path) -> bool:

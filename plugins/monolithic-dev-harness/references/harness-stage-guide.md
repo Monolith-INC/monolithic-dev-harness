@@ -1,35 +1,31 @@
 # Harness
 
-The authoritative preparation sequence is [six-stage onboarding](six-stage-onboarding.md):
-Discovery → Planning → Hardening → Preparation → Confirmation → Execution. The legacy stage
-names below remain supported for existing runs; they do not add preparation approval gates.
-Use the planning-depth choice after discovery and before drafting, then one final bundle
-confirmation. Versioning is detected only at execution entry and never required for preparation.
+The authoritative sequence is [onboarding](six-stage-onboarding.md): Discovery → Planning →
+Hardening → Refinement → Preparation → Execution → Verify. Use the planning-depth choice after
+discovery and before drafting. Versioning is detected only at execution entry and never required
+for preparation.
 
 Follow [the workflow storyboard](workflow-storyboard.md) for stage entry and exit,
 review surfaces, and Back/Pause/Resume/Cancel/Complete behavior. This skill supplies the
 stage-specific details. Each stage consumes the previous stage's output; none re-invents it. Hooks
 enforce the rules that must never depend on the model remembering them.
 
-The operational flow is Discovery → Planning → Hardening → Preparation → Confirmation →
-Execution. During Preparation, right after Hardening, refine the work with `generate-work-item`,
-`decompose-backlog` and `generate-breakdown-work-items` in draft mode into `tracker-drafts.json`
-([tracker drafts](tracker-drafts.md)) before the manifest and final implementation plan. Show the
-bundle with `harness workflow show` before `implementation-confirm`; publish the approved drafts with
-`harness tracker publish` at execution. Git, branches and commits
-are optional execution/delivery tools; they never gate local work.
+Refinement, right after Hardening, runs the agile-backlog-toolkit skills against the selected
+tracker: items are written in their type's template, created and read back, and each Story's
+implementation plan is shown and approved on its own (`implementation-confirm`) before its Tasks are
+proposed and approved. Nothing is approved in bulk. Git, branches and commits are optional
+execution and delivery tools; they never gate local work.
 
 ```text
 Request / ticket / idea
   └─ Discovery: knowledge catalog/find/fetch, request analysis, focused source investigation
       └─ Planning: select depth and methods; compare approaches; record decisions
           └─ Hardening: selected reviewers; reconcile requirements; triage findings
-              └─ Preparation: requirements/spec/risk/verification → refine and draft tracker items
-                  and child Tasks → validate batch → manifest → final implementation plan
-              └─ Confirmation: review complete bundle; one approval tied to the unchanged content
-                  └─ Execution: local implementation; Git, branches and commits are optional
-                      └─ Delivery: tracker publication, push, PR, deploy and merge are separately
-                         authorized actions when requested
+              └─ Refinement: items in the tracker, each approved; per Story: plan approved, then Tasks
+                  └─ Preparation: risk and verification documents, each approved; reading manifest
+                      └─ Execution: per Story, local implementation; Git, branches and commits optional
+                          └─ Verify: review, resolution, Feature close; push, PR and merge only with
+                             Git-based delivery
 ```
 
 A change of direction at any stage (a new constraint, a failed assumption, a rescoped goal) goes
@@ -175,45 +171,12 @@ The choice is routing, not approval: it never opens an approval window. `Investi
 Continue directly when the user already chose a starting point, named an existing task, directly
 invoked a planning skill, or explicitly asked to create or modify a work item.
 
-## Approved six-stage execution
+## Execution from an approved plan
 
-After `implementation-confirm`, `implement-story` consumes the reviewed implementation plan,
-manifest and technical specification without reopening outline, body or G2 approvals. Reuse
-that contextual authorization for exactly the tracker actions stated in the bundle. Recheck
-content digests; consult the user only for changed circumstances or genuinely missing contracts.
-Detect optional version control at execution; absence does not prevent local implementation.
-
-The following separate approval sequence applies only to legacy runs without this approved bundle.
-Do not mix it into the six-stage handoff.
-
-## Legacy preparation only: Backlog
-
-1. **Top ancestor.** `generate-work-item` drafts the highest item in the tree (usually an Epic) from
-   the product spec, user's idea, or an existing item. When a product spec exists, preserve its
-   `CAP-N` identifiers and companions rather than re-inventing the intent. The **Descrição Original** section keeps the source text
-   verbatim. The top ancestor can be a Feature or a User Story: neither needs a parent, so do not
-   ask for or invent one. When the source is an item that must stay intact (for example, the
-   original of a copied item), create a new item and name the original in plain text (id and
-   title, for example `Idea 4007`). Never link to it, and never write `#4007` or its URL in a
-   description or comment: Azure DevOps turns a mention into a link, and links are two-way. Rule
-   `protected-items` blocks protected ids in id fields and in text.
-2. **Enrich** it (`enrich-work-item`) into the team format.
-3. **Decompose** (`decompose-backlog`, tree mode for an Epic): Features, then Stories with points,
-   one outline at GATE 1 and one body batch at GATE 2. Points go into the Azure points field.
-4. **Break down** each Story that will be built next (`generate-breakdown-work-items`): atomic Tasks
-   aligned to the acceptance criteria, plus Staging, Review, and a done Breakdown Task.
-5. `validate-artifact` on anything the user edited by hand. Check the selected tracker's hierarchy,
-   labels, and required values before publishing the batch. In Linear, confirm Story and Task
-   labels exist before the first item is created. Explain where every Task will be visible.
-
-## Legacy preparation only: Technical plan
-
-`start-ticket` on the Story (moves it to in progress), then `write-spec`. The spec takes the
-Story, its acceptance criteria, its covered `CAP-N` values, its Tasks, and any adopted UX and
-architecture companions as input. It decides the Story-local *how*: affected modules, contracts,
-test strategy, and implementation details. It cannot override an upstream `AD-N` or product
-constraint silently. Present its exact revision through the best available review surface for
-**G2** and stop until the user approves. A path or short summary alone is insufficient.
+`implement-story` consumes the Story's approved implementation plan, the reading manifest and the
+documents this Story needs. Each tracker write is asked with its own approval. Recheck content
+digests; consult the user only for changed circumstances or genuinely missing contracts. Detect
+optional version control at execution; absence does not prevent local implementation.
 
 ## Stage 3: Build
 

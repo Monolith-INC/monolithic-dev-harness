@@ -7,42 +7,6 @@ license: MIT
 
 # Decompose Backlog
 
-## Six-stage preparation mode
-
-When invoked during six-stage preparation, the outline and enriched bodies are local drafts.
-Continue through DECOMPOSE, DRAFT, ENRICH and local AUDIT without separate GATE 1/2 approvals.
-Include the drafts and hierarchy/coverage report in the final manifest and implementation-confirm
-bundle. Defer CREATE until that bundle is approved for those concrete tracker writes. Reuse that
-approval while its contents and target remain unchanged. The gates and publication rules below
-apply only to legacy standalone runs; they never prohibit saving preparation drafts.
-Record the outline in the work's `tracker-drafts.json` as described in
-[tracker drafts](../../references/tracker-drafts.md); CREATE is `harness tracker publish` after approval.
-
-
-Conductor for turning a parent work item into its child tree in Azure DevOps: Feature → Stories
-(*story mode*), or Epic → Features → Stories (*tree mode*). Load the reference files
-as each phase needs them — they carry the self-contained rules so this file stays a score, not a
-textbook.
-
-References (in `../../references/`):
-
-- `decomposition-rules.md` — hierarchy, Feature sizing (Epic → Feature), Story sizing (1 Story = 1 sprint = 1 PR), story-point heuristic, DoR, parent-type branch.
-- `ticket-structure.md` — draft format + draft file constraints (frontmatter, filename regex).
-- `azure-mechanics.md` — create/link MCP calls + the two linking gotchas + rendering rules.
-- `audit-checklist.md` — fidelity / coverage / DoR postflight.
-
-Shape contracts and sub-pass notes:
-
-- `../../common/templates/canonical-feature.md` — **read-only shape contract** for Feature drafts in
-  tree mode (Objetivo, Escopo, Critérios de Sucesso, Áreas/Módulos, Descrição Original).
-- `../../common/templates/canonical-user-story.md` — **read-only shape contract** for enriched Story drafts (seven
-  emoji sections per `ticket-structure.md`, pt-BR labels). Do not edit; validate every draft against
-  this template when `language` is `pt-BR`.
-- `../../common/contracts/decompose-backlog/canonical-user-story.en.md` — same shape contract with English section labels. Use when
-  `language` is `en`.
-- `../generate-plain-language-documentation/references/integration-notes.md` — prose polish sub-pass
-  in DRAFT and ENRICH phases.
-
 ## Input
 
 A parent work item **id** (Epic or Feature). Optional: target iteration, story-point ceiling override,

@@ -1,4 +1,4 @@
-"""Regression checks for deterministic discovery routing and six-stage artifact order."""
+"""Discovery reads knowledge before the repository; each Story's plan is approved before its Tasks."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ ROOT = Path(__file__).resolve().parents[5]
 PLUGIN = ROOT / "plugins" / "monolithic-dev-harness"
 
 
-class KnowledgeAndBundleOrderTests(unittest.TestCase):
+class KnowledgeAndPlanOrderTests(unittest.TestCase):
     def test_discovery_routes_catalog_find_fetch_before_repository_reads(self) -> None:
         config = json.loads((PLUGIN / "config/prepared-workflows.json").read_text())
         discovery = config["stages"]["discovery"]
@@ -27,29 +27,25 @@ class KnowledgeAndBundleOrderTests(unittest.TestCase):
         self.assertIn("before broad project reads", checks)
         self.assertIn("never blocks discovery", checks)
 
-    def test_preparation_contract_places_refined_tracker_drafts_before_final_plan(
-        self,
-    ) -> None:
+    def test_refinement_approves_each_story_plan_before_its_tasks(self) -> None:
         contract = (PLUGIN / "references/six-stage-onboarding.md").read_text()
-        preparation = contract.split("## Preparation", 1)[1].split(
-            "## Confirmation", 1
-        )[0]
+        refinement = contract.split("## Refinement", 1)[1].split("## Preparation", 1)[0]
         self.assertLess(
-            preparation.index("tracker-drafts.json"),
-            preparation.index("write the implementation plan last"),
+            refinement.index("implementation-confirm"),
+            refinement.index("propose the Story's Tasks"),
         )
-        self.assertLess(
-            preparation.index("tracker-drafts.json"), preparation.index("manifest over")
-        )
+        self.assertIn("Nothing is approved in bulk", refinement)
+        self.assertNotIn("tracker-drafts", contract)
+        self.assertNotIn("tracker publish", contract)
 
-    def test_bmad_preparation_preserves_final_plan_order_and_single_confirmation(
-        self,
-    ) -> None:
-        step = (PLUGIN / "skills/bmad-build/step-02-plan.md").read_text()
+    def test_bmad_planning_hands_the_hardened_approach_to_refinement(self) -> None:
+        step = " ".join(
+            (PLUGIN / "skills/bmad-build/step-02-plan.md").read_text().split()
+        )
         self.assertIn("planning approach draft", step)
-        self.assertIn("write `{plan_file}` as the final implementation plan", step)
-        self.assertIn("do not edit plan/manifest/decision artifacts", step)
-        self.assertIn("create a branch during preparation", step.lower())
+        self.assertIn("input to the Refinement stage", step)
+        self.assertIn("do not start-ticket, inspect Git, or create a branch", step)
+        self.assertNotIn("implementation-confirm", step)
 
 
 if __name__ == "__main__":

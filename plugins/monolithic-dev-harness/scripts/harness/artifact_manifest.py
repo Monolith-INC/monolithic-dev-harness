@@ -1,4 +1,4 @@
-"""A compact reading map for the prepared bundle; file reads are isolated here."""
+"""A compact reading map for the prepared documents; file reads are isolated here."""
 
 from __future__ import annotations
 

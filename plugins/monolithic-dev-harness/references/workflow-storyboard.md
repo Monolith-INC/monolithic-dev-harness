@@ -17,9 +17,10 @@ remain readable for saved runs, but do not introduce additional approval checkpo
 | Discovery | Request/ticket analysis, relevant code, constraints, evidence and Code Map | Enough evidence to recommend planning depth |
 | Planning | Light/Standard/Hardcore choice before drafting; contextual methods, full catalog or recommendations | Drafted approach and recorded choices |
 | Hardening | Selected reviewers, requirement reconciliation, findings triage | Consequential blockers settled; remaining risks explicit |
-| Preparation | Requirements/spec/risk/verification, refined tracker drafts and child Tasks, validated batch, manifest, then implementation plan last | Complete reviewable bundle |
-| Confirmation | Native review of bundle, recorded decisions and concrete actions | One context-bound approval, revision or pause |
-| Execution | Detect versioning automatically, implement, test and review | Verified work and contextual delivery decisions |
+| Refinement | Items written in their type's template, created and read back; per Story: plan shown and approved, then Tasks approved and created | Every Story in scope has an approved plan and Tasks |
+| Preparation | Risk and verification documents, each approved; reading manifest | Documents approved and saved |
+| Execution | Per Story: start it, write missing technical specs, implement Task by Task with tests and checks | Changed code with passing checks |
+| Verify | Review, resolution report, Feature close; push and pull request only with Git-based delivery | Story done; Feature closed when its Stories are |
 
 Save evidence during every stage. Preparation assembles it rather than delaying persistence.
 No repository versioning rule applies before execution. No language preference stops work.
@@ -27,7 +28,7 @@ Pause/reset/drop controls preserve evidence; suspension disables every harness v
 
 ## After setup
 
-Onboarding is the optional discovery-through-confirmation preparation workflow. The user may skip, dismiss or restart it,
+Onboarding is the optional discovery-through-verify workflow. The user may skip, dismiss or restart it,
 or use `harness mode free` for skills and guidance without a session. Language uses a captured
 choice or saved preference, else English; no confirmation is required. These controls preserve
 structured work and strict action governance. The routing below applies when guided work is wanted.

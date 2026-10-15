@@ -5,8 +5,6 @@ No Git anywhere: the project is a plain folder, and the local tracker holds the 
 
 from __future__ import annotations
 
-import hashlib
-import json
 import sys
 import tempfile
 import unittest
@@ -205,60 +203,6 @@ class TestRequirements(Project):
     def test_skipped_tracking_releases_the_gate(self) -> None:
         state.set_tracking_mode(self.root, "skipped")
         self.assertFalse(self.edit().is_denied())
-
-
-class TestBundleApproval(Project):
-    """The six-stage confirmation covers the work items its approved bundle names."""
-
-    def approve_bundle(self, story_ref: str = "STORY-0001") -> Path:
-        folder = work_sessions.root(self.root) / self.session
-        plan = self.root / "docs" / "plan.md"
-        drafts = self.root / "docs" / "tracker-drafts.json"
-        plan.parent.mkdir(parents=True)
-        plan.write_text("the plan\n", encoding="utf-8")
-        drafts.write_text(json.dumps({"drafts": []}), encoding="utf-8")
-        digest = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()  # noqa: E731
-        state.write_json(
-            folder / "decision.json",
-            {
-                "status": "answered",
-                "approval": True,
-                "gate": "implementation-confirm",
-                "answer": "Approve",
-                "artifacts": [
-                    ["docs/plan.md", digest(plan)],
-                    ["docs/tracker-drafts.json", digest(drafts)],
-                ],
-            },
-        )
-        state.write_json(folder / "tracker-published.json", {"keys": {"S1": story_ref}})
-        return plan
-
-    def test_an_approved_unchanged_bundle_that_published_the_story_counts(
-        self,
-    ) -> None:
-        self.link()
-        self.approve_bundle()
-        self.assertEqual(self.missing(), [])
-
-    def test_a_bundle_that_did_not_publish_this_story_does_not_count(self) -> None:
-        self.link()
-        self.approve_bundle("STORY-0042")
-        self.assertEqual(self.missing(), ["plan_approved"])
-
-    def test_a_bundle_changed_after_approval_does_not_count(self) -> None:
-        self.link()
-        self.approve_bundle().write_text("changed\n", encoding="utf-8")
-        self.assertEqual(self.missing(), ["plan_approved"])
-
-    def test_a_later_revise_answer_withdraws_the_approval(self) -> None:
-        self.link()
-        self.approve_bundle()
-        folder = work_sessions.root(self.root) / self.session
-        record = state.read_json(folder / "decision.json")
-        state.write_json(folder / "decision-history.json", {"answers": [record]})
-        state.write_json(folder / "decision.json", {**record, "answer": "Revise"})
-        self.assertEqual(self.missing(), ["plan_approved"])
 
 
 class TestCatalog(unittest.TestCase):

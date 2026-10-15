@@ -6,8 +6,9 @@ description: Default entry point when the user asks to add, build, change, or fi
 # Harness
 
 Follow [six-stage onboarding](../../references/six-stage-onboarding.md): Discovery → Planning →
-Hardening → Preparation → Confirmation → Execution. Choose depth after discovery and before
-drafting. Present one final bundle confirmation; reuse its unchanged decisions and approvals.
+Hardening → Refinement → Preparation → Execution → Verify. Choose depth after discovery and before
+drafting. Approve each work item, Story plan and document when it is created; nothing is approved in
+bulk.
 No versioning prerequisite applies before execution.
 
 Use the bundled `bin/harness` when `harness` is unavailable on PATH.

@@ -19,8 +19,8 @@ versioned delivery, use branches stacked under one Feature branch:
 Before using the tracker, call `workflow_tracking_status`. If tracking is paused, report that this
 skill is unavailable until `/resume-tracker`.
 
-If the approved bundle calls for local implementation without tracker/SCM delivery, execute its
-Stories in the stated dependency order in the current working copy. Do not create branches, commits,
+Without Git-based delivery, implement the Feature's Stories, each from its approved plan, in their
+dependency order in the current working copy. Do not create branches, commits,
 or PRs as a prerequisite.
 
 ## Procedure

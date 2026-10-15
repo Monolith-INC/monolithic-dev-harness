@@ -70,6 +70,12 @@ def approved_kinds_for(project_root: Path, key: str) -> set[str]:
     return kinds
 
 
+def frontmatter(path: Path) -> dict[str, Any]:
+    """A note's frontmatter; empty when the note cannot be read."""
+    note = _read_note(path)
+    return note[0] if note is not None else {}
+
+
 def _markdown_files(root: Path | None) -> Iterator[Path]:
     if root is None or not root.is_dir():
         return

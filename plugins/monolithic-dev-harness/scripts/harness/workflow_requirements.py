@@ -21,7 +21,6 @@ from typing import Any
 
 from core.result import Err, Failure, Ok, Result, bind, fmap
 from harness import (
-    bundle,
     code_content,
     globs,
     local_artifacts,
@@ -368,9 +367,7 @@ def _tasks(context: _Context) -> str | None:
 
 
 def _plan(context: _Context) -> str | None:
-    if _approved_plan_note(context.repo, context.key) or bundle.covers(
-        context.repo, context.session.id, context.key
-    ):
+    if _approved_plan_note(context.repo, context.key):
         return None
     return (
         None
