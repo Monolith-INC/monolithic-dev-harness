@@ -1,6 +1,5 @@
-# Six-stage onboarding contract
+# Onboarding contract
 
-This contract supersedes the old Discover → Backlog → Tech Plan preparation sequence.
 Discovery and communication require neither Git nor an implementation session. Free mode allows
 direct skill use. The user can pause, resume, restart, reset or drop preparation at any time;
 archive prior progress before replacing it, preserve decisions and external-write receipts,

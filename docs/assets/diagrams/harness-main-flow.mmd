@@ -1,16 +1,20 @@
 flowchart TD
-  D[Discovery: request, code and evidence] --> P[Planning: choose depth before drafting]
+  I[Idea route: shape the idea, product spec] -->|Continue| D
+  I -->|Stop here| X[Keep the brief or spec]
+  D[Discovery: request, code and evidence] --> RS{Entry item already refined?}
+  RS -->|Rework it, or a draft| P[Planning: choose depth before drafting]
+  RS -->|Use it as it is| R
   P --> M[Contextual shortlist / full catalog / recommendations]
   M --> H[Hardening: reconcile and triage selected reviews]
-  H --> A[Preparation: documents, manifest, tracker drafts, implementation plan]
-  A --> C{One final bundle confirmation}
-  C -->|Approve| E[Execution: detect optional VCS, implement, verify]
-  C -->|Revise| P
-  C -->|Pause| R[Preserve progress]
-  R -->|Resume| C
+  H --> R[Refinement: work items in the tracker, each approved]
+  R --> PL{Per Story: plan approved?}
+  PL -->|Approve| T[Tasks proposed, approved and created]
+  PL -->|Revise| R
+  T --> PR[Preparation: risk and verification documents, each approved]
+  PR --> E[Execution per Story: start, missing specs, implement]
+  E --> V[Verify: review, resolution, Feature close]
   U[Native controls → async → chat fallback] -.-> P
-  U -.-> C
+  U -.-> PL
   S[Pause / resume / reset / restart / drop anytime] -.-> D
-  S -.-> A
   F[Suspend: every harness veto disabled] -.-> S
-  E --> W[Context-bound delivery / merge decisions]
+  V --> W[Git delivery only: push, draft PR, merge decisions]

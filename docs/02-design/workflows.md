@@ -2,27 +2,29 @@
 title: Runtime Workflows
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-10-06
+last_reviewed: 2026-10-15
 ---
 
 # Runtime Workflows
 
 ## End-to-end flow
 
-Discovery → Planning → Hardening → Preparation → Confirmation → Execution.
-See [the main-flow specification](specs/harness-main-flow.md) and
-[the implementation plan](specs/six-stage-onboarding-implementation.md).
+Discovery → Planning → Hardening → Refinement → Preparation → Execution → Verify.
+See [the main-flow specification](specs/harness-main-flow.md) and the
+[constitution](../../CONSTITUTION.md) for the settled rules.
 
-Discovery investigates the request and relevant project evidence first. Planning then offers
-Light, Standard or Hardcore depth before drafting, with contextual methods, full catalog or agent
-recommendations. Hardening reconciles requirements and triages reviewer findings. Preparation
-assembles documents, a reading manifest, local tracker drafts and the implementation plan.
-One native confirmation of that bundle begins execution. Native failure falls back to async and
-then chat without discarding the decision. Decisions are saved throughout and reused unchanged.
+Discovery investigates the request and relevant project evidence first; an already-refined Epic,
+Feature or Story can be reworked or used as it is. Planning then offers Light, Standard or Hardcore
+depth before drafting, with contextual methods, full catalog or agent recommendations. Hardening
+reconciles requirements and triages reviewer findings. Refinement writes the work items in the
+selected tracker, each approved before it is created, and per Story approves the implementation
+plan, then the Tasks. Preparation writes the risk and verification documents, each approved, and a
+reading manifest. Execution and Verify run Story by Story. Native failure falls back to async and
+then chat without discarding the decision. Decisions are saved throughout and reused unchanged;
+nothing is approved in bulk.
 
 Versioning is optional and detected only at execution entry. Pausing preserves progress;
 suspension disables every harness veto. Free mode remains available without a session.
-Legacy stage labels in saved checkpoints remain supported for continuity.
 
 Product ideation remains available when a user asks to explore which product or problem to pursue:
 
@@ -39,49 +41,58 @@ unclear idea
   |
   `--> product-spec           canonical Why / CAP-N / constraints / non-goals / success signal
            |
-           `--> ask whether to begin backlog drafting
+           `--> idea-continue: continue into technical discovery, or stop here
 ```
 
 These are independent tools, not a fixed waterfall. The product spec adopts load-bearing UX and
 architecture artifacts as companions. Planning creates no tracker item, branch, commit, or pull
-request. The existing approval protocol begins when the user chooses to enter the backlog stage.
+request. The approval protocol begins when the work reaches refinement.
 
 For a feature request with no clear starting point, the agent defaults to technical discovery and
 may ask whether to investigate first or draft work items directly. Product ideation is a separate
 optional route, offered when the user wants to explore which product or problem to pursue. Routing
 is not approval and opens no write window.
 
-## Backlog stage
+## Refinement stage
 
 ```text
-source text (product spec, idea, or existing item)
+hardened approach (or an item used as it is)
   |
   v
-generate-work-item    top ancestor draft (usually an Epic); Descrição Original kept verbatim
+amend-workitems / enrich-work-item   approach changes reach existing items first
   |
   v
-enrich-work-item      team format: O quê, Por quê, Comportamento, Critérios, Notas, Complexidade
+validate-artifact     an item already in its type's template is only checked
   |
+  v
+generate-work-item    new top item; Descrição Original kept verbatim
+enrich-work-item      the type's template: O quê, Por quê, Comportamento, Critérios, Notas,
+  |                   Complexidade, Descrição Original               <- publish-items
   v
 decompose-backlog     tree mode for an Epic:
   |                     DECOMPOSE  Features (existing reused), Stories under each;
   |                                preserve CAP-N coverage when a product spec exists
-  |                     GATE 1     one outline for the whole tree
+  |                     GATE 1     one outline for the whole tree     <- refinement-split
   |                     DRAFT      Feature + Story drafts; Stories under new Features use
   |                                parent_id "pending:<feature draft>"
   |                     ENRICH     team format, Story Points per the 6-driver MAX
-  |                     GATE 2     one batch: every body with points
+  |                     GATE 2     every body with points            <- publish-items
   |                     CREATE     top-down: Features, then Stories under the real Feature ids
   |                     VERIFY     read back: parent chain, points field set
   |                     AUDIT      Epic slice -> Feature -> Story coverage; orphans, scope creep
   v
-generate-breakdown-work-items   per Story: atomic Tasks + Staging + Review + Breakdown (done)
+generate-breakdown-work-items   per Story:
+                        PLAN       saved, shown, approved            <- implementation-confirm
+                        TASKS      atomic Tasks + Staging + Review + Breakdown (done), with
+                                   hours                              <- publish-items
 ```
 
-## Build stage (per Story)
+## Execution stage (per Story)
 
 ```text
-start-ticket (Story -> in progress) --> branch-and-pr: branch {category}/{key}-{slug}
+start-ticket (Story -> in progress, session linked) --> branch-and-pr: branch
+  |                                                        (Git-based delivery only)
+write-spec            technical spec kinds the Story still lacks   <- approve-spec
   |
   v
 for each Task, in breakdown order:
@@ -109,7 +120,11 @@ fix VERIFIED findings    new commits; re-run checks and the pass that found them
 review_verdict.py        ready for the code as it is now
   |
 branch-and-pr            push + draft PR linked to the Story   <- approval-required,
-                                                                   draft-reviewed-prs
+                         (Git-based delivery only)                draft-reviewed-prs
+  |
+resolve-ticket           resolution report and verification evidence; the Story is done
+  |
+finish-feature-development   once every Story of the Feature is done (local mode without Git)
 ```
 
 ## Orchestrated skill call
@@ -223,16 +238,18 @@ a turn would end mid-workflow with no question and no pending menu, with the sav
 ### Idea to backlog tree
 
 ```text
-You:    Take "students can add a profile photo" through the backlog stage. pt-BR.
+You:    Take "students can add a profile photo" through refinement. pt-BR.
 Agent:  drafts the Epic, enriches it, proposes:
           Feature 1  Photo upload and cropping   Stories: 5, 3, 3 pts
           Feature 2  Avatar across the app       Stories: 3, 2 pts
-        GATE 1: approve the outline?
+        refinement-split: approve the split?
 You:    merge the two avatar Stories
 Agent:  shows every body with points
-        GATE 2: batch HB-4F9A (1 Epic, 2 Features, 4 Stories, 7 parent links)
-You:    approve HB-4F9A
+        publish-items: publish these 7 work items?
+You:    Approve
 Agent:  creates top-down, reads back parents and points, reports coverage
+        per Story: shows its plan -> implementation-confirm -> proposes its Tasks
+        and hours -> publish-items -> creates them
 ```
 
 ```text

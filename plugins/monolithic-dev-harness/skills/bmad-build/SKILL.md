@@ -1,6 +1,6 @@
 ---
 name: bmad-build
-description: Technical discovery for a named feature request or ticket, using BMad Build's clarify-and-route and plan steps. Reads the repository, compares feasible approaches, hardens the approach, then prepares tracker drafts and the final implementation plan in the harness's six-stage order.
+description: Technical discovery for a named feature request or ticket, using BMad Build's clarify-and-route and plan steps. Reads the repository, compares feasible approaches and hardens the approach, then hands it to the harness's refinement stage, which writes the work items and each Story's plan.
 ---
 
 # BMad Build (harness Stage 0)

@@ -10,7 +10,7 @@ created: 2026-10-09
 
 ## Goal
 
-Run the harness six-stage flow inside the Zed editor agent panel (any model, including
+Run the harness onboarding flow inside the Zed editor agent panel (any model, including
 Kimi-for-coding) as a first-class host alongside claude/cursor/codex. Decisions render through
 the chat fallback; harness tools reach the agent through MCP context servers; policy
 enforcement is delegated to Zed's tool-permission prompts because Zed has no hook lifecycle.

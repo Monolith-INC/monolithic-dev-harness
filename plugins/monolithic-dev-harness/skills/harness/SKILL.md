@@ -5,7 +5,7 @@ description: Default entry point when the user asks to add, build, change, or fi
 
 # Harness
 
-Follow [six-stage onboarding](../../references/six-stage-onboarding.md): Discovery → Planning →
+Follow [onboarding](../../references/onboarding.md): Discovery → Planning →
 Hardening → Refinement → Preparation → Execution → Verify. Choose depth after discovery and before
 drafting. Approve each work item, Story plan and document when it is created; nothing is approved in
 bulk.

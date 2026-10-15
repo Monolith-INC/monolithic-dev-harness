@@ -61,7 +61,7 @@
         "original_request"
       ],
       "knowledge": [
-        "references/six-stage-onboarding.md",
+        "references/onboarding.md",
         "references/human-decisions.md",
         "references/project-knowledge.md"
       ],
@@ -107,7 +107,7 @@
     },
     "planning": {
       "knowledge": [
-        "references/six-stage-onboarding.md",
+        "references/onboarding.md",
         "references/human-decisions.md"
       ],
       "operations": [
@@ -137,7 +137,7 @@
     },
     "hardening": {
       "knowledge": [
-        "references/six-stage-onboarding.md",
+        "references/onboarding.md",
         "references/human-decisions.md"
       ],
       "operations": [
@@ -167,7 +167,7 @@
     "refinement": {
       "title": "Refine the backlog in the tracker",
       "knowledge": [
-        "references/six-stage-onboarding.md",
+        "references/onboarding.md",
         "references/human-decisions.md",
         "references/decomposition-rules.md",
         "references/ticket-structure.md"
@@ -242,7 +242,7 @@
     "preparation": {
       "title": "Prepare the delivery documents",
       "knowledge": [
-        "references/six-stage-onboarding.md",
+        "references/onboarding.md",
         "references/human-decisions.md"
       ],
       "operations": [
@@ -274,7 +274,7 @@
     "execution": {
       "title": "Implement one Story from its approved plan",
       "knowledge": [
-        "references/six-stage-onboarding.md",
+        "references/onboarding.md",
         "references/human-decisions.md",
         "references/decomposition-rules.md"
       ],
@@ -351,7 +351,7 @@
     "verify": {
       "title": "Verify, resolve and close",
       "knowledge": [
-        "references/six-stage-onboarding.md",
+        "references/onboarding.md",
         "references/human-decisions.md",
         "references/audit-checklist.md"
       ],

@@ -2,30 +2,34 @@
 title: Harness Main Flow
 status: implementation
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-10-08
+last_reviewed: 2026-10-15
 ---
 
 # Harness main flow
 
-![Six-stage flow](../../assets/diagrams/harness-main-flow.svg)
+![Onboarding flow](../../assets/diagrams/harness-main-flow.svg)
 
-Discovery → Planning → Hardening → Preparation → Confirmation → Execution.
-The [implementation plan](six-stage-onboarding-implementation.md) defines delivery and verification.
-The bundled [stage contract](../../../plugins/monolithic-dev-harness/references/six-stage-onboarding.md)
-is the agent-facing source of truth.
+Discovery → Planning → Hardening → Refinement → Preparation → Execution → Verify, with an optional
+idea route in front. The bundled [onboarding contract](../../../plugins/monolithic-dev-harness/references/onboarding.md)
+is the agent-facing source of truth; the settled rules behind it are in the
+[constitution](../../../CONSTITUTION.md).
 
 ## User experience
 
-Discovery investigates before asking. Once the work is understood, choose Light, Standard or
-Hardcore planning depth before drafting. Comprehensive paths offer a contextual shortlist,
-full method catalog or agent recommendations. Retain Reshuffle, List all and Proceed.
-Hardening validates the resulting plan; it is distinct from exploring approaches before drafting.
+Discovery investigates before asking. When the user starts from an Epic, Feature or Story whose
+text is already refined, they choose to rework it or use it as it is. Once the work is understood,
+choose Light, Standard or Hardcore planning depth before drafting. Comprehensive paths offer a
+contextual shortlist, full method catalog or agent recommendations. Retain Reshuffle, List all and
+Proceed. Hardening validates the resulting approach; it is distinct from exploring approaches
+before drafting.
 
-Preparation assembles relevant specifications, requirements, risk findings and companions, then
-creates a reading manifest and implementation plan. Evidence and decisions are saved throughout.
-Tracker artifacts are drafted locally. One final confirmation accepts the reviewed bundle and
-its specified actions. Already accepted decisions are recapped, not repeatedly approved.
-Merging and unrelated external writes remain context-bound actions.
+Refinement runs the agile-backlog-toolkit skills against the selected tracker: each work item is
+written in its type's template and approved before it is created; each Story's implementation plan
+is shown and approved on its own, then its Tasks. Preparation writes the risk and verification
+documents, each approved, and the reading manifest. Execution and Verify run Story by Story; a
+Feature closes once all its Stories are done. Nothing is approved in bulk, and already accepted
+decisions are recapped, not approved again. Merging and unrelated external writes remain
+context-bound actions.
 
 ## Runtime boundaries
 

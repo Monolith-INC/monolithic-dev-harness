@@ -8,6 +8,12 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `tracker_update_work_item` changes the named fields of an existing work item (title,
+  description, story points, a Task's hours, assignee, sprint) through the gateway and reads it
+  back, for the local tracker, Azure DevOps and Linear.
+- Gates `refinement-split`, `approve-document`, `refined-start` and `idea-continue`.
+- `CONSTITUTION.md` records the settled rules for the workflow.
+
 - Planning-only Markdown edits in the configured artifacts folder no longer require an
   implementation session. Verified Breakdown completion uses a bounded publication receipt;
   ordinary implementation completion keeps its session and evidence requirements.
@@ -61,6 +67,23 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- Onboarding (formerly "six-stage onboarding") is Discovery → Planning → Hardening → Refinement →
+  Preparation → Execution → Verify, with an optional idea route that may stop at a brief or spec.
+  The older route family (`investigate-request`, `prepare-artifacts`, `implement-approved-item`,
+  `resume-work`, `suspend-checks`) and its stages are removed.
+- Refinement runs the agile-backlog-toolkit skills against the selected tracker as their workflow
+  is written: each work item is approved before it is created (`refinement-split`,
+  `publish-items`), and each Story's implementation plan is shown and approved on its own with
+  `implementation-confirm` before its Tasks are proposed and approved.
+- A work session tracks the Epic, Feature or Story the user started from
+  (`harness work-session track`); linking a Story outside that item is refused.
+- `write-spec` writes only the technical spec kinds a Story still lacks; it no longer writes an
+  implementation plan.
+- `finish-feature-development` closes a Feature without Git-based delivery once every Story is
+  done.
+- Without source globs, documents and data in the planning folder (`.md`, `.json`, `.yaml`, ...)
+  are not code; scripts there still are.
+
 - **No harness decision depends on version control.** Code changes wait for the execution
   stage's `requires` in `config/prepared-workflows.json`: the work session is linked to its Story or
   Bug (`harness work-session link --work-item <key>`), the tracker holds that item in progress with
@@ -99,6 +122,11 @@ All notable changes to this project are documented here. The format follows
   answers in any form, re-checks scope after the answers, and never compresses a plan to fit the
   token budget. The approval summary lists every recorded decision instead of re-asking them.
 
+### Removed
+
+- `tracker-drafts.json`, `harness tracker publish` and the single approval of a whole preparation
+  bundle.
+
 ## [0.6.2] - 2026-10-06
 
 ### Fixed
@@ -126,8 +154,6 @@ All notable changes to this project are documented here. The format follows
 - The decision protocol explains recovery without repeated answers or suspension just for diagnosis.
 
 ## [0.6.0] - 2026-10-06
-
-### Added
 
 - Project work sessions: several tickets can be in flight in one project, each bound to its own
   host conversation, with `harness work-session` lifecycle commands (start, list, route, select,

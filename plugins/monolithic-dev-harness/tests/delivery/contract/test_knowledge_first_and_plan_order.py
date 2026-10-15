@@ -28,7 +28,7 @@ class KnowledgeAndPlanOrderTests(unittest.TestCase):
         self.assertIn("never blocks discovery", checks)
 
     def test_refinement_approves_each_story_plan_before_its_tasks(self) -> None:
-        contract = (PLUGIN / "references/six-stage-onboarding.md").read_text()
+        contract = (PLUGIN / "references/onboarding.md").read_text()
         refinement = contract.split("## Refinement", 1)[1].split("## Preparation", 1)[0]
         self.assertLess(
             refinement.index("implementation-confirm"),

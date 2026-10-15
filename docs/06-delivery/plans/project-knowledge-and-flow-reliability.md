@@ -39,10 +39,9 @@ confirmation for an unchanged approved bundle.
 2. Make discovery/implementation skills consult the harness knowledge index first, then verify
    source files as needed. Missing, stale, empty, or unavailable knowledge is a non-blocking
    fallback, never a workflow stop.
-3. Reconcile the six-stage storyboard and skills with the actual order: discovery; depth/method
-   selection; plan hardening; preparation of requirement/spec/risk companions and tracker item/task
-   drafts; manifest over the complete bundle; implementation plan referencing that bundle; one
-   confirmation. Tracker publication remains explicitly authorized and separate.
+3. Reconcile the onboarding storyboard and skills with the actual order: discovery; depth/method
+   selection; hardening; refinement in the tracker (each item approved; per Story the plan, then
+   its Tasks); preparation documents, each approved; execution and verify per Story.
 4. Remove mandatory Git/VCS, branch, and commit steps from local execution. Keep VCS detection
    automatic and optional; PR/push actions appear only when the user asks for that delivery route.
    Find and remove corresponding enforcement that blocks local source changes solely due to no

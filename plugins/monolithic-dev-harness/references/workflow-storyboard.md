@@ -9,8 +9,7 @@ prose. A first request resumes after setup instead of making the user repeat it.
 and its gates are drawn in the project documentation
 (`docs/02-design/specs/harness-main-flow.md`).
 
-The current contract is [six-stage onboarding](six-stage-onboarding.md). Historical stage names
-remain readable for saved runs, but do not introduce additional approval checkpoints.
+The current contract is [onboarding](onboarding.md).
 
 | Stage | Work | Exit |
 | --- | --- | --- |

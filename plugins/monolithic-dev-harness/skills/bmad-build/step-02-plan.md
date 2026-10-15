@@ -78,7 +78,7 @@ contextual methods, Reshuffle, full-catalog browsing, agent recommendations and 
 reopen completed choices. Otherwise continue automatically to preparation; an optional extra
 review is never required to finish. Record accepted changes once and reuse them.
 
-Follow [the six-stage contract](../../references/six-stage-onboarding.md). The hardened approach
+Follow [the onboarding contract](../../references/onboarding.md). The hardened approach
 is the input to the Refinement stage, which runs the agile-backlog-toolkit skills against the
 selected tracker and approves each Story's implementation plan on its own. Do not write work items
 or an implementation plan here, and do not start-ticket, inspect Git, or create a branch. If the approach changes an existing work item, Refinement updates that item first.

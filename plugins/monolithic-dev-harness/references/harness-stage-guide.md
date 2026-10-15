@@ -1,6 +1,6 @@
 # Harness
 
-The authoritative sequence is [onboarding](six-stage-onboarding.md): Discovery → Planning →
+The authoritative sequence is [onboarding](onboarding.md): Discovery → Planning →
 Hardening → Refinement → Preparation → Execution → Verify. Use the planning-depth choice after
 discovery and before drafting. Versioning is detected only at execution entry and never required
 for preparation.
@@ -114,7 +114,7 @@ Use `workflow prepare` only when the stage needs a consolidated reference packag
 Discover required tools at their point of use; `--available` remains an optional diagnostic check.
 A gate with artifacts saves its review checkpoint automatically; manual checkpoints cover stage ends.
 
-## Stage 0: Technical discovery
+## Discovery, planning and hardening
 
 For an assigned ticket or request to change an existing product, invoke `bmad-build`. It renders
 the bundled clarify-and-route and plan templates with this project's verified context and selected
@@ -126,9 +126,9 @@ separately built parts consistent) are available; `bmad-build` uses `bmad-prd` w
 behavior is too unclear to investigate. `bmad-build` investigates with subagents, uses `bmad-deep-recon` for
 unfamiliar code or domains, flags drift between the code and the project's agent instructions (fixed
 with `bmad-project-context`), keeps a decision memlog beside the plan, and offers **Deepen**
-(adversarial and edge-case review, elicitation, party mode) at its approval checkpoint. Do not start implementation from this step. On approval, save the plan as a harness workflow
-checkpoint and pass it to Stage 1 as the source for work-item drafting. The Stage 0 approval does
-not publish tracker items; the normal backlog review and write gates still apply.
+(adversarial and edge-case review, elicitation, party mode) at its review points. Do not start
+implementation here. Save the hardened approach as a workflow checkpoint: Refinement takes it as the
+input for the work items. Nothing here creates or publishes tracker items.
 
 For a ticket in an external or local harness tracker, check `workflow_tracking_status`, use
 `tracker_get_work_item` for the named item and `tracker_list_children` for relevant parent context.
@@ -153,10 +153,10 @@ research, brief, requirements, experience, and architecture routes remain availa
 that only needs a product contract can still go directly to `product-spec`. Do not make ideation a
 prerequisite for an assigned change.
 
-The BMad plan is the feature-level strategy. Later `write-spec` work must use it as an input and
-cover only story-level details needed for implementation. Do not repeat Stage 0 investigation or
-silently change its accepted decisions. Finishing Stage 0 never implies permission to create or
-publish tracker items.
+The hardened approach is the feature-level strategy. Later `write-spec` work uses it as an input and
+covers only story-level details needed for implementation. Do not repeat discovery or silently
+change its accepted decisions; a change reaches the work items first. Finishing discovery never
+implies permission to create or publish tracker items.
 
 ### Offer the starting point
 
@@ -180,23 +180,23 @@ invoked a planning skill, or explicitly asked to create or modify a work item.
 
 ## Execution from an approved plan
 
-`implement-story` consumes the Story's approved implementation plan, the reading manifest and the
-documents this Story needs. Each tracker write is asked with its own approval. Recheck content
-digests; consult the user only for changed circumstances or genuinely missing contracts. Detect
-optional version control at execution; absence does not prevent local implementation.
-
-## Stage 3: Build
-
-`implement-story`. One Task, one verified commit, in breakdown order. When the Story is done, it
+`start-ticket` links the Story and moves it to in progress; `write-spec` writes any technical spec
+kind it still lacks; `implement-story` consumes the Story's approved implementation plan, the
+reading manifest and the documents this Story needs, one Task at a time in breakdown order, each
+ending in a passing check (and a commit, with Git-based delivery). When the Story is done, it
 generates API and end-to-end tests for the delivered behavior with `bmad-qa-generate-e2e-tests`
-before `prove-it-works`.
+before `prove-it-works`. Each tracker write is asked with its own approval. Recheck content digests;
+consult the user only for changed circumstances or genuinely missing contracts. Detect optional
+version control at execution; absence does not prevent local implementation.
 
-## Stage 4: Verify
+## Verify
 
-`review`. The requirements check first, then thermos alongside `bmad-review`'s edge-case and
+`review`: the requirements check first, then thermos alongside `bmad-review`'s edge-case and
 verification-gap lenses (the edge-case lens also falsifies the plan's claims and checks deletions),
-one triage of all findings, fixes, a verdict for the code as it is now, and the draft PR when
-Git-based delivery was chosen.
+one triage of all findings, fixes, and a verdict for the code as it is now. With Git-based delivery,
+`branch-and-pr` opens the draft pull request and `review-pr` answers its comments. `resolve-ticket`
+publishes the resolution report and verification evidence, and the Story is done. A Feature closes
+with `finish-feature-development` once all its Stories are done.
 
 ## Talking to the user
 
