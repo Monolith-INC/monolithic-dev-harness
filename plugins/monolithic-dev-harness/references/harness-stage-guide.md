@@ -229,8 +229,10 @@ standard approval gates in `config/gates.toml`; each is tied to what the user re
 
 | Write | Gate | Tied to | Pass |
 | --- | --- | --- | --- |
-| Create, update, or link items from reviewed drafts | `publish-items` | the drafts | `--artifact` per draft, `--value count=`, `--value tracker=` |
-| Move one existing item (start a Story, finish a Feature) | `move-item` | that item | `--value item=`, `--value status=`, `--value ref=` |
+| Create, update, or link items from reviewed drafts, including rewriting an item's title, description or points | `publish-items` | the drafts | `--artifact` per draft, `--value count=`, `--value tracker=` |
+| Move one existing item (start a Story, finish a Feature), or set its hours, assignee or sprint; never its title, description or points | `move-item` | that item | `--value item=`, `--value status=`, `--value ref=` |
+| Approve one Story's implementation plan (shown first) | `implementation-confirm` | the plan | `--artifact` the plan; its Story comes from the plan |
+| Save a created document such as a risk or verification document (shown first) | `approve-document` | the document | `--artifact` the document |
 | Build from a spec (Task transitions, publishing the spec) | `approve-spec` | the spec | `--artifact` the spec |
 | Push a branch and open its draft pull request | `publish-branch` | that branch | `--value branch=` |
 | Reply on or link to a pull request | `reply-pr` | that pull request and the reviewed replies | `--artifact`, `--value pr=` |

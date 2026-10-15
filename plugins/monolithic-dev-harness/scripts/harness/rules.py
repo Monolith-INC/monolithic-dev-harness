@@ -726,12 +726,15 @@ def rule_feature_branch(call: ToolCall, repo: Path) -> Decision:
 
 
 # What a remote write is about: ("branch", name), ("pr", ref), ("item", ref) for an existing work
-# item, ("tracker", "") for a new one, or ("general", "").
+# item, ("content", ref) for rewriting an existing item's text or size, ("tracker", "") for a new
+# one, or ("general", "").
 Target = tuple[str, str]
 _BRANCH_WRITES = frozenset({"scm_create_pull_request"})
 _PR_WRITES = frozenset({"scm_reply_to_thread", "scm_link_work_item"})
 # Pausing enforcement is a general permission: only a short general window covers it.
 _GENERAL_WRITES = frozenset({"workflow_skip_tracker"})
+# Fields whose change rewrites what an item says; only an approval of the reviewed text covers it.
+_CONTENT_FIELDS = frozenset({"title", "description", "storyPoints"})
 
 
 def write_targets(call: ToolCall, repo: Path) -> tuple[Target, ...]:
@@ -751,6 +754,10 @@ def write_targets(call: ToolCall, repo: Path) -> tuple[Target, ...]:
         return (("pr", str(call.tool_input.get("pullRequestRef", ""))),)
     if call.name in _GENERAL_WRITES:
         return (("general", ""),)
+    if call.name == "tracker_update_work_item" and _CONTENT_FIELDS & set(
+        call.tool_input
+    ):
+        return (("content", str(call.tool_input.get("ref", ""))),)
     return tuple(("item", ref) for ref in referenced_values(call.tool_input)) or (
         ("tracker", ""),
     )
@@ -801,8 +808,10 @@ def _covers(record: dict[str, Any], target: Target) -> bool:
         case [bound_kind, bound_value]:
             return (bound_kind, bound_value) == (kind, value) and bool(value)
         case _:
-            # Reviewed content with no target (drafts, an approved spec) covers tracker writes.
-            return kind in ("tracker", "item")
+            # Reviewed content with no target (drafts, an approved spec) covers tracker writes,
+            # including rewriting an item's text; an approval tied to one item (move-item) does
+            # not cover that.
+            return kind in ("tracker", "item", "content")
 
 
 def _session_ended(repo: Path, work_session_id: str | None) -> bool:

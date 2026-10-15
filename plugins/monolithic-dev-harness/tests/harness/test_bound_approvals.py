@@ -139,3 +139,38 @@ def test_a_story_approval_covers_only_that_item(tmp_path: Path) -> None:
     assert "deny" not in update("42")
     assert "approval-required" in update("43")
     assert "approval-required" in tracker_write(tmp_path, "native-a")
+
+
+GATEWAY = "mcp__plugin_monolithic-dev-harness_workflow-integrations__"
+
+
+def test_an_item_approval_does_not_cover_rewriting_its_content(tmp_path: Path) -> None:
+    first, _ = project(tmp_path)
+    approve(
+        tmp_path,
+        first,
+        "native-a",
+        "move-item",
+        "--value",
+        "item=Shared lists",
+        "--value",
+        "status=In Progress",
+        "--value",
+        "ref=42",
+    )
+
+    def gateway(tool: str, **arguments: object) -> str:
+        return native(
+            tmp_path,
+            "pre-tool",
+            {
+                "tool_name": GATEWAY + tool,
+                "tool_input": {"ref": "42", **arguments},
+                "session_id": "native-a",
+            },
+        )
+
+    assert "deny" not in gateway("tracker_transition_work_item", state="in_progress")
+    assert "deny" not in gateway("tracker_update_work_item", hours=4)
+    for content in ({"title": "New"}, {"description": "New"}, {"storyPoints": 3}):
+        assert "approval-required" in gateway("tracker_update_work_item", **content)
