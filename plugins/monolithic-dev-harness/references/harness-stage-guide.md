@@ -248,7 +248,7 @@ standard approval gates in `config/gates.toml`; each is tied to what the user re
    tell the user what changed and ask the gate again.
 
 Where questions cannot be asked (Cursor without a menu), a typed `approve HB-…` still opens a
-general window of `approvals.window_minutes` (default 20). Cancelling the workflow (`harness workflow cancel`) or stopping the work session ends approvals early.
+general window of `approvals.window_minutes` (default 20). The user typing `harness revoke` in chat ends approvals early.
 
 You cannot approve anything yourself: approvals are recorded only from the user's own prompt or
 click, a question that arrives with answers already filled in is refused, and hook `human-owned`

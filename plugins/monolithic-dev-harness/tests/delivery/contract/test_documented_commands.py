@@ -20,7 +20,7 @@ DOCUMENTS = sorted(
 COMMAND = re.compile(r"`(harness (?:[^`|\[\]{}…]|\.\.\.)+?)`")
 PLACEHOLDER = re.compile(r"<[^>]*>")
 # Phrases the user types in chat for the hook to catch; they are not CLI commands.
-TYPED_BY_THE_USER = frozenset({"harness suspend", "harness resume"})
+TYPED_BY_THE_USER = frozenset({"harness suspend", "harness resume", "harness revoke"})
 
 
 def _commands() -> list[tuple[str, str]]:

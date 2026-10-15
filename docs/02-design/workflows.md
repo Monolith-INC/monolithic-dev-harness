@@ -210,8 +210,8 @@ agent                          you                      prompt hook          pre
   |---------------------------------------------------------------------------->  | deny: approval-required
 ```
 
-The agent cannot open a window: approval records are human-owned. Cancelling the workflow or
-stopping the work session closes them.
+The agent cannot open a window: approval records are human-owned. The user typing `harness revoke`
+in chat closes them.
 In Claude and Codex the agent asks a standard approval gate (`Approve` / `Not now`) instead of
 quoting a batch id; the click or a typed `Approve` opens the approval. A gate's approval is tied to
 what was reviewed (the drafts or spec, one item, one branch, or one pull request) and has no time
