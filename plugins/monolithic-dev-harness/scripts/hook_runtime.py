@@ -13,23 +13,18 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-from spec_runtime import SPEC_KINDS
-
-from core.result import Err, Failure, Ok, Result, bind, fmap, recover
+from core.result import Err, Failure, Ok, Result, bind, fmap
 from harness import (
     code_content,
-    gitstate,
-    sessions,
     settings,
     state,
     work_sessions,
     workflow_requirements,
 )
-from harness.local_artifacts import approved_kinds_for, artifacts_dir
 from host_adapters import select_adapter
 from host_adapters.hook_bridge import project_root_hint, should_emit_allow
 from integrations import branches, registry
-from integrations.contracts import LogicalState, TrackerOps, WorkItem, WorkItemKind
+from integrations.contracts import TrackerOps, WorkItem, WorkItemKind
 from policy import CanonicalToolEvent, PolicyDecision
 from policy.commands import escapes_checkout, git_commands, is_code, writes_code
 from policy.git_branch_guard import evaluate_git_branch_guard
@@ -148,7 +143,7 @@ def evaluate_event(
             if code_decision.is_denied():
                 return code_decision
         if delivery and _is_mutating_git(command):
-            return _evaluate_work_context(event)
+            return _evaluate_git_delivery(event, work_session_id)
         return PolicyDecision.allow()
 
     if event.tool_name == "tracker_transition_work_item":
@@ -183,17 +178,28 @@ def _evaluate_code_change(
     root = Path(event.workspace_root or ".")
     if _is_bootstrap_or_repair(event.command) or not _enforced(root):
         return PolicyDecision.allow()
-    match workflow_requirements.evaluate(
-        root, work_session_id or work_sessions.current(root)
-    ):
+    return _gate(root, work_session_id or work_sessions.current(root))[0]
+
+
+def _gate(
+    root: Path,
+    scope: str | None,
+    gate: workflow_requirements.Gate = workflow_requirements.CODE_CHANGE,
+    work_item: str | None = None,
+) -> tuple[PolicyDecision, workflow_requirements.Report | None]:
+    """The gate's decision and, when the catalog could be read, its report."""
+    match workflow_requirements.evaluate(root, scope, gate, work_item):
         case Ok(report) if report.ready:
-            return PolicyDecision.allow()
+            return PolicyDecision.allow(), report
         case Ok(report):
-            return PolicyDecision.deny(workflow_requirements.refusal(report))
+            return PolicyDecision.deny(workflow_requirements.refusal(report)), report
         case Err(failure):
-            return PolicyDecision.deny(
-                f"[harness] the workflow catalog cannot be read ({failure.message}); code "
-                "changes stay blocked until the harness package is repaired."
+            return (
+                PolicyDecision.deny(
+                    f"[harness] the workflow catalog cannot be read ({failure.message}); "
+                    f"{gate.action.lower()} stays blocked until the harness package is repaired."
+                ),
+                None,
             )
 
 
@@ -234,134 +240,44 @@ def _enforced(root: Path) -> bool:
     return state.tracking_mode(root) == "enforced"
 
 
-def _session_item(root: Path) -> Result[tuple[sessions.Session, TrackerOps, WorkItem]]:
-    """This checkout's active session, the tracker, and the session's work item as the tracker has it."""
-    return bind(
-        _active_session(root),
-        lambda session: bind(
-            registry.open_selected(root, settings.load(root)),
-            lambda ops: fmap(
-                ops.get_work_item(session.work_item),
-                lambda item: (session, ops, item),
-            ),
-        ),
-    )
-
-
-def _active_session(root: Path) -> Result[sessions.Session]:
-    match sessions.resolve(root):
-        case sessions.Bound(session) if session.phase == sessions.Phase.ACTIVE:
-            return Ok(session)
-        case sessions.Bound(session):
-            return Err(
-                _failure(
-                    f"session {session.id} for {session.work_item} is {session.phase.value}; resume it first"
-                )
-            )
-        case sessions.Unbound(reason) | sessions.Broken(reason):
-            return Err(
-                _failure(
-                    f"governed changes need an active session: {reason}. Start one with "
-                    "`harness session start <work item>` on the work item's branch."
-                )
-            )
-
-
-def _failure(message: str) -> Failure:
-    return Failure("workflow_policy", message)
-
-
-def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
+def _evaluate_git_delivery(
+    event: CanonicalToolEvent, work_session_id: str | None
+) -> PolicyDecision:
+    """With Git-based delivery, a commit or push carries code: the code-change requirements hold,
+    on a branch whose name carries the linked work item's key."""
     root = Path(event.workspace_root or ".")
-    if (
-        _is_bootstrap_or_repair(event.command)
-        or not _enforced(root)
-        or not _has_committed_head(root)
-    ):
+    if _is_bootstrap_or_repair(event.command) or not _enforced(root):
         return PolicyDecision.allow()
-    boundary = "push" in {
-        command[0] for command in git_commands(event.command or "") if command
-    }
-    match sessions.resolve(root):
-        case _:
-            pass
-    return _decision(
-        bind(
-            _active_session(root),
-            lambda session: (
-                recover(
-                    _snapshot_ready(root.resolve(), session),
-                    lambda _: _live_ready(root),
+    decision, report = _gate(root, work_session_id or work_sessions.current(root))
+    if decision.is_denied() or report is None:
+        return decision
+    return _decision(_on_item_branch(root, event.branch, report.work_item))
+
+
+def _on_item_branch(root: Path, branch: str, work_item: str) -> Result[None]:
+    return bind(
+        settings.load(root),
+        lambda chosen: bind(
+            registry.selected(root, Ok(chosen)),
+            lambda active: bind(
+                branches.work_item_id(
+                    chosen.branch_template, active.manifest.ids.branch_key, branch
                 )
-                if session.readiness_verified_at and not boundary
-                else _live_ready(root)
+                if branch
+                else Err(Failure("workflow_policy", "HEAD is not on a branch")),
+                lambda key: (
+                    Ok(None)
+                    if key.upper() == work_item.upper()
+                    else Err(
+                        Failure(
+                            "workflow_policy",
+                            f"branch {branch} is for {key}, but the work session implements "
+                            f"{work_item}; commit and push on {work_item}'s branch",
+                        )
+                    )
+                ),
             ),
-        )
-    )
-
-
-def _has_committed_head(root: Path) -> bool:
-    """Session and evidence rules apply only when Git can identify a committed baseline."""
-    try:
-        gitstate.head_sha(root)
-        return True
-    except gitstate.GitError:
-        return False
-
-
-def _live_ready(root: Path) -> Result[None]:
-    return bind(
-        _session_item(root),
-        lambda found: _ready(root.resolve(), found[1], found[2]),
-    )
-
-
-def _snapshot_ready(root: Path, session: sessions.Session) -> Result[None]:
-    """Readiness pinned when the session started. Ordinary edits it covers never contact the
-    tracker; anything it does not cover (a spec published later) is checked live."""
-    match session.readiness_state:
-        case LogicalState.IN_PROGRESS.value:
-            return _has_spec(
-                root,
-                session.work_item,
-                {_artifact_kind(kind) for kind in session.readiness_artifacts},
-            )
-        case _:
-            return Err(
-                _failure(
-                    f"Work item {session.work_item} was not in progress when this session started."
-                )
-            )
-
-
-def _ready(root: Path, ops: TrackerOps, item: WorkItem) -> Result[None]:
-    if item.state != LogicalState.IN_PROGRESS:
-        return Err(
-            _failure(
-                f"Work item {item.key} must be in progress before code changes are allowed."
-            )
-        )
-    return bind(
-        ops.list_artifacts(item.id),
-        lambda found: _has_spec(
-            root, item.key, {_artifact_kind(artifact.kind) for artifact in found}
         ),
-    )
-
-
-def _has_spec(root: Path, key: str, kinds: set[str]) -> Result[None]:
-    local = set(map(_artifact_kind, approved_kinds_for(root, key)))
-    if SPEC_ARTIFACT_KINDS & (kinds | local):
-        return Ok(None)
-    folder = artifacts_dir(root)
-    where = (
-        "the tracker"
-        if folder is None
-        else f"the tracker or under {folder} (a note there counts once it is marked "
-        "`status: approved` and the user then approves it)"
-    )
-    return Err(
-        _failure(f"Work item {key} has no accepted specification artifact in {where}.")
     )
 
 
@@ -406,7 +322,7 @@ def _evaluate_completion(
     """A work item is done only when the workflow catalog's completion requirements hold.
 
     A Breakdown task closes on its planning receipt; another Task closes inside the work session
-    that implements its Story or Bug; a Story or Bug needs the verify stage's `completes` list.
+    that implements its Story or Bug; a Story or Bug needs the catalog's `completion` list.
     """
     root = Path(event.workspace_root or ".")
     if not _enforced(root):
@@ -426,7 +342,9 @@ def _evaluate_completion(
         case Ok((ops, item, artifacts)):
             pass
     receipts = tuple(
-        a for a in artifacts if _artifact_kind(a.kind) == "planning_completion"
+        a
+        for a in artifacts
+        if workflow_requirements.artifact_kind(a.kind) == "planning_completion"
     )
     if receipts:
         return _decision(fmap(_receipt_route(ops, item, receipts), lambda _: None))
@@ -437,18 +355,7 @@ def _evaluate_completion(
         if _links(root, work_session_id, item)
         else workflow_requirements.linked_session(root, item.key)
     )
-    match workflow_requirements.evaluate(
-        root, scope, workflow_requirements.COMPLETION, work_item=item.key
-    ):
-        case Ok(report) if report.ready:
-            return PolicyDecision.allow()
-        case Ok(report):
-            return PolicyDecision.deny(workflow_requirements.refusal(report))
-        case Err(failure):
-            return PolicyDecision.deny(
-                f"[harness] the workflow catalog cannot be read ({failure.message}); work "
-                "items stay open until the harness package is repaired."
-            )
+    return _gate(root, scope, workflow_requirements.COMPLETION, item.key)[0]
 
 
 def _receipt_route(ops: TrackerOps, item: WorkItem, receipts: tuple) -> Result[object]:
@@ -483,21 +390,6 @@ def _task_completion(root: Path, ops: TrackerOps, task: WorkItem) -> PolicyDecis
         "`harness work-session link --work-item <key>` (`start-ticket` skill), then mark the "
         "Task done."
     )
-
-
-def _artifact_kind(kind: str) -> str:
-    normalized = str(kind).strip().lower().replace("-", "_").replace(" ", "_")
-    return {
-        "pr": "pull_request",
-        "pullrequest": "pull_request",
-        "resolution": "resolution_report",
-        "verification_report": "verification",
-        "technical_specification": "tech_spec",
-    }.get(normalized, normalized)
-
-
-# The kinds write-spec produces, plus the generic `spec`, in the form `_artifact_kind` gives them.
-SPEC_ARTIFACT_KINDS = frozenset(map(_artifact_kind, (*SPEC_KINDS, "spec")))
 
 
 def _is_mutating_git(command: str) -> bool:

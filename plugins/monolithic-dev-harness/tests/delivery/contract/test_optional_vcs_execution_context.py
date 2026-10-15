@@ -112,7 +112,9 @@ class OptionalVcsExecutionContextTests(unittest.TestCase):
         self.plan.write_text("changed after approval\n", encoding="utf-8")
         self.assertTrue(self._edit_decision().is_denied())
 
-    def test_bundle_approval_does_not_authorize_git_commit(self) -> None:
+    def test_with_git_delivery_a_bundle_approval_does_not_commit_on_main(self) -> None:
+        write_settings(self.root, git={"delivery": True})
+        self._publish_story()
         event = CanonicalToolEvent(
             client="claude",
             tool_name="Bash",
@@ -121,7 +123,9 @@ class OptionalVcsExecutionContextTests(unittest.TestCase):
             workspace_root=str(self.root),
             branch="main",
         )
-        self.assertTrue(hook_runtime._evaluate_work_context(event).is_denied())
+        self.assertTrue(
+            hook_runtime._evaluate_git_delivery(event, self.scope).is_denied()
+        )
 
 
 if __name__ == "__main__":

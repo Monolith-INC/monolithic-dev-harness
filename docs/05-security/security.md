@@ -55,9 +55,10 @@ See [threat-model.md](threat-model.md).
 | Nothing unreviewed reaches a pull request; people publish and approve | `draft-reviewed-prs` |
 | A Feature's Story pull request targets the Feature branch its session pinned | `feature-branch` |
 | Existing implementation is adopted only as the user approved it | `human-owned` protects `.harness/state/adoptions/`; approval only on the **Approve adoption** click, pinned to the plan digest |
-| Code ships with tests; generated files are not hand-edited | `tests-with-code`, `generated-files` |
-| Sensitive paths need evidence for the exact change | `guarded-paths` |
-| Stacked branches keep their history: no rebase, squash merge, or force-push | `history-preserved` |
+| Code changes wait for Tasks and an approved plan | the execution stage's `requires` in `config/prepared-workflows.json` |
+| Work is done only with tests, checks, review, and evidence for the exact code | the catalog's `completion` list; evidence and code baselines are human-owned |
+| Generated files are not hand-edited | `generated-files` |
+| With Git delivery, stacked branches keep their history: no rebase, squash merge, or force-push | `history-preserved` |
 | A broken, missing, or untrusted tracker cannot be written to | `tracker-invalid` |
 | Onboarded tracker code runs only as the user saw it | trust pinned to the folder digest when the question is shown (ADR-0009) |
 | Session, branch, state, spec, and evidence discipline | workflow policy |

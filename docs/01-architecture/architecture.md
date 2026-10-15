@@ -105,8 +105,8 @@ received --> governed? --no--> allowed
                 v
          harness rules (in order)
          human-owned -> tracker-invalid -> protected-items
-         -> feature-branch -> draft-reviewed-prs -> history-preserved
-         -> approval-required -> generated-files -> commit rules
+         -> feature-branch* -> draft-reviewed-prs -> history-preserved*
+         -> approval-required -> generated-files      (* Git delivery only)
                 |                                   |
               pass                                 deny --> denied (rule + fix)
                 v
@@ -181,8 +181,8 @@ Details: [data-model.md](data-model.md).
 | Workflow runtime import or run fails | write-class calls denied, reads allowed |
 | Selected tracker missing, invalid, untrusted, or lacking values (or a shipped tracker broken) | tracker and SCM writes denied, and every call to an MCP server other than the harness's own (`tracker-invalid`) |
 | A broken onboarded tracker folder | reported by `harness doctor`; other trackers unaffected |
-| No active session for the checkout | governed code changes denied until `harness session start` |
-| git unavailable | commit and PR rules deny |
+| Execution requirements not met (`harness workflow requirements`) | governed code changes denied; the refusal names the next workflow step |
+| git unavailable, with Git delivery | commit, push, and PR rules deny |
 | Approval window expired | tracker/SCM writes denied until a new approval |
 | Azure DevOps unreachable | the call fails; nothing is retried in a loop (see the runbook) |
 

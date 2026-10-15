@@ -294,6 +294,10 @@ class TestHumanOwned(HookTestCase):
             ".harness/state/trackers/x.json",
             ".harness/state/tracking.json",
             ".harness/state/adoptions/HA-0123456789/approval.json",
+            ".harness/state/checks/0123abcd.json",
+            ".harness/state/review/0123abcd.json",
+            ".harness/state/code-baselines/STORY-0001.json",
+            ".harness/tracker/in_progress/STORY-0001.json",
         ):
             with self.subTest(path=path):
                 self.assertDenied(
@@ -1274,6 +1278,17 @@ class TestPullRequest(HookTestCase):
         sh(self.repo, "commit", "-q", "-m", "more")
         self.assertDenied(self.pr(isDraft=True), "draft-reviewed-prs")
 
+    def test_uncommitted_changes_block_the_pull_request(self) -> None:
+        """Evidence describes files on disk; the pull request carries commits."""
+        self.approve()
+        self.ship_ready_commit()
+        self.write("lib/a.dart", "edited after the commit\n")
+        result = self.pr(isDraft=True)
+        self.assertDenied(result, "draft-reviewed-prs")
+        self.assertIn(
+            "uncommitted", result["hookSpecificOutput"]["permissionDecisionReason"]
+        )
+
     def test_publishing_and_voting_are_human_only(self) -> None:
         self.approve()
         self.assertDenied(
@@ -1419,6 +1434,29 @@ class TestFailClosed(HookTestCase):
             mock.patch.object(
                 hook.rules, "evaluate", side_effect=lambda *a: time.sleep(3)
             ),
+        ):
+            result = self._in_process("Write", {"file_path": str(self.repo / "a")})
+        self.assertDenied(result, "harness-error")
+
+    def test_a_slow_workflow_policy_blocks_writes_within_the_budget(self) -> None:
+        """The workflow policy (a slow tracker) shares the budget, so the host never times out
+        and lets the call through; a broad `except Exception` on the way cannot swallow it."""
+        import time
+        from unittest import mock
+
+        from scripts import hook_runtime
+
+        def stall(*_args):
+            try:
+                time.sleep(3)
+            except Exception:
+                return 0
+            return 0
+
+        hook = self._hook_module()
+        with (
+            mock.patch.object(hook, "RULES_BUDGET_SECONDS", 1),
+            mock.patch.object(hook_runtime, "run", side_effect=stall),
         ):
             result = self._in_process("Write", {"file_path": str(self.repo / "a")})
         self.assertDenied(result, "harness-error")

@@ -72,8 +72,8 @@ the figures by hand.
 
 ### 3. Technical plan (gate G2)
 
-For the Story you build next, the agent checks out its branch, moves it to in progress, binds it to
-your checkout with `harness session start <story>`, and writes a technical spec from its acceptance
+For the Story you build next, the agent moves it to in progress, links the work session to it with
+`harness work-session link --work-item <story>`, and writes a technical spec from its acceptance
 criteria and Tasks. The Tech Lead reviews it; approve the batch that publishes it.
 When product planning exists, the technical spec traces back to its capabilities and inherits its
 UX and architecture decisions rather than re-deciding them.

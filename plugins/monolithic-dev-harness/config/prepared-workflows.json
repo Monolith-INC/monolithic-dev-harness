@@ -97,7 +97,7 @@
         {"name": "finish-feature-development", "when": "Close a completed feature workflow."}
       ],
       "outputs": ["test and check evidence", "review result", "remaining risks or follow-up"],
-      "completes": ["work_item_linked", "tests_with_code", "checks_passed", "guarded_paths_verified", "review_ready", "verification_recorded", "resolution_reported", "pull_request_linked"],
+      "completes_work_item": true,
       "checks": ["report only checks that actually ran", "separate local, installed, and live-host evidence"],
       "recovery": ["keep the item open and record the exact failed or unavailable check"]
     },
@@ -300,13 +300,14 @@
         "plan_approved",
         "work_item_started"
       ],
-      "completes": ["work_item_linked", "tests_with_code", "checks_passed", "guarded_paths_verified", "review_ready", "verification_recorded", "resolution_reported", "pull_request_linked"],
+      "completes_work_item": true,
       "checks": [
         "detect optional versioning now",
         "external delivery remains context-bound"
       ]
     }
   },
+  "completion": ["work_item_linked", "tests_with_code", "checks_passed", "guarded_paths_verified", "review_ready", "verification_recorded", "resolution_reported", "pull_request_linked"],
   "requirements": {
     "work_item_linked": {
       "description": "The work session names the Story or Bug it implements.",

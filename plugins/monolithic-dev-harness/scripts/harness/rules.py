@@ -1,6 +1,7 @@
 """The harness rules, evaluated on every governed tool call. Each deny names its rule.
 
-human-owned         The settings, approvals, manual-check records, sessions, and tracker trust are human-owned.
+human-owned         The settings, approvals, manual-check, check and review records, sessions, code baselines,
+                    local tracker records, and tracker trust are human-owned.
 tracker-invalid     While the selected tracker is missing or broken, tracker and SCM writes are refused, and so is
                     every call to an MCP server that is not the harness's own.
 approval-required   Tracker and SCM writes need an approval window opened by the user (a prompt or a click).
@@ -289,6 +290,13 @@ _OWNED_DIRS = (
     (".harness", "state", "host_sessions"),
     (".harness", "state", "trackers"),
     (".harness", "state", "adoptions"),
+    # Evidence the workflow requirements trust: written by checks.py, review_verdict.py, and
+    # the code baseline at link time, never by hand.
+    (".harness", "state", "checks"),
+    (".harness", "state", "review"),
+    (".harness", "state", "code-baselines"),
+    # The local tracker's records change only through its tracker tools.
+    (".harness", "tracker"),
 )
 
 
@@ -505,7 +513,9 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
                     "human-owned",
                     f"{_relative(repo, path)} is human-owned. Approvals, manual checks, and tracker trust are "
                     "recorded from the user's own prompt; checkout sessions change through `harness session`, "
-                    "and work sessions through `harness work-session`; the "
+                    "and work sessions through `harness work-session`; check results and review verdicts "
+                    "are recorded by scripts/harness/checks.py and review_verdict.py; local tracker "
+                    "records change through the tracker tools; the "
                     "settings are edited by a person (or created once by bootstrap).",
                 )
     if call.kind == "shell":
@@ -622,6 +632,23 @@ def rule_draft_reviewed_prs(
             "draft-reviewed-prs",
             "pull requests must be created as drafts (isDraft: true); a human publishes them (gate G4).",
         )
+    # Evidence describes the files on disk; a pull request carries commits. With Git-based delivery
+    # they must be the same code.
+    try:
+        uncommitted = gitstate.git(
+            repo, "status", "--porcelain", "--untracked-files=no"
+        )
+    except gitstate.GitError as exc:
+        return Decision.deny(
+            "draft-reviewed-prs", f"cannot read the working tree: {exc}"
+        )
+    if uncommitted:
+        return Decision.deny(
+            "draft-reviewed-prs",
+            "the working tree has uncommitted changes, so the review and check evidence would "
+            "describe code the pull request does not carry. Commit (and re-run the checks and "
+            "review) first.",
+        )
     current = code_content.files(repo)
     digest = code_content.digest(current)
     if (
@@ -635,7 +662,7 @@ def rule_draft_reviewed_prs(
             "requirements check and thermos pass.",
         )
     required = code_content.applicable_checks(
-        settings, changed_since_link(repo, work_session_id, current)
+        settings, code_content.changed_since_link(repo, work_session_id, current)
     )
     missing = required - state.passed_checks(repo, digest)
     if missing:
@@ -645,22 +672,6 @@ def rule_draft_reviewed_prs(
             f"({digest[:12]}). Run scripts/harness/checks.py.",
         )
     return Decision.allow()
-
-
-def changed_since_link(
-    repo: Path, work_session_id: str | None, current: dict[str, str]
-) -> tuple[str, ...]:
-    """Code changed since the work session linked its work item; all code when that is unknown."""
-    match work_session_id and work_sessions.select(repo, work_session_id):
-        case Ok(session) if session.work_item:
-            baseline = code_content.baseline(session.folder, session.work_item)
-        case _:
-            baseline = None
-    return (
-        tuple(sorted(current))
-        if baseline is None
-        else code_content.changed(baseline, current)
-    )
 
 
 def _creates_pull_request(call: ToolCall) -> bool:
@@ -797,7 +808,6 @@ def _session_ended(repo: Path, work_session_id: str | None) -> bool:
     """Approvals end with their work session: a stopped or completed one covers nothing."""
     if work_session_id is None:
         return False
-    from . import work_sessions
 
     match work_sessions.select(repo, work_session_id):
         case Ok(session):

@@ -29,7 +29,6 @@ from harness import (  # noqa: E402
     state,
     work_sessions,
 )
-from harness.rules import changed_since_link  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -52,7 +51,7 @@ def main(argv: list[str] | None = None) -> int:
     chosen = loaded.value
     before = code_content.files(repo)
     digest = code_content.digest(before)
-    changed = changed_since_link(
+    changed = code_content.changed_since_link(
         repo, args.session_id or work_sessions.current(repo), before
     )
 

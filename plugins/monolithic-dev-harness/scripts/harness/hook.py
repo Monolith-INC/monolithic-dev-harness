@@ -66,12 +66,13 @@ from host_adapters.interactions import (  # noqa: E402
 )
 
 # The hosts give the hook 15 seconds and treat a timeout as "no decision", which lets the call
-# through. The rules get less than that, and running out counts as a failure.
-RULES_BUDGET_SECONDS = 10
+# through. The rules and the workflow policy share less than that, and running out counts as a
+# failure.
+RULES_BUDGET_SECONDS = 12
 
 
-class _OutOfTime(Exception):
-    pass
+class _OutOfTime(BaseException):
+    """Not an Exception, so no `except Exception` on the way can swallow it and let a call run."""
 
 
 def _out_of_time(_signum: int, _frame: Any) -> None:
@@ -194,29 +195,38 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
         signal.signal(signal.SIGALRM, _out_of_time)
         signal.setitimer(signal.ITIMER_REAL, RULES_BUDGET_SECONDS)
     try:
-        loaded = settings.load(repo)
-        match loaded:
-            case Err(failure):
-                return _fail(
-                    host, call, f"the settings cannot be used: {failure.message}"
-                )
-            case Ok(chosen):
-                decision = rules.evaluate(
-                    call,
-                    repo,
-                    chosen,
-                    tracker_policy.build(repo, loaded),
-                    work_session_id,
-                )
+        return _governed_pre_tool(
+            host, event, payload, call, repo, work_session_id, request
+        )
     except (Exception, _OutOfTime) as exc:
-        # Any failure of the rules, including a crash or running out of time, blocks writes.
-        # A hook that exits with an error or times out is not a block: the host lets the call run.
+        # Any failure of the rules or the workflow policy, including a crash or running out of
+        # time, blocks writes. A hook that errors or times out is not a block: the host would let
+        # the call run.
         return _fail(
             host, call, f"harness rules could not run: {type(exc).__name__}: {exc}"
         )
     finally:
         if timed:
             signal.setitimer(signal.ITIMER_REAL, 0)
+
+
+def _governed_pre_tool(
+    host: str,
+    event: str,
+    payload: dict[str, Any],
+    call: rules.ToolCall,
+    repo: Path,
+    work_session_id: str | None,
+    request: tuple[str, str] | None,
+) -> int:
+    loaded = settings.load(repo)
+    match loaded:
+        case Err(failure):
+            return _fail(host, call, f"the settings cannot be used: {failure.message}")
+        case Ok(chosen):
+            decision = rules.evaluate(
+                call, repo, chosen, tracker_policy.build(repo, loaded), work_session_id
+            )
     match decision.allowed:
         case True:
             match _bind(repo, host, payload, work_session_id, request):
@@ -822,8 +832,10 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
                 "claude",
                 rules.Decision.deny(
                     "plain-questions",
-                    "A guarded-change approval must apply to exactly one staged manual check. "
-                    "Stage only that change, describe what the user should validate, and ask again.",
+                    "A guarded-change approval must apply to exactly one manual check whose "
+                    "guarded file changed since the work item was linked. Link the work session "
+                    "(`harness work-session link --work-item <key>`) so the harness knows what "
+                    "changed, describe what the user should validate, and ask again.",
                 ),
             )
             return 0
@@ -956,7 +968,7 @@ def _manual_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] |
         case str(), Ok(chosen):
             current = code_content.files(repo)
             code = code_content.digest(current)
-            changed = rules.changed_since_link(
+            changed = code_content.changed_since_link(
                 repo, work_sessions.current(repo), current
             )
             guards = tuple(

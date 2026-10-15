@@ -30,13 +30,11 @@ Anyone using or installing the harness.
 | Plugin missing after install | host not restarted | restart Claude Code / reload Cursor |
 | Every write blocked with `harness-error` | invalid `.harness/settings.json` | fix the JSON; check `guarded_paths` names existing checks; `harness doctor` shows the first problem |
 | `tracker-invalid` on a tracker write | the selected tracker cannot be used | `harness doctor`: add the missing `tracker.values`, fix the folder, or trust the onboarded tracker again |
-| Code changes refused: no active session | no session, a paused one, a detached HEAD, or another branch | `harness session status`, then `start <item>` on the item's branch or `resume` |
-| `harness session start` refuses | the branch carries a different id, or the checkout already has an open session | check out the item's branch; close the old session first |
+| Code changes refused by the workflow | an execution requirement is missing: no linked work item, no Tasks, no approved plan, or the item not in progress | `harness workflow requirements` names the missing step and the skill that produces it |
+| A Story cannot be marked done | a completion requirement is missing | `harness workflow requirements --gate completion` names it |
 | `approval-required` after approving | window expired or a different batch id | approve the batch id the agent shows now |
 | `protected-items` | the item is protected in the settings | intended; work on a copy |
-| `tests-with-code` on a commit | source changed without tests on the branch | add the test |
-| `guarded-paths` on a commit | no evidence for the staged change | run the check with `--staged`, or record a manual check |
-| `draft-reviewed-prs` on the PR | no `ready` verdict or checks for HEAD | run the review stage again after the last commit |
+| `draft-reviewed-prs` on the PR | uncommitted changes, or no `ready` verdict or checks for the code as it is | commit, then run the checks and the review stage again |
 | `history-preserved` on a git command | a rebase, squash merge, or force-push | merge instead; a person can rewrite history outside the agent if it is really needed |
 | Azure DevOps gateway unavailable | the selected adapter is misconfigured or its provider connection failed | inspect `.harness/settings.json`; reload the host, then make one read-only `workflow-integrations` call |
 | Azure DevOps calls hang | provider connection may be waiting for OAuth | stop retrying; complete any open sign-in, then reload the host (see the runbook) |

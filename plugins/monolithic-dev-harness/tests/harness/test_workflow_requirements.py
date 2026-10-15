@@ -265,17 +265,29 @@ class TestCatalog(unittest.TestCase):
     def test_every_required_check_is_declared_and_implemented(self) -> None:
         catalog = prepared_workflows.load_catalog()
         declared = set(catalog["requirements"])
-        self.assertEqual(declared, set(workflow_requirements.CHECKS))
+        self.assertEqual(declared, workflow_requirements.CHECKED)
         for stage in catalog["stages"].values():
             self.assertLessEqual(set(stage.get("requires", ())), declared)
-            self.assertLessEqual(set(stage.get("completes", ())), declared)
-        self.assertTrue(catalog["stages"]["execution"]["requires"])
-
-    def test_both_routes_finish_with_the_same_completion_requirements(self) -> None:
-        stages = prepared_workflows.load_catalog()["stages"]
+        self.assertLessEqual(set(catalog["completion"]), declared)
         self.assertEqual(
-            stages["execution"]["completes"], stages["verify"]["completes"]
+            catalog["stages"]["execution"]["requires"][0], "work_item_linked"
         )
+        self.assertEqual(catalog["completion"][0], "work_item_linked")
+
+    def test_the_implementing_stages_show_the_one_completion_list(self) -> None:
+        catalog = prepared_workflows.load_catalog()
+        with tempfile.TemporaryDirectory() as directory:
+            for route, stage in (
+                ("onboarding", "execution"),
+                ("implement-approved-item", "verify"),
+            ):
+                package = prepared_workflows.prepare_stage(
+                    Path(directory), route, stage
+                ).value
+                self.assertEqual(
+                    [entry["id"] for entry in package["completion_requirements"]],
+                    catalog["completion"],
+                )
 
     def test_the_prepared_step_shows_its_entry_requirements(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -368,6 +380,24 @@ class TestCompletion(Verified):
         state.record_manual(self.root, "secure", code_content.current(self.root), "ok")
         self.assertEqual(self.completion(), [])
 
+    def test_linking_another_item_and_back_keeps_the_original_baseline(self) -> None:
+        other = self.ops.create_work_item(
+            WorkItemKind.USER_STORY, "Other", "", ""
+        ).value.key
+        self.code("lib/a.dart", "new\n")
+        workflow_requirements.link(self.root, self.session, other)
+        workflow_requirements.link(self.root, self.session, self.story)
+        self.finish()
+        self.assertEqual(self.completion(), ["tests_with_code"])
+
+    def test_a_fresh_work_session_keeps_the_items_baseline(self) -> None:
+        self.code("lib/a.dart", "new\n")
+        work_sessions.transition(self.root, self.session, "stop")
+        self.session = work_sessions.start(self.root, "Again").value.id
+        workflow_requirements.link(self.root, self.session, self.story)
+        self.finish()
+        self.assertEqual(self.completion(), ["tests_with_code"])
+
     def test_relinking_the_same_item_keeps_the_original_baseline(self) -> None:
         self.code("lib/a.dart", "new\n")
         workflow_requirements.link(self.root, self.session, self.story)
@@ -442,6 +472,24 @@ class TestNoVersionControl(Verified):
         self.assertEqual(
             state.passed_checks(self.root, code_content.current(self.root)), set()
         )
+
+    def test_without_code_globs_build_output_is_not_code(self) -> None:
+        from harness import checks
+
+        script = self.root / "build_it.py"
+        script.write_text(
+            "import time\nfrom pathlib import Path\nPath('build').mkdir(exist_ok=True)\n"
+            "Path('build/out.txt').write_text(str(time.time()))\n",
+            encoding="utf-8",
+        )
+        write_settings(
+            self.root,
+            artifacts_path="Vault",
+            checks=[{"name": "unit", "run": f"{sys.executable} {script}"}],
+        )
+        self.assertEqual(checks.main(["--repo", str(self.root)]), 0)
+        self.assertEqual(checks.main(["--repo", str(self.root)]), 0)
+        self.assertNotIn("build/out.txt", code_content.files(self.root))
 
     def test_the_project_is_found_by_its_harness_folder(self) -> None:
         from harness import project_paths

@@ -91,21 +91,25 @@ def _routes(plugin_root: Path) -> dict[str, tuple[str, ...]]:
 _FIELDS = ("description", "stage", "skill", "how")
 
 
-REQUIREMENT_LISTS = ("requires", "completes")
-
-
 def stage_requirements(
-    stage_id: str, plugin_root: Path = PLUGIN_ROOT, *, field: str = "requires"
+    stage_id: str, plugin_root: Path = PLUGIN_ROOT
 ) -> Result[tuple[dict[str, str], ...]]:
-    """A stage's requirements in catalog order: id, description, and who produces each.
-
-    `requires` must hold before the stage's work (code changes, for execution); `completes`
-    before the stage's work item may be marked done.
-    """
+    """What a stage needs before its work starts (code changes, for execution), in catalog order:
+    id, description, and the stage and skill that produce each."""
     return attempt(
-        lambda: _stage_requirements(
-            load_catalog(plugin_root), stage_id, plugin_root, field
-        ),
+        lambda: _stage_requirements(load_catalog(plugin_root), stage_id, plugin_root),
+        "prepared_workflow_invalid",
+        "prepared workflow",
+        _Invalid,
+    )
+
+
+def completion_requirements(
+    plugin_root: Path = PLUGIN_ROOT,
+) -> Result[tuple[dict[str, str], ...]]:
+    """What must hold before a Story or Bug is marked done: the catalog's one `completion` list."""
+    return attempt(
+        lambda: _completion_requirements(load_catalog(plugin_root), plugin_root),
         "prepared_workflow_invalid",
         "prepared workflow",
         _Invalid,
@@ -113,29 +117,38 @@ def stage_requirements(
 
 
 def _stage_requirements(
-    catalog: dict[str, Any], stage_id: str, plugin_root: Path, field: str = "requires"
+    catalog: dict[str, Any], stage_id: str, plugin_root: Path
+) -> tuple[dict[str, str], ...]:
+    stage = catalog.get("stages", {}).get(stage_id)
+    if not isinstance(stage, dict):
+        raise _Invalid(f"unknown prepared stage: {stage_id}")
+    return _requirements(catalog, stage.get("requires", ()), plugin_root)
+
+
+def _completion_requirements(
+    catalog: dict[str, Any], plugin_root: Path
+) -> tuple[dict[str, str], ...]:
+    return _requirements(catalog, catalog.get("completion", ()), plugin_root)
+
+
+def _requirements(
+    catalog: dict[str, Any], ids: Iterable[str], plugin_root: Path
 ) -> tuple[dict[str, str], ...]:
     stages = catalog.get("stages", {})
     declared = catalog.get("requirements", {})
-    if stage_id not in stages:
-        raise _Invalid(f"unknown prepared stage: {stage_id}")
-    if field not in REQUIREMENT_LISTS:
-        raise _Invalid(f"unknown requirement list: {field}")
     entries: list[dict[str, str]] = []
-    for requirement_id in stages[stage_id].get(field, ()):
+    for requirement_id in ids:
         entry = declared.get(requirement_id)
         if not isinstance(entry, dict) or not all(
-            isinstance(entry.get(field), str) and entry[field].strip()
-            for field in _FIELDS
+            isinstance(entry.get(name), str) and entry[name].strip() for name in _FIELDS
         ):
-            raise _Invalid(
-                f"stage {stage_id!r} requires an undeclared or incomplete requirement: "
-                f"{requirement_id}"
-            )
+            raise _Invalid(f"undeclared or incomplete requirement: {requirement_id}")
         if entry["stage"] not in stages:
             raise _Invalid(f"requirement {requirement_id!r} names an unknown stage")
         _inside(plugin_root, f"skills/{entry['skill']}/SKILL.md", "producing skill")
-        entries.append({"id": requirement_id, **{k: entry[k] for k in _FIELDS}})
+        entries.append(
+            {"id": requirement_id, **{name: entry[name] for name in _FIELDS}}
+        )
     return tuple(entries)
 
 
@@ -373,7 +386,9 @@ def _prepare_stage(
         "recommended_skills": skill_entries,
         "entry_requirements": list(_stage_requirements(catalog, stage_id, plugin_root)),
         "completion_requirements": list(
-            _stage_requirements(catalog, stage_id, plugin_root, "completes")
+            _completion_requirements(catalog, plugin_root)
+            if stage.get("completes_work_item")
+            else ()
         ),
         "expected_outputs": list(stage.get("outputs", ())),
         "checks": list(stage.get("checks", ())),

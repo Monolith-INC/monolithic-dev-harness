@@ -330,12 +330,50 @@ def publish(
     )
 
 
+def _confirmation(entry: Mapping[str, Any]) -> bool:
+    return (
+        entry.get("gate") == "implementation-confirm"
+        and entry.get("status") == "answered"
+    )
+
+
+def _approves(entry: Mapping[str, Any]) -> bool:
+    return str(entry.get("answer", "")).strip().casefold() in APPROVED_ANSWERS
+
+
+def covers(repo: Path, session: str, work_item: str) -> bool:
+    """The session's last implementation-confirm answer approved its bundle, every reviewed file
+    is unchanged since, and that bundle published `work_item`."""
+    match _history(repo, session), _read(repo, session, PUBLISHED):
+        case Ok(entries), Ok(published):
+            pass
+        case _:
+            return False
+    answers = [entry for entry in entries if _confirmation(entry)]
+    reviewed = answers[-1].get("artifacts") if answers else None
+    return (
+        bool(answers)
+        and answers[-1].get("approval") is True
+        and _approves(answers[-1])
+        and isinstance(reviewed, list)
+        and bool(reviewed)
+        and _unchanged(repo, reviewed)
+        and work_item in dict(published.get("keys", {})).values()
+    )
+
+
+def _unchanged(repo: Path, reviewed: list[Any]) -> bool:
+    pairs = [entry for entry in reviewed if isinstance(entry, list) and len(entry) == 2]
+    return len(pairs) == len(reviewed) and _digests(
+        repo, [str(name) for name, _ in pairs]
+    ) == Ok(tuple((str(name), digest) for name, digest in pairs))
+
+
 def _approved(repo: Path, session: str | None, drafts_name: str) -> Result[None]:
     def matches(entry: Mapping[str, Any], digest: str) -> bool:
         return (
-            entry.get("gate") == "implementation-confirm"
-            and entry.get("status") == "answered"
-            and str(entry.get("answer", "")).strip().casefold() in APPROVED_ANSWERS
+            _confirmation(entry)
+            and _approves(entry)
             and [drafts_name, digest] in entry.get("artifacts", [])
         )
 

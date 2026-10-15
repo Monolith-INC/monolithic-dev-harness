@@ -88,13 +88,13 @@ for each Task, in breakdown order:
   architect         only when the Task adds or reshapes an interface
   tdd               failing test for the Task's acceptance criterion
   implement         smallest change that passes it
-  check             configured checks; --staged before committing a guarded path
+  check             configured checks on the code as it is
   deslop            remove AI slop from the Task's diff
-  commit            one Task, one commit      <- tests-with-code, generated-files, guarded-paths
+  commit            one Task, one commit, when versioned delivery was chosen
   transition Task   approval batch            <- approval-required
   |
   v
-check on HEAD (clean tree) -> prove-it-works -> review
+check on the final code -> prove-it-works -> review
 ```
 
 ## Verify stage
@@ -106,7 +106,7 @@ thermos                  two parallel reviewers: correctness/security, maintaina
   |
 fix VERIFIED findings    new commits; re-run checks and the pass that found them
   |
-review_verdict.py        ready for HEAD (clean tree required)
+review_verdict.py        ready for the code as it is now
   |
 branch-and-pr            push + draft PR linked to the Story   <- approval-required,
                                                                    draft-reviewed-prs
@@ -150,10 +150,12 @@ tool call
   -> approval-required  tracker/SCM write or git push
                         without an open window?          -> deny
   -> generated-files    hand edit of a generated file?   -> deny
-  -> git commit?        tests-with-code, guarded-paths   -> deny
-  -> workflow policy    active session, branch convention,
-                        state, spec, evidence, protected
-                        branches, stack order            -> deny
+  -> workflow policy    code change before the execution
+                        requirements hold; done before the
+                        completion list holds; with Git
+                        delivery: protected branches,
+                        branch convention, the item's
+                        branch, stack order              -> deny
   -> allow (and log the write to the open approval window)
 ```
 
@@ -163,13 +165,13 @@ tool call
 start-ticket
   -> work item's branch checked out (branch_template + the tracker's ids.branch_key)
   -> tracker_transition_work_item in_progress        (approval)
-  -> harness session start <work item>               binds the item to this checkout
+  -> harness work-session link --work-item <key>     names the item; records the code as it is
 implement-story / review
-  -> code changes allowed while the session is active, the item is in progress, and a spec is
-     accepted (the workflow policy reads the session's item, not the branch name)
-  -> harness session pause / resume                  when work stops and starts again
+  -> code changes allowed once `harness workflow requirements` is ready: Tasks parented to
+     the item, an approved unchanged implementation plan, the item in progress
+  -> harness work-session pause / resume             when work stops and starts again
 resolve-ticket
-  -> tracker_transition_work_item done               checked against the session's item
+  -> tracker_transition_work_item done               the catalog's completion list for the item
   -> harness session close                           frees the checkout
 ```
 
@@ -248,21 +250,22 @@ Epic: Profile photo
         `-- Breakdown (done)
 ```
 
-### A rule stopping a commit
+### A Story that is not done yet
 
 ```text
-Agent:  git commit -m "feat: avatar widget"
-Hook:   [harness tests-with-code] this commit changes 2 source file(s) (e.g. src/profile/avatar.ts)
-        and neither the commit nor the branch changes a test matching ['src/**/*.test.ts'].
-        New code ships with tests.
-Agent:  adds src/profile/avatar.test.ts, runs the check, commits again -> allowed
+Agent:  tracker_transition_work_item STORY-42 done
+Hook:   [harness] Marking the work item done waits for what the workflow catalog requires.
+        Next: add or update the tests that cover the changed source files (`tdd` skill).
+        Found: 2 source file(s) changed (e.g. src/profile/avatar.ts) and no test matching
+        ['src/**/*.test.ts'] changed with them.
+Agent:  adds src/profile/avatar.test.ts, runs the checks and the review, marks it done -> allowed
 ```
 
 ### A guarded path with no automated suite
 
 ```text
-Agent:  stages infra/main.tf, asks you to validate the change by hand
+Agent:  changes infra/main.tf, asks you to validate the change by hand
 You:    validated in the sandbox — harness manual-check infra ok
-Hook:   [harness] manual check infra recorded for staged tree 3f2a91c0d4e1
-Agent:  git commit -> allowed (the evidence matches the staged tree exactly)
+Hook:   [harness] manual check infra recorded for the code as it is now (3f2a91c0d4e1)
+Agent:  marks the Story done -> allowed (the evidence matches the code on disk exactly)
 ```

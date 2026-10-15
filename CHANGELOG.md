@@ -70,6 +70,13 @@ All notable changes to this project are documented here. The format follows
 - Check, review, and manual-check evidence is keyed to a digest of the code files on disk instead
   of a Git tree or commit. `checks.py` drops `--staged` and `--head` and records nothing when a
   check rewrites code. The project is found by its `.harness` folder, not by `.git`.
+- A work item's code baseline is recorded once per project, at its first link; relinking or a new
+  work session cannot hide changes. Check and review evidence, code baselines, and local tracker
+  records are human-owned. The workflow policy shares the hook's time budget, so a slow tracker
+  blocks instead of timing out into an allow. Without source or test globs, build and test output
+  folders are not code. With Git delivery, a pull request needs a clean working tree, and commits
+  and pushes need the code-change requirements on the linked item's branch (the branch-bound
+  session no longer grants them).
 - **Breaking:** `tests-with-code` and `guarded-paths` no longer refuse commits; they are completion
   requirements. The protected-branch guard, branch naming convention, `history-preserved`,
   `feature-branch`, the draft pull-request requirements, and the branch-bound session check for
