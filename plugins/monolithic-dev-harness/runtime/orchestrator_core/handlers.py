@@ -11,7 +11,7 @@ from harness.settings import Settings
 from integrations import registry
 from integrations.contracts import Manifest, TrackerOps
 from integrations.payloads import as_float, as_text
-from integrations.planning import CURRENT, HourFields, IterationCapacity, no_hours
+from integrations.planning import CURRENT, IterationCapacity
 
 from .artifact_validator import critiques_from_results, validate_artifact
 from .ingest import ingest_file, ingest_from_text
@@ -381,17 +381,18 @@ def handle_estimate_breakdown(
         }
 
     # Every task whose figure moved is written, including one that dropped to zero: leaving
-    # stale hours behind is exactly the drift this feature exists to prevent. The tracker names
-    # its own hour fields; a tracker that records no hours, or none usable, gets no writes and a
-    # note to record the figures by hand.
-    hour_fields, why_no_hours = _hour_recording(tracker)
+    # stale hours behind is exactly the drift this feature exists to prevent. Each write is the
+    # `tracker_update_work_item` call that makes it; the adapter maps hours to its own fields. A
+    # tracker that records no hours, or none usable, gets no writes and a note to record the
+    # figures by hand.
+    records_hours, why_no_hours = _hour_recording(tracker)
     changed = (
         [] if estimate.blocked else [task for task in estimate.tasks if task.changed]
     )
     write_ops = [
-        {"item_id": task.task_id, "fields": dict(fields)}
+        {"ref": task.task_id, "hours": task.hours, "firstEstimate": task.is_new}
         for task in changed
-        if (fields := hour_fields(task.hours, task.is_new))
+        if records_hours
     ]
     by_hand = (
         (f"record these hours by hand: {why_no_hours}",)
@@ -538,13 +539,13 @@ def _unchecked(
 
 def _hour_recording(
     tracker: Result[tuple[Manifest, TrackerOps]],
-) -> tuple[HourFields, str]:
-    """How the tracker records hours, and why nothing would be written if it records none."""
+) -> tuple[bool, str]:
+    """Whether the tracker records hours, and why nothing would be written if it does not."""
     match tracker:
         case Ok((_, operations)):
-            return operations.hour_fields, "the tracker records no hours"
+            return operations.records_hours, "the tracker records no hours"
         case Err(failure):
-            return no_hours, failure.message
+            return False, failure.message
 
 
 def _capacity_source(

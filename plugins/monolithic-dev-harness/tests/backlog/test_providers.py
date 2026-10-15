@@ -5,8 +5,6 @@ from datetime import date
 from pathlib import Path
 
 from azure_tracker import (
-    ORIGINAL_ESTIMATE,
-    REMAINING_WORK,
     days_off,
     item,
     items,
@@ -125,11 +123,6 @@ class TestAzureFields(unittest.TestCase):
         record = {"id": 1, "fields": {"Microsoft.VSTS.Common.Discipline": "Dev"}}
         self.assertEqual(item(record, process="cmmi").activity, "Dev")
         self.assertIsNone(item(record, process="agile").activity)
-
-    def test_original_estimate_needs_a_stated_process_that_is_not_scrum(self):
-        """Writing it to Scrum fails silently, so an unstated process does not risk it."""
-        self.assertIn(ORIGINAL_ESTIMATE, tracker("cmmi").hour_fields(4.0, True))
-        self.assertNotIn(ORIGINAL_ESTIMATE, tracker("").hour_fields(4.0, True))
 
 
 class TestAzureMapping(unittest.TestCase):
@@ -266,17 +259,6 @@ class TestAzurePlanning(unittest.TestCase):
         self.assertEqual(plan.available_hours, 124.0)
         self.assertEqual(plan.planned_hours, 12.0)
         self.assertEqual(plan.items_estimated, 1)
-
-    def test_hour_fields_target_remaining_work(self):
-        """Remaining Work is the field capacity and burndown actually read."""
-        self.assertIn(REMAINING_WORK, tracker().hour_fields(6.0, False))
-
-    def test_original_estimate_is_set_once_and_never_on_scrum(self):
-        original = ORIGINAL_ESTIMATE
-        self.assertIn(original, tracker("agile").hour_fields(4.0, True))
-        self.assertNotIn(original, tracker("agile").hour_fields(4.0, False))
-        self.assertNotIn(original, tracker("scrum").hour_fields(4.0, True))
-        self.assertNotIn(original, tracker("agile").hour_fields(0.0, True))
 
 
 class TestFilesystemProvider(unittest.TestCase):

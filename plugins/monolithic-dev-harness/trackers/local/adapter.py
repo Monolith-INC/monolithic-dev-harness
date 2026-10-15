@@ -30,12 +30,13 @@ from integrations.contracts import (
     AdapterContext,
     ArtifactDraft,
     ArtifactRef,
+    FieldNames,
     LogicalState,
     Page,
     TrackerOps,
     WorkItem,
-    WorkItemChanges,
     WorkItemKind,
+    changed_fields,
 )
 from integrations.planning import IterationReading, is_current
 from integrations.planning_files import (
@@ -48,6 +49,7 @@ from integrations.planning_files import (
 )
 
 PAGE_SIZE = 50
+FIELDS = FieldNames("title", "description", POINTS, ASSIGNED_TO, ITERATION)
 PREFIXES = {
     WorkItemKind.EPIC: "EPIC",
     WorkItemKind.FEATURE: "FEATURE",
@@ -72,13 +74,9 @@ def adapter(context: AdapterContext) -> TrackerOps:
             context, root, kind, title, description, parent
         ),
         update_work_item=lambda ref, changes: bind(
-            require(
-                not changes.empty(),
-                "invalid_request",
-                "name at least one field to change",
-            ),
-            lambda _: bind(
-                _find(context, root, ref), lambda found: _update(found, changes)
+            changed_fields(changes, FIELDS, RECORDED_HOURS),
+            lambda fields: bind(
+                _find(context, root, ref), lambda found: _update(found, fields)
             ),
         ),
         transition_work_item=lambda ref, state: bind(
@@ -124,7 +122,7 @@ def adapter(context: AdapterContext) -> TrackerOps:
                 ),
             ),
         ),
-        hour_fields=RECORDED_HOURS,
+        records_hours=True,
     )
 
 
@@ -302,27 +300,10 @@ def _write(path: Path, record: Mapping[str, Any]) -> Result[None]:
     )
 
 
-def _update(found: Record, changes: WorkItemChanges) -> Result[WorkItem]:
+def _update(found: Record, fields: Mapping[str, Any]) -> Result[WorkItem]:
     """Write the named fields, then read the record back from disk."""
     path, record = found
-    named = {
-        "title": changes.title,
-        "description": changes.description,
-        POINTS: changes.story_points,
-        ASSIGNED_TO: changes.assignee,
-        ITERATION: changes.iteration,
-    }
-    hours = (
-        RECORDED_HOURS(changes.hours, changes.first_estimate)
-        if changes.hours is not None
-        else {}
-    )
-    updated = {
-        **record,
-        **{name: value for name, value in named.items() if value is not None},
-        **hours,
-        "updatedAt": _now(),
-    }
+    updated = {**record, **fields, "updatedAt": _now()}
     return bind(
         _write(path, updated), lambda _: fmap(_read(path), lambda read: _item(read[1]))
     )

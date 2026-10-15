@@ -297,10 +297,12 @@ def main(argv: list[str] | None = None) -> int:
             # Exit 2 distinguishes "cannot fit" from "failed to run".
             return 2
         if result["write_ops"]:
-            print("\n  Write these to the tracker (nothing has been written yet):")
+            print(
+                "\n  Write these with tracker_update_work_item (nothing has been written yet):"
+            )
         for op in result["write_ops"]:
-            for field, value in op["fields"].items():
-                print(f"    {op['item_id']}  {field} = {value}")
+            first = " (first estimate)" if op["firstEstimate"] else ""
+            print(f"    {op['ref']}  hours = {op['hours']}{first}")
         return 0
 
     if args.command == "config":

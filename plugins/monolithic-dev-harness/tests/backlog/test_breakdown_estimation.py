@@ -2,8 +2,6 @@ import unittest
 from datetime import date
 
 from azure_tracker import (
-    ORIGINAL_ESTIMATE,
-    REMAINING_WORK,
     reading,
     refused,
     select_azure,
@@ -525,13 +523,12 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
         self.assertEqual(result["capacity_errors"], [])
         self.assertFalse(result["capacity_known"])
 
-    def test_the_local_tracker_writes_its_own_hour_fields(self):
+    def test_the_local_tracker_records_hours(self):
         result = self._run(
             dict(self.BASE, assignee="Ana"),
             write_settings,
         )
-        fields = {name for op in result["write_ops"] for name in op["fields"]}
-        self.assertEqual(fields, {"remaining_hours", "effort_hours"})
+        self.assertTrue(result["write_ops"])
         self.assertEqual(result["capacity_errors"], [])
 
     def test_the_local_tracker_checks_capacity_for_a_named_sprint(self):
@@ -587,13 +584,14 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
         self.assertIn("estimate-breakdown", HANDLERS)
         self.assertNotIn("generate-breakdown-work-items", HANDLERS)
 
-    def test_produces_write_ops_for_tasks_with_hours(self):
-        """Remaining Work is the field that makes a Task visible to the sprint."""
+    def test_each_write_is_the_update_call_that_makes_it(self):
+        """The adapter maps hours to its own fields; the skill passes these straight on."""
         result = self._run(dict(self.BASE))
         self.assertTrue(result["ok"])
         self.assertTrue(result["estimated"])
-        paths = {f for op in result["write_ops"] for f in op["fields"]}
-        self.assertIn(REMAINING_WORK, paths)
+        self.assertTrue(result["write_ops"])
+        for op in result["write_ops"]:
+            self.assertEqual(set(op), {"ref", "hours", "firstEstimate"})
 
     def test_new_zero_hour_task_is_not_written(self):
         """A Breakdown marker that never had hours needs no write."""
@@ -603,7 +601,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
             {"id": "102", "title": "Breakdown"},
         ]
         result = self._run(base)
-        self.assertNotIn("102", {op["item_id"] for op in result["write_ops"]})
+        self.assertNotIn("102", {op["ref"] for op in result["write_ops"]})
 
     def test_task_dropping_to_zero_is_written(self):
         """Clearing stale hours is the whole point: leaving 6h on a marker misleads the burndown."""
@@ -613,18 +611,13 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
             {"id": "102", "title": "Breakdown", "current_hours": 6.0},
         ]
         result = self._run(base)
-        ops = {op["item_id"]: op["fields"] for op in result["write_ops"]}
-        self.assertIn("102", ops)
-        self.assertEqual(ops["102"][REMAINING_WORK], 0.0)
+        ops = {op["ref"]: op["hours"] for op in result["write_ops"]}
+        self.assertEqual(ops["102"], 0.0)
 
-    def test_original_estimate_omitted_on_scrum(self):
-        """The process guard applies to the handler's write ops too."""
-        scrum = self._run(dict(self.BASE), lambda root: select_azure(root, "scrum"))
-        agile = self._run(dict(self.BASE), lambda root: select_azure(root, "agile"))
-        scrum_paths = {f for op in scrum["write_ops"] for f in op["fields"]}
-        agile_paths = {f for op in agile["write_ops"] for f in op["fields"]}
-        self.assertNotIn(ORIGINAL_ESTIMATE, scrum_paths)
-        self.assertIn(ORIGINAL_ESTIMATE, agile_paths)
+    def test_a_new_tasks_figure_is_its_first_estimate(self):
+        """Which field records a first estimate is the adapter's choice, per process."""
+        result = self._run(dict(self.BASE), lambda root: select_azure(root, "agile"))
+        self.assertTrue(all(op["firstEstimate"] for op in result["write_ops"]))
 
     def test_blocked_estimate_produces_no_write_ops(self):
         """Work that cannot fit is never written."""

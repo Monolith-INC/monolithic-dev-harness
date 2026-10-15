@@ -28,12 +28,14 @@ from integrations.contracts import (
     AdapterContext,
     ArtifactDraft,
     ArtifactRef,
+    FieldNames,
     LogicalState,
     Page,
     TrackerOps,
     WorkItem,
     WorkItemChanges,
     WorkItemKind,
+    changed_fields,
 )
 from integrations.payloads import as_float, first_number, parse_date
 from integrations.planning import (
@@ -216,7 +218,7 @@ def adapter(context: AdapterContext) -> TrackerOps:
             _usable(replies), lambda _: _reading(replies, ref)
         ),
         iteration_items=lambda replies, ref: _sprint_items(replies, process),
-        hour_fields=_hour_fields(process),
+        records_hours=True,
     )
 
 
@@ -421,45 +423,37 @@ def _update(
     call, read, ref: str, changes: WorkItemChanges, process: str
 ) -> Result[WorkItem]:
     """One JSON-Patch update with only the named fields, then the item read back."""
-    named = {
-        TITLE: changes.title,
-        DESCRIPTION: changes.description,
-        _points_field(process): changes.story_points,
-        ASSIGNED_TO: changes.assignee,
-        ITERATION_PATH: changes.iteration,
-    }
-    updates = [
+    names = FieldNames(
+        TITLE, DESCRIPTION, _points_field(process), ASSIGNED_TO, ITERATION_PATH
+    )
+    return bind(
+        changed_fields(changes, names, _hour_fields(process)),
+        lambda fields: bind(
+            payloads.number(ref, "work item"),
+            lambda number: bind(
+                call("write", "update", {"id": number, "updates": _patch(fields)}),
+                lambda _: read(ref),
+            ),
+        ),
+    )
+
+
+def _patch(fields: Mapping[str, Any]) -> list[dict[str, Any]]:
+    """JSON-Patch ops for the fields. The server's `update` passes plain ops through and drops a
+    per-op `format`, so a changed description also sets the field's own format to Markdown."""
+    ops = [
         {"op": "add", "path": _field_ref(name), "value": value}
-        for name, value in named.items()
-        if value is not None
+        for name, value in fields.items()
     ]
-    if changes.description is not None:
-        # The server's `update` passes plain JSON-Patch ops through; a per-op `format` is dropped,
-        # so the field's own format op keeps the Markdown body from being stored as HTML.
-        updates.append(
+    if DESCRIPTION in fields:
+        ops.append(
             {
                 "op": "add",
                 "path": f"/multilineFieldsFormat/{DESCRIPTION}",
                 "value": "Markdown",
             }
         )
-    if changes.hours is not None:
-        updates += [
-            {"op": "add", "path": path, "value": value}
-            for path, value in _hour_fields(process)(
-                changes.hours, changes.first_estimate
-            ).items()
-        ]
-    return bind(
-        require(bool(updates), "invalid_request", "name at least one field to change"),
-        lambda _: bind(
-            payloads.number(ref, "work item"),
-            lambda number: bind(
-                call("write", "update", {"id": number, "updates": updates}),
-                lambda _: read(ref),
-            ),
-        ),
-    )
+    return ops
 
 
 def _transition(
@@ -593,8 +587,8 @@ def _sprint_items(
 def _hour_fields(process: str | None) -> HourFields:
     """Remaining Work always; Original Estimate once, where the process has it."""
     return hour_writer(
-        _field_ref(REMAINING_WORK),
-        _field_ref(ORIGINAL_ESTIMATE) if _supports_original_estimate(process) else "",
+        REMAINING_WORK,
+        ORIGINAL_ESTIMATE if _supports_original_estimate(process) else "",
     )
 
 

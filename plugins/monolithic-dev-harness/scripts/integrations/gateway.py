@@ -25,6 +25,7 @@ from harness.settings import Settings
 from . import artifacts, registry, scm
 from .contracts import (
     ArtifactDraft,
+    Hours,
     LogicalState,
     PullRequestDraft,
     ScmOps,
@@ -326,16 +327,7 @@ def _tracker_call(name: str, args: Mapping[str, Any], ops: TrackerOps) -> Result
             args.get("parentRef", ""),
         ),
         "tracker_update_work_item": lambda: ops.update_work_item(
-            args["ref"],
-            WorkItemChanges(
-                title=args.get("title"),
-                description=args.get("description"),
-                story_points=args.get("storyPoints"),
-                hours=args.get("hours"),
-                first_estimate=bool(args.get("firstEstimate", False)),
-                assignee=args.get("assignee"),
-                iteration=args.get("iteration"),
-            ),
+            args["ref"], _changes(args)
         ),
         "tracker_list_children": lambda: ops.list_children(args["ref"]),
         "tracker_transition_work_item": lambda: ops.transition_work_item(
@@ -351,6 +343,22 @@ def _tracker_call(name: str, args: Mapping[str, Any], ops: TrackerOps) -> Result
         ),
     }
     return fmap(calls[name](), plain)
+
+
+def _changes(args: Mapping[str, Any]) -> WorkItemChanges:
+    """The schema-checked `tracker_update_work_item` arguments as the change they describe."""
+    return WorkItemChanges(
+        title=args.get("title"),
+        description=args.get("description"),
+        story_points=args.get("storyPoints"),
+        hours=(
+            Hours(args["hours"], bool(args.get("firstEstimate", False)))
+            if "hours" in args
+            else None
+        ),
+        assignee=args.get("assignee"),
+        iteration=args.get("iteration"),
+    )
 
 
 def _publish(ops: TrackerOps, args: Mapping[str, Any]) -> Result[Any]:

@@ -11,6 +11,7 @@ from core.result import Err, Ok
 from integrations import artifacts
 from integrations.contracts import (
     ArtifactDraft,
+    Hours,
     LogicalState,
     WorkItemChanges,
     WorkItemKind,
@@ -113,7 +114,7 @@ class AzureTest(unittest.TestCase):
                 title="Refined",
                 description="body",
                 story_points=3,
-                hours=5,
+                hours=Hours(5),
                 assignee="ana@example.com",
                 iteration="proj\\Sprint 2",
             ),
@@ -218,10 +219,28 @@ class AzureTest(unittest.TestCase):
         self.assertEqual(str(reading.capacity.start_date), "2026-08-03")
         (item,) = tracker.iteration_items(replies, "current").value
         self.assertEqual(item.item_id, "5")
-        self.assertEqual(
-            dict(tracker.hour_fields(4.0, True)),
-            {"/fields/Microsoft.VSTS.Scheduling.RemainingWork": 4.0},
-        )
+        self.assertTrue(tracker.records_hours)
+
+    def test_hours_write_remaining_work_and_the_first_estimate_where_the_process_has_it(
+        self,
+    ) -> None:
+        def hour_paths(process: str, hours: Hours) -> set[str]:
+            ops(
+                "azure-devops", {**AZURE, "process": process}, self.call
+            ).update_work_item("10", WorkItemChanges(hours=hours))
+            return {
+                u["path"] for u in self.call.sent("wit_work_item_write")[-1]["updates"]
+            }
+
+        remaining = "/fields/Microsoft.VSTS.Scheduling.RemainingWork"
+        original = "/fields/Microsoft.VSTS.Scheduling.OriginalEstimate"
+        self.assertEqual(hour_paths("agile", Hours(4, True)), {remaining, original})
+        self.assertEqual(hour_paths("cmmi", Hours(4, True)), {remaining, original})
+        self.assertEqual(hour_paths("agile", Hours(4)), {remaining})
+        self.assertEqual(hour_paths("agile", Hours(0, True)), {remaining})
+        # Scrum has no Original Estimate, and an unstated process does not risk writing it.
+        self.assertEqual(hour_paths("scrum", Hours(4, True)), {remaining})
+        self.assertEqual(hour_paths("", Hours(4, True)), {remaining})
 
     def test_a_work_items_reply_of_ids_alone_is_refused_not_read_as_empty(self) -> None:
         """list_for_iteration answers with ids only; counting that as no work would overstate
@@ -341,7 +360,9 @@ class LinearTest(unittest.TestCase):
                 "cycle": "Cycle 2",
             },
         )
-        refused = self.tracker.update_work_item("ENG-4", WorkItemChanges(hours=2))
+        refused = self.tracker.update_work_item(
+            "ENG-4", WorkItemChanges(hours=Hours(2))
+        )
         self.assertIn("no hours", refused.failure.message)
 
     def test_a_reply_without_an_issue_is_a_provider_error(self) -> None:
@@ -391,7 +412,7 @@ class LinearTest(unittest.TestCase):
             ),
             ("ENG-2", 3.0, "Ana", "user_story", "7"),
         )
-        self.assertEqual(dict(self.tracker.hour_fields(4.0, True)), {})
+        self.assertFalse(self.tracker.records_hours)
         named = self.tracker.read_iteration(replies, "6").value.capacity
         self.assertEqual(str(named.start_date), "2026-07-20")
         missing = self.tracker.read_iteration(replies, "99").value
@@ -510,13 +531,7 @@ class LocalTest(unittest.TestCase):
         missing = self.tracker.read_iteration({}, "S2").failure
         self.assertEqual(missing.code, "no_capacity")
         self.assertIn(".harness/tracker/capacity/S2.json", missing.message)
-        self.assertEqual(
-            dict(self.tracker.hour_fields(4.0, True)),
-            {"remaining_hours": 4.0, "effort_hours": 4.0},
-        )
-        self.assertEqual(
-            dict(self.tracker.hour_fields(4.0, False)), {"remaining_hours": 4.0}
-        )
+        self.assertTrue(self.tracker.records_hours)
 
     def test_planning_needs_the_sprint_named(self) -> None:
         """No sprint name must not read a made-up file or count every unplanned item."""
@@ -555,9 +570,7 @@ class LocalTest(unittest.TestCase):
             (stored["story_points"], stored["assigned_to"], stored["iteration"]),
             (3, "ana", "Sprint 2"),
         )
-        self.tracker.update_work_item(
-            task.key, WorkItemChanges(hours=4, first_estimate=True)
-        )
+        self.tracker.update_work_item(task.key, WorkItemChanges(hours=Hours(4, True)))
         hours = json.loads(
             (self.repo / ".harness/tracker/backlog/TASK-0001.json").read_text()
         )
