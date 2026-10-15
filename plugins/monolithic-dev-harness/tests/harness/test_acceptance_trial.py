@@ -23,6 +23,10 @@ class AcceptanceTrialTests(unittest.TestCase):
             self.assertEqual(settings["tracker"]["name"], "local")
             self.assertEqual(settings["artifacts_path"], "docs/planning")
             self.assertTrue((project / ".harness/tracker/backlog").is_dir())
+            # Seeded as `harness bootstrap` seeds it, so discovery's knowledge ladder can run.
+            self.assertTrue(
+                (project / ".harness/knowledge/stores/project/catalog.json").is_file()
+            )
             environment = acceptance_trial.runner_environment(str(project))
             self.assertEqual(Path(environment["TMPDIR"]).stat().st_mode & 0o777, 0o700)
             self.assertEqual(

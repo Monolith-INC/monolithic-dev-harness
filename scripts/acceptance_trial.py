@@ -130,6 +130,7 @@ def prepare(
             )
             prepare_local_tracker(project)
             prepare_planning(project, str(settings.get("artifacts_path", "")))
+            prepare_knowledge(project)
         if with_zed:
             write_zed_settings(project)
         run_git(project, "add", "--all")
@@ -162,6 +163,13 @@ def prepare_planning(project: Path, artifacts_path: str) -> dict:
             raise ValueError(
                 f"Planning setup failed: {failure.code}: {failure.message}"
             )
+
+
+def prepare_knowledge(project: Path) -> None:
+    """Seed the project knowledge store, as `harness bootstrap` does after applying settings."""
+    from harness import knowledge
+
+    knowledge.initialize(project)
 
 
 def prepare_local_tracker(project: Path) -> None:
