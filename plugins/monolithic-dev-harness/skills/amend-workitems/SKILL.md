@@ -82,11 +82,13 @@ parallel format:
   references and approval gate.
 - Human-facing wording → `$generate-plain-language-documentation`.
 - An existing Story's plan-backed Task changes → `$generate-breakdown-work-items` rules; update
-  the saved Implementation Plan before reconciling its Tasks.
+  the saved Implementation Plan first, show it and have it approved again with
+  `implementation-confirm --value story=<key>`, then reconcile its Tasks.
 - A missing required Task explicitly approved by the user → `$generate-work-item` and then link it
   as a child of the Story.
 
-Apply approved content top-down. Never mutate hierarchy, state, ownership, area, iteration, tags,
+Write each changed item with `tracker_update_work_item` (only the fields that change), never the
+tracker's own tools. Apply approved content top-down. Never mutate hierarchy, state, ownership, area, iteration, tags,
 or unrelated sections. Reconcile the Task child list without deleting existing Tasks: update only
 affected Task content, add approved missing Tasks, and report stale/unmatched Tasks for review.
 

@@ -35,7 +35,7 @@ Load the Story, and its parent Feature when it has one, before drafting the plan
 
 1. **Parent Feature body** (only when the Story has a parent)
    - Tracker: follow the normalized parent relationship and load the Feature through its adapter
-   - Artifacts: `parent_id_artifacts path`, `parent_id`, or Features/ path from frontmatter / links
+   - Artifacts: `parent_id`, or Features/ path from frontmatter / links
    - A Story with no parent is valid: set `feature: null` and plan from the Story alone. STOP and
      ask once only when the Story names a parent that cannot be read.
 2. **User Story body** — title, description/sections, assignee when present
@@ -125,19 +125,20 @@ created: YYYY-MM-DD
 ---
 ```
 
-`status` is allowed here (Implementation_Plans is not Tickets/). Keep `draft` while preparing the
-Task batch; update it after the combined plan-and-Task review.
+`status` is allowed here (Implementation_Plans is not Tickets/). Keep `draft` while writing the
+plan; set `approved` when it is complete, just before it is shown and `implementation-confirm` is
+asked. The approval pins that exact content.
 
 ### Save gate
 
 1. Write the file to disk.
 2. Re-read the file and assert it exists and is non-empty.
 3. Record `plan_path` on the run context.
-4. Continue to Task drafting. Present the complete plan with the Task batch at the material
-   publication review point; a path plus summary is insufficient.
+4. Show the plan with `harness workflow show --artifact <plan>`, put the output in the reply, and
+   ask `implementation-confirm --value story=<key>`. Draft Tasks only after it is approved.
 
 **STOP before Task creation:** PHASE 3 must check `plan_path` exists. If missing → STOP with
 "Implementation Plan not saved; refusing Task creation."
 
-No separate `proceed` gate is needed between saving the local plan and drafting Tasks. Edits must
-still cover every acceptance criterion before publication.
+The plan approval is required before Tasks are drafted. Edits must still cover every acceptance
+criterion, and an edited plan needs a new approval.

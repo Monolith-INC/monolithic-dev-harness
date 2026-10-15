@@ -128,7 +128,11 @@ requires it (work-item enricher).
 
 ## PHASE 5 — GATE & DESTINATION
 
-**── GATE —** WAIT for explicit approval before any write. Silence is not approval.
+**── GATE —** Save the enriched body as a draft file, show it, then ask the `publish-items`
+approval gate with the draft as `--artifact` (see the harness skill's approval protocol). Silence is
+not approval. An existing item is changed with `tracker_update_work_item` (`description`, and
+`title` when it changed), keeping the original text in its Original Description section; a new item
+is created with `tracker_create_work_item`. Read the item back after the write.
 
 Then ask **where to persist** (if not already chosen):
 

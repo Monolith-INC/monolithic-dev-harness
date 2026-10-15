@@ -139,9 +139,10 @@ Show:
 - For each sub-story: proposed title + one-line scope + estimated points
 - Which original ACs map to each sub-story
 
-Wait for explicit approval (`yes` / `proceed` / `ok` or equivalent) before entering DRAFT.
-If the user revises the plan (different pattern, different count, adjusted titles): incorporate
-revisions and re-show the updated plan. Do not proceed until the plan is approved.
+Save the split plan as a file in the artifacts path, show it, then ask
+`harness decision present --gate refinement-split --artifact <split plan>`. Do not enter DRAFT until
+it is approved. If the user revises the plan (different pattern, different count, adjusted titles):
+incorporate revisions, show the updated plan, and ask again.
 
 ---
 
@@ -224,12 +225,14 @@ Wait for user choice.
 Report file paths and stop. No further action.
 
 **Option 2 — Provider:**
-Read `../../common/providers.md` and use the selected Azure DevOps or Linear connector.
+Read `../../common/providers.md`. Ask the `publish-items` approval gate with the sub-story drafts
+as `--artifact`s, then write through `workflow-integrations` only.
 
 For each sub-story draft (in order):
 
 1. Create each approved child using `tracker_create_work_item`, with its harness kind, title,
-   description, and parent reference.
+   description, and parent reference, then set its points with `tracker_update_work_item`
+   (`storyPoints`).
 2. Assert response contains `System.Id`. If absent: STOP and report failure with the item
    title and the raw error.
 3. Supply `parentRef` at creation when the story has a parent. Do not parent a Story directly to
@@ -255,8 +258,8 @@ Delete each local draft file written in PHASE 4. Report `Drafts discarded.` and 
 
 - **One story per run.** Process only the first argument if multiple are given.
 - **No silent patching.** Coverage gaps and duplicates surface to the user — never auto-resolved.
-- **No provider writes without user consent.** Connector calls execute only if the user selects
-  HANDOFF option 2.
+- **No provider writes without user consent.** Tracker writes happen only after HANDOFF option 2
+  and its `publish-items` approval.
 - **Gate before draft.** DRAFT phase does not execute until GATE 1 is explicitly approved.
 - **Spike ≠ split.** When Incerteza is the sole dominant driver, recommend a Spike; do not
   force a scope split.

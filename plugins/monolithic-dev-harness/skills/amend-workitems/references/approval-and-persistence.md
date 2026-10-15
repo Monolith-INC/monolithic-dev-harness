@@ -7,10 +7,11 @@ or cancellation performs no writes.
 
 After approval, use the existing `enrich-work-item`, `generate-plain-language-documentation`,
 `generate-breakdown-work-items`, and (only when explicitly approved) `generate-work-item` skills.
-Use their Azure mechanics and read-back rules. Apply content updates top-down. Update Task child
+Write through `workflow-integrations` only: `tracker_update_work_item` for an existing item,
+`tracker_create_work_item` for an approved new one, each read back. Apply content updates top-down. Update Task child
 lists without deleting or relinking existing children. Add only explicitly approved missing Tasks.
-Update a related Implementation Plan before changing its Tasks, and ensure every affected acceptance
-criterion remains covered. Validate changed Epic, Feature, and Story artifacts after read-back.
+Update a related Implementation Plan before changing its Tasks, ensure every affected acceptance
+criterion remains covered, and have the changed plan approved again with `implementation-confirm`. Validate changed Epic, Feature, and Story artifacts after read-back.
 
 On any failed write, read-back, link check, or validation, stop immediately, report the failure and
 backup path, and do not attempt an automatic rollback or a second mutation.

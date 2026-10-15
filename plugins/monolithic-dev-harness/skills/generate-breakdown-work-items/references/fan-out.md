@@ -30,7 +30,7 @@ a short inventory to the user, then start the loop.
 
 ### Artifacts / filesystem
 
-1. Feature file: find tickets with `parent_id_artifacts path` / `parent_id` pointing at this
+1. Feature file: find tickets with `parent_id` pointing at this
    Feature, or Tickets under a known Feature id prefix.
 2. Epic: resolve child Feature files, then Stories under those Features.
 3. If discovery is ambiguous → STOP and ask once for an explicit Story list or path lookup.
