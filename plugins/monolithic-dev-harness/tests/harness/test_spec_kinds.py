@@ -5,7 +5,6 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
-
 import spec_runtime
 from artifact_profiles.spec import SPEC_REQUIRED_HEADINGS, spec_profile
 
