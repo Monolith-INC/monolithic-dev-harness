@@ -20,8 +20,8 @@ Before using the tracker, call `workflow_tracking_status`. If tracking is paused
 skill is unavailable until `/resume-tracker`.
 
 Without Git-based delivery, implement the Feature's Stories, each from its approved plan, in their
-dependency order in the current working copy. Do not create branches, commits,
-or PRs as a prerequisite.
+dependency order in the current working copy, then close the Feature with
+`finish-feature-development` in its local mode. Do not create branches, commits, or PRs.
 
 ## Procedure
 

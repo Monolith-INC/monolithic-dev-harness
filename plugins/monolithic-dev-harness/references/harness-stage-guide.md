@@ -32,8 +32,10 @@ A change of direction at any stage (a new constraint, a failed assumption, a res
 through `bmad-correct-course`: it assesses impact on the plan, spec, and work items, proposes the
 changes, and routes back to the earliest stage whose approved output the change invalidates.
 
-Stacked Feature work (several Stories under one Feature) runs stage 3–4 per Story inside
-`feature-implementation`, then `merge-story-stack-into-feature` and `finish-feature-development`.
+Feature work (several Stories under one Feature) runs execution and verify per Story inside
+`feature-implementation`, then closes the Feature with `finish-feature-development`. With Git-based
+delivery the Story stack lands first through `merge-story-stack-into-feature`; without it, the
+Feature closes locally once every Story is done.
 
 ## Complete onboarding, then select a project work session
 
