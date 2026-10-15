@@ -1,6 +1,6 @@
 ---
 name: branch-and-pr
-description: Create the Story branch and, after review passes, push it and open a draft pull request linked to the Story, on the repository host the settings select (Azure Repos or GitHub). Use at the start of implement-story (branch) and at the end of the review stage (push and PR).
+description: Create the Story branch and, after review passes and only when the user wants one, push it and open a draft pull request linked to the Story, on the repository host the settings select (Azure Repos or GitHub). Use at the start of implement-story (branch) and at the end of the review stage (push and PR).
 ---
 
 # Branch and pull request
@@ -29,7 +29,8 @@ falls back to chat on its own.
 
 ## Pull request (after review)
 
-Preconditions, all enforced by hooks:
+Open one only when the user asks for it: a pull request is their choice, never a step the workflow
+requires. Preconditions, all enforced by hooks:
 
 - the review stage recorded a `ready` verdict for the code as it is now (`draft-reviewed-prs`);
 - every applicable check passed on the code as it is now (`draft-reviewed-prs`);

@@ -80,7 +80,10 @@ All notable changes to this project are documented here. The format follows
 - `write-spec` writes only the technical spec kinds a Story still lacks; it no longer writes an
   implementation plan.
 - `finish-feature-development` closes a Feature without Git-based delivery once every Story is
-  done.
+  done. A Feature or Epic is done when every child is done or cancelled and it holds a resolution
+  report and verification evidence.
+- A pull request is never required to mark a Story, Feature or Epic done: opening one is the
+  user's choice, with or without Git-based delivery (`pull_request_linked` is removed).
 - Without source globs, documents and data in the planning folder (`.md`, `.json`, `.yaml`, ...)
   are not code; scripts there still are.
 

@@ -436,8 +436,7 @@
     "guarded_paths_verified",
     "review_ready",
     "verification_recorded",
-    "resolution_reported",
-    "pull_request_linked"
+    "resolution_reported"
   ],
   "requirements": {
     "work_item_linked": {
@@ -499,12 +498,6 @@
       "stage": "verify",
       "skill": "resolve-ticket",
       "how": "publish the resolution report to the work item"
-    },
-    "pull_request_linked": {
-      "description": "When the user chose Git-based delivery with a remote repository host, the work item links its pull request.",
-      "stage": "verify",
-      "skill": "branch-and-pr",
-      "how": "open the draft pull request and link it to the work item"
     }
   },
   "routes": {

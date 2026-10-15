@@ -120,7 +120,7 @@ fix VERIFIED findings    new commits; re-run checks and the pass that found them
 review_verdict.py        ready for the code as it is now
   |
 branch-and-pr            push + draft PR linked to the Story   <- approval-required,
-                         (Git-based delivery only)                draft-reviewed-prs
+                         (only when the user asks for one)       draft-reviewed-prs
   |
 resolve-ticket           resolution report and verification evidence; the Story is done
   |

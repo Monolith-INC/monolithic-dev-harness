@@ -19,7 +19,7 @@ The current contract is [onboarding](onboarding.md).
 | Refinement | Items written in their type's template, created and read back; per Story: plan shown and approved, then Tasks approved and created | Every Story in scope has an approved plan and Tasks |
 | Preparation | Risk and verification documents, each approved; reading manifest | Documents approved and saved |
 | Execution | Per Story: start it, write missing technical specs, implement Task by Task with tests and checks | Changed code with passing checks |
-| Verify | Review, resolution report, Feature close; push and pull request only with Git-based delivery | Story done; Feature closed when its Stories are |
+| Verify | Review, resolution report, Feature close; push and pull request only when the user asks for them | Story done; Feature closed when its Stories are |
 
 Save evidence during every stage. Preparation assembles it rather than delaying persistence.
 No repository versioning rule applies before execution. No language preference stops work.

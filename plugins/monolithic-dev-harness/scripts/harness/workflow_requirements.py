@@ -516,13 +516,6 @@ def _artifact(kind: str, label: str) -> Callable[[_Context], str | None]:
     return read
 
 
-def _pull_request(context: _Context) -> str | None:
-    chosen = context.chosen
-    if not chosen.git_delivery or chosen.scm.name == "local":
-        return None  # no pull request is part of this project's delivery
-    return _artifact("pull_request", "pull request")(context)
-
-
 @dataclass(frozen=True)
 class _Check:
     read: Callable[[_Context], str | None]
@@ -541,7 +534,6 @@ CHECKS: dict[str, _Check] = {
     "review_ready": _Check(_review),
     "resolution_reported": _Check(_artifact("resolution_report", "resolution report")),
     "verification_recorded": _Check(_artifact("verification", "verification")),
-    "pull_request_linked": _Check(_pull_request),
 }
 CHECKED = frozenset({LINK, *CHECKS})  # every requirement id this module knows
 

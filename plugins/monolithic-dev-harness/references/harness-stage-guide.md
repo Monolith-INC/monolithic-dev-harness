@@ -24,8 +24,8 @@ Request / ticket / idea
               └─ Refinement: items in the tracker, each approved; per Story: plan approved, then Tasks
                   └─ Preparation: risk and verification documents, each approved; reading manifest
                       └─ Execution: per Story, local implementation; Git, branches and commits optional
-                          └─ Verify: review, resolution, Feature close; push, PR and merge only with
-                             Git-based delivery
+                          └─ Verify: review, resolution, Feature close; push, PR and merge only
+                             when the user asks for them
 ```
 
 A change of direction at any stage (a new constraint, a failed assumption, a rescoped goal) goes
@@ -193,8 +193,8 @@ version control at execution; absence does not prevent local implementation.
 
 `review`: the requirements check first, then thermos alongside `bmad-review`'s edge-case and
 verification-gap lenses (the edge-case lens also falsifies the plan's claims and checks deletions),
-one triage of all findings, fixes, and a verdict for the code as it is now. With Git-based delivery,
-`branch-and-pr` opens the draft pull request and `review-pr` answers its comments. `resolve-ticket`
+one triage of all findings, fixes, and a verdict for the code as it is now. When the user wants a
+pull request, `branch-and-pr` opens it as a draft and `review-pr` answers its comments. `resolve-ticket`
 publishes the resolution report and verification evidence, and the Story is done. A Feature closes
 with `finish-feature-development` once all its Stories are done.
 

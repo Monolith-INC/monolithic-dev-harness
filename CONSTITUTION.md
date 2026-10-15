@@ -116,6 +116,10 @@ No harness decision depends on Git. Steps that need Git (branches, commits, pull
 stacks) run only when the user chose Git-based delivery. Without it, a Feature is closed through
 `finish-feature-development` in its local mode.
 
+A pull request is always the user's choice, with or without Git-based delivery: it is opened only
+when they ask for one and is never a condition for marking a Story, Feature or Epic done (owner,
+2026-10-15).
+
 ## Article 11 — No compatibility paths, no dead material
 
 The harness is not in production. When something is replaced, the old version is removed in the

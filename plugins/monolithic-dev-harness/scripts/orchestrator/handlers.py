@@ -256,7 +256,6 @@ def _feature_plan(arguments: Mapping[str, Any], *, mode: str) -> dict[str, Any]:
         "required_artifact_kinds": [
             "implementation-plan",
             "verification",
-            "pull_request",
         ],
     }
 

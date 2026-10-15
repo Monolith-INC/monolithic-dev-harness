@@ -30,18 +30,19 @@ matching section. Both close the Feature only on evidence read from the tracker.
 3. **Confirm every Story has landed** on the Feature branch through `merge-story-stack-into-feature`
    (merge commits).
 4. **Reconcile** first if an ancestor update is still pending (`reconcile-feature-stack`).
-5. **Open the Feature pull request** into the base branch through the SCM adapter, as a **draft**,
-   and link it to the Feature. Push and pull request are one `publish-branch` approval.
+5. **Only when the user wants one, open the Feature pull request** into the base branch through
+   the SCM adapter, as a **draft**, and link it to the Feature. Push and pull request are one
+   `publish-branch` approval. A pull request is the user's choice, never a condition for closing.
 6. **Publish the closeout** on the Feature with `tracker_publish_artifact`: a `resolution_report`
    and a `verification` artifact, as in the local mode.
-7. **Move the Feature to done** only after the closeout and the pull-request link exist. One
-   `move-item` approval for the Feature covers both its closeout and the move.
+7. **Move the Feature to done** once the closeout exists. One `move-item` approval for the Feature
+   covers both its closeout and the move.
 
 ## Rules
 
 - Verify every Story's completion through the tracker, not from memory.
-- With Git-based delivery, create and link the Feature pull request through the configured SCM
+- When the user asks for a Feature pull request, create and link it through the configured SCM
   adapter.
 - Publish the closeout before requesting done. The harness moves a Feature or Epic to done only
   when it has child items, every one is done or cancelled, and it holds a `resolution_report` and a
-  `verification` artifact, plus its pull-request link with Git-based delivery.
+  `verification` artifact.

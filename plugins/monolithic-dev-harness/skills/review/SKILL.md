@@ -66,8 +66,9 @@ blocker and do not open a pull request.
 
 ## 5. Pull request
 
-When GitHub or Azure Repos is configured, `branch-and-pr` can push and open the **draft** pull
-request linked to the Story (one `publish-branch` approval for both). Include the requirements coverage and
+When the user wants a pull request and GitHub or Azure Repos is configured, `branch-and-pr` can push
+and open the **draft** pull request linked to the Story (one `publish-branch` approval for both).
+Opening one is always the user's choice. Include the requirements coverage and
 the thermos verdict in the description. If no hosted service is configured, finish after recording
 the verdict; the local review is complete and must not be marked blocked for lack of a pull request.
 

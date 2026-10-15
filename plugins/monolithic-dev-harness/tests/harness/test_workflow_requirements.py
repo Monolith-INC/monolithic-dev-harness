@@ -389,13 +389,11 @@ class TestContainerCompletion(Verified):
         self.assertTrue(decision.is_denied())
         self.assertIn("resolution_report, verification", decision.reason)
 
-    def test_with_git_delivery_the_feature_also_needs_its_pull_request(self) -> None:
+    def test_with_git_delivery_a_feature_closes_without_a_pull_request(self) -> None:
         write_settings(self.root, artifacts_path="Vault", git={"delivery": True})
         feature, story = self.feature()
         self.ops.transition_work_item(story, LogicalState.DONE)
         self.close(feature)
-        self.assertIn("pull_request", self.done(feature).reason)
-        self.ops.add_artifact(feature, ArtifactDraft("pull_request", "PR", "url", "1"))
         self.assertFalse(self.done(feature).is_denied())
 
     def test_a_feature_without_children_is_not_done(self) -> None:
@@ -475,18 +473,15 @@ class TestCompletion(Verified):
             self.completion(), ["verification_recorded", "resolution_reported"]
         )
 
-    def test_a_pull_request_is_required_only_with_git_delivery_to_a_remote_host(
-        self,
-    ) -> None:
+    def test_a_pull_request_is_never_required_even_with_git_delivery(self) -> None:
         self.finish()
-        self.assertEqual(self.completion(), [])
         write_settings(
             self.root,
             artifacts_path="Vault",
             git={"delivery": True},
             checks=[{"name": "unit", "run": "true", "when": ["lib/**"]}],
         )
-        self.assertEqual(self.completion(), ["pull_request_linked"])
+        self.assertEqual(self.completion(), [])
 
     def test_another_sessions_item_is_not_completed_here(self) -> None:
         other = self.ops.create_work_item(

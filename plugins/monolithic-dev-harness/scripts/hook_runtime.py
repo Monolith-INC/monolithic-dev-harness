@@ -352,7 +352,7 @@ def _evaluate_completion(
     if item.kind is WorkItemKind.TASK:
         return _task_completion(root, ops, item)
     if item.kind in (WorkItemKind.FEATURE, WorkItemKind.EPIC):
-        return _container_completion(root, ops, item, artifacts)
+        return _container_completion(ops, item, artifacts)
     scope = (
         work_session_id
         if _links(root, work_session_id, item)
@@ -377,15 +377,16 @@ def _links(root: Path, work_session_id: str | None, item: WorkItem) -> bool:
 
 
 _CLOSED = frozenset({LogicalState.DONE, LogicalState.CANCELED})
+# A pull request is the user's choice, never a condition for closing.
+_CLOSEOUT = frozenset({"resolution_report", "verification"})
 
 
 def _container_completion(
-    root: Path, ops: TrackerOps, item: WorkItem, artifacts: tuple
+    ops: TrackerOps, item: WorkItem, artifacts: tuple
 ) -> PolicyDecision:
     """A Feature or Epic closes as codex-workflows' finish-feature-development closes it: every
     child done or cancelled (each was held to its own completion rules), and its closeout
-    published, the resolution report and verification, plus the pull request link with Git-based
-    delivery."""
+    published, the resolution report and verification."""
     match ops.list_children(item.id):
         case Err(failure):
             return PolicyDecision.deny(failure.message)
@@ -393,7 +394,7 @@ def _container_completion(
             pass
     still_open = [child.key for child in children if child.state not in _CLOSED]
     held = {workflow_requirements.artifact_kind(a.kind) for a in artifacts}
-    missing = sorted(_closeout(root) - held)
+    missing = sorted(_CLOSEOUT - held)
     match children, still_open, missing:
         case (), _, _:
             reason = f"{item.key} has no child work items to close it on"
@@ -410,14 +411,6 @@ def _container_completion(
         f"[harness] {item.key} is marked done only once its children are and its closeout is "
         f"published: {reason}. This refusal is for you, not for the user."
     )
-
-
-def _closeout(root: Path) -> frozenset[str]:
-    match settings.load(root):
-        case Ok(chosen) if chosen.git_delivery and chosen.scm.name != "local":
-            return frozenset({"resolution_report", "verification", "pull_request"})
-        case _:
-            return frozenset({"resolution_report", "verification"})
 
 
 def _task_completion(root: Path, ops: TrackerOps, task: WorkItem) -> PolicyDecision:
