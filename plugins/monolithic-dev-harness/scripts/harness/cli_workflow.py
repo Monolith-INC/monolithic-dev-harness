@@ -327,7 +327,7 @@ def work_session_command(args: argparse.Namespace) -> int:
             )
         case "track":
             result = fmap(
-                workflow_requirements.track(
+                work_lifecycle.track(
                     project,
                     args.session_id or work_sessions.current(project) or "",
                     args.work_item or "",
@@ -336,7 +336,7 @@ def work_session_command(args: argparse.Namespace) -> int:
             )
         case "link":
             result = fmap(
-                workflow_requirements.link(
+                work_lifecycle.link(
                     project,
                     args.session_id or work_sessions.current(project) or "",
                     args.work_item or "",

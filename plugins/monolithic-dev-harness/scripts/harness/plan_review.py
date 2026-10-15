@@ -12,8 +12,8 @@ from pathlib import Path
 
 from core.result import Ok, Result, bind, err
 from harness import local_artifacts
-from harness.workflow_requirements import BUILDABLE, artifact_kind
-from integrations.contracts import TrackerOps
+from harness.workflow_requirements import artifact_kind
+from integrations.contracts import BUILDABLE_KINDS, TrackerOps
 
 
 def story(repo: Path, names: list[str]) -> Result[str]:
@@ -35,7 +35,7 @@ def tracked(ops: TrackerOps, key: str) -> Result[None]:
         ops.get_work_item(key),
         lambda item: (
             Ok(None)
-            if item.kind in BUILDABLE
+            if item.kind in BUILDABLE_KINDS
             else err(
                 "plan_invalid",
                 f"{key} is a {item.kind.value}; a plan is approved for a Story or Bug",

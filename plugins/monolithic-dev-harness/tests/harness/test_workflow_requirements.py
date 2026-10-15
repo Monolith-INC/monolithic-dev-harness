@@ -24,6 +24,7 @@ from harness import (
     prepared_workflows,
     settings,
     state,
+    work_lifecycle,
     work_sessions,
     workflow_requirements,
 )
@@ -216,7 +217,7 @@ class TestEntryItem(Project):
         return feature, story
 
     def track(self, key: str):
-        return workflow_requirements.track(self.root, self.session, key)
+        return work_lifecycle.track(self.root, self.session, key)
 
     def test_the_session_records_the_item_the_user_started_from(self) -> None:
         feature, _ = self.tree()
@@ -228,13 +229,13 @@ class TestEntryItem(Project):
     def test_a_story_under_the_entry_item_may_be_linked(self) -> None:
         feature, story = self.tree()
         self.track(feature)
-        linked = workflow_requirements.link(self.root, self.session, story)
+        linked = work_lifecycle.link(self.root, self.session, story)
         self.assertEqual(linked.value.work_item, story)
 
     def test_a_story_outside_the_entry_item_is_refused(self) -> None:
         feature, _ = self.tree()
         self.track(feature)
-        refused = workflow_requirements.link(self.root, self.session, self.story)
+        refused = work_lifecycle.link(self.root, self.session, self.story)
         self.assertIn(feature, refused.failure.message)
 
     def test_a_session_tracks_one_entry_item(self) -> None:
@@ -253,8 +254,8 @@ class TestEntryItem(Project):
             WorkItemKind.USER_STORY, "Second", "", feature
         ).value.key
         self.track(feature)
-        workflow_requirements.link(self.root, self.session, inside)
-        workflow_requirements.link(self.root, self.session, second)
+        work_lifecycle.link(self.root, self.session, inside)
+        work_lifecycle.link(self.root, self.session, second)
         self.assertIsNotNone(code_content.baseline(self.root, inside))
         self.assertIsNotNone(code_content.baseline(self.root, second))
 
@@ -312,7 +313,7 @@ class Verified(Project):
         )
         self.code("lib/a.dart", "old\n")
         self.assertIsInstance(
-            workflow_requirements.link(self.root, self.session, self.story), Ok
+            work_lifecycle.link(self.root, self.session, self.story), Ok
         )
 
     def code(self, rel: str, text: str) -> None:
@@ -446,8 +447,8 @@ class TestCompletion(Verified):
             WorkItemKind.USER_STORY, "Other", "", ""
         ).value.key
         self.code("lib/a.dart", "new\n")
-        workflow_requirements.link(self.root, self.session, other)
-        workflow_requirements.link(self.root, self.session, self.story)
+        work_lifecycle.link(self.root, self.session, other)
+        work_lifecycle.link(self.root, self.session, self.story)
         self.finish()
         self.assertEqual(self.completion(), ["tests_with_code"])
 
@@ -455,13 +456,13 @@ class TestCompletion(Verified):
         self.code("lib/a.dart", "new\n")
         work_sessions.transition(self.root, self.session, "stop")
         self.session = work_sessions.start(self.root, "Again").value.id
-        workflow_requirements.link(self.root, self.session, self.story)
+        work_lifecycle.link(self.root, self.session, self.story)
         self.finish()
         self.assertEqual(self.completion(), ["tests_with_code"])
 
     def test_relinking_the_same_item_keeps_the_original_baseline(self) -> None:
         self.code("lib/a.dart", "new\n")
-        workflow_requirements.link(self.root, self.session, self.story)
+        work_lifecycle.link(self.root, self.session, self.story)
         self.finish()
         self.assertEqual(self.completion(), ["tests_with_code"])
 

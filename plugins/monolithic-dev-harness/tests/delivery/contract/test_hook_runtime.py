@@ -20,6 +20,7 @@ from harness import (
     sessions,
     settings,
     state,
+    work_lifecycle,
     work_sessions,
     workflow_requirements,
 )
@@ -127,9 +128,7 @@ class TrackedRepo(unittest.TestCase):
         )
 
     def link(self, key: str = "STORY-0001") -> None:
-        self.assertIsInstance(
-            workflow_requirements.link(self.root, self.session, key), Ok
-        )
+        self.assertIsInstance(work_lifecycle.link(self.root, self.session, key), Ok)
 
     def evaluate(
         self,

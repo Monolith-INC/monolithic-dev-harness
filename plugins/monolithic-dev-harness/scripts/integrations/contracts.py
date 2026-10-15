@@ -39,6 +39,14 @@ class WorkItemKind(str, Enum):
     BUG = "bug"
 
 
+# What a work session implements, and what an implementation plan is approved for.
+BUILDABLE_KINDS = frozenset({WorkItemKind.USER_STORY, WorkItemKind.BUG})
+# What work may start from (the item a work session tracks).
+ENTRY_KINDS = frozenset(
+    {WorkItemKind.EPIC, WorkItemKind.FEATURE, WorkItemKind.USER_STORY, WorkItemKind.BUG}
+)
+
+
 class LogicalState(str, Enum):
     """The harness's states; each tracker maps them to its own in `states`."""
 
@@ -62,6 +70,13 @@ class WorkItem:
     provider_data: Mapping[str, Any] = field(
         default_factory=lambda: EMPTY, compare=False
     )
+
+    def is_child_of(self, parent: WorkItem) -> bool:
+        """Whether this item names `parent` as its parent, by id or key."""
+        return bool(self.parent_id) and self.parent_id.casefold() in {
+            parent.id.casefold(),
+            parent.key.casefold(),
+        }
 
 
 @dataclass(frozen=True)

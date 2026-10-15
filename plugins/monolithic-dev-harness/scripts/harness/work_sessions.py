@@ -443,13 +443,18 @@ def _transition(
 
 def link(project: Path, identifier: str, work_item: str) -> Result[Session]:
     """Name the Story or Bug an active session implements; a new link replaces the old one."""
+    return bind(
+        require_active(project, identifier),
+        lambda current: save_link(current, work_item),
+    )
+
+
+def save_link(current: Session, work_item: str) -> Result[Session]:
+    """Record the Story or Bug this already-read session implements."""
     key = work_item.strip()
     return bind(
         require(bool(key), "invalid_request", "name the work item to link"),
-        lambda _: bind(
-            require_active(project, identifier),
-            lambda current: _save_link(current, key),
-        ),
+        lambda _: _save(current, work_item=key, event="linked"),
     )
 
 
@@ -471,10 +476,6 @@ def track(project: Path, identifier: str, entry_item: str) -> Result[Session]:
             ),
         ),
     )
-
-
-def _save_link(current: Session, key: str) -> Result[Session]:
-    return _save(current, work_item=key, event="linked")
 
 
 def _save(current: Session, *, event: str, **changes: str) -> Result[Session]:
