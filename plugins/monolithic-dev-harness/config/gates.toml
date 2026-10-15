@@ -10,6 +10,8 @@
 #   approval                answering Approve authorizes tracker/SCM writes
 #   artifact                the human reviews files; at least one --artifact is required
 #   recommended             the option id marked as recommended unless --recommended names another
+#   shown                   the reviewed files must have been printed with `harness workflow show`,
+#                           as they read now, and (on Claude) carried in the agent's own reply
 #   binds                   for approvals, what the approval is tied to:
 #                             "artifacts"        the reviewed files, unchanged (tracker writes)
 #                             "branch:{slot}"    pushes and draft pull requests for that branch
@@ -50,6 +52,7 @@ detail.pt-br = "Usar skills sem onboarding guiado; verificações de ações con
 id = "implementation-confirm"
 approval = true
 artifact = true
+shown = true
 binds = "artifacts"
 question.en = "Approve the implementation plan for {story}?"
 question.pt-br = "Aprovar o plano de implementação de {story}?"
@@ -302,6 +305,7 @@ question.en = "Approve this document and save it?"
 question.pt-br = "Aprovar este documento e salvá-lo?"
 approval = true
 artifact = true
+shown = true
 binds = "artifacts"
 recommended = "approve"
 [[gate.option]]

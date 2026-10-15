@@ -134,8 +134,8 @@ asked. The approval pins that exact content.
 1. Write the file to disk.
 2. Re-read the file and assert it exists and is non-empty.
 3. Record `plan_path` on the run context.
-4. Show the plan with `harness workflow show --artifact <plan>`, put the output in the reply, and
-   ask `implementation-confirm --value story=<key>`. Draft Tasks only after it is approved.
+4. Have the plan approved as the skill's section 2 describes (`implementation-confirm`). Draft
+   Tasks only after it is approved.
 
 **STOP before Task creation:** PHASE 3 must check `plan_path` exists. If missing → STOP with
 "Implementation Plan not saved; refusing Task creation."

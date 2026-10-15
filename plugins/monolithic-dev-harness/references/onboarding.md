@@ -49,13 +49,10 @@ with `harness work-session link`, which refuses a Story outside that item's tree
 3. Split an Epic or Feature with `decompose-backlog`: approve the split (`refinement-split`), then
    the item bodies (`publish-items`); the items are created, read back and audited for coverage.
    Split an oversized Story with `split-story`.
-4. For each Story, `generate-breakdown-work-items` saves its implementation plan with
-   `status: approved`. Show it with `harness workflow show --artifact <plan>` and put the output in
-   your reply, then ask `harness decision present --gate implementation-confirm --value
-   story=<key> --artifact <plan>`. The harness refuses the question unless the note is that Story's
-   plan, the Story exists in the tracker, and the plan was shown as it reads now (on Claude, in your
-   own reply). Approving it pins the plan. Then propose the Story's Tasks, with Staging, Review and
-   Breakdown, and create them after their own `publish-items` approval.
+4. For each Story, `generate-breakdown-work-items` saves its implementation plan and has it shown
+   and approved with `implementation-confirm`, as that skill's section 2 describes; approving it
+   pins the plan. Then propose the Story's Tasks, with Staging, Review and Breakdown, and create
+   them after their own `publish-items` approval.
 
 Every tracker write goes through the harness gateway and is read back. Nothing is approved in bulk:
 each item, plan and document is shown and approved when it is created.
@@ -64,8 +61,8 @@ each item, plan and document is shown and approved when it is created.
 
 Write the risk and verification documents with `generate-plain-language-documentation`, as notes in
 the artifacts path that name their Story (`story: <key>`). For each one, when it is complete: set
-`status: approved`, show it, and ask `harness decision present --gate approve-document --artifact
-<document>`. Approving pins its exact content; editing it afterwards needs a new approval. With a
+`status: approved`, show it with `harness workflow show --artifact <document>` and put the output
+in your reply, then ask `harness decision present --gate approve-document --artifact <document>`. Approving pins its exact content; editing it afterwards needs a new approval. With a
 remote tracker, then publish it to its Story with `tracker_publish_artifact` so the team sees it
 where the work item lives. Build the reading manifest over the approved plans and documents so later
 stages load only what they need; the manifest is harness state, not a document to approve. Keep

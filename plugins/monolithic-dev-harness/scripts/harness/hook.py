@@ -815,9 +815,9 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             ),
         )
         return 0
-    match _unseen_plan(repo, host, payload, pending if preparing else None):
+    match _unseen_artifacts(repo, host, payload, pending if preparing else None):
         case str() as reason:
-            _emit_decision(host, rules.Decision.deny("plan-not-shown", reason))
+            _emit_decision(host, rules.Decision.deny("artifacts-not-shown", reason))
             return 0
         case None:
             pass
@@ -922,17 +922,24 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     return 0
 
 
-def _unseen_plan(
+def _unseen_artifacts(
     repo: Path, host: str, payload: dict[str, Any], pending: decisions.Pending | None
 ) -> str | None:
-    """On Claude, a Story's plan approval waits until the plan is in the agent's own reply."""
+    """On Claude, a `shown` gate waits until its files are in the agent's own reply."""
     match host, pending, payload.get("transcript_path"):
-        case "claude", decisions.Pending(scope=scope), str() as transcript if (
-            decisions.record(repo, scope) or {}
-        ).get("gate") == "implementation-confirm":
-            from harness import plan_review
+        case "claude", decisions.Pending(scope=scope), str() as transcript:
+            from harness import artifact_review, gates
 
-            result = plan_review.shown_in_chat(repo, scope, Path(transcript))
+            record = decisions.record(repo, scope) or {}
+            match gates.load():
+                case Ok((_, catalog)) if (
+                    gate := catalog.get(str(record.get("gate", "")))
+                ) and gate.shown:
+                    pass
+                case _:
+                    return None
+            names = [str(entry[0]) for entry in record.get("artifacts", ()) if entry]
+            result = artifact_review.shown_in_chat(repo, names, Path(transcript))
             return result.failure.message if isinstance(result, Err) else None
         case _:
             return None

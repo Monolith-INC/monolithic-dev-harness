@@ -12,6 +12,7 @@ from pathlib import Path
 from core.result import Err, Failure, Ok, Result, attempt, bind, err, fmap, require
 from harness import (
     artifact_manifest,
+    artifact_review,
     decisions,
     discovery,
     gates,
@@ -398,31 +399,24 @@ def decision_command(args: argparse.Namespace) -> int:
             return _fallback_decision(repo, args)
         case "present":
             key = decisions.new_key()
-            match _question_spec(repo, args):
-                case Err(failure):
-                    print(failure.message, file=sys.stderr)
-                    return 2
-                case Ok(spec):
-                    pass
-            # A Story's plan is approved only once the human has been shown it as it reads now.
-            match (
-                bind(
-                    registry.open_selected(repo, settings.load(repo)),
-                    lambda ops: plan_review.ready(
-                        repo,
-                        args.session_id,
-                        list(args.artifact or ()),
-                        dict(pairs(args.value)).get("story", ""),
-                        ops,
+            match bind(
+                _gate_values(repo, args),
+                lambda values: bind(
+                    _question_spec(repo, args, values),
+                    lambda spec: fmap(
+                        artifact_review.shown(
+                            repo, args.session_id, list(args.artifact or ())
+                        )
+                        if spec.shown
+                        else Ok(None),
+                        lambda _: spec,
                     ),
-                )
-                if spec.gate == "implementation-confirm"
-                else Ok(None)
+                ),
             ):
                 case Err(failure):
                     print(failure.message, file=sys.stderr)
                     return 2
-                case Ok():
+                case Ok(spec):
                     pass
             wording = questions.problems(
                 {
@@ -563,12 +557,31 @@ def _reused(entry: dict | None) -> Result[str] | None:
             return None
 
 
-def _question_spec(repo: Path, args: argparse.Namespace) -> Result[gates.Rendered]:
+def _gate_values(repo: Path, args: argparse.Namespace) -> Result[dict[str, str]]:
+    """The `--value`s that fill the gate's slots. `implementation-confirm` names the Story its one
+    approved plan is for, and that Story must be in the tracker: it comes from the plan, never
+    from the agent."""
+    values = dict(pairs(args.value))
+    if args.gate != "implementation-confirm":
+        return Ok(values)
+    return bind(
+        plan_review.story(repo, list(args.artifact or ())),
+        lambda key: bind(
+            registry.open_selected(repo, settings.load(repo)),
+            lambda ops: fmap(
+                plan_review.tracked(ops, key), lambda _: {**values, "story": key}
+            ),
+        ),
+    )
+
+
+def _question_spec(
+    repo: Path, args: argparse.Namespace, values: dict[str, str]
+) -> Result[gates.Rendered]:
     """The question to ask: a catalog gate in the project's language, or a one-off question.
 
     Approvals always come from the catalog, so their wording and what they are tied to are fixed.
     """
-    values = dict(pairs(args.value))
     if args.gate:
         if (
             args.question
@@ -814,7 +827,7 @@ def workflow_command(args: argparse.Namespace) -> int:
     match args.operation:
         case "show":
             return print_result(
-                plan_review.show(repo, args.session_id, list(args.artifact or ()))
+                artifact_review.show(repo, args.session_id, list(args.artifact or ()))
             )
         case "manifest":
             return print_result(

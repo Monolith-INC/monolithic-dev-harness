@@ -1,4 +1,5 @@
-"""A Story's implementation plan is approved on its own, after it was shown as it reads now."""
+"""A Story's implementation plan, and any `shown` gate's files, are approved only after they were
+shown as they read now; the plan's Story comes from the plan."""
 
 from __future__ import annotations
 
@@ -56,7 +57,7 @@ def _show(repo: Path, *names: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def _confirm(repo: Path, story: str, *names: str) -> subprocess.CompletedProcess[str]:
+def _ask(repo: Path, gate: str, *names: str) -> subprocess.CompletedProcess[str]:
     return _cli(
         repo,
         "decision",
@@ -65,11 +66,13 @@ def _confirm(repo: Path, story: str, *names: str) -> subprocess.CompletedProcess
         "claude",
         "--blocking-available",
         "--gate",
-        "implementation-confirm",
-        "--value",
-        f"story={story}",
+        gate,
         *(a for n in names for a in ("--artifact", n)),
     )
+
+
+def _confirm(repo: Path, *names: str) -> subprocess.CompletedProcess[str]:
+    return _ask(repo, "implementation-confirm", *names)
 
 
 def test_a_shown_plan_for_a_tracked_story_may_be_approved(tmp_path: Path) -> None:
@@ -79,21 +82,23 @@ def test_a_shown_plan_for_a_tracked_story_may_be_approved(tmp_path: Path) -> Non
     shown = _show(tmp_path, plan)
     assert shown.returncode == 0, shown.stderr
     assert "Do it." in shown.stdout
-    assert f"[{plan}]({plan})" in shown.stdout and story in shown.stdout
+    assert f"[{plan}]({plan})" in shown.stdout
 
-    asked = _confirm(tmp_path, story, plan)
+    asked = _confirm(tmp_path, plan)
     assert asked.returncode == 0, asked.stderr
-    assert json.loads(asked.stdout)["tool"] == "AskUserQuestion"
+    question = json.loads(asked.stdout)
+    assert question["tool"] == "AskUserQuestion"
+    assert story in json.dumps(question["questions"])
 
 
 def test_the_plan_must_be_shown_as_it_reads_now(tmp_path: Path) -> None:
     story = _project(tmp_path)
     plan = _plan(tmp_path, story)
-    assert "show the plan first" in _confirm(tmp_path, story, plan).stderr
+    assert "show the files first" in _confirm(tmp_path, plan).stderr
 
     assert _show(tmp_path, plan).returncode == 0
     _plan(tmp_path, story, body="# Plan\n\nSomething else.\n")
-    assert "show the plan first" in _confirm(tmp_path, story, plan).stderr
+    assert "show the files first" in _confirm(tmp_path, plan).stderr
 
 
 def test_exactly_one_plan_is_approved_at_a_time(tmp_path: Path) -> None:
@@ -102,10 +107,9 @@ def test_exactly_one_plan_is_approved_at_a_time(tmp_path: Path) -> None:
     other = tmp_path / "Vault" / "other.md"
     other.write_text("notes\n", encoding="utf-8")
 
-    assert "--artifact" in _confirm(tmp_path, story).stderr
+    assert "--artifact" in _confirm(tmp_path).stderr
     assert (
-        "one implementation plan"
-        in _confirm(tmp_path, story, plan, "Vault/other.md").stderr
+        "one implementation plan" in _confirm(tmp_path, plan, "Vault/other.md").stderr
     )
 
 
@@ -113,13 +117,17 @@ def test_the_note_must_be_an_approved_plan_for_that_story(tmp_path: Path) -> Non
     story = _project(tmp_path)
 
     _plan(tmp_path, story, kind="design-doc")
-    assert "type implementation-plan" in _confirm(tmp_path, story, PLAN).stderr
+    assert "type implementation-plan" in _confirm(tmp_path, PLAN).stderr
 
     _plan(tmp_path, story, status="draft")
-    assert "status: approved" in _confirm(tmp_path, story, PLAN).stderr
+    assert "status: approved" in _confirm(tmp_path, PLAN).stderr
 
-    _plan(tmp_path, "STORY-0042")
-    assert f"names STORY-0042, not {story}" in _confirm(tmp_path, story, PLAN).stderr
+    path = tmp_path / PLAN
+    path.write_text(
+        "---\ntype: implementation-plan\nstatus: approved\n---\n\n# Plan\n",
+        encoding="utf-8",
+    )
+    assert "exactly one Story" in _confirm(tmp_path, PLAN).stderr
 
 
 def test_the_story_must_exist_in_the_tracker(tmp_path: Path) -> None:
@@ -127,14 +135,20 @@ def test_the_story_must_exist_in_the_tracker(tmp_path: Path) -> None:
     plan = _plan(tmp_path, "STORY-0042")
     assert _show(tmp_path, plan).returncode == 0
 
-    refused = _confirm(tmp_path, "STORY-0042", plan)
+    refused = _confirm(tmp_path, plan)
     assert refused.returncode != 0 and "STORY-0042" in refused.stderr
 
 
-def test_tracker_publish_is_gone(tmp_path: Path) -> None:
+def test_a_document_is_shown_before_it_is_approved(tmp_path: Path) -> None:
     _project(tmp_path)
-    refused = _cli(tmp_path, "tracker", "publish")
-    assert refused.returncode == 2 and "invalid choice" in refused.stderr
+    document = tmp_path / "Vault" / "risks.md"
+    document.parent.mkdir(parents=True, exist_ok=True)
+    document.write_text("# Risks\n\nNone known.\n", encoding="utf-8")
+    name = "Vault/risks.md"
+    assert "show the files first" in _ask(tmp_path, "approve-document", name).stderr
+    assert _show(tmp_path, name).returncode == 0
+    asked = _ask(tmp_path, "approve-document", name)
+    assert asked.returncode == 0, asked.stderr
 
 
 def _transcript(path: Path, reply: str) -> Path:
@@ -170,7 +184,7 @@ def test_on_claude_the_plan_must_be_in_the_reply_not_only_a_tool_result(
     story = _project(tmp_path)
     plan = _plan(tmp_path, story)
     shown = _show(tmp_path, plan)
-    asked = json.loads(_confirm(tmp_path, story, plan).stdout)
+    asked = json.loads(_confirm(tmp_path, plan).stdout)
     question = {
         "tool_name": "AskUserQuestion",
         "tool_input": {"questions": asked["questions"]},
@@ -182,7 +196,7 @@ def test_on_claude_the_plan_must_be_in_the_reply_not_only_a_tool_result(
         "ask",
         {**question, "tool_use_id": "toolu_a", "transcript_path": str(summary)},
     )
-    assert "plan-not-shown" in denied
+    assert "artifacts-not-shown" in denied
 
     full = _transcript(tmp_path / "full.jsonl", shown.stdout)
     allowed = claude_hook(

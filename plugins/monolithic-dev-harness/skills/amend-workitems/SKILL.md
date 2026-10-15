@@ -82,8 +82,8 @@ parallel format:
   references and approval gate.
 - Human-facing wording → `$generate-plain-language-documentation`.
 - An existing Story's plan-backed Task changes → `$generate-breakdown-work-items` rules; update
-  the saved Implementation Plan first, show it and have it approved again with
-  `implementation-confirm --value story=<key>`, then reconcile its Tasks.
+  the saved Implementation Plan first, have it approved again with `implementation-confirm` as
+  that skill describes, then reconcile its Tasks.
 - A missing required Task explicitly approved by the user → `$generate-work-item` and then link it
   as a child of the Story.
 

@@ -36,7 +36,7 @@ LINK = "work_item_linked"
 TRACKER_FACTS = "execution-facts.json"
 # Failures that mean the tracker gave no answer at all, as opposed to an answer such as "not found".
 UNREACHABLE = frozenset({"provider_unavailable", "not_configured"})
-_BUILDABLE = frozenset({WorkItemKind.USER_STORY, WorkItemKind.BUG})
+BUILDABLE = frozenset({WorkItemKind.USER_STORY, WorkItemKind.BUG})
 
 
 @dataclass(frozen=True)
@@ -408,7 +408,7 @@ def _tracker(result: Result[Any]) -> Any:
 
 def _started(context: _Context) -> str | None:
     item = context.item
-    if item.kind not in _BUILDABLE:
+    if item.kind not in BUILDABLE:
         return f"{item.key} is a {item.kind.value}; link the Story or Bug it belongs to"
     if item.state != LogicalState.IN_PROGRESS:
         return f"{item.key} is {item.state.value}, not in progress"

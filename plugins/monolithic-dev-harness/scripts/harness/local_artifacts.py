@@ -15,6 +15,7 @@ import hashlib
 import os
 import sys
 from collections.abc import Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
@@ -39,13 +40,55 @@ def artifacts_dir(project_root: Path) -> Path | None:
     return load_project_config(project_root).resolve_artifacts_dir(project_root)
 
 
+@dataclass(frozen=True)
+class Note:
+    """A note's frontmatter and the digest of its whole content."""
+
+    frontmatter: dict[str, Any]
+    digest: str
+
+    @property
+    def kind(self) -> str:
+        return str(self.frontmatter.get("type") or "")
+
+    @property
+    def approved(self) -> bool:
+        return (
+            str(self.frontmatter.get("status", "")).strip().lower() == APPROVED_STATUS
+        )
+
+    @property
+    def work_items(self) -> tuple[str, ...]:
+        """The work items the note names in its `story` or `work_item` field, one or a list."""
+        named: list[str] = []
+        for name in WORK_ITEM_FIELDS:
+            value = self.frontmatter.get(name)
+            for item in value if isinstance(value, list) else [value]:
+                # Inline lists (`story: ["7824"]`) keep their quotes after parsing.
+                text = str(item).strip().strip("\"'") if item is not None else ""
+                if text:
+                    named.append(text)
+        return tuple(dict.fromkeys(named))
+
+
+def note(path: Path) -> Note | None:
+    """The note at `path`, or None when it cannot be read."""
+    try:
+        content = path.read_bytes()
+    except OSError:
+        return None
+    head = content[:_FRONTMATTER_BYTES].decode("utf-8-sig", errors="replace")
+    frontmatter, _ = parse_frontmatter(head)
+    return Note(frontmatter, hashlib.sha256(content).hexdigest())
+
+
 def approved_notes(project_root: Path) -> dict[str, str]:
     """Path -> content digest of each note marked `status: approved`, for an approval to pin."""
     notes: dict[str, str] = {}
     for path in _markdown_files(artifacts_dir(project_root)):
-        note = _read_note(path)
-        if note is not None and _approved(note[0]):
-            notes[str(path.resolve())] = note[1]
+        found = note(path)
+        if found is not None and found.approved:
+            notes[str(path.resolve())] = found.digest
     return notes
 
 
@@ -56,24 +99,16 @@ def approved_kinds_for(project_root: Path, key: str) -> set[str]:
     """
     kinds: set[str] = set()
     for path, digests in state.pinned_notes(project_root).items():
-        note = _read_note(Path(path))
-        if note is None or note[1] not in digests:
-            continue
-        frontmatter = note[0]
-        kind = frontmatter.get("type")
+        found = note(Path(path))
         if (
-            isinstance(kind, str)
-            and _approved(frontmatter)
-            and any(_names_key(frontmatter.get(f), key) for f in WORK_ITEM_FIELDS)
+            found is not None
+            and found.digest in digests
+            and found.kind
+            and found.approved
+            and key in found.work_items
         ):
-            kinds.add(kind)
+            kinds.add(found.kind)
     return kinds
-
-
-def frontmatter(path: Path) -> dict[str, Any]:
-    """A note's frontmatter; empty when the note cannot be read."""
-    note = _read_note(path)
-    return note[0] if note is not None else {}
 
 
 def _markdown_files(root: Path | None) -> Iterator[Path]:
@@ -86,26 +121,3 @@ def _markdown_files(root: Path | None) -> Iterator[Path]:
         for name in files:
             if name.endswith(".md"):
                 yield Path(directory) / name
-
-
-def _read_note(path: Path) -> tuple[dict[str, Any], str] | None:
-    """The note's frontmatter and the digest of its whole content, or None when unreadable."""
-    try:
-        content = path.read_bytes()
-    except OSError:
-        return None
-    head = content[:_FRONTMATTER_BYTES].decode("utf-8-sig", errors="replace")
-    frontmatter, _ = parse_frontmatter(head)
-    return frontmatter, hashlib.sha256(content).hexdigest()
-
-
-def _approved(frontmatter: dict[str, Any]) -> bool:
-    return str(frontmatter.get("status", "")).strip().lower() == APPROVED_STATUS
-
-
-def _names_key(value: Any, key: str) -> bool:
-    # Inline lists (`story: ["7824"]`) keep their quotes after parsing.
-    values = value if isinstance(value, list) else [value]
-    return any(
-        str(item).strip().strip("\"'") == key for item in values if item is not None
-    )
