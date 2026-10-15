@@ -429,15 +429,20 @@ def _update(
         ITERATION_PATH: changes.iteration,
     }
     updates = [
-        {
-            "op": "add",
-            "path": _field_ref(name),
-            "value": value,
-            **({"format": "Markdown"} if name == DESCRIPTION else {}),
-        }
+        {"op": "add", "path": _field_ref(name), "value": value}
         for name, value in named.items()
         if value is not None
     ]
+    if changes.description is not None:
+        # The server's `update` passes plain JSON-Patch ops through; a per-op `format` is dropped,
+        # so the field's own format op keeps the Markdown body from being stored as HTML.
+        updates.append(
+            {
+                "op": "add",
+                "path": f"/multilineFieldsFormat/{DESCRIPTION}",
+                "value": "Markdown",
+            }
+        )
     if changes.hours is not None:
         updates += [
             {"op": "add", "path": path, "value": value}

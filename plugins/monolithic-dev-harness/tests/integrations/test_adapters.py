@@ -121,7 +121,11 @@ class AzureTest(unittest.TestCase):
         [sent] = self.call.sent("wit_work_item_write")
         self.assertEqual((sent["action"], sent["id"]), ("update", 10))
         self.assertEqual(
-            {update["path"]: update["value"] for update in sent["updates"]},
+            {
+                update["path"]: update["value"]
+                for update in sent["updates"]
+                if not update["path"].startswith("/multilineFieldsFormat/")
+            },
             {
                 "/fields/System.Title": "Refined",
                 "/fields/System.Description": "body",
@@ -131,6 +135,16 @@ class AzureTest(unittest.TestCase):
                 "/fields/System.IterationPath": "proj\\Sprint 2",
             },
         )
+        # The MCP server's `update` takes plain JSON-Patch ops; Markdown is a field of its own.
+        self.assertIn(
+            {
+                "op": "add",
+                "path": "/multilineFieldsFormat/System.Description",
+                "value": "Markdown",
+            },
+            sent["updates"],
+        )
+        self.assertTrue(all(set(u) == {"op", "path", "value"} for u in sent["updates"]))
         self.assertEqual(updated.key, "10")
         self.tracker.update_work_item("10", WorkItemChanges(title="Only"))
         self.assertEqual(
