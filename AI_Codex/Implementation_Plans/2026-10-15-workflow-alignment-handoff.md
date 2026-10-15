@@ -34,6 +34,23 @@ implemented and pushed (`3482e84` … `efeb3d3`). All suites green at `efeb3d3`:
 | 10 | `5b04de4` | Planning documents and data not code; scripts there still are |
 | 11 | `efeb3d3` | Rename to "onboarding"; docs, diagram and changelog current; obsolete docs deleted |
 
+Thermos review of packages 1–11 (both reviewers) and its fixes, `bf0c48c` … `369790b`, all suites
+green at `369790b` (backlog 334, plugin 1204 / 1 skipped, installers):
+
+- Fixed: the discovery skill's `--stage discover` command (plus a test that every documented
+  `harness …` command parses); Feature and Epic completion (children done or cancelled, plus a
+  resolution report and verification, as codex-workflows closes a Feature); Azure updates keep
+  Markdown (`/multilineFieldsFormat/System.Description`); an approval pins only the notes it
+  reviewed; an item approval no longer covers rewriting that item's text; a plan outside the
+  artifacts path is refused.
+- Owner decision: a pull request is always the user's choice and never a completion condition
+  (`pull_request_linked` removed; constitution Article 10).
+- Refactors: one shape for hours (`Hours`, `changed_fields`, tool-shaped `write_ops`); one note
+  reader; `shown = true` as a gate setting (`artifact_review`), the plan's Story read from the plan;
+  session binding in `work_lifecycle`; one Git-delivery helper; the gate reference complete.
+- Still unverified: the Linear MCP `save_issue` field names `estimate`, `assignee` and `cycle`, and
+  whether Linear accepts fractional estimates; check them against the live server in the trial.
+
 Earlier on this branch: catalog requirement gates and Git independence (`2ceaf27`, `5d8aab2`),
 knowledge store in trial fixtures (`addd129`), the alignment design and constitution.
 
@@ -99,7 +116,7 @@ All questions are settled as owner decisions 1–12 in that document.
 2. **Rerun DAY-001** on a fresh fixture through refinement (item approvals, plan approval, Tasks)
    and `start-ticket`, with one code edit attempted before and after linking; stop before
    implementation. Check that `tracker_update_work_item` writes hours on the local tracker.
-3. **Thermos review** of the branch, then take PR #37 out of draft.
+3. Take PR #37 out of draft once the trial passes (the thermos review is done).
 
 ## Environment notes
 
