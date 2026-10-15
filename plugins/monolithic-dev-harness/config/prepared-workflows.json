@@ -48,7 +48,8 @@
       ],
       "checks": [
         "keep ideas distinct from accepted requirements",
-        "record unresolved choices"
+        "record unresolved choices",
+        "end with the idea-continue question: continue into technical discovery, or stop with the brief or spec"
       ],
       "recovery": [
         "save the current idea record and return to the last human choice"

@@ -19,6 +19,20 @@ Use that supplied record as the intent. Do not pass an external tracker id to BM
 artifact from this stage. Use `tickets.py find` or `next` only when the user explicitly starts from
 the BMad file-based ticket tree.
 
+### An already-refined entry item
+
+Check the supplied item with `validate-artifact`. An item is refined when its text is already in
+its type's template (an Epic, Feature or Story, written by `enrich-work-item` with the draft kept as
+Original Description) and it passes. Tasks are a Story's breakdown, not part of refinement, so do
+not look at them here. A draft continues discovery without a question. For a refined item, ask
+`harness decision present --gate refined-start --value item=<key>`:
+
+- **Rework it:** continue discovery. Whatever planning and hardening change reaches the item first,
+  through `enrich-work-item` or `amend-workitems`, keeping its Original Description.
+- **Use it as it is:** save a checkpoint with `harness workflow checkpoint --stage refinement
+  --label "<key> used as it is" --next-action "Refinement: validate <key> and its children, then
+  break down any Story without Tasks"` and follow that next action instead of this workflow.
+
 ## Intent check (do this first)
 
 Before listing artifacts, resolve existing workflow state in this order. Skip the remaining checks as soon as a branch applies. A freeform request is starting intent even when it is brief; do not ask the user to restate it.

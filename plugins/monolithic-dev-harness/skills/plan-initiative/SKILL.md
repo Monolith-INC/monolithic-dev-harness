@@ -57,5 +57,8 @@ companions. Present the exact complete contract and critique together through th
 available review surface, then ask for one material decision about entering backlog drafting.
 
 Beginning backlog work is a new action. Do not create work items merely because planning finished.
+Ask `harness decision present --gate idea-continue`: **Continue** goes on to technical discovery
+(`bmad-build`) with the product spec as its input; **Stop here** keeps the brief or spec as the
+result, and the work ends there with `harness workflow complete`.
 
 Adapted from BMad Method's planning router (MIT, BMad Code, LLC).

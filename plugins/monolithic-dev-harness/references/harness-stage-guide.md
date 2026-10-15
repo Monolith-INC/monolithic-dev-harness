@@ -167,7 +167,12 @@ the choices and progress and continue this same run after the reply; do not aban
 internal question-tool errors. The shared human-decisions contract applies to every later question too.
 
 The choice is routing, not approval: it never opens an approval window. `Investigate first` invokes
-`bmad-build`; `Draft work items` enters Stage 1; `Explore the idea` invokes `plan-initiative`.
+`bmad-build`; `Draft work items` enters Refinement; `Explore the idea` invokes `plan-initiative`,
+which ends with `idea-continue`: continue into technical discovery, or stop with the brief or spec.
+
+When the request names an Epic, Feature or Story whose text is already refined (it passes
+`validate-artifact`), discovery asks `refined-start`: rework it with discovery, planning and
+hardening, or use it as it is and go to Refinement. Tasks play no part in that check.
 Continue directly when the user already chose a starting point, named an existing task, directly
 invoked a planning skill, or explicitly asked to create or modify a work item.
 
