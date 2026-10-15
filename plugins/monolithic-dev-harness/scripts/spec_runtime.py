@@ -11,16 +11,15 @@ SPEC_KINDS = (
     "design-doc",
     "tech-spec",
     "srs",
-    "implementation-plan",
     "bugfix-spec",
     "api-contract",
 )
 DEFAULT_KINDS_BY_SIGNAL = {
     "bugfix": ("bugfix-spec", "adr"),
     "feature": ("design-doc", "tech-spec"),
-    "task": ("implementation-plan", "tech-spec"),
+    "task": ("tech-spec",),
     "refactor": ("adr", "tech-spec"),
-    "default": ("tech-spec", "implementation-plan"),
+    "default": ("tech-spec",),
 }
 
 
