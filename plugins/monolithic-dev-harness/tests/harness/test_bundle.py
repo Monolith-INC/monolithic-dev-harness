@@ -208,6 +208,53 @@ def test_approved_drafts_are_created_once_each_under_their_parents(
     assert manifest.name == "local"
 
 
+@pytest.mark.parametrize("later", ["Revise", "Stop here"])
+def test_a_later_answer_withdraws_the_approval_to_publish(
+    tmp_path: Path, later: str
+) -> None:
+    """Only the session's last implementation-confirm answer counts, as for code changes."""
+    _manifest(tmp_path)
+    drafts_name = _bundle(tmp_path)[1]
+    digest = bundle._digests(tmp_path, [drafts_name]).value[0][1]
+    answer = {
+        "gate": "implementation-confirm",
+        "status": "answered",
+        "artifacts": [[drafts_name, digest]],
+    }
+    state.write_json(
+        state.state_dir(tmp_path) / "decision-history.json",
+        {"answers": [{**answer, "answer": "Approve"}, {**answer, "answer": later}]},
+    )
+
+    refused = _cli(tmp_path, "tracker", "publish", "--drafts", drafts_name)
+
+    assert refused.returncode != 0 and "not part of an approved" in refused.stderr
+
+
+def test_approving_other_drafts_last_does_not_publish_these(tmp_path: Path) -> None:
+    _manifest(tmp_path)
+    drafts_name = _bundle(tmp_path)[1]
+    digest = bundle._digests(tmp_path, [drafts_name]).value[0][1]
+    approved = {
+        "gate": "implementation-confirm",
+        "status": "answered",
+        "answer": "Approve",
+    }
+    state.write_json(
+        state.state_dir(tmp_path) / "decision-history.json",
+        {
+            "answers": [
+                {**approved, "artifacts": [[drafts_name, digest]]},
+                {**approved, "artifacts": [["other/tracker-drafts.json", "0" * 64]]},
+            ]
+        },
+    )
+
+    refused = _cli(tmp_path, "tracker", "publish", "--drafts", drafts_name)
+
+    assert refused.returncode != 0 and "not part of an approved" in refused.stderr
+
+
 def _transcript(path: Path, reply: str) -> Path:
     rows = [
         {

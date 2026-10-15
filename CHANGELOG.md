@@ -48,6 +48,9 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- `harness tracker publish` reads only the work session's last `implementation-confirm` answer:
+  a later **Revise** or **Stop here**, or an approval of different drafts, withdraws an earlier
+  approval, as it already did for code changes.
 - Draft critics evaluate each submitted draft once and retain findings without requesting
   implementation approval. Reflection history survives revised submissions.
 - Codex presentation attempts native controls before chat; namespaced question tools are routed

@@ -330,15 +330,22 @@ def publish(
     )
 
 
-def _confirmation(entry: Mapping[str, Any]) -> bool:
-    return (
-        entry.get("gate") == "implementation-confirm"
+def _last_approval(entries: list[Mapping[str, Any]]) -> Mapping[str, Any] | None:
+    """The session's last implementation-confirm answer when it approved; a later Revise or Stop
+    withdraws an earlier approval."""
+    answers = [
+        entry
+        for entry in entries
+        if entry.get("gate") == "implementation-confirm"
         and entry.get("status") == "answered"
-    )
-
-
-def _approves(entry: Mapping[str, Any]) -> bool:
-    return str(entry.get("answer", "")).strip().casefold() in APPROVED_ANSWERS
+    ]
+    match answers:
+        case [*_, last] if (
+            str(last.get("answer", "")).strip().casefold() in APPROVED_ANSWERS
+        ):
+            return last
+        case _:
+            return None
 
 
 def covers(repo: Path, session: str, work_item: str) -> bool:
@@ -349,12 +356,11 @@ def covers(repo: Path, session: str, work_item: str) -> bool:
             pass
         case _:
             return False
-    answers = [entry for entry in entries if _confirmation(entry)]
-    reviewed = answers[-1].get("artifacts") if answers else None
+    approval = _last_approval(entries)
+    reviewed = approval.get("artifacts") if approval is not None else None
     return (
-        bool(answers)
-        and answers[-1].get("approval") is True
-        and _approves(answers[-1])
+        approval is not None
+        and approval.get("approval") is True
         and isinstance(reviewed, list)
         and bool(reviewed)
         and _unchanged(repo, reviewed)
@@ -370,11 +376,10 @@ def _unchanged(repo: Path, reviewed: list[Any]) -> bool:
 
 
 def _approved(repo: Path, session: str | None, drafts_name: str) -> Result[None]:
-    def matches(entry: Mapping[str, Any], digest: str) -> bool:
-        return (
-            _confirmation(entry)
-            and _approves(entry)
-            and [drafts_name, digest] in entry.get("artifacts", [])
+    def approved(entries: list[Mapping[str, Any]], digest: str) -> bool:
+        approval = _last_approval(entries)
+        return approval is not None and [drafts_name, digest] in approval.get(
+            "artifacts", []
         )
 
     return bind(
@@ -383,7 +388,7 @@ def _approved(repo: Path, session: str | None, drafts_name: str) -> Result[None]
             _history(repo, session),
             lambda entries: (
                 Ok(None)
-                if any(matches(entry, digests[0][1]) for entry in entries)
+                if approved(entries, digests[0][1])
                 else err(
                     "publish_unapproved",
                     f"{drafts_name} is not part of an approved implementation bundle as it is "
