@@ -19,6 +19,12 @@ from integrations.contracts import BUILDABLE_KINDS, TrackerOps
 def story(repo: Path, names: list[str]) -> Result[str]:
     """The Story or Bug the one approved plan in `names` is for."""
     match names:
+        case [name] if not _in_artifacts_path(repo, name):
+            return err(
+                "plan_invalid",
+                f"{name} is outside the artifacts path, so approving it could not pin it; save "
+                "the plan in the artifacts path",
+            )
         case [name]:
             return _plan_story(name, local_artifacts.note((repo / name).resolve()))
         case _:
@@ -41,6 +47,13 @@ def tracked(ops: TrackerOps, key: str) -> Result[None]:
                 f"{key} is a {item.kind.value}; a plan is approved for a Story or Bug",
             )
         ),
+    )
+
+
+def _in_artifacts_path(repo: Path, name: str) -> bool:
+    folder = local_artifacts.artifacts_dir(repo)
+    return folder is not None and (repo / name).resolve().is_relative_to(
+        folder.resolve()
     )
 
 

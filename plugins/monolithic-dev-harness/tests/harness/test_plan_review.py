@@ -205,3 +205,14 @@ def test_on_claude_the_plan_must_be_in_the_reply_not_only_a_tool_result(
         {**question, "tool_use_id": "toolu_b", "transcript_path": str(full)},
     )
     assert "deny" not in allowed
+
+
+def test_the_plan_lives_in_the_artifacts_path(tmp_path: Path) -> None:
+    story = _project(tmp_path)
+    outside = tmp_path / "docs" / "plan.md"
+    outside.parent.mkdir()
+    outside.write_text(
+        f'---\ntype: implementation-plan\nstory: "{story}"\nstatus: approved\n---\n',
+        encoding="utf-8",
+    )
+    assert "artifacts path" in _confirm(tmp_path, "docs/plan.md").stderr
