@@ -40,6 +40,7 @@ class Session:
     events: tuple[dict[str, str], ...]
     folder: Path
     implicit_selection: bool = True
+    work_item: str = ""  # the Story or Bug this session implements, once linked
 
 
 def scope_folder(
@@ -75,6 +76,7 @@ def _payload(session: Session) -> dict[str, Any]:
         "updated_at": session.updated_at,
         "events": list(session.events),
         "implicit_selection": session.implicit_selection,
+        "work_item": session.work_item,
     }
 
 
@@ -96,6 +98,7 @@ def _from_payload(
             ),
             folder=folder,
             implicit_selection=payload.get("implicit_selection", True) is True,
+            work_item=str(payload.get("work_item") or ""),
         )
     except (KeyError, TypeError, ValueError):
         return err(
@@ -433,6 +436,39 @@ def _transition(
                 ),
                 lambda _: Ok(updated),
             )
+
+
+def link(project: Path, identifier: str, work_item: str) -> Result[Session]:
+    """Name the Story or Bug an active session implements; a new link replaces the old one."""
+    key = work_item.strip()
+    return bind(
+        require(bool(key), "invalid_request", "name the work item to link"),
+        lambda _: bind(
+            require_active(project, identifier),
+            lambda current: _save_link(current, key),
+        ),
+    )
+
+
+def _save_link(current: Session, key: str) -> Result[Session]:
+    now = _now()
+    updated = replace(
+        current,
+        work_item=key,
+        updated_at=now,
+        events=(*current.events, {"type": "linked", "at": now}),
+    )
+    return fmap(
+        attempt(
+            lambda: state.write_json(
+                updated.folder / "session.json", _payload(updated)
+            ),
+            "session_unwritable",
+            f"could not update work session {current.id}",
+            OSError,
+        ),
+        lambda _: updated,
+    )
 
 
 def as_json(session: Session) -> dict[str, Any]:

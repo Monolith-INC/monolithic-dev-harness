@@ -68,6 +68,8 @@ class Settings:
     guarded_paths: tuple[GuardedPath, ...]
     require_draft: bool
     require_review_verdict: bool
+    # The user chose Git-based delivery: only then do the rules about Git commands apply.
+    git_delivery: bool = False
 
     @property
     def check_names(self) -> frozenset[str]:
@@ -216,6 +218,7 @@ def _parse(raw: Mapping[str, Any]) -> Result[Settings]:
             require_review_verdict=bool(
                 pull_requests.get("require_review_verdict", True)
             ),
+            git_delivery=raw.get("git", {}).get("delivery") is True,
         )
     )
 

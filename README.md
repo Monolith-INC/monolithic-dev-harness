@@ -98,15 +98,18 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
   approval gates, audited against the source text and stable product capability IDs when present.
 - **Trackers are adapters:** Azure DevOps, Linear, and a repository-local tracker ship; any other
   can be onboarded as a folder, and counts only once a person trusts it as it reads.
-- **Sessions:** a work item is bound to one checkout; code changes need an active session, and the
-  workflow checks that item.
+- **Work sessions:** a work session is linked to the Story or Bug it implements. Code changes wait
+  until the workflow catalog's execution requirements hold (Tasks parented to it, an approved
+  implementation plan, the item in progress); marking it done waits for the verify stage's. No
+  harness decision depends on version control.
 - **Spec-driven delivery:** a technical spec per Story, then one test-first, checked, cleaned-up
   commit per Task; stacked branches for multi-Story Features.
 - **Requirements-first review:** coverage of the Story's acceptance criteria before a deep
   correctness and maintainability audit, ending in a recorded verdict and a **draft** pull request.
-- **Deterministic enforcement:** ten named rules (for example `approval-required`,
-  `tests-with-code`, `draft-reviewed-prs`) plus the workflow policy, evaluated before every
-  governed tool call, failing closed for writes.
+- **Deterministic enforcement:** named rules (for example `approval-required`,
+  `generated-files`, `draft-reviewed-prs`) plus the workflow requirements in
+  `config/prepared-workflows.json`, evaluated before every governed tool call, failing closed for
+  writes. Rules about Git commands apply only when you choose Git-based delivery.
 - **Human approvals that the agent cannot forge:** tracker and SCM writes open only after you click
   **Approve** on the agent's question in Claude Code or Codex, or reply `approve HB-…` where the
   native question picker is unavailable.
@@ -239,11 +242,13 @@ no approved spec, it stops and asks for one.
 
 #### What the hooks block while it works
 
-- committing code without tests (`tests-with-code`)
+- changing code before the work session is linked and its plan and Tasks are in place
+  (`harness workflow requirements`)
 - editing generated files (`generated-files`)
-- committing a guarded path before its check passes, or before a person has checked it by hand
-  (`guarded-paths`)
 - writing to the board or pushing without approval (`approval-required`)
+- marking the Story done before its source changes come with tests, its checks and review passed on
+  the code as it is, and each changed guarded path has its check or a person's hand confirmation
+  (`harness workflow requirements --gate completion`)
 
 #### End of the Story
 
@@ -364,10 +369,9 @@ fail for the intended reason, then made to pass. When a useful automated test is
 harness says so and uses the closest reliable check instead (a targeted script, an emulator
 scenario, or a manual check).
 
-Known conflict: the `tests-with-code` hook refuses any commit that changes source files with no
-test changes in the commit or earlier on the branch. So a Task with no practical automated test
-can only be committed once the branch already has test changes; as the first Task on a branch,
-it is blocked.
+Tests with code are checked when the Story is marked done, not at each commit: source files changed
+since the work session was linked must come with changed tests, so a Task with no practical
+automated test does not block its commit.
 
 #### What if implementation already exists?
 
@@ -455,7 +459,8 @@ example:
 | `branch_template`                                | yes      | ticket branch names; contains `{key}`                           |
 | `protected_work_items`                           | no       | ids never written, linked, parented, or mentioned               |
 | `artifacts_path`                                 | no       | where plans, specs, and backlog drafts live                     |
-| `checks`, `tests_required`, `generated`, `guarded_paths`, `pull_requests` | no | inputs to the commit and pull request rules |
+| `git` (`base_branch`, `delivery`)                | no       | `delivery: true` when you chose Git-based delivery; only then do rules about Git commands apply |
+| `checks`, `tests_required`, `generated`, `guarded_paths`, `pull_requests` | no | inputs to the completion requirements and pull request rules |
 
 Adding a tracker: [`skills/onboard-tracker`](./plugins/monolithic-dev-harness/skills/onboard-tracker/SKILL.md).
 See [`docs/04-operations/environments.md`](./docs/04-operations/environments.md) and

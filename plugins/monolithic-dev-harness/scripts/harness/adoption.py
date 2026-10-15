@@ -21,7 +21,7 @@ from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
 from integrations import branches, registry
 from integrations.contracts import ArtifactRef, LogicalState, WorkItem
 
-from . import gitstate, rules, sessions, settings, state
+from . import code_content, gitstate, sessions, settings, state
 
 SCHEMA = "harness-adoption-assessment:v1"
 PLAN_SCHEMA = "harness-adoption-plan:v1"
@@ -241,8 +241,14 @@ def _assessment(
     loaded = settings.load(repo)
     chosen = loaded.value if isinstance(loaded, Ok) else None
     settings_error = loaded.failure.message if isinstance(loaded, Err) else ""
-    required = rules.applicable_checks(repo, chosen) if chosen is not None else set()
-    passed = state.passed_checks(repo, gitstate.head_tree(repo))
+    required = (
+        code_content.applicable_checks(
+            chosen, tuple(gitstate.branch_paths(repo, chosen.base_branch))
+        )
+        if chosen is not None
+        else set()
+    )
+    passed = state.passed_checks(repo, code_content.current(repo))
     staged = _changed(repo, "--cached")
     unstaged = _changed(repo)
     # HEAD evidence covers the adopted content only when nothing uncommitted or untracked is carried.

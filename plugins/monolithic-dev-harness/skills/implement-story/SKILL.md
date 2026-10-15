@@ -38,7 +38,10 @@ stated in the bundle, reusing its approval. Unrelated actions and later merges n
 1. `start-ticket` on the Story: it confirms the tracker item, moves it to in progress (a tracker write:
    reuse the approved bundle when this transition is stated; otherwise ask the `move-item` gate), and returns the spec plan.
 2. Use `branch-and-pr` → *Branch* section only when the user selected branch-based delivery. Otherwise continue in the existing working copy; the approved project work-session is the work context.
-3. Read the repository routing (`AGENTS.md` → subproject router) once, and list the rules that apply
+3. Before the first code change, run `harness workflow requirements --repo <project>`. Continue only
+   when it reports `ready`; otherwise do the step it names for the first missing requirement. The
+   hook refuses code changes with the same report.
+4. Read the repository routing (`AGENTS.md` → subproject router) once, and list the rules that apply
    to this Story (state management, layer boundaries, localization, PII masking, generated code,
    test layout). Carry the list through every Task.
 
@@ -52,12 +55,14 @@ prerequisite for local implementation.
    Tasks and say why.
 2. **Failing test first** (`tdd`) for the Task's acceptance criterion.
 3. **Implement** the smallest change that passes it, following the carried rules.
-4. **Check** (`check --staged` for guarded paths; otherwise run the applicable checks). Fix until
-   green; never silence a check.
+4. **Check** (`check`): run the applicable checks on the code as it is. Fix until green; never
+   silence a check.
 5. **Deslop** (`deslop`) the Task's diff.
 6. **Commit** atomically (`commit-prep`) when versioned delivery was selected: one Task, one commit, with a message that names the Task
-   id. The hooks block commits that lack tests (`tests-with-code`), edit generated files (`generated-files`), or touch a guarded
-   path without evidence (`guarded-paths`). Fix the cause; never work around the hook.
+   id. Hand edits of generated files are refused (`generated-files`). Tests with code, checks,
+   and guarded-path evidence are completion requirements: the Story cannot be marked done without
+   them (`harness workflow requirements --gate completion`). Fix the cause; never work around a
+   hook.
 7. **Transition the Task** to done in the tracker. The approved bundle (or legacy `approve-spec` approval) covers its stated transitions while the
    spec is unchanged; if the hook reports the spec changed, show what changed and ask again.
 

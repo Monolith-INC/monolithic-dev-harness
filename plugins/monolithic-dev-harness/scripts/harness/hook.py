@@ -40,9 +40,9 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
 from core.result import Err, Ok, Result, attempt, bind  # noqa: E402
 from harness import (  # noqa: E402
     adoption,
+    code_content,
     decisions,
     gates,
-    gitstate,
     globs,
     harness_controls,
     onboarding,
@@ -53,6 +53,7 @@ from harness import (  # noqa: E402
     settings,
     state,
     tracker_policy,
+    work_sessions,
     workflow,
 )
 from host_adapters import hook_bridge, work_session_context  # noqa: E402
@@ -607,14 +608,10 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
             + _pin_approved_notes(repo, approval_id)
         )
     for name in MANUAL_RE.findall(prompt):
-        try:
-            tree = gitstate.index_tree(repo)
-        except gitstate.GitError as exc:
-            notes.append(f"[harness] manual check {name} NOT recorded: {exc}")
-            continue
-        state.record_manual(repo, name, tree, prompt[:500])
+        code = code_content.current(repo)
+        state.record_manual(repo, name, code, prompt[:500])
         notes.append(
-            f"[harness] manual check {name} recorded for staged tree {tree[:12]}."
+            f"[harness] manual check {name} recorded for the code as it is now ({code[:12]})."
         )
     if output := hook_bridge.format_prompt(host, notes):
         print(output)
@@ -897,15 +894,14 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     return 0
 
 
-
 def _unseen_bundle(
     repo: Path, host: str, payload: dict[str, Any], pending: decisions.Pending | None
 ) -> str | None:
     """On Claude, the final approval waits until the bundle is in the agent's own reply."""
     match host, pending, payload.get("transcript_path"):
         case "claude", decisions.Pending(scope=scope), str() as transcript if (
-            (decisions.record(repo, scope) or {}).get("gate") == "implementation-confirm"
-        ):
+            decisions.record(repo, scope) or {}
+        ).get("gate") == "implementation-confirm":
             from harness import bundle, settings
             from integrations import registry
 
@@ -918,6 +914,7 @@ def _unseen_bundle(
             return result.failure.message if isinstance(result, Err) else None
         case _:
             return None
+
 
 def _artifacts(repo: Path, scope: str | None) -> tuple[tuple[str, str], ...]:
     """The reviewed files of the current checkpoint, so a changed one cannot be approved."""
@@ -949,7 +946,7 @@ def _tracker_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] 
 
 
 def _manual_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] | None:
-    """Pin one unmet manual guard and the exact staged tree before showing its button."""
+    """Pin one unmet manual guard and the exact code before showing its button."""
     text = questions.manual_signoff(tool_input)
     if text is None:
         return {}
@@ -957,21 +954,24 @@ def _manual_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] |
         case _, Err():
             return None
         case str(), Ok(chosen):
-            staged = gitstate.staged_paths(repo)
-            tree = gitstate.index_tree(repo)
+            current = code_content.files(repo)
+            code = code_content.digest(current)
+            changed = rules.changed_since_link(
+                repo, work_sessions.current(repo), current
+            )
             guards = tuple(
                 guard
                 for guard in chosen.guarded_paths
                 if guard.kind == "manual"
-                and globs.select(staged, [guard.path])
-                and not state.has_manual(repo, guard.name, tree)
+                and globs.select(changed, [guard.path])
+                and not state.has_manual(repo, guard.name, code)
             )
             match guards:
                 case (guard,):
                     return {
                         "manual": {
                             "name": guard.name,
-                            "tree": tree,
+                            "code": code,
                             "question": text,
                         }
                     }
@@ -1234,8 +1234,8 @@ def _apply_marker(
                 tool_input,
                 response,
             )
-            current = gitstate.index_tree(repo)
-            recorded = chosen and current == manual.get("tree")
+            current = code_content.current(repo)
+            recorded = chosen and current == manual.get("code")
             match recorded:
                 case True:
                     state.record_manual(
@@ -1245,13 +1245,13 @@ def _apply_marker(
                         str(manual.get("question", ""))[:500],
                     )
                     note = (
-                        f"[harness] manual check {manual.get('name')} recorded for staged tree "
-                        f"{current[:12]}."
+                        f"[harness] manual check {manual.get('name')} recorded for the code as "
+                        f"it is now ({current[:12]})."
                     )
                 case False if chosen:
                     note = (
-                        "[harness] the staged change changed after the question was shown, so the "
-                        "manual check was not recorded. Show the updated change and ask again."
+                        "[harness] the code changed after the question was shown, so the manual "
+                        "check was not recorded. Show the updated change and ask again."
                     )
                 case False:
                     note = "[harness] the guarded change was not approved."

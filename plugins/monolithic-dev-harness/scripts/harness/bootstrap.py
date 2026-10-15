@@ -167,6 +167,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scm-value", action="append", default=[])
     parser.add_argument("--artifacts-path")
     parser.add_argument("--base-branch")
+    parser.add_argument(
+        "--git-delivery",
+        choices=("on", "off"),
+        help="whether the user chose Git-based delivery (branches, pull requests); off by default",
+    )
     args = parser.parse_args(argv)
 
     repo = Path(args.repo).resolve()
@@ -181,6 +186,9 @@ def main(argv: list[str] | None = None) -> int:
         ),
         "artifacts_path": args.artifacts_path or "",
         "base_branch": args.base_branch or "",
+        "git_delivery": None
+        if args.git_delivery is None
+        else args.git_delivery == "on",
     }
     match (
         args.settings_from,

@@ -88,6 +88,57 @@ def _routes(plugin_root: Path) -> dict[str, tuple[str, ...]]:
     return checked
 
 
+_FIELDS = ("description", "stage", "skill", "how")
+
+
+REQUIREMENT_LISTS = ("requires", "completes")
+
+
+def stage_requirements(
+    stage_id: str, plugin_root: Path = PLUGIN_ROOT, *, field: str = "requires"
+) -> Result[tuple[dict[str, str], ...]]:
+    """A stage's requirements in catalog order: id, description, and who produces each.
+
+    `requires` must hold before the stage's work (code changes, for execution); `completes`
+    before the stage's work item may be marked done.
+    """
+    return attempt(
+        lambda: _stage_requirements(
+            load_catalog(plugin_root), stage_id, plugin_root, field
+        ),
+        "prepared_workflow_invalid",
+        "prepared workflow",
+        _Invalid,
+    )
+
+
+def _stage_requirements(
+    catalog: dict[str, Any], stage_id: str, plugin_root: Path, field: str = "requires"
+) -> tuple[dict[str, str], ...]:
+    stages = catalog.get("stages", {})
+    declared = catalog.get("requirements", {})
+    if stage_id not in stages:
+        raise _Invalid(f"unknown prepared stage: {stage_id}")
+    if field not in REQUIREMENT_LISTS:
+        raise _Invalid(f"unknown requirement list: {field}")
+    entries: list[dict[str, str]] = []
+    for requirement_id in stages[stage_id].get(field, ()):
+        entry = declared.get(requirement_id)
+        if not isinstance(entry, dict) or not all(
+            isinstance(entry.get(field), str) and entry[field].strip()
+            for field in _FIELDS
+        ):
+            raise _Invalid(
+                f"stage {stage_id!r} requires an undeclared or incomplete requirement: "
+                f"{requirement_id}"
+            )
+        if entry["stage"] not in stages:
+            raise _Invalid(f"requirement {requirement_id!r} names an unknown stage")
+        _inside(plugin_root, f"skills/{entry['skill']}/SKILL.md", "producing skill")
+        entries.append({"id": requirement_id, **{k: entry[k] for k in _FIELDS}})
+    return tuple(entries)
+
+
 def _digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
@@ -320,6 +371,10 @@ def _prepare_stage(
         ],
         "operations": operations,
         "recommended_skills": skill_entries,
+        "entry_requirements": list(_stage_requirements(catalog, stage_id, plugin_root)),
+        "completion_requirements": list(
+            _stage_requirements(catalog, stage_id, plugin_root, "completes")
+        ),
         "expected_outputs": list(stage.get("outputs", ())),
         "checks": list(stage.get("checks", ())),
         "recovery": list(stage.get("recovery", ())),

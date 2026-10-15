@@ -28,6 +28,7 @@ from harness import (
     work_lifecycle,
     work_sessions,
     workflow,
+    workflow_requirements,
 )
 from harness.cli_common import pairs, print_result, resolve_repo
 from host_adapters.interactions import present
@@ -111,11 +112,15 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
             "stop",
             "resume",
             "complete",
+            "link",
         ),
     )
     work_session_parser.add_argument("session_id", nargs="?")
     work_session_parser.add_argument(
         "--request", help="the exact request for a new work session"
+    )
+    work_session_parser.add_argument(
+        "--work-item", help="the Story or Bug the work session implements (link only)"
     )
     work_session_parser.add_argument("--repo", default=".")
     workflow_parser = sub.add_parser(
@@ -128,6 +133,7 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
             "render",
             "checkpoint",
             "status",
+            "requirements",
             "list",
             "routes",
             "prepare",
@@ -147,6 +153,12 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     workflow_parser.add_argument(
         "--request",
         help="start a workflow or include the exact request in a prepared handoff",
+    )
+    workflow_parser.add_argument(
+        "--gate",
+        choices=tuple(workflow_requirements.GATES),
+        default="code-change",
+        help="requirements only: code-change (before editing code) or completion (before done)",
     )
     workflow_parser.add_argument("--point", type=int)
     workflow_parser.add_argument("--stage", choices=workflow.STAGES)
@@ -308,6 +320,15 @@ def work_session_command(args: argparse.Namespace) -> int:
         case "resume":
             result = fmap(
                 work_lifecycle.resume(project, args.session_id or ""),
+                work_sessions.as_json,
+            )
+        case "link":
+            result = fmap(
+                workflow_requirements.link(
+                    project,
+                    args.session_id or work_sessions.current(project) or "",
+                    args.work_item or "",
+                ),
                 work_sessions.as_json,
             )
         case "pause" | "stop" | "complete":
@@ -733,6 +754,7 @@ def workflow_command(args: argparse.Namespace) -> int:
     repo = resolve_repo(args.repo)
     if decisions.blocking(repo, args.session_id) and args.operation not in (
         "status",
+        "requirements",
         "list",
         "pause",
         "cancel",
@@ -754,6 +776,7 @@ def workflow_command(args: argparse.Namespace) -> int:
     match args.operation, args.session_id:
         case operation, None if operation not in (
             "status",
+            "requirements",
             "list",
             "routes",
             "prepare",
@@ -824,6 +847,21 @@ def workflow_command(args: argparse.Namespace) -> int:
                     ),
                     lambda package: json.dumps(
                         package, ensure_ascii=False, indent=2, sort_keys=True
+                    ),
+                )
+            )
+        case "requirements":
+            return print_result(
+                fmap(
+                    workflow_requirements.evaluate(
+                        repo,
+                        args.session_id or work_sessions.current(repo),
+                        workflow_requirements.GATES[args.gate],
+                    ),
+                    lambda report: json.dumps(
+                        workflow_requirements.as_json(report),
+                        ensure_ascii=False,
+                        indent=2,
                     ),
                 )
             )

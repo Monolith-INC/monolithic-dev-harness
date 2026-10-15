@@ -225,7 +225,8 @@ before `prove-it-works`.
 
 `review`. The requirements check first, then thermos alongside `bmad-review`'s edge-case and
 verification-gap lenses (the edge-case lens also falsifies the plan's claims and checks deletions),
-one triage of all findings, fixes, a verdict for HEAD, and the draft PR.
+one triage of all findings, fixes, a verdict for the code as it is now, and the draft PR when
+Git-based delivery was chosen.
 
 ## Talking to the user
 
@@ -292,12 +293,16 @@ blocks any agent write to the records. Gates G1, G2, and G4 map to these approva
 | `plain-questions` | questions to the user that are long, ask several things, contain file names, code, or internal names, or come with answers filled in |
 | `approval-required` | tracker/SCM writes and `git push` without an open approval window |
 | `protected-items` | any write, link, or child on a protected work item, even with approval |
-| `tests-with-code` | commits that change source files with no test change in the commit or on the branch |
 | `generated-files` | hand edits to generated files |
-| `guarded-paths` | commits to guarded paths without check or manual evidence for the staged tree |
-| `draft-reviewed-prs` | non-draft pull requests; pull requests without a `ready` verdict and passing checks for HEAD; publishing drafts or voting |
-| `history-preserved` | rewriting branch history: rebase, squash merges, force-push, `filter-branch`, completing a pull request by squash or rebase |
-| workflow | local code edits without an unchanged implementation-confirm approval or applicable active checkout session; optional branch convention for versioned delivery; tracker-backed status, accepted specification, completion evidence and protected-branch rules where those delivery actions are selected |
+| `draft-reviewed-prs` | publishing drafts or voting; with Git-based delivery, non-draft pull requests and pull requests without a `ready` verdict and passing checks for the code as it is now |
+| `history-preserved` | with Git-based delivery: rewriting branch history (rebase, squash merges, force-push, `filter-branch`, completing a pull request by squash or rebase) |
+| workflow: code changes | code edits until the execution stage's `requires` hold (`harness workflow requirements`): a linked work session, Tasks parented to its Story or Bug, an approved unchanged implementation plan, the item in progress |
+| workflow: completion | marking a Story or Bug done until the verify stage's `completes` hold (`--gate completion`): tests with code, checks, guarded-path evidence, a `ready` review, verification and resolution reports, and a pull request only with Git-based delivery to a remote host; a Task closes inside its Story's work session |
+| workflow: Git delivery | with Git-based delivery only: protected-branch guard, branch naming convention, commits and pushes inside a branch-bound session |
+
+The workflow rows read `config/prepared-workflows.json`; no harness decision depends on version
+control. Evidence (checks, review verdicts, manual checks) is keyed to a digest of the code on
+disk.
 
 When a hook denies the requested effect, respect that boundary. When it cannot classify a
 permitted read, use a narrow verified reader such as jq or a native file-read tool. Tool fallback

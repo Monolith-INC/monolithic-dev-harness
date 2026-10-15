@@ -57,7 +57,13 @@
     "git": {
       "type": "object",
       "additionalProperties": false,
-      "properties": {"base_branch": {"type": "string", "minLength": 1}}
+      "properties": {
+        "base_branch": {"type": "string", "minLength": 1},
+        "delivery": {
+          "type": "boolean",
+          "description": "The user chose Git-based delivery: the rules about Git commands (protected branches, no history rewrite, branch names, draft pull requests) apply only when true."
+        }
+      }
     },
     "approvals": {
       "type": "object",

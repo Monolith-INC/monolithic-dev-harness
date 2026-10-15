@@ -31,8 +31,8 @@ falls back to chat on its own.
 
 Preconditions, all enforced by hooks:
 
-- the review stage recorded a `ready` verdict for HEAD (`draft-reviewed-prs`);
-- every applicable check passed for HEAD's tree (`draft-reviewed-prs`);
+- the review stage recorded a `ready` verdict for the code as it is now (`draft-reviewed-prs`);
+- every applicable check passed on the code as it is now (`draft-reviewed-prs`);
 - an approval covers this branch (`approval-required`): say in plain words what will be pushed and opened, then ask the `publish-branch` gate with `--value branch=<branch>` (the harness skill's approval protocol). It covers pushing that branch and opening its draft pull request.
 
 Then:

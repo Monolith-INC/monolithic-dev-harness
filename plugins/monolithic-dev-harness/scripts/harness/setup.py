@@ -320,6 +320,7 @@ def propose(
     scm_values: Mapping[str, str] | None = None,
     artifacts_path: str = "",
     base_branch: str = "",
+    git_delivery: bool | None = None,
 ) -> Result[dict[str, Any]]:
     def candidate(raw: dict[str, Any]) -> Result[dict[str, Any]]:
         old_tracker = _selection(raw, "tracker")
@@ -339,6 +340,7 @@ def propose(
             "git": {
                 **_git_settings(raw),
                 **({"base_branch": chosen_base} if chosen_base else {}),
+                **({} if git_delivery is None else {"delivery": git_delivery}),
             },
         }
         return bind(

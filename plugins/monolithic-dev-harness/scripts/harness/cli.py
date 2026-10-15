@@ -6,7 +6,8 @@ harness doctor [--repo <dir>] [--tools]
 harness bootstrap --repo <dir> [--inspect | --propose | --apply-digest <hash>]
 harness session start <work item> [--workflow <name>] | status | pause | resume | close
 harness work-session route --request <text> | start --request <text> | list | select <id> | pause|stop|resume|complete <id>
-harness workflow start | render | checkpoint | list | status | routes | prepare | back | pause | resume | cancel | complete --session-id <id>
+                    | link [<id>] --work-item <key>
+harness workflow start | render | checkpoint | list | status | requirements | routes | prepare | back | pause | resume | cancel | complete --session-id <id>
 harness preference show | language <en|pt-br>
 harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...] | tree
 harness tracker publish --drafts <tracker-drafts.json> --session-id <id> [--repo <dir>]
@@ -47,6 +48,7 @@ from harness import (  # noqa: E402
     knowledge,
     local_tracker,
     preferences,
+    project_paths,
     sessions,
     settings,
     state,
@@ -169,7 +171,7 @@ def doctor(args: argparse.Namespace) -> int:
     )
 
     print("Repository")
-    repo = gitstate.repo_root(Path(args.repo)) or Path(args.repo).resolve()
+    repo = project_paths.root(Path(args.repo))
     if not settings.governed(repo):
         report.line("skip", str(repo), "not opted in (run `harness bootstrap`)")
     else:
@@ -221,10 +223,11 @@ def _repository(report: Report, repo: Path, args: argparse.Namespace) -> None:
     for problem in registry.problems(repo):
         report.line("warn", "tracker folder", problem.message)
     report.line("ok", "tracking", state.tracking_mode(repo))
-    if gitstate.repo_root(repo) is not None:
-        report.line("ok", "session", sessions.describe(sessions.resolve(repo)))
-    else:
-        report.line("skip", "session", "version control is not in use")
+    match settings.load(repo):
+        case Ok(chosen) if chosen.git_delivery:
+            report.line("ok", "session", sessions.describe(sessions.resolve(repo)))
+        case _:
+            report.line("skip", "session", "Git-based delivery is not selected")
     if args.tools and isinstance(selected, Ok):
         report.line(*_tools(repo, selected.value))
 
@@ -271,7 +274,7 @@ def _tools(repo: Path, active: registry.Active) -> tuple[str, str, str]:
 def bootstrap(extra: list[str]) -> int:
     args = list(extra)
     if "--repo" not in args:
-        repo = gitstate.repo_root(Path.cwd()) or Path.cwd().resolve()
+        repo = project_paths.root(Path.cwd())
         args += ["--repo", str(repo)]
     script = PLUGIN_ROOT / "scripts" / "harness" / "bootstrap.py"
     return subprocess.call([sys.executable, str(script), *args])

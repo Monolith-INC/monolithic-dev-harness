@@ -52,7 +52,10 @@ repository inspection or available provider choices; do not ask the user to type
 value cannot be inferred or presented as a selectable option, stop and report which value is
 unavailable instead of opening a text prompt. Do not ask for values already present or safely
 inferred. Use `local` for source control by default. Do not inspect or present hosted code services
-as a setup choice; the user can configure one later if they request pull-request features. Explain
+as a setup choice; the user can configure one later if they request pull-request features. Whether
+the project uses version control is the user's choice and never changes a harness decision. Rules
+about Git commands (protected branches, no history rewrite, branch names, draft pull requests) apply
+only when the user asks for Git-based delivery: then add `--git-delivery on` to the proposal. Explain
 where tracker work will appear and where plans will be saved. For the local tracker, work-item
 records live in `.harness/tracker/` in this project; `artifacts_path` is the folder for planning
 drafts. Never claim those two folders are the same.

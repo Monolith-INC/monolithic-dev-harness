@@ -23,7 +23,7 @@ skill is unavailable until `/resume-tracker`.
   has run.
 
 Rebase, squash merges, and force-push are refused by the `history-preserved` rule whenever the
-repository is governed; nothing needs switching on.
+user chose Git-based delivery (`git.delivery` in `.harness/settings.json`).
 
 ## Procedure
 

@@ -58,6 +58,25 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- **No harness decision depends on version control.** Code changes wait for the execution
+  stage's `requires` in `config/prepared-workflows.json`: the work session is linked to its Story or
+  Bug (`harness work-session link --work-item <key>`), the tracker holds that item in progress with
+  its Tasks parented to it, and an approved, unchanged implementation plan names it. Marking a
+  Story or Bug done waits for the verify stage's `completes`: tests with code, checks, guarded-path
+  evidence, a `ready` review, verification and resolution reports, and a pull request only with
+  Git-based delivery to a remote host. A Task closes inside its Story's work session. Refusals
+  name the next workflow step for the agent; `harness workflow requirements [--gate completion]`
+  shows the same state. Projects without commits are no longer exempt.
+- Check, review, and manual-check evidence is keyed to a digest of the code files on disk instead
+  of a Git tree or commit. `checks.py` drops `--staged` and `--head` and records nothing when a
+  check rewrites code. The project is found by its `.harness` folder, not by `.git`.
+- **Breaking:** `tests-with-code` and `guarded-paths` no longer refuse commits; they are completion
+  requirements. The protected-branch guard, branch naming convention, `history-preserved`,
+  `feature-branch`, the draft pull-request requirements, and the branch-bound session check for
+  commits and pushes now apply only with Git-based delivery (`git.delivery: true`, set with
+  `harness bootstrap --propose --git-delivery on`). Existing projects that rely on them must opt
+  in.
+
 - Replies to a pending question are matched loosely on every transport: a number, an ordinal, the
   label in any case or accents, a unique prefix, or a unique set of its words. A loose reply never
   selects an approving option unless it says "approve". Typing after a dismissed picker or expired

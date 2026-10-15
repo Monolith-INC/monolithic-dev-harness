@@ -61,6 +61,7 @@ Use this map instead of searching plugin files to rediscover workflow capabiliti
 | Parent and child context | `tracker_list_children` |
 | Existing requirements/spec/review artifacts | `tracker_list_artifacts` |
 | Active or saved workflow state | `harness workflow status` / `harness workflow list` |
+| What code changes still need, and which step produces it | `harness workflow requirements` |
 | Settings and artifact folder for backlog work | `bin/agile-backlog-toolkit config --show` |
 | Technical discovery | `bmad-build` (BMad Build's clarify and plan steps) |
 | Ideation and product shaping | `plan-initiative` and its listed optional routes |

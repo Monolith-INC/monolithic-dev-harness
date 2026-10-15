@@ -26,12 +26,19 @@ that this skill is unavailable until `/resume-tracker` restores it.
    `tracker_transition_work_item`. It is a tracker write: reuse a valid bundle approval for this stated transition; otherwise ask the
    `move-item` gate with `--value item=<title>`, `--value status=<in-progress name>`, and
    `--value ref=<id>` first.
-4. A checkout-bound `harness session` is optional and is used only when the user selected
-   branch-based delivery. The project work-session and unchanged implementation-confirm approval
-   authorize local edits without tying work to a branch.
-5. Report the work item, its provider state, its children, and the specification artifacts it
+4. Link the project work session to this Story or Bug:
+   `harness work-session link --work-item <key> --repo <project>`. Code changes start only when
+   `harness workflow requirements --repo <project>` reports `ready`: the session is linked, the
+   tracker holds the item in progress with its Tasks parented to it, and an approved, unchanged
+   implementation plan names it. The requirements come from the workflow catalog; when one is
+   missing, the report names the stage and skill that produce it. Go there and continue; it is a
+   workflow step, not an error to report to the user. Version control plays no part.
+5. A checkout-bound `harness session` is optional and is used only when the user selected
+   branch-based delivery; it gives no permission to change code.
+6. Report the work item, its provider state, its children, and the specification artifacts it
    needs. If a required specification is missing, consult the user about the gap. In legacy runs, use
    `write-spec`; an unchanged approved bundle never needs spec regeneration or another approval.
 
 Durable state lives in the tracker; for the local tracker, its `.harness/tracker/` records are the
-tracker. The session lives in `.harness/state/sessions/` and changes only through `harness session`.
+tracker. The work session lives in `.harness/state/work_sessions/` and changes only through
+`harness work-session`.

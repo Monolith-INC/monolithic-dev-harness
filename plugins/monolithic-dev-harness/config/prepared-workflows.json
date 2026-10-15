@@ -82,7 +82,8 @@
         {"name": "check", "when": "Run the project's prescribed checks."}
       ],
       "outputs": ["scoped source change", "focused tests", "work log"],
-      "checks": ["confirm approved plan, linked Tasks, and item-local specification", "verify each meaningful block"],
+      "requires": ["work_item_linked", "tasks_parented", "plan_approved", "work_item_started"],
+      "checks": ["verify each meaningful block"],
       "recovery": ["preserve unfinished edits and checkpoint; do not mix another ticket into this run"]
     },
     "verify": {
@@ -96,6 +97,7 @@
         {"name": "finish-feature-development", "when": "Close a completed feature workflow."}
       ],
       "outputs": ["test and check evidence", "review result", "remaining risks or follow-up"],
+      "completes": ["work_item_linked", "tests_with_code", "checks_passed", "guarded_paths_verified", "review_ready", "verification_recorded", "resolution_reported", "pull_request_linked"],
       "checks": ["report only checks that actually ran", "separate local, installed, and live-host evidence"],
       "recovery": ["keep the item open and record the exact failed or unavailable check"]
     },
@@ -292,10 +294,86 @@
         "verified implementation",
         "test and review evidence"
       ],
+      "requires": [
+        "work_item_linked",
+        "tasks_parented",
+        "plan_approved",
+        "work_item_started"
+      ],
+      "completes": ["work_item_linked", "tests_with_code", "checks_passed", "guarded_paths_verified", "review_ready", "verification_recorded", "resolution_reported", "pull_request_linked"],
       "checks": [
         "detect optional versioning now",
         "external delivery remains context-bound"
       ]
+    }
+  },
+  "requirements": {
+    "work_item_linked": {
+      "description": "The work session names the Story or Bug it implements.",
+      "stage": "execution",
+      "skill": "start-ticket",
+      "how": "run `harness work-session link --work-item <key>` for the Story or Bug being implemented"
+    },
+    "tasks_parented": {
+      "description": "The tracker holds at least one Task under that Story or Bug, and every Task under it names it as parent.",
+      "stage": "preparation",
+      "skill": "generate-breakdown-work-items",
+      "how": "break the Story or Bug down into Tasks in the selected tracker"
+    },
+    "plan_approved": {
+      "description": "An implementation plan for that Story or Bug was approved and has not changed since.",
+      "stage": "confirmation",
+      "skill": "generate-breakdown-work-items",
+      "how": "save the implementation plan and have the user approve it: the implementation-confirm bundle in six-stage onboarding, or the plan review of generate-breakdown-work-items"
+    },
+    "work_item_started": {
+      "description": "The tracker holds that Story or Bug, and it is in progress.",
+      "stage": "execution",
+      "skill": "start-ticket",
+      "how": "start the Story or Bug so the tracker shows it in progress"
+    }
+,
+    "tests_with_code": {
+      "description": "Source files changed since the work item was linked come with changed tests, as the settings' tests_required pairs them.",
+      "stage": "execution",
+      "skill": "tdd",
+      "how": "add or update the tests that cover the changed source files"
+    },
+    "checks_passed": {
+      "description": "Every configured check that applies to the changed files passed on the code as it is now.",
+      "stage": "execution",
+      "skill": "check",
+      "how": "run the project's checks with scripts/harness/checks.py and fix what fails"
+    },
+    "guarded_paths_verified": {
+      "description": "Each changed guarded path has its evidence for the code as it is now: its check passed, or the user confirmed it by hand.",
+      "stage": "execution",
+      "skill": "check",
+      "how": "run the guarded path's check, or show the change to the user and record their manual confirmation"
+    },
+    "review_ready": {
+      "description": "The review stage recorded a `ready` verdict for the code as it is now.",
+      "stage": "verify",
+      "skill": "review",
+      "how": "run the review stage; it records the verdict with scripts/harness/review_verdict.py"
+    },
+    "verification_recorded": {
+      "description": "The tracker holds a verification artifact for the work item.",
+      "stage": "verify",
+      "skill": "resolve-ticket",
+      "how": "publish the verification evidence to the work item"
+    },
+    "resolution_reported": {
+      "description": "The tracker holds a resolution report for the work item.",
+      "stage": "verify",
+      "skill": "resolve-ticket",
+      "how": "publish the resolution report to the work item"
+    },
+    "pull_request_linked": {
+      "description": "When the user chose Git-based delivery with a remote repository host, the work item links its pull request.",
+      "stage": "verify",
+      "skill": "branch-and-pr",
+      "how": "open the draft pull request and link it to the work item"
     }
   },
   "routes": {

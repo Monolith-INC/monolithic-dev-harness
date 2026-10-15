@@ -1,4 +1,4 @@
-"""An unchanged final approval can scope local edits without a branch-bound session."""
+"""Local edits on the main branch follow the workflow requirements, never the branch."""
 
 from __future__ import annotations
 
@@ -15,7 +15,9 @@ for path in (ROOT, SCRIPTS_DIR):
     if str(path) not in os.sys.path:
         os.sys.path.insert(0, str(path))
 
-from harness import state, work_sessions, workflow
+from harness import settings, state, work_sessions, workflow
+from integrations import registry
+from integrations.contracts import LogicalState, WorkItemKind
 from scripts import hook_runtime
 from scripts.policy import CanonicalToolEvent
 from tests.settings_fixture import write_settings
@@ -75,19 +77,38 @@ class OptionalVcsExecutionContextTests(unittest.TestCase):
         )
 
     def _edit_decision(self):
-        return hook_runtime._evaluate_work_context(
+        return hook_runtime.evaluate_event(
             CanonicalToolEvent(
                 client="claude",
                 tool_name="Write",
                 kind="edit",
+                file_path=str(self.root / "lib" / "a.dart"),
                 workspace_root=str(self.root),
-            )
+                branch="main",
+            ),
+            work_session_id=self.scope,
         )
 
+    def _publish_story(self) -> None:
+        ops = registry.open_selected(self.root, settings.load(self.root)).value
+        story = ops.create_work_item(WorkItemKind.USER_STORY, "Story", "", "").value
+        ops.transition_work_item(story.key, LogicalState.IN_PROGRESS)
+        ops.create_work_item(WorkItemKind.TASK, "Task", "", story.key)
+        state.write_json(
+            work_sessions.root(self.root) / self.scope / "tracker-published.json",
+            {"keys": {"S1": story.key}},
+        )
+        work_sessions.link(self.root, self.scope, story.key)
+
     def test_approved_unchanged_bundle_allows_local_edit_on_main(self) -> None:
+        self._publish_story()
         self.assertFalse(self._edit_decision().is_denied())
 
+    def test_the_branch_alone_never_allows_a_local_edit(self) -> None:
+        self.assertTrue(self._edit_decision().is_denied())
+
     def test_changed_reviewed_artifact_does_not_authorize_local_edit(self) -> None:
+        self._publish_story()
         self.plan.write_text("changed after approval\n", encoding="utf-8")
         self.assertTrue(self._edit_decision().is_denied())
 

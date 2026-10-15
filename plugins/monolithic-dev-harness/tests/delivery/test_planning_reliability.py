@@ -74,17 +74,14 @@ def receipt_fixture():
     return ops, marker, artifact
 
 
-def test_planning_completion_needs_no_checkout_session(tmp_path):
+def test_planning_completion_needs_no_work_session(tmp_path):
     ops, marker, artifact = receipt_fixture()
     with patch.object(
-        hook_runtime,
-        "_active_session",
-        side_effect=AssertionError("implementation session requested"),
+        hook_runtime.workflow_requirements,
+        "linked_session",
+        side_effect=AssertionError("work session requested"),
     ):
-        assert isinstance(
-            hook_runtime._completion_route(tmp_path, ops, marker, (artifact,)),
-            Ok,
-        )
+        assert isinstance(hook_runtime._receipt_route(ops, marker, (artifact,)), Ok)
 
 
 @pytest.mark.parametrize(
@@ -133,16 +130,12 @@ def test_coding_task_cannot_use_planning_receipt():
     )
 
 
-def test_implementation_completion_still_requires_session(tmp_path):
+def test_a_task_without_a_receipt_still_requires_its_storys_session(tmp_path):
     ops, marker, _ = receipt_fixture()
     with patch.object(
-        hook_runtime,
-        "_active_session",
-        return_value=Err(hook_runtime._failure("missing session")),
+        hook_runtime.workflow_requirements, "linked_session", return_value=None
     ):
-        assert isinstance(
-            hook_runtime._completion_route(tmp_path, ops, marker, ()), Err
-        )
+        assert hook_runtime._task_completion(tmp_path, ops, marker).is_denied()
 
 
 def test_both_workflow_validator_tools_use_the_critic(tmp_path):
@@ -219,7 +212,7 @@ def test_external_symlink_needs_code_context(tmp_path, absolute, patterns):
     path = (
         str(root / "docs/planning/draft.md") if absolute else "docs/planning/draft.md"
     )
-    with patch.object(hook_runtime, "_code_patterns", return_value=patterns):
+    with patch.object(hook_runtime.code_content, "patterns", return_value=patterns):
         assert hook_runtime._edits_code(
             CanonicalToolEvent(
                 client="codex",
@@ -232,21 +225,24 @@ def test_external_symlink_needs_code_context(tmp_path, absolute, patterns):
     assert writes_code(f"echo x > {path}", root, patterns, "docs/planning")
 
 
-@pytest.mark.parametrize("session_item,denied", [("T2", False), ("OTHER", True)])
-def test_ordinary_completion_reads_tracker_once(tmp_path, session_item, denied):
+@pytest.mark.parametrize("linked,denied", [("S1", False), ("OTHER", True)])
+def test_task_completion_follows_its_storys_work_session(tmp_path, linked, denied):
     from scripts.policy import CanonicalToolEvent
 
-    _, item, _ = receipt_fixture()
-    ops = SimpleNamespace(
-        get_work_item=Mock(return_value=Ok(item)),
-        list_artifacts=Mock(
-            return_value=Ok(
-                tuple(
-                    ArtifactRef(kind, kind, kind, "1")
-                    for kind in ("resolution_report", "verification", "pull_request")
-                )
-            )
+    parent, item = (
+        WorkItem("S1", "S1", "Story", WorkItemKind.USER_STORY, LogicalState.BACKLOG),
+        WorkItem(
+            "T1",
+            "T1",
+            "Build it",
+            WorkItemKind.TASK,
+            LogicalState.BACKLOG,
+            parent_id="S1",
         ),
+    )
+    ops = SimpleNamespace(
+        get_work_item=Mock(side_effect=lambda ref: Ok(parent if ref == "S1" else item)),
+        list_artifacts=Mock(return_value=Ok(())),
     )
     with (
         patch.object(hook_runtime, "_enforced", return_value=True),
@@ -254,9 +250,9 @@ def test_ordinary_completion_reads_tracker_once(tmp_path, session_item, denied):
             hook_runtime.registry, "open_selected", return_value=Ok(ops)
         ) as opened,
         patch.object(
-            hook_runtime,
-            "_active_session",
-            return_value=Ok(SimpleNamespace(work_item=session_item)),
+            hook_runtime.workflow_requirements,
+            "linked_session",
+            side_effect=lambda _root, key: "WS-1" if key == linked else None,
         ),
         patch.object(hook_runtime.settings, "load", return_value={}),
     ):
@@ -273,7 +269,6 @@ def test_ordinary_completion_reads_tracker_once(tmp_path, session_item, denied):
             is denied
         )
     opened.assert_called_once()
-    ops.get_work_item.assert_called_once_with(item.id)
     ops.list_artifacts.assert_called_once_with(item.id)
 
 
@@ -281,13 +276,10 @@ def test_corrected_receipt_supersedes_prior_revision(tmp_path):
     ops, marker, receipt = receipt_fixture()
     old = replace(receipt, content="bad", revision="1")
     corrected = replace(receipt, id="A2", revision="2")
+    assert isinstance(hook_runtime._receipt_route(ops, marker, (old, corrected)), Ok)
     assert isinstance(
-        hook_runtime._completion_route(tmp_path, ops, marker, (old, corrected)),
-        Ok,
-    )
-    assert isinstance(
-        hook_runtime._completion_route(
-            tmp_path, ops, marker, (old, replace(corrected, revision="1"))
+        hook_runtime._receipt_route(
+            ops, marker, (old, replace(corrected, revision="1"))
         ),
         Err,
     )

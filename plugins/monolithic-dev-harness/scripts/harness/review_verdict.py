@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Record the review stage's verdict for the current HEAD commit.
+"""Record the review stage's verdict for the code as it is now.
 
     review_verdict.py --verdict ready|blocked --summary "<one line>" [--repo <dir>]
 
-The verdict is keyed to HEAD's commit id, so any new commit invalidates it and the PR gate (draft-reviewed-prs)
-asks for a fresh review. `ready` requires a clean working tree: the review must describe exactly
-what the pull request will contain.
+The verdict is keyed to the digest of the project's code files (`harness.code_content`), so any
+later change to a code file invalidates it and the completion and pull-request checks ask for a
+fresh review. Version control plays no part.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from harness import gitstate, state  # noqa: E402
+from harness import code_content, project_paths, state  # noqa: E402
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -28,19 +28,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--summary", required=True)
     args = parser.parse_args(argv)
 
-    repo = gitstate.repo_root(Path(args.repo)) or Path(args.repo).resolve()
-    if args.verdict == "ready" and gitstate.git(
-        repo, "status", "--porcelain", "--untracked-files=no"
-    ):
-        print(
-            "working tree has uncommitted changes; commit (and re-review) before recording `ready`",
-            file=sys.stderr,
-        )
-        return 2
-    head = gitstate.head_sha(repo)
-    path = state.record_review(repo, head, args.verdict, args.summary)
+    repo = project_paths.root(Path(args.repo))
+    digest = code_content.current(repo)
+    path = state.record_review(repo, digest, args.verdict, args.summary)
     print(
-        f"review verdict `{args.verdict}` recorded for {head[:12]}: {path.relative_to(repo)}"
+        f"review verdict `{args.verdict}` recorded for code {digest[:12]}: "
+        f"{path.relative_to(repo)}"
     )
     return 0
 

@@ -51,7 +51,7 @@ class TestHookRuntime(unittest.TestCase):
     def test_skipped_tracking_bypasses_ticket_context_checks_but_not_git_guards(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            write_settings(root)
+            write_settings(root, git={"delivery": True})
             state.set_tracking_mode(root, "skipped")
             event = CanonicalToolEvent(
                 client="claude",
@@ -90,7 +90,7 @@ def git(root: Path, *args: str) -> None:
 
 
 class TrackedRepo(unittest.TestCase):
-    """A git repository on a ticket branch, with the local tracker holding STORY-0001 in progress."""
+    """A git repository on a ticket branch with Git-based delivery; STORY-0001 is in progress."""
 
     def setUp(self):
         self._tmp = tempfile.TemporaryDirectory()
@@ -109,12 +109,21 @@ class TrackedRepo(unittest.TestCase):
 
     def configure(self, artifacts_path: str) -> None:
         path = {"artifacts_path": artifacts_path} if artifacts_path else {}
-        write_settings(self.root, branch_template="{category}/{key}-{slug}", **path)
+        write_settings(
+            self.root,
+            branch_template="{category}/{key}-{slug}",
+            git={"delivery": True},
+            **path,
+        )
 
     def evaluate(self):
+        """A commit on the ticket branch: code edits follow the workflow's execution requirements
+        (tests/harness/test_workflow_requirements.py); Git operations keep these session rules."""
         event = CanonicalToolEvent(
             client="claude",
-            tool_name="Write",
+            tool_name="Bash",
+            kind="shell",
+            command="git commit -m wip",
             workspace_root=str(self.root),
             branch="userstory/STORY-0001-example",
         )
@@ -163,7 +172,7 @@ class TestWorkspace(unittest.TestCase):
 
 
 class TestSessionScope(TrackedRepo):
-    """Governed code changes need an active session, and the session names the work item."""
+    """Governed Git operations need an active session, and the session names the work item."""
 
     def setUp(self):
         super().setUp()
@@ -193,7 +202,7 @@ class TestSessionScope(TrackedRepo):
         sessions.start(self.root, "STORY-0001", "implement-story")
         self.assertIn("must be in progress", self.evaluate().reason)
 
-    def test_ordinary_edits_use_the_start_snapshot_but_push_revalidates(self):
+    def test_commits_use_the_start_snapshot_but_push_revalidates(self):
         sessions.start(
             self.root,
             "STORY-0001",
@@ -240,25 +249,23 @@ class TestSessionScope(TrackedRepo):
         git(self.root, "checkout", "-q", "-b", "userstory/STORY-0002-other")
         self.assertTrue(self.evaluate().is_denied())
 
-    def test_completion_is_checked_against_the_session_item(self):
+    def test_a_branch_session_does_not_complete_a_work_item(self):
+        """Completion follows the work session's catalog requirements, never the branch."""
         sessions.start(self.root, "STORY-0001", "implement-story")
+        for kind in ("resolution_report", "verification", "pull_request"):
+            self.ops.add_artifact("STORY-0001", ArtifactDraft(kind, kind, "text", "1"))
         done = CanonicalToolEvent(
             client="claude",
             tool_name="mcp__x__tracker_transition_work_item",
             workspace_root=str(self.root),
         )
         self.assertIn(
-            "missing artifacts",
+            "harness work-session link",
             hook_runtime._evaluate_completion(done, "STORY-0001").reason,
         )
         self.assertIn(
             "local work item not found",
             hook_runtime._evaluate_completion(done, "STORY-0009").reason,
-        )
-        for kind in ("resolution_report", "verification", "pull_request"):
-            self.ops.add_artifact("STORY-0001", ArtifactDraft(kind, kind, "text", "1"))
-        self.assertFalse(
-            hook_runtime._evaluate_completion(done, "STORY-0001").is_denied()
         )
 
     def test_new_branches_follow_the_convention(self):
@@ -278,7 +285,7 @@ PLAN = 'type: implementation-plan\nstory: "STORY-0001"\nstatus: approved'
 
 
 class TestSpecGateArtifactsPath(TrackedRepo):
-    """A note in the artifacts path opens the spec gate only as the user approved it."""
+    """A note in the artifacts path opens the Git spec gate only as the user approved it."""
 
     def setUp(self):
         super().setUp()
