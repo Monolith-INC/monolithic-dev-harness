@@ -24,7 +24,7 @@ from harness import (
 from host_adapters import select_adapter
 from host_adapters.hook_bridge import project_root_hint, should_emit_allow
 from integrations import branches, registry
-from integrations.contracts import TrackerOps, WorkItem, WorkItemKind
+from integrations.contracts import LogicalState, TrackerOps, WorkItem, WorkItemKind
 from policy import CanonicalToolEvent, PolicyDecision
 from policy.commands import escapes_checkout, git_commands, is_code, writes_code
 from policy.git_branch_guard import evaluate_git_branch_guard
@@ -322,7 +322,8 @@ def _evaluate_completion(
     """A work item is done only when the workflow catalog's completion requirements hold.
 
     A Breakdown task closes on its planning receipt; another Task closes inside the work session
-    that implements its Story or Bug; a Story or Bug needs the catalog's `completion` list.
+    that implements its Story or Bug; a Feature or Epic closes once its children are; a Story or
+    Bug needs the catalog's `completion` list.
     """
     root = Path(event.workspace_root or ".")
     if not _enforced(root):
@@ -350,6 +351,8 @@ def _evaluate_completion(
         return _decision(fmap(_receipt_route(ops, item, receipts), lambda _: None))
     if item.kind is WorkItemKind.TASK:
         return _task_completion(root, ops, item)
+    if item.kind in (WorkItemKind.FEATURE, WorkItemKind.EPIC):
+        return _container_completion(ops, item, artifacts)
     scope = (
         work_session_id
         if _links(root, work_session_id, item)
@@ -371,6 +374,42 @@ def _links(root: Path, work_session_id: str | None, item: WorkItem) -> bool:
             return session.work_item.upper() in {item.key.upper(), item.id.upper()}
         case _:
             return False
+
+
+_CLOSED = frozenset({LogicalState.DONE, LogicalState.CANCELED})
+
+
+def _container_completion(
+    ops: TrackerOps, item: WorkItem, artifacts: tuple
+) -> PolicyDecision:
+    """A Feature or Epic is done once it has children, every one is done or cancelled (each was
+    held to its own completion rules), and it holds its closing report."""
+    match ops.list_children(item.id):
+        case Err(failure):
+            return PolicyDecision.deny(failure.message)
+        case Ok(children):
+            pass
+    still_open = [child.key for child in children if child.state not in _CLOSED]
+    reported = any(
+        workflow_requirements.artifact_kind(a.kind) == "closing_report"
+        for a in artifacts
+    )
+    match children, still_open, reported:
+        case (), _, _:
+            reason = f"{item.key} has no child work items to close it on"
+        case _, [_, *_], _:
+            reason = f"{', '.join(still_open)} under {item.key} not done yet"
+        case _, _, False:
+            reason = (
+                "publish its closing evidence first with `tracker_publish_artifact` (kind "
+                "`closing-report`; `finish-feature-development` skill)"
+            )
+        case _:
+            return PolicyDecision.allow()
+    return PolicyDecision.deny(
+        f"[harness] {item.key} is marked done only when its children are: {reason}. This "
+        "refusal is for you, not for the user."
+    )
 
 
 def _task_completion(root: Path, ops: TrackerOps, task: WorkItem) -> PolicyDecision:

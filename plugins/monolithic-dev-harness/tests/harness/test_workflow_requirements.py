@@ -349,6 +349,63 @@ class Verified(Project):
         )
 
 
+class TestContainerCompletion(Verified):
+    """A Feature or Epic is done once every child is done and it holds its closing report."""
+
+    def feature(self) -> tuple[str, str]:
+        feature = self.ops.create_work_item(WorkItemKind.FEATURE, "F", "", "").value.key
+        story = self.ops.create_work_item(
+            WorkItemKind.USER_STORY, "S", "", feature
+        ).value.key
+        return feature, story
+
+    def close(self, ref: str) -> None:
+        self.ops.add_artifact(
+            ref, ArtifactDraft("closing-report", "Closing", "evidence", "1")
+        )
+
+    def test_a_feature_with_its_stories_done_and_a_closing_report_is_done(self) -> None:
+        feature, story = self.feature()
+        self.ops.transition_work_item(story, LogicalState.DONE)
+        self.close(feature)
+        self.assertFalse(self.done(feature).is_denied())
+
+    def test_an_open_story_keeps_the_feature_open(self) -> None:
+        feature, story = self.feature()
+        self.close(feature)
+        decision = self.done(feature)
+        self.assertTrue(decision.is_denied())
+        self.assertIn(story, decision.reason)
+
+    def test_a_cancelled_story_does_not_hold_the_feature_open(self) -> None:
+        feature, story = self.feature()
+        self.ops.transition_work_item(story, LogicalState.CANCELED)
+        self.close(feature)
+        self.assertFalse(self.done(feature).is_denied())
+
+    def test_the_closing_report_is_required(self) -> None:
+        feature, story = self.feature()
+        self.ops.transition_work_item(story, LogicalState.DONE)
+        decision = self.done(feature)
+        self.assertTrue(decision.is_denied())
+        self.assertIn("closing-report", decision.reason)
+
+    def test_a_feature_without_children_is_not_done(self) -> None:
+        feature = self.ops.create_work_item(WorkItemKind.FEATURE, "F", "", "").value.key
+        self.close(feature)
+        self.assertTrue(self.done(feature).is_denied())
+
+    def test_an_epic_closes_on_its_features(self) -> None:
+        epic = self.ops.create_work_item(WorkItemKind.EPIC, "E", "", "").value.key
+        feature = self.ops.create_work_item(
+            WorkItemKind.FEATURE, "F", "", epic
+        ).value.key
+        self.close(epic)
+        self.assertTrue(self.done(epic).is_denied())
+        self.ops.transition_work_item(feature, LogicalState.DONE)
+        self.assertFalse(self.done(epic).is_denied())
+
+
 class TestCompletion(Verified):
     def test_tested_checked_reviewed_and_reported_work_is_done(self) -> None:
         self.code("lib/a.dart", "new\n")
