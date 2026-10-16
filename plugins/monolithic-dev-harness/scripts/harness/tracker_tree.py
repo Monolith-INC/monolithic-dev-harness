@@ -1,13 +1,12 @@
 """Print the local tracker's work items as their parent/child tree.
 
-Items are filed by state, so the hierarchy lives only in each record's `parentId`. This view puts
+Tickets are filed by state, so the hierarchy lives only in each ticket's `parent_id`. This view puts
 it back together: every item under its parent, children in key order, each with its state. An
 item whose parent is missing is shown at the top level and marked, so nothing disappears.
 """
 
 from __future__ import annotations
 
-import json
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -28,21 +27,16 @@ def render(repo: Path, manifest: Manifest) -> Result[str]:
 
 def _records(repo: Path, manifest: Manifest) -> Result[tuple[dict[str, Any], ...]]:
     root = local_tracker.storage_root(repo)
-
-    def load() -> tuple[dict[str, Any], ...]:
-        return tuple(
-            {**json.loads(path.read_text(encoding="utf-8")), "_folder": folder}
-            for folder in dict.fromkeys(manifest.states.values())
-            if (root / folder).is_dir()
-            for path in sorted((root / folder).glob("*.json"))
-        )
-
     return attempt(
-        load,
+        lambda: tuple(
+            {**record, "_folder": path.parent.name}
+            for path, record in local_tracker.records(root, manifest)
+        ),
         "local_storage_error",
         f"could not read the work items in {root}",
         OSError,
         ValueError,
+        UnicodeDecodeError,
     )
 
 

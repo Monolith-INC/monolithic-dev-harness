@@ -38,6 +38,6 @@ that this skill is unavailable until `/resume-tracker` restores it.
    needs. When a technical spec kind is still missing, `write-spec` writes it; an approved,
    unchanged spec is never regenerated or approved again.
 
-Durable state lives in the tracker; for the local tracker, its `.harness/tracker/` records are the
+Durable state lives in the tracker; for the local tracker, its ticket files in `Tickets/` are the
 tracker. The work session lives in `.harness/state/work_sessions/` and changes only through
 `harness work-session`.

@@ -257,6 +257,7 @@ question.en = "Publish these {count} work items to {tracker}?"
 question.pt-br = "Publicar estes {count} itens de trabalho em {tracker}?"
 approval = true
 artifact = true
+shown = true
 binds = "artifacts"
 recommended = "approve"
 

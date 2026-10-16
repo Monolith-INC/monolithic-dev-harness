@@ -9,20 +9,57 @@ from pathlib import Path
 
 from harness import settings
 from integrations import registry
-from integrations.contracts import WorkItemKind
+from integrations.contracts import WorkItemChanges, WorkItemKind
 from tests.harness.test_decisions import CLI
 from tests.settings_fixture import write_settings
 
 PLAN = "Vault/Implementation_Plans/plan.md"
 
 
-def _project(repo: Path) -> str:
+REFINED = """## 🎯 What
+
+The settings screen explains what a reset removes.
+
+## 💡 Why
+
+People reset by mistake and lose their tasks.
+
+## 📋 Expected Behavior
+
+#### Reset
+
+- The notice names what is removed before the reset runs.
+
+## ✅ Acceptance Criteria
+
+- [ ] The notice lists the tasks and lists that a reset removes.
+
+## 🔧 Technical Notes
+
+Settings screen.
+
+## 📊 Complexity
+
+**2 points** — Largest driver: Scope=2, Uncertainty=1, Integrations=1, Data=1, QA=1, Rollout=1 → 2 points
+
+## 📄 Original Description
+
+Explain what a reset removes.
+"""
+
+
+def _project(repo: Path, description: str = REFINED) -> str:
     """A local tracker holding one Story; returns its key."""
     write_settings(repo, artifacts_path="Vault")
     ops = registry.open_selected(repo, settings.load(repo)).value
-    return ops.create_work_item(
-        WorkItemKind.USER_STORY, "Explain reset", "", ""
+    key = ops.create_work_item(
+        WorkItemKind.USER_STORY,
+        "Explain what a settings reset removes",
+        description,
+        "",
     ).value.key
+    ops.update_work_item(key, WorkItemChanges(story_points=2))
+    return key
 
 
 def _plan(
@@ -216,3 +253,15 @@ def test_the_plan_lives_in_the_artifacts_path(tmp_path: Path) -> None:
         encoding="utf-8",
     )
     assert "artifacts path" in _confirm(tmp_path, "docs/plan.md").stderr
+
+
+def test_the_story_is_refined_before_its_plan_is_approved(tmp_path: Path) -> None:
+    """The toolkit writes a Story's plan from its refined text, so a draft Story is refined first."""
+    story = _project(
+        tmp_path, description="As a user I want to know what reset removes."
+    )
+    plan = _plan(tmp_path, story)
+    assert _show(tmp_path, plan).returncode == 0
+    refused = _confirm(tmp_path, plan)
+    assert refused.returncode != 0
+    assert "not refined" in refused.stderr and "validate-artifact" in refused.stderr

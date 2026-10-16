@@ -491,9 +491,9 @@ class TestCompletion(Verified):
         self.assertIn("harness work-session link", self.done(other).reason)
 
     def test_a_task_is_done_inside_its_storys_session(self) -> None:
-        self.assertFalse(self.done("TASK-0001").is_denied())
+        self.assertFalse(self.done("TASK-0002").is_denied())
         work_sessions.transition(self.root, self.session, "stop")
-        self.assertIn("work session", self.done("TASK-0001").reason)
+        self.assertIn("work session", self.done("TASK-0002").reason)
 
 
 class TestNoVersionControl(Verified):

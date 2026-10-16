@@ -45,16 +45,22 @@ with `harness work-session link`, which refuses a Story outside that item's tree
 1. Carry approach changes into items that already exist first: `enrich-work-item` for one item,
    `amend-workitems` for an Epic or Feature tree. The original text stays in Original Description.
 2. Check items already in their type's template with `validate-artifact`; enrich only what fails.
-   Write new items with `generate-work-item`, then `enrich-work-item`.
+   Write new items with `generate-work-item`, then `enrich-work-item`. When the work started from a
+   project file, that file's text is the draft and becomes the Original Description.
 3. Split an Epic or Feature with `decompose-backlog`: approve the split (`refinement-split`), then
    the item bodies (`publish-items`); the items are created, read back and audited for coverage.
    Split an oversized Story with `split-story`.
 4. For each Story, `generate-breakdown-work-items` saves its implementation plan and has it shown
    and approved with `implementation-confirm`, as that skill's section 2 describes; approving it
-   pins the plan. Then propose the Story's Tasks, with Staging, Review and Breakdown, and create
-   them after their own `publish-items` approval.
+   pins the plan. The Story must pass `validate-artifact` first: the plan is written from its
+   refined acceptance criteria. Then propose the Story's Tasks, with Staging, Review and Breakdown,
+   and create them after their own `publish-items` approval.
 
-Every tracker write goes through the harness gateway and is read back. Nothing is approved in bulk:
+Every item is written first as a draft ticket in `Tickets/Ready/` (the toolkit's ticket format;
+no `provider_id`). Show the drafts with `harness workflow show --artifact <draft>`, then ask
+`publish-items` with the same `--artifact` files. The gateway writes an item's description only
+when it is an approved draft's body, word for word; with the local tracker, creating the item turns
+its draft into the tracked ticket. Every tracker write is read back. Nothing is approved in bulk:
 each item, plan and document is shown and approved when it is created.
 
 Planning files are not code. When the project sets no source globs, every file counts as code except

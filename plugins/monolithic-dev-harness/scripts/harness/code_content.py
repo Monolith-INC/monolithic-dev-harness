@@ -16,12 +16,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from core.result import Err, Ok
-from harness import globs, local_artifacts, settings, state
+from harness import globs, local_artifacts, local_tracker, settings, state
 from policy.commands import is_code
 
 BASELINES = "code-baselines"
-# Folders never walked: hidden ones (.git, .harness, tool caches) and dependency stores.
+# Folders never walked: hidden ones (.git, .harness, tool caches), dependency stores, and the
+# local tracker's tickets.
 _SKIPPED = frozenset({"node_modules", "__pycache__"})
+# The local tracker's tickets at the project root are backlog, never code.
+_TICKETS = local_tracker.ROOT.name
 # With no source or test globs every file counts as code, except what builds and test runs write:
 # a check that leaves output there must not change the code it just checked.
 _OUTPUTS = frozenset({"build", "dist", "out", "target", "coverage"})
@@ -83,7 +86,11 @@ def files(repo: Path) -> dict[str, str]:
     found: dict[str, str] = {}
     for directory, subdirs, names in os.walk(root):
         subdirs[:] = sorted(
-            d for d in subdirs if not d.startswith(".") and d not in skipped
+            d
+            for d in subdirs
+            if not d.startswith(".")
+            and d not in skipped
+            and not (directory == str(root) and d == _TICKETS)
         )
         for name in names:
             path = Path(directory) / name

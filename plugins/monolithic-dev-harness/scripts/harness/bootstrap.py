@@ -6,8 +6,8 @@
 Writes, once:
   .harness/settings.json   the repository's only settings file, copied from --settings-from after
                            it is checked; an existing one is never replaced (people own it)
-  .git/info/exclude        ignores .harness/state/ and the local tracker's .harness/tracker/ in
-                           this clone only (the shared .gitignore is never edited)
+  .git/info/exclude        ignores .harness/state/ in this clone only (the shared .gitignore is
+                           never edited); the local tracker's Tickets/ is project content
   .harness/knowledge/      the harness knowledge store, seeded with a pointer to the settings
 
 Then checks that the selected tracker exists and has the values it needs. Review configuration

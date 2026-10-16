@@ -453,28 +453,22 @@ class LocalTest(unittest.TestCase):
         ).value
         self.assertEqual(
             (feature.key, story.key, story.parent_id),
-            ("FEATURE-0001", "STORY-0001", "FEATURE-0001"),
+            ("FEATURE-0001", "STORY-0002", "FEATURE-0001"),
         )
-        self.assertTrue(
-            (self.repo / ".harness/tracker/backlog/STORY-0001.json").is_file()
-        )
+        self.assertTrue((self.repo / "Tickets/Ready/0002-story.md").is_file())
         refused = self.tracker.create_work_item(
             WorkItemKind.EPIC, "Epic", "", story.key
         )
         self.assertEqual(refused.failure.code, "invalid_hierarchy")
         moved = self.tracker.transition_work_item(
-            "story-0001", LogicalState.IN_PROGRESS
+            "story-0002", LogicalState.IN_PROGRESS
         ).value
         self.assertEqual(moved.state, LogicalState.IN_PROGRESS)
-        self.assertTrue(
-            (self.repo / ".harness/tracker/in_progress/STORY-0001.json").is_file()
-        )
-        self.assertFalse(
-            (self.repo / ".harness/tracker/backlog/STORY-0001.json").exists()
-        )
+        self.assertTrue((self.repo / "Tickets/InProgress/0002-story.md").is_file())
+        self.assertFalse((self.repo / "Tickets/Ready/0002-story.md").exists())
         self.assertEqual(
             [item.key for item in self.tracker.list_children(feature.key).value],
-            ["STORY-0001"],
+            ["STORY-0002"],
         )
         self.tracker.add_artifact(
             story.key, ArtifactDraft("spec", "Tech spec", "text", "1")
@@ -496,9 +490,7 @@ class LocalTest(unittest.TestCase):
         )
 
     def test_planning_reads_the_capacity_file_and_sprint_items(self) -> None:
-        folder = self.repo / ".harness/tracker/capacity"
-        folder.mkdir(parents=True)
-        (folder / "S1.json").write_text(
+        (self.repo / "capacity-S1.json").write_text(
             json.dumps(
                 {
                     "startDate": "2026-08-03",
@@ -510,15 +502,13 @@ class LocalTest(unittest.TestCase):
         story = self.tracker.create_work_item(
             WorkItemKind.USER_STORY, "S", "", ""
         ).value
-        path = self.repo / ".harness/tracker/backlog" / f"{story.key}.json"
-        record = json.loads(path.read_text())
-        path.write_text(
-            json.dumps(
-                {**record, "iteration": "S1", "story_points": 5, "remaining_hours": 8}
-            )
+        self.tracker.update_work_item(
+            story.key,
+            WorkItemChanges(story_points=5, iteration="S1", hours=Hours(8, False)),
         )
-        (path.parent / "stray.json").write_text(
-            json.dumps({"kind": "task", "state": "backlog", "iteration": "S1"})
+        # A draft is not an item, even when it names the sprint.
+        (self.repo / "Tickets/Ready/task-stray.md").write_text(
+            "---\ntype: ticket\nwork_item_type: Task\niteration: S1\n---\n\nStray\n"
         )
         reading = self.tracker.read_iteration({}, "S1").value
         self.assertEqual(reading.capacity.members[0].daily_hours, 6.0)
@@ -530,7 +520,7 @@ class LocalTest(unittest.TestCase):
         # A sprint with no capacity file cannot be checked, so it is refused, not read as empty.
         missing = self.tracker.read_iteration({}, "S2").failure
         self.assertEqual(missing.code, "no_capacity")
-        self.assertIn(".harness/tracker/capacity/S2.json", missing.message)
+        self.assertIn("capacity-S2.json", missing.message)
         self.assertTrue(self.tracker.records_hours)
 
     def test_planning_needs_the_sprint_named(self) -> None:
@@ -563,17 +553,13 @@ class LocalTest(unittest.TestCase):
         self.assertEqual(
             (updated.title, updated.description), ("Refined", "refined text")
         )
-        stored = json.loads(
-            (self.repo / ".harness/tracker/backlog/STORY-0001.json").read_text()
-        )
+        stored = self.tracker.get_work_item(story.key).value.provider_data
         self.assertEqual(
             (stored["story_points"], stored["assigned_to"], stored["iteration"]),
             (3, "ana", "Sprint 2"),
         )
         self.tracker.update_work_item(task.key, WorkItemChanges(hours=Hours(4, True)))
-        hours = json.loads(
-            (self.repo / ".harness/tracker/backlog/TASK-0001.json").read_text()
-        )
+        hours = self.tracker.get_work_item(task.key).value.provider_data
         self.assertEqual((hours["remaining_hours"], hours["effort_hours"]), (4, 4))
         self.assertIsInstance(
             self.tracker.update_work_item("STORY-0042", WorkItemChanges(title="x")), Err
@@ -590,10 +576,56 @@ class LocalTest(unittest.TestCase):
         )
 
     def test_a_corrupt_record_is_reported(self) -> None:
-        folder = self.repo / ".harness/tracker/backlog"
+        folder = self.repo / "Tickets/Ready"
         folder.mkdir(parents=True)
-        (folder / "TASK-0001.json").write_text("{")
+        (folder / "0001-x.md").write_text(
+            '---\nprovider_id: "TASK-0001"\nwork_item_type: Chore\n---\n\nx\n'
+        )
         self.assertIsInstance(self.tracker.get_work_item("TASK-0001"), Err)
+
+    def test_an_item_is_a_ticket_file_in_the_toolkit_format(self) -> None:
+        """Front matter as `references/ticket-structure.md` gives it; the description is the body."""
+        epic = self.tracker.create_work_item(WorkItemKind.EPIC, "Épico: um", "", "")
+        feature = self.tracker.create_work_item(
+            WorkItemKind.FEATURE,
+            "Reset notice",
+            "## 🎯 Objective\n\nSay so.",
+            "EPIC-0001",
+        ).value
+        text = (self.repo / "Tickets/Ready/0002-reset-notice.md").read_text()
+        self.assertTrue(text.startswith("---\n"))
+        for line in (
+            'title: "Reset notice"',
+            "type: ticket",
+            "work_item_type: Feature",
+            "provider: local",
+            'provider_id: "FEATURE-0002"',
+            'parent_id: "EPIC-0001"',
+        ):
+            self.assertIn(line + "\n", text)
+        self.assertTrue(text.endswith("---\n\n## 🎯 Objective\n\nSay so.\n"))
+        self.assertEqual(feature.description, "## 🎯 Objective\n\nSay so.")
+        self.assertTrue((self.repo / "Tickets/Ready/0001-epico-um.md").is_file())
+        self.assertEqual(epic.value.title, "Épico: um")
+
+    def test_creating_an_item_replaces_its_draft(self) -> None:
+        """The toolkit renames a draft with the provider id once the item exists."""
+        drafts = self.repo / "Tickets/Ready"
+        drafts.mkdir(parents=True)
+        (drafts / "draft-reset-notice.md").write_text(
+            "---\ntype: ticket\nwork_item_type: User Story\n---\n\nThe body.\n"
+        )
+        (drafts / "draft-other.md").write_text(
+            "---\ntype: ticket\nwork_item_type: User Story\n---\n\nAnother.\n"
+        )
+        story = self.tracker.create_work_item(
+            WorkItemKind.USER_STORY, "Reset notice", "The body.", ""
+        ).value
+        self.assertEqual(
+            sorted(path.name for path in drafts.iterdir()),
+            ["0001-reset-notice.md", "draft-other.md"],
+        )
+        self.assertEqual(story.key, "STORY-0001")
 
 
 class PublishTest(unittest.TestCase):

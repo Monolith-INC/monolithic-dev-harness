@@ -56,9 +56,9 @@ as a setup choice; the user can configure one later if they request pull-request
 the project uses version control is the user's choice and never changes a harness decision. Rules
 about Git commands (protected branches, no history rewrite, branch names, draft pull requests) apply
 only when the user asks for Git-based delivery: then add `--git-delivery on` to the proposal. Explain
-where tracker work will appear and where plans will be saved. For the local tracker, work-item
-records live in `.harness/tracker/` in this project; `artifacts_path` is the folder for planning
-drafts. Never claim those two folders are the same.
+where tracker work will appear and where plans will be saved. For the local tracker, work items
+are ticket files in `Tickets/` at the project root, as the agile-backlog-toolkit lays them out;
+`artifacts_path` is the folder for plans and specs. Never claim those two folders are the same.
 
 ## 2. Prepare one reviewable proposal
 

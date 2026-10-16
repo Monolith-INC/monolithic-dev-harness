@@ -2,11 +2,11 @@
   "schemaVersion": 1,
   "name": "local",
   "label": "Local tracker",
-  "docs": "Bundled local tracker. Bootstrap prepares .harness/tracker/{backlog,ready,in_progress,done,canceled,artifacts,capacity}/. Work items are JSON files under the matching state folder; creating an item issues its key. Records stay in this project clone and are ignored through .git/info/exclude when Git is present. No provider onboarding is needed.",
+  "docs": "Bundled local tracker: the agile-backlog-toolkit's Tickets/ folder at the project root. Each work item is a ticket file (Markdown, the toolkit's front matter, the description as its body) in Tickets/Ready, Tickets/InProgress or Tickets/Done; a file without provider_id is a draft. Artifacts go to Tickets/Attachments/<KEY>/ and sprint capacity to capacity-<sprint>.json beside Tickets/. No provider onboarding is needed.",
   "connection": {"kind": "local"},
   "settings": [],
   "kinds": {"epic": "epic", "feature": "feature", "user_story": "user_story", "task": "task", "bug": "bug"},
-  "states": {"backlog": "backlog", "ready": "ready", "in_progress": "in_progress", "done": "done", "canceled": "canceled"},
+  "states": {"backlog": "Ready", "ready": "Ready", "in_progress": "InProgress", "done": "Done", "canceled": "Done"},
   "artifacts": [
     {"name": "epic", "children": ["feature"]},
     {"name": "feature", "children": ["user_story", "bug"]},

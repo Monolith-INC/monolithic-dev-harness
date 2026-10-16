@@ -297,7 +297,6 @@ class TestHumanOwned(HookTestCase):
             ".harness/state/checks/0123abcd.json",
             ".harness/state/review/0123abcd.json",
             ".harness/state/code-baselines/STORY-0001.json",
-            ".harness/tracker/in_progress/STORY-0001.json",
         ):
             with self.subTest(path=path):
                 self.assertDenied(
@@ -417,6 +416,48 @@ class TestTrackers(HookTestCase):
         self.assertAllowed(
             self.claude(
                 "Bash", {"command": "git commit --allow-empty -m 'STORY-0001 notes'"}
+            )
+        )
+
+    def test_local_tracker_items_change_only_through_the_tracker_tools(self) -> None:
+        """A draft in Tickets/ is the agent's to write; a tracked item (it has a provider_id) is
+        the tracker's, so writing one directly would skip the approval its tools require."""
+        self.select({"name": "local"})
+        ready = self.repo / "Tickets/Ready"
+        ready.mkdir(parents=True)
+        item = ready / "0001-reset-notice.md"
+        item.write_text('---\nprovider_id: "STORY-0001"\n---\n\nBody\n')
+        draft = ready / "draft-reset-notice.md"
+        self.assertAllowed(
+            self.claude(
+                "Write",
+                {"file_path": str(draft), "content": "---\ntype: ticket\n---\n"},
+            )
+        )
+        for tool, payload in (
+            ("Edit", {"file_path": str(item), "old_string": "Body", "new_string": "x"}),
+            (
+                "Write",
+                {
+                    "file_path": str(draft),
+                    "content": '---\nprovider_id: "STORY-0002"\n---\n',
+                },
+            ),
+            (
+                "Write",
+                {
+                    "file_path": str(self.repo / "Tickets/Attachments/STORY-0001/x.md"),
+                    "content": "x",
+                },
+            ),
+        ):
+            with self.subTest(tool=tool, payload=payload):
+                self.assertDenied(self.claude(tool, payload), "tracked-tickets")
+        self.select({"name": "linear", "values": {"team": "ENG"}})
+        self.assertAllowed(
+            self.claude(
+                "Edit",
+                {"file_path": str(item), "old_string": "Body", "new_string": "x"},
             )
         )
 

@@ -17,7 +17,15 @@ item, it supplies the item and its parent context after a read-only `tracker_get
 Use that supplied record as the intent. Do not pass an external tracker id to BMad's local
 `tickets.py` store. Do not call `start-ticket`, change tracker state, create a branch, or publish an
 artifact from this stage. Use `tickets.py find` or `next` only when the user explicitly starts from
-the BMad file-based ticket tree.
+the BMad file-based ticket tree; that tree is read as input only, and `Tickets/` is the only backlog.
+
+### A project file that is not a tracker item
+
+When the request names a file in the project (a legacy backlog note, an idea file) rather than a
+tracker item, that file is the item's draft. Read it as the intent and run discovery on it. Keep its
+text word for word: Refinement turns it into the item with `generate-work-item` and
+`enrich-work-item`, and the file's text becomes the item's Original Description. Never edit or move
+the file itself.
 
 ### An already-refined entry item
 

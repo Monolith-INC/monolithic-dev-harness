@@ -55,7 +55,7 @@ def receipt_fixture():
     marker = WorkItem(
         "T2",
         "T2",
-        "Breakdown — Plan",
+        "Breakdown",
         WorkItemKind.TASK,
         LogicalState.BACKLOG,
         parent_id="S1",
@@ -134,9 +134,18 @@ def test_incomplete_or_mismatched_completion_receipts_are_denied(content):
 
 def test_coding_task_cannot_use_planning_receipt():
     ops, marker, artifact = receipt_fixture()
-    assert isinstance(
-        verify(ops, replace(marker, title="Implement count"), artifact), Err
+    refused = verify(ops, replace(marker, title="Implement count"), artifact)
+    assert (
+        isinstance(refused, Err)
+        and "title starts with `Breakdown`" in refused.failure.message
     )
+
+
+def test_the_breakdown_task_is_titled_as_the_skill_names_it():
+    """`atomic-tasks.md` titles it `Breakdown`; a longer title that starts so is accepted too."""
+    ops, marker, artifact = receipt_fixture()
+    for title in ("Breakdown", "Breakdown — Plan", "breakdown: counts"):
+        assert isinstance(verify(ops, replace(marker, title=title), artifact), Ok)
 
 
 def test_a_task_without_a_receipt_still_requires_its_storys_session(tmp_path):

@@ -89,18 +89,25 @@ def prepare(
     runner_temp = trial_root / "runner-tmp"
     preference_home = trial_root / "preferences"
     codex_home = trial_root / "codex-home"
+    claude_config = trial_root / "claude-config"
     auth_source = (
         Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / "auth.json"
     )
+    claude_credentials = (
+        Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude"))
+        / ".credentials.json"
+    )
     try:
-        runner_temp.mkdir(mode=0o700)
-        preference_home.mkdir(mode=0o700)
-        codex_home.mkdir(mode=0o700)
-        runner_temp.chmod(0o700)
-        preference_home.chmod(0o700)
-        codex_home.chmod(0o700)
+        for folder in (runner_temp, preference_home, codex_home, claude_config):
+            folder.mkdir(mode=0o700)
+            folder.chmod(0o700)
         if auth_source.is_file():
             (codex_home / "auth.json").symlink_to(auth_source.resolve())
+        # Only the sign-in is shared; the trial's Claude Code settings and plugins are its own.
+        if claude_credentials.is_file():
+            (claude_config / ".credentials.json").symlink_to(
+                claude_credentials.resolve()
+            )
         marker = {
             "format": 2,
             "token": uuid.uuid4().hex,
@@ -114,6 +121,7 @@ def prepare(
             "runner_temp": str(runner_temp),
             "preference_home": str(preference_home),
             "codex_home": str(codex_home),
+            "claude_config": str(claude_config),
             "auth_source": str(auth_source.resolve()) if auth_source.is_file() else "",
         }
         (trial_root / MARKER_NAME).write_text(json.dumps(marker), encoding="utf-8")
@@ -274,6 +282,7 @@ def runner_environment(project_arg: str) -> dict[str, str]:
         "TMPDIR": ("runner_temp", trial_root / "runner-tmp"),
         "HARNESS_USER_STATE_DIR": ("preference_home", trial_root / "preferences"),
         "CODEX_HOME": ("codex_home", trial_root / "codex-home"),
+        "CLAUDE_CONFIG_DIR": ("claude_config", trial_root / "claude-config"),
     }
     for key, (field, expected) in paths.items():
         supplied = Path(str(marker.get(field, "")))
@@ -282,7 +291,44 @@ def runner_environment(project_arg: str) -> dict[str, str]:
         status = supplied.stat()
         if status.st_uid != os.getuid() or status.st_mode & 0o777 != 0o700:
             raise ValueError(f"Trial {key} folder must be user-owned with mode 0700.")
-    return {key: str(expected) for key, (_, expected) in paths.items()}
+    return {
+        **{key: str(expected) for key, (_, expected) in paths.items()},
+        # The harness under test installs into folders the trial owns, never the user's.
+        "HARNESS_HOME": str(trial_root / "harness-install"),
+        "HARNESS_BIN_DIR": str(trial_root / "bin"),
+        "PATH": f"{trial_root / 'bin'}{os.pathsep}{os.environ.get('PATH', '')}",
+    }
+
+
+def install_harness(project_arg: str, host: str) -> Path:
+    """Install this checkout's harness for `host` into the trial's own folders; returns the log."""
+    project, trial_root, _ = _trial_metadata(project_arg)
+    log = trial_root / "installer.log"
+    with log.open("w", encoding="utf-8") as output:
+        subprocess.run(
+            [
+                "bash",
+                str(PLUGIN.parents[1] / "install.sh"),
+                "--host",
+                host,
+                "--source",
+                str(PLUGIN.parents[1]),
+                "--yes",
+            ],
+            cwd=project,
+            env={
+                **{
+                    key: value
+                    for key, value in os.environ.items()
+                    if key not in HOST_CONTEXT_VARIABLES
+                },
+                **runner_environment(str(project)),
+            },
+            stdout=output,
+            stderr=subprocess.STDOUT,
+            check=True,
+        )
+    return log
 
 
 def cleanup_abandoned_runs() -> tuple[Path, ...]:
@@ -524,6 +570,11 @@ def main() -> int:
         help="JSON file whose values override the selected profile",
     )
     prepare_parser.add_argument(
+        "--install",
+        choices=("claude",),
+        help="install this checkout's harness for that host into the trial's own folders",
+    )
+    prepare_parser.add_argument(
         "--with-zed",
         action="store_true",
         help="write a project .zed/settings.json exposing the in-repo plugin's MCP servers",
@@ -560,7 +611,12 @@ def main() -> int:
                 )
                 if overrides is not None and not isinstance(overrides, dict):
                     raise ValueError("Settings override must contain a JSON object.")
-                print(prepare(args.profile, overrides, with_zed=args.with_zed))
+                project = prepare(
+                    args.profile, overrides, in_checkout=True, with_zed=args.with_zed
+                )
+                if args.install:
+                    install_harness(str(project), args.install)
+                print(project)
             case "discard":
                 print(f"Discarded {discard(args.project_path)}")
             case "environment":

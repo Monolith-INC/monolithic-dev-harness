@@ -1,4 +1,4 @@
-"""`harness tracker tree` rebuilds the local tracker's hierarchy from items filed by state."""
+"""`harness tracker tree` rebuilds the local tracker's hierarchy from tickets filed by state."""
 
 from __future__ import annotations
 
@@ -14,11 +14,10 @@ from tests.settings_fixture import write_settings
 def _item(
     repo: Path, folder: str, key: str, kind: str, title: str, parent: str = ""
 ) -> None:
-    path = local_tracker.storage_root(repo) / folder / f"{key}.json"
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
-        json.dumps({"key": key, "kind": kind, "title": title, "parentId": parent}),
-        encoding="utf-8",
+    root = local_tracker.storage_root(repo)
+    local_tracker.write(
+        root / folder / local_tracker.file_name(key, title),
+        {"key": key, "kind": kind, "title": title, "parentId": parent},
     )
 
 
@@ -46,6 +45,8 @@ def test_items_from_every_state_folder_are_drawn_under_their_parents(
     _item(tmp_path, new, "TASK-0005", "task", "Widget tests", "STORY-0003")
     _item(tmp_path, active, "TASK-0004", "task", "Add notice widget", "STORY-0003")
     _item(tmp_path, new, "TASK-0009", "task", "Stray task", "STORY-9999")
+    draft = local_tracker.storage_root(tmp_path) / new / "draft-notes.md"
+    draft.write_text("---\ntype: ticket\n---\n\nNot an item yet.\n", encoding="utf-8")
 
     shown = _tree(tmp_path)
 
@@ -59,6 +60,7 @@ def test_items_from_every_state_folder_are_drawn_under_their_parents(
     assert (
         lines[5].startswith("TASK-0009") and "parent STORY-9999 not found" in lines[5]
     )
+    assert len(lines) == 6, "a draft is not an item"
 
 
 def test_an_empty_tracker_says_so(tmp_path: Path) -> None:

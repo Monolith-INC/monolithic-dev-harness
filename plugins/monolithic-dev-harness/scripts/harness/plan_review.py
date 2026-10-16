@@ -2,7 +2,8 @@
 
 The question is about exactly one note of type `implementation-plan`, marked `status: approved` so
 the approval pins it, that names exactly one Story or Bug, and that Story or Bug exists in the
-selected tracker. The Story comes from the plan, so the agent never names it separately. That the
+selected tracker and is refined (it passes `validate-artifact`): the toolkit writes a Story's plan
+from its refined acceptance criteria. The Story comes from the plan, so the agent never names it separately. That the
 plan was shown first is the gate's own `shown` rule (`artifact_review`).
 """
 
@@ -11,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.result import Ok, Result, bind, err
-from harness import local_artifacts
+from harness import local_artifacts, refined
 from harness.workflow_requirements import artifact_kind
 from integrations.contracts import BUILDABLE_KINDS, TrackerOps
 
@@ -36,11 +37,11 @@ def story(repo: Path, names: list[str]) -> Result[str]:
 
 
 def tracked(ops: TrackerOps, key: str) -> Result[None]:
-    """The plan's Story or Bug exists in the tracker."""
+    """The plan's Story or Bug exists in the tracker and is refined."""
     return bind(
         ops.get_work_item(key),
         lambda item: (
-            Ok(None)
+            refined.check(item)
             if item.kind in BUILDABLE_KINDS
             else err(
                 "plan_invalid",

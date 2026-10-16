@@ -1,21 +1,14 @@
-"""A tracker kept in this clone: one JSON file per work item, one Markdown file per artifact.
+"""The bundled local tracker: the agile-backlog-toolkit's `Tickets/` folder (`harness.local_tracker`).
 
-Bootstrap ignores `.harness/tracker/` through `.git/info/exclude`, so its records stay local. Every
-worktree of the clone reads the main worktree's records, so a linked worktree sees the same items.
-
-    .harness/tracker/<state>/<KEY>.json          a work item, in the folder of its state
-    .harness/tracker/artifacts/<KEY>/<file>.md   its artifacts, in the shared artifact format
-    .harness/tracker/capacity/<sprint>.json      a sprint's dates and team, in the capacity format
-
-Keys are `<PREFIX>-<number>` (`STORY-0007`). Hierarchy follows the manifest's artifacts. A work
-item's planning fields (its sprint, points, and hours) use the same names as a planning file's
-front matter (`integrations.planning`). Planning reads these files, so it needs no replies, but it
-does need the sprint named: there is no "current" sprint to fall back on.
+Each work item is a ticket file in its state's folder; its artifacts are Markdown files under
+`Tickets/Attachments/<KEY>/`. Hierarchy follows the manifest's artifacts. A work item's planning
+fields (its sprint, points, and hours) use the same names as a planning file's front matter
+(`integrations.planning`). Planning reads these files, so it needs no replies, but it does need the
+sprint named: there is no "current" sprint to fall back on.
 """
 
 from __future__ import annotations
 
-import json
 import re
 from collections.abc import Mapping
 from datetime import UTC, datetime
@@ -24,7 +17,6 @@ from typing import Any
 
 from core.result import Ok, Result, attempt, bind, err, fmap, oks, require, sequence
 from harness import local_tracker
-from harness.state import write_json
 from integrations import artifacts
 from integrations.contracts import (
     AdapterContext,
@@ -76,7 +68,7 @@ def adapter(context: AdapterContext) -> TrackerOps:
         update_work_item=lambda ref, changes: bind(
             changed_fields(changes, FIELDS, RECORDED_HOURS),
             lambda fields: bind(
-                _find(context, root, ref), lambda found: _update(found, fields)
+                _find(context, root, ref), lambda found: _update(context, found, fields)
             ),
         ),
         transition_work_item=lambda ref, state: bind(
@@ -104,7 +96,7 @@ def adapter(context: AdapterContext) -> TrackerOps:
             _find(context, root, ref), lambda found: _link(found, url, kind)
         ),
         read_iteration=lambda replies, ref: bind(
-            _sprint(ref), lambda name: _capacity(root, name)
+            _sprint(ref), lambda name: _capacity(context.repo, name)
         ),
         iteration_items=lambda replies, ref: bind(
             _sprint(ref),
@@ -126,37 +118,37 @@ def adapter(context: AdapterContext) -> TrackerOps:
     )
 
 
-def _now() -> str:
-    return datetime.now(UTC).isoformat()
+def _today() -> str:
+    return datetime.now(UTC).date().isoformat()
 
 
-def _state_folders(context: AdapterContext, root: Path) -> tuple[Path, ...]:
-    return tuple(root / name for name in context.manifest.states.values())
+def _records(context: AdapterContext, root: Path) -> Result[tuple[Record, ...]]:
+    return attempt(
+        lambda: local_tracker.records(root, context.manifest),
+        "local_storage_error",
+        f"could not read the tickets in {root}",
+        OSError,
+        ValueError,
+        UnicodeDecodeError,
+    )
 
 
-def _read(path: Path) -> Result[Record]:
+def _reread(context: AdapterContext, path: Path, state: str) -> Result[Record]:
+    """Read one ticket file back from disk after writing it."""
     return bind(
         attempt(
-            lambda: json.loads(path.read_text(encoding="utf-8")),
+            lambda: local_tracker.read(path, state),
             "local_storage_error",
             f"could not read {path.name}",
             OSError,
             ValueError,
+            UnicodeDecodeError,
         ),
         lambda record: (
             Ok((path, record))
-            if isinstance(record, dict)
-            else err("local_storage_error", f"{path.name} is not an object")
+            if record is not None
+            else err("local_storage_error", f"{path.name} lost its provider_id")
         ),
-    )
-
-
-def _records(context: AdapterContext, root: Path) -> Result[tuple[Record, ...]]:
-    return sequence(
-        _read(path)
-        for folder in _state_folders(context, root)
-        if folder.is_dir()
-        for path in sorted(folder.glob("*.json"))
     )
 
 
@@ -226,14 +218,13 @@ def _allowed_child(
 
 
 def _next_key(found: tuple[Record, ...], kind: WorkItemKind) -> str:
-    prefix = PREFIXES[kind]
-    pattern = re.compile(rf"^{prefix}-(\d+)$")
+    """The next number across every kind, so the number alone names the file."""
     numbers = tuple(
         int(match.group(1))
         for _, record in found
-        if (match := pattern.match(str(record.get("key", ""))))
+        if (match := re.match(r"^[A-Z]+-(\d+)$", str(record.get("key", ""))))
     )
-    return f"{prefix}-{max(numbers, default=0) + 1:04d}"
+    return f"{PREFIXES[kind]}-{max(numbers, default=0) + 1:04d}"
 
 
 def _create(
@@ -273,39 +264,52 @@ def _store_new(
     description: str,
     parent: Record | None,
 ) -> Result[WorkItem]:
+    """Write the item's ticket file; a draft with the same body becomes this item."""
     key = _next_key(found, kind)
-    now = _now()
     record = {
         "key": key,
-        "id": key,
         "title": title,
         "kind": kind.value,
-        "state": LogicalState.BACKLOG.value,
         "description": description,
         "parentId": parent[1]["key"] if parent else "",
-        "links": [],
-        "createdAt": now,
-        "updatedAt": now,
+        "date": _today(),
     }
-    folder = root / context.manifest.states[LogicalState.BACKLOG]
-    return fmap(_write(folder / f"{key}.json", record), lambda _: _item(record))
+    state = LogicalState.BACKLOG
+    path = root / context.manifest.states[state] / local_tracker.file_name(key, title)
+
+    def store() -> None:
+        local_tracker.write(path, record)
+        for draft, body in local_tracker.drafts(root):
+            if body.strip() == description.strip() and draft != path:
+                draft.unlink()
+
+    return bind(
+        attempt(store, "local_storage_error", f"could not write {path.name}", OSError),
+        lambda _: fmap(
+            _reread(context, path, state.value), lambda read: _item(read[1])
+        ),
+    )
 
 
 def _write(path: Path, record: Mapping[str, Any]) -> Result[None]:
     return attempt(
-        lambda: write_json(path, dict(record)),
+        lambda: local_tracker.write(path, record),
         "local_storage_error",
         f"could not write {path.name}",
         OSError,
     )
 
 
-def _update(found: Record, fields: Mapping[str, Any]) -> Result[WorkItem]:
-    """Write the named fields, then read the record back from disk."""
+def _update(
+    context: AdapterContext, found: Record, fields: Mapping[str, Any]
+) -> Result[WorkItem]:
+    """Write the named fields, then read the item back from disk."""
     path, record = found
-    updated = {**record, **fields, "updatedAt": _now()}
     return bind(
-        _write(path, updated), lambda _: fmap(_read(path), lambda read: _item(read[1]))
+        _write(path, {**record, **fields}),
+        lambda _: fmap(
+            _reread(context, path, str(record["state"])), lambda read: _item(read[1])
+        ),
     )
 
 
@@ -313,24 +317,26 @@ def _move(
     context: AdapterContext, root: Path, found: Record, state: LogicalState
 ) -> Result[WorkItem]:
     path, record = found
-    updated = {**record, "state": state.value, "updatedAt": _now()}
     target = root / context.manifest.states[state] / path.name
     return bind(
-        _write(target, updated),
-        lambda _: fmap(
+        _write(target, record),
+        lambda _: bind(
             attempt(
                 lambda: path.unlink() if target != path else None,
                 "local_storage_error",
                 f"could not move {path.name}",
                 OSError,
             ),
-            lambda _: _item(updated),
+            lambda _: fmap(
+                _reread(context, target, state.value),
+                lambda read: _item({**read[1], "state": state.value}),
+            ),
         ),
     )
 
 
 def _artifact_folder(root: Path, record: Mapping[str, Any]) -> Path:
-    return root / "artifacts" / str(record["key"])
+    return local_tracker.attachments(root, str(record["key"]))
 
 
 def _artifacts(
@@ -402,19 +408,19 @@ def _link(found: Record, url: str, kind: str) -> Result[Mapping[str, Any]]:
         Ok(reply)
         if link in links
         else fmap(
-            _write(path, {**record, "links": [*links, link], "updatedAt": _now()}),
+            _write(path, {**record, "links": [*links, link]}),
             lambda _: reply,
         )
     )
 
 
-def _capacity(root: Path, name: str) -> Result[IterationReading]:
-    path = root / "capacity" / f"{_safe(name)}.json"
+def _capacity(repo: Path, name: str) -> Result[IterationReading]:
+    path = local_tracker.capacity_file(repo, _safe(name))
     return bind(
         require(
             path.is_file(),
             "no_capacity",
-            f"sprint {name!r} has no capacity file at {path.relative_to(root.parent.parent)}",
+            f"sprint {name!r} has no capacity file at {path.name} beside Tickets/",
         ),
         lambda _: read_capacity_file(path, name),
     )
@@ -427,6 +433,6 @@ def _sprint(ref: str) -> Result[str]:
         if not is_current(ref)
         else err(
             "invalid_request",
-            "name the sprint: the local tracker reads .harness/tracker/capacity/<sprint>.json",
+            "name the sprint: the local tracker reads capacity-<sprint>.json beside Tickets/",
         )
     )

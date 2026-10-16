@@ -93,6 +93,11 @@ held to an approval that covers it. Every write is read back before it is report
 skill never calls a tracker's own tools directly; when the gateway lacks an operation a source
 skill needs, add it to the gateway.
 
+The bundled local tracker is the agile-backlog-toolkit's `Tickets/` folder at the project root,
+laid out as the toolkit lays it out: one ticket file per item (its front matter, its description as
+the body) in `Tickets/Ready`, `Tickets/InProgress` or `Tickets/Done`. A ticket without
+`provider_id` is a draft; a tracked item changes only through the gateway (owner, 2026-10-16).
+
 ## Article 8 — Plans and specs
 
 - One implementation plan per Story: the agile-backlog-toolkit's plan, which maps every acceptance
@@ -101,6 +106,9 @@ skill needs, add it to the gateway.
 - `write-spec` owns technical specs (tech spec, design doc, ADR, API contract), with its critic
   review, and writes only the kinds a Story still lacks.
 - `bmad-spec` writes the product-level spec on the idea route.
+- BMad's Build workflow (`bmad-build`) is assimilated, not removed. Its plan file is the hardened
+  approach that refinement takes as input, never a Story's implementation plan. BMad's ticket list
+  (`tickets.py`) is read as input only; `Tickets/` is the only backlog (owner, 2026-10-16).
 
 ## Article 9 — Where work starts and where it may stop
 

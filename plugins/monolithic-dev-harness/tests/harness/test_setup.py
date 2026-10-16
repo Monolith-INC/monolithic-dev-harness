@@ -279,9 +279,9 @@ class SetupTests(unittest.TestCase):
             ).value["candidate"],
         )
         self.assertIn("tracker.storage", setup.inspect(self.repo).value["missing"])
-        record = self.repo / ".harness/tracker/backlog/STORY-0001.json"
+        record = self.repo / "Tickets/Ready/0001-story.md"
         record.parent.mkdir(parents=True)
-        record.write_text('{"key":"STORY-0001"}\n')
+        record.write_text("---\nprovider_id: STORY-0001\n---\n")
         before = record.read_bytes()
         command = subprocess.run(
             [

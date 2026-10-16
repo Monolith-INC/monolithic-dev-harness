@@ -533,9 +533,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
 
     def test_the_local_tracker_checks_capacity_for_a_named_sprint(self):
         def sprint_file(root):
-            folder = root / ".harness" / "tracker" / "capacity"
-            folder.mkdir(parents=True)
-            (folder / "S1.json").write_text(
+            (root / "capacity-S1.json").write_text(
                 '{"startDate": "2026-08-03", "finishDate": "2026-08-14", '
                 '"members": [{"name": "Ana", "activities": [{"capacityPerDay": 1}]}]}'
             )

@@ -17,8 +17,8 @@ from typing import Any
 from core.result import Err, Ok
 
 STATE_RELATIVE_PATH = Path(".harness") / "state"
-# Harness state and local tracker records belong to one clone: never committed, shared, or adopted.
-LOCAL_ONLY_PATHS = (".harness/state/", ".harness/tracker/")
+# Harness state belongs to one clone: never committed, shared, or adopted.
+LOCAL_ONLY_PATHS = (".harness/state/",)
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
 
 

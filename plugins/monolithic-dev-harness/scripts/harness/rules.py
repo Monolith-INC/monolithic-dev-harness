@@ -36,6 +36,7 @@ from . import (
     code_content,
     gitstate,
     globs,
+    local_tracker,
     sessions,
     shellscan,
     state,
@@ -296,8 +297,6 @@ _OWNED_DIRS = (
     (".harness", "state", "checks"),
     (".harness", "state", "review"),
     (".harness", "state", "code-baselines"),
-    # The local tracker's records change only through its tracker tools.
-    (".harness", "tracker"),
 )
 
 
@@ -515,8 +514,7 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
                     f"{_relative(repo, path)} is human-owned. Approvals, manual checks, and tracker trust are "
                     "recorded from the user's own prompt; checkout sessions change through `harness session`, "
                     "and work sessions through `harness work-session`; check results and review verdicts "
-                    "are recorded by scripts/harness/checks.py and review_verdict.py; local tracker "
-                    "records change through the tracker tools; the "
+                    "are recorded by scripts/harness/checks.py and review_verdict.py; the "
                     "settings are edited by a person (or created once by bootstrap).",
                 )
     if call.kind == "shell":
@@ -525,6 +523,39 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
             return Decision.deny(
                 "human-owned",
                 f"this command could write {written}, which is human-owned harness state or settings.",
+            )
+    return Decision.allow()
+
+
+_PROVIDER_ID = re.compile(r"^provider_id:", re.MULTILINE)
+
+
+def rule_tracked_tickets(call: ToolCall, repo: Path, settings: Settings) -> Decision:
+    """With the local tracker, a ticket that is a tracked item changes only through its tools.
+
+    Drafts in `Tickets/` (no `provider_id`) are written by the agile-backlog-toolkit's skills.
+    """
+    if call.kind != "edit" or settings.tracker.name != "local":
+        return Decision.allow()
+    root = local_tracker.storage_root(repo).resolve()
+    written = " ".join(
+        str(call.tool_input.get(name) or "") for name in ("content", "new_string")
+    )
+    for path in call.file_paths:
+        target = (repo / _relative(repo, path)).resolve()
+        if not target.is_relative_to(root):
+            continue
+        if (
+            local_tracker.ATTACHMENTS in target.relative_to(root).parts
+            or (target.is_file() and local_tracker.is_item(target))
+            or _PROVIDER_ID.search(written)
+        ):
+            return Decision.deny(
+                "tracked-tickets",
+                f"{_relative(repo, path)} is a work item in the local tracker (or its "
+                "attachment). Change it with the tracker tools (`tracker_update_work_item`, "
+                "`tracker_transition_work_item`, `tracker_publish_artifact`) after the user "
+                "approves the change. A draft without `provider_id` may be written directly.",
             )
     return Decision.allow()
 
@@ -787,8 +818,13 @@ def _pushed_branches(args: list[str], where: Path) -> tuple[str, ...]:
 
 
 def _context_unchanged(repo: Path, binds: dict[str, Any]) -> bool:
+    """Every reviewed file reads as it did. A reviewed draft in `Tickets/` that is gone became its
+    item (the toolkit renames a draft once the item exists); its approved body is still held."""
+    tickets = local_tracker.storage_root(repo).resolve()
     for name, digest in binds.get("artifacts", ()):
         path = repo / str(name)
+        if not path.exists() and path.resolve().is_relative_to(tickets):
+            continue
         try:
             current = hashlib.sha256(path.read_bytes()).hexdigest()
         except OSError:
@@ -847,6 +883,26 @@ def covering_approval(
     return None, stale
 
 
+_TEXT_WRITES = ("tracker_create_work_item", "tracker_update_work_item")
+
+
+def _written_body(call: ToolCall) -> str | None:
+    """The description a create or update writes, when it writes one."""
+    if call.name not in _TEXT_WRITES or "description" not in call.tool_input:
+        return None
+    return str(call.tool_input.get("description") or "")
+
+
+def _approved_body(repo: Path, work_session_id: str | None, body: str) -> bool:
+    """Whether an open approval, its reviewed files unchanged, holds a draft with this body."""
+    digest = hashlib.sha256(body.strip().encode("utf-8")).hexdigest()
+    return not _session_ended(repo, work_session_id) and any(
+        digest in (record.get("binds") or {}).get("bodies", ())
+        and _context_unchanged(repo, record.get("binds") or {})
+        for _, record in state.open_approvals(repo, work_session_id)
+    )
+
+
 def rule_approval_required(
     call: ToolCall,
     repo: Path,
@@ -855,6 +911,17 @@ def rule_approval_required(
 ) -> Decision:
     if not is_remote_write(call, policy):
         return Decision.allow()
+    match _written_body(call):
+        case str() as body if not _approved_body(repo, work_session_id, body):
+            return Decision.deny(
+                "approval-required",
+                f"`{call.name}` writes a work item's text that no approved draft holds. Write "
+                "the item as its draft (the agile-backlog-toolkit's skills write drafts to "
+                "`Tickets/Ready/`), show it with `harness workflow show --artifact <draft>`, and "
+                "ask `harness decision present --gate publish-items --artifact <draft>`. The "
+                "description must be the draft's body, word for word. You cannot approve it "
+                "yourself.",
+            )
     match covering_approval(call, repo, work_session_id):
         case (_, _), _:
             return Decision.allow()
@@ -976,6 +1043,7 @@ def evaluate(
             decision
             for rule in (
                 lambda: rule_human_owned(call, repo),
+                lambda: rule_tracked_tickets(call, repo, settings),
                 lambda: rule_tracker_valid(call, policy),
                 lambda: rule_protected_items(call, policy),
                 lambda: _delivery(settings, lambda: rule_feature_branch(call, repo)),

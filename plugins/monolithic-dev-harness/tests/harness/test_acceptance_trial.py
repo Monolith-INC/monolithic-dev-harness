@@ -22,7 +22,7 @@ class AcceptanceTrialTests(unittest.TestCase):
             settings = json.loads((project / ".harness/settings.json").read_text())
             self.assertEqual(settings["tracker"]["name"], "local")
             self.assertEqual(settings["artifacts_path"], "docs/planning")
-            self.assertTrue((project / ".harness/tracker/backlog").is_dir())
+            self.assertTrue((project / "Tickets/Ready").is_dir())
             # Seeded as `harness bootstrap` seeds it, so discovery's knowledge ladder can run.
             self.assertTrue(
                 (project / ".harness/knowledge/stores/project/catalog.json").is_file()
@@ -40,6 +40,22 @@ class AcceptanceTrialTests(unittest.TestCase):
             )
             if auth_source.is_file():
                 self.assertTrue((codex_home / "auth.json").is_symlink())
+            # Claude Code: a private configuration with the user's sign-in linked, and the
+            # harness installed into folders the trial owns.
+            claude_config = Path(environment["CLAUDE_CONFIG_DIR"])
+            self.assertEqual(claude_config.stat().st_mode & 0o777, 0o700)
+            credentials = (
+                Path(os.environ.get("CLAUDE_CONFIG_DIR", Path.home() / ".claude"))
+                / ".credentials.json"
+            )
+            if credentials.is_file():
+                self.assertTrue((claude_config / ".credentials.json").is_symlink())
+            trial_root = project.parent
+            self.assertEqual(
+                (environment["HARNESS_HOME"], environment["HARNESS_BIN_DIR"]),
+                (str(trial_root / "harness-install"), str(trial_root / "bin")),
+            )
+            self.assertTrue(environment["PATH"].startswith(str(trial_root / "bin")))
         finally:
             acceptance_trial.discard(str(project))
 

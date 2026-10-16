@@ -65,7 +65,6 @@ HUMAN_OWNED_WRITES = (
     # Evidence the workflow requirements trust is recorded by the harness, never by hand.
     "echo x > .harness/state/checks/abc.json",
     "echo x > .harness/state/review/abc.json",
-    "echo x > .harness/tracker/in_progress/STORY-0001.json",
     "echo x > .harness/*.json",
     "sed -i s/4007// .harness/settings.json",
     "yq -i '.x=1' .harness/settings.json",

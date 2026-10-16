@@ -1186,7 +1186,12 @@ def _open_approval(
     """
     window = _window(repo)
     state.open_approval(
-        repo, approval_id, window, question, work_session_id=scope, binds=binds
+        repo,
+        approval_id,
+        window,
+        question,
+        work_session_id=scope,
+        binds=_with_bodies(repo, binds),
     )
     lasts = (
         "holds until it is revoked, the work session ends, or what was reviewed changes. "
@@ -1199,6 +1204,23 @@ def _open_approval(
         "Make only the writes the question described."
         + _pin_approved_notes(repo, approval_id, binds)
     )
+
+
+def _with_bodies(repo: Path, binds: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Add the digest of each reviewed file's body, so a work item written later can be held to
+    the draft the user approved even after the item replaces that draft."""
+    from harness import local_tracker
+
+    if not binds or not binds.get("artifacts"):
+        return binds
+    bodies = []
+    for entry in binds["artifacts"]:
+        try:
+            text = (repo / str(entry[0])).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError, IndexError, TypeError):
+            continue
+        bodies.append(local_tracker.body_digest(text))
+    return {**binds, "bodies": sorted(set(bodies))}
 
 
 def _answered_binds(repo: Path, scope: str | None, key: str) -> dict[str, Any] | None:

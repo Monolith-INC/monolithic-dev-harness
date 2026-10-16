@@ -33,37 +33,54 @@ def _latest(artifacts: tuple[ArtifactRef, ...]) -> Result[ArtifactRef]:
 
 def verify(ops: TrackerOps, item: WorkItem, artifact: ArtifactRef) -> Result[object]:
     return bind(
-        attempt(
-            lambda: json.loads(artifact.content),
+        require(
+            _is_breakdown(item),
             "workflow_policy",
-            "read planning completion receipt",
-            ValueError,
+            f"{item.key} is not a Story's Breakdown Task: a planning completion receipt closes "
+            "only a Task whose title starts with `Breakdown`, as generate-breakdown-work-items "
+            "names it",
         ),
-        lambda receipt: bind(
-            require(
-                _bound(receipt, item),
+        lambda _: bind(
+            attempt(
+                lambda: json.loads(artifact.content),
                 "workflow_policy",
-                "planning completion receipt must name this breakdown task and its parent",
+                "read planning completion receipt",
+                ValueError,
             ),
-            lambda _: bind(
-                ops.get_work_item(item.parent_id),
-                lambda parent: bind(
-                    require(
-                        parent.kind == WorkItemKind.USER_STORY,
-                        "workflow_policy",
-                        "breakdown completion needs a story parent",
-                    ),
-                    lambda _: bind(
-                        ops.list_children(parent.id),
-                        lambda children: require(
-                            _published(receipt, item, children),
+            lambda receipt: bind(
+                require(
+                    _bound(receipt, item),
+                    "workflow_policy",
+                    "planning completion receipt must name this breakdown task and its parent",
+                ),
+                lambda _: bind(
+                    ops.get_work_item(item.parent_id),
+                    lambda parent: bind(
+                        require(
+                            parent.kind == WorkItemKind.USER_STORY,
                             "workflow_policy",
-                            "planning completion receipt must match all published implementation children",
+                            "breakdown completion needs a story parent",
+                        ),
+                        lambda _: bind(
+                            ops.list_children(parent.id),
+                            lambda children: require(
+                                _published(receipt, item, children),
+                                "workflow_policy",
+                                "planning completion receipt must match all published "
+                                "implementation children",
+                            ),
                         ),
                     ),
                 ),
             ),
         ),
+    )
+
+
+def _is_breakdown(item: WorkItem) -> bool:
+    """The skill titles it `Breakdown` (kept recognizable when localized)."""
+    return item.kind == WorkItemKind.TASK and item.title.strip().casefold().startswith(
+        "breakdown"
     )
 
 
@@ -76,9 +93,7 @@ def _bound(receipt: object, item: WorkItem) -> bool:
             "children": list() as children,
         }:
             return (
-                item.kind == WorkItemKind.TASK
-                and item.title.casefold().startswith(("breakdown —", "breakdown -"))
-                and key == item.id
+                key == item.id
                 and parent == item.parent_id
                 and bool(parent)
                 and bool(children)

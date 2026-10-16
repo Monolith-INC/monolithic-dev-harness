@@ -68,9 +68,10 @@ Use this map instead of searching plugin files to rediscover workflow capabiliti
 
 For a named project file, open that file directly. Use the host's tool catalog and these known
 capabilities; do not search source code to find tool names or infer settings already reported by a
-command. The bundled local tracker needs no provider onboarding. Its records are under
-`.harness/tracker/`; the configured artifact folder holds plans and drafts. A project file can be
-planned directly even when it is not yet a tracker record.
+command. The bundled local tracker needs no provider onboarding. Its work items are the agile-backlog-toolkit's
+ticket files in `Tickets/Ready`, `Tickets/InProgress` and `Tickets/Done` at the project root; the
+configured artifact folder holds plans and specs. A project file can be planned directly even when
+it is not yet a tracker record.
 
 ## Workflow actions
 
