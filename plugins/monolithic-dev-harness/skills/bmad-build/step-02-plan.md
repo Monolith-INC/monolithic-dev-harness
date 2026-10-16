@@ -75,8 +75,14 @@ The user decides substantive alternatives. Do not ask for implementation approva
 
 If the user wants further exploration, use the same paginated native decision protocol for
 contextual methods, Reshuffle, full-catalog browsing, agent recommendations and Proceed. Do not
-reopen completed choices. Otherwise continue automatically to preparation; an optional extra
-review is never required to finish. Record accepted changes once and reuse them.
+reopen completed choices. An optional extra review is never required to finish. Record accepted
+changes once and reuse them.
+
+When hardening is done, have the approach approved before refinement: show it with
+`harness workflow show --artifact {plan_file}`, put that output in your reply, then ask
+`harness decision present --gate plan-checkpoint --artifact {plan_file}`. Never end the turn with
+the approach unasked. **Approve and continue** goes on to refinement; **Deepen** runs more
+hardening and asks again; **Approve and stop** saves the approved approach and pauses.
 
 Follow [the onboarding contract](../../references/onboarding.md). The hardened approach
 is the input to the Refinement stage, which runs the agile-backlog-toolkit skills against the

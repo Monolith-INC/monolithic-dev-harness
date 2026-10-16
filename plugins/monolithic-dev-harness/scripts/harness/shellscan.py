@@ -838,6 +838,16 @@ def _exec_writes(rest: tuple[str, ...]) -> bool:
     name = posixpath.basename(inner[0])
     if name in IN_PLACE_FLAGS:
         return any(IN_PLACE_FLAGS[name].match(a) for a in inner[1:])
+    if name in SHELLS and "-c" in inner[1:-1]:
+        # `sh -c '<script>'`: the script decides, so read it like any other command line.
+        script = next((a for a in inner[inner.index("-c") + 1 :] if a != "--"), "")
+        return any(
+            _exec_writes((ran.name, *ran.args))
+            or any(
+                op in _REDIRECT_OUT and to != "/dev/null" for op, to in ran.redirects
+            )
+            for ran in invocations(script)
+        )
     return name not in NON_WRITERS
 
 

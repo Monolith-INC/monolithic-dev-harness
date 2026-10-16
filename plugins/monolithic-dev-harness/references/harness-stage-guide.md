@@ -45,7 +45,8 @@ this skill's own location; do not ask the user to find the path, change their sh
 the plugin again. Report a missing command only if neither the shell command nor the bundled
 executable exists.
 
-Start with `harness begin --request "<exact user request>" --repo <project>`.
+Start with `harness begin --request "<exact user request>" --repo <project>`, run on its own as one
+plain command (see the harness skill).
 Follow its setup or session-choice instructions before doing work.
 Onboarding is optional. `harness mode free` provides direct skill use and guidance without creating
 a session, requiring tracker setup or confirming language. `harness onboarding skip|dismiss|restart`

@@ -484,3 +484,10 @@ def test_claude_asks_with_its_native_control_unless_told_it_cannot(
     fallback_repo.mkdir()
     write_settings(fallback_repo)
     assert _claude_present(fallback_repo, "--native-unavailable")["transport"] == "chat"
+
+
+def test_claude_code_is_read_as_claude(tmp_path: Path) -> None:
+    write_settings(tmp_path)
+    assert (
+        _claude_present(tmp_path, "--host", "claude-code")["tool"] == "AskUserQuestion"
+    )

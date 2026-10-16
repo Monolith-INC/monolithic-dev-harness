@@ -31,7 +31,9 @@ by the user or materially changed circumstances.
 Review the drafted approach using the selected rigor. Reconcile original requirements and accepted
 decisions. Triage findings into fixes, consequential choices and deferred improvements with owner
 and revisit trigger. Resolve only choices that objectively block dependent work; continue independent
-work. Additional elicitation remains available but is not an endless default loop.
+work. Additional elicitation remains available but is not an endless default loop. The stage ends
+with the approach shown and approved (`plan-checkpoint` with the approach as `--artifact`); the
+turn never ends with the approach drafted and unasked.
 
 ## Refinement
 

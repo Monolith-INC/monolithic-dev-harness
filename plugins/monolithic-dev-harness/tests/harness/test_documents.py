@@ -159,3 +159,12 @@ def test_a_remote_tracker_names_documents_only_once_the_item_exists(
     match documents.path(tmp_path, args):
         case result:
             assert "assigns an item's id when it is created" in result.failure.message
+
+
+def test_story_is_read_as_user_story(tmp_path: Path, capsys) -> None:
+    from tests.settings_fixture import write_settings
+
+    write_settings(tmp_path, artifacts_path="docs/planning")
+    assert _path(
+        tmp_path, capsys, "--new", "story", "--title", "Counts", "--type", "spec"
+    ) == ("docs/planning/user-story-0001-counts/spec-user-story-0001-counts.md")

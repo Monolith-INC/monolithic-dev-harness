@@ -98,10 +98,30 @@ def writes_code(
         for path in paths:
             relative = _inside(path, base)
             if escapes_checkout(path, base) or (
-                relative is not None and is_code(relative, patterns, tree, planning)
+                relative is not None
+                and is_code(relative, patterns, tree, planning)
+                and not (tree and _only_documents(base, relative, patterns, planning))
             ):
                 return True
     return False
+
+
+def _only_documents(
+    base: Path | None, relative: str, patterns: Sequence[str] | None, planning: str
+) -> bool:
+    """A folder inside the planning folder that holds only planning documents and data."""
+    if base is None or not planning:
+        return False
+    folder = base / relative
+    files = (
+        [path for path in folder.rglob("*") if path.is_file()]
+        if folder.is_dir()
+        else []
+    )
+    return bool(files) and all(
+        not is_code(path.relative_to(base).as_posix(), patterns, False, planning)
+        for path in files
+    )
 
 
 def escapes_checkout(path: str, root: Path | None) -> bool:

@@ -16,7 +16,9 @@ Onboarding is optional. If the user wants skills or guidance without a session, 
 `harness mode free --repo <project>` and invoke the relevant skill directly. Free mode preserves
 all action approvals and protected-state rules; it is not suspension. Ideation can be added to
 ongoing work without restarting that work.
-Start with `harness begin --request "<exact request>" --repo <project>`.
+Start with `harness begin --request "<exact request>" --repo <project>`, run on its own as one plain
+command (`--repo .` or an absolute path; no variables, `$(…)`, `;` or `&&`): the harness links this
+conversation to its work session only when it can read the command.
 It checks setup, routes the session, creates the workflow when absent, and returns pinned discovery instructions.
 
 - `setup_needed`: follow the bootstrap skill, preserving the returned request, then repeat begin.

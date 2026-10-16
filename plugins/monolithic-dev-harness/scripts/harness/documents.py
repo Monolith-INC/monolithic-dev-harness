@@ -91,6 +91,13 @@ def _located(repo: Path, artifacts: Path, args: argparse.Namespace) -> Result[Pa
                 ),
                 lambda chain: item_path(artifacts, chain, args.type),
             )
+        case None, "story":
+            # The toolkit's short name for a User Story.
+            return _located(
+                repo,
+                artifacts,
+                argparse.Namespace(**{**vars(args), "new": "user-story"}),
+            )
         case None, str() as kind if kind not in _KINDS:
             return err("document_target", f"--new is one of {', '.join(_KINDS)}")
         case None, str() as kind if (args.title or "").strip():

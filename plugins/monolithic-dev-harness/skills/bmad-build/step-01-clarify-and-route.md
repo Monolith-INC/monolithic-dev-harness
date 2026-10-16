@@ -93,7 +93,7 @@ This runs on the output of `tickets.py find` for one ticket. Find's `description
      limitation and continue with focused source inspection; knowledge lookup must never block work.
    - **A ticket from the tree** — when **Ticket resolution** set `plan_file`: the entry, its epic file and what that file's References name, and the story file when there is one are already the intent. For continuity, read the plans beside `plan_file` whose `ticket` is one of find's `after` ids that is a plain number (an entry of the same epic; a ref such as `1.5` is another epic's). Extract each one's **Code Map**, **Design Notes**, **Plan Change Log**, and task list as continuity context for step-02 planning.
    - **Anything else:**
-     - No `{active_initiative}`: unless the user already said in this session, ask once whether this work belongs to an initiative or is standalone. For an initiative, use the user's answer as `{active_initiative}` for this run; do not invoke an external BMad setup or modify the project's config. For standalone work, leave it empty.
+     - Do not ask whether the work belongs to an initiative: where its documents go is the harness's document layout (`references/document-layout.md`), by work item. A configured `{active_initiative}` only helps find existing planning documents.
      - List `{{ config.output_folder }}/{active_initiative}/`, then `{{ config.output_folder }}/`.
      - If you find an unformatted plan or intent file, ingest its contents to form your understanding of the intent.
      - Planning documents sit in folders by type, main file named after the folder. Typical ones:

@@ -166,15 +166,22 @@ was attempted. D1–D8 fixed in the commit after `813cf18` (native questions on 
 and `harness document path`, manifest and gate-value docs, plain checkpoint commands). The owner's
 document layout is Constitution Article 8a.
 
+**Trial test-013** (`…/20261016-day001-claude-05/problems.md`): two runs, both stopped in
+planning. Native questions and the Story-folder names worked. Root cause found: the conversation
+was never bound to its work session (`--repo "$PWD"` made `harness begin` unreadable). E1–E8 fixed
+as candidate **0.7.0-rc.1**.
+
+**Trial strategy (owner, 2026-10-16):** each version candidate is a pre-release (`X.Y.Z-rc.N`,
+`docs/06-delivery/release-process.md`); the owner copies the test project, installs the
+pre-release, runs it normally, then asks for the transcript; the agent reads it and the run's folder.
+
 **Next steps:**
-1. Prepare test-013 (`.venv/bin/python scripts/acceptance_trial.py prepare --profile local-planning
-   --install claude`), run DAY-001 again through `start-ticket` with the move approved, and one
-   code edit before and after linking.
-2. Check in the run: documents land in `docs/planning/user-story-0001-…/` with their final names,
-   the ticket draft reserves its number, and questions use the native control.
-3. Open: how a remote tracker (Azure, Linear) names a document before its item exists (`--new` is
-   refused there); BMad idea-route documents (brief, PRD, product spec) are not yet in the layout;
-   C3 (state diffs shown by Claude Code).
+1. Tag `v0.7.0-rc.1` and push the tag (owner's go-ahead) so the release workflow publishes the
+   pre-release.
+2. Owner trial with the pre-release; check the binding (`.harness/state/host_sessions/`), the
+   approach approval, the ticket draft's reserved number, and documents in the Story folder.
+3. Open: remote trackers naming documents before their item exists; BMad idea-route documents
+   outside the layout; C3 (state diffs shown by Claude Code).
 
 **Notes:** `AI_Codex/Artifacts/live-trials/20261016-day001-claude-02/problems.md` (test-010, P1–P3
 list) and `20261016-day001-claude-03/problems.md` (test-011, with "Fixed after this run").

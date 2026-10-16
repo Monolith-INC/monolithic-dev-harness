@@ -349,3 +349,29 @@ def test_corrected_receipt_supersedes_prior_revision(tmp_path):
 )
 def test_in_place_editor_script_is_not_a_file(tmp_path, command, expected):
     assert writes_code(command, tmp_path, None, "docs/planning") is expected
+
+
+@pytest.mark.parametrize(
+    "command,expected",
+    [
+        # Trial test-013: a read-only shell run on each found file is not a write.
+        (
+            'find docs/planning -type f -exec sh -c \'echo "== $1"; cat "$1"\' _ {} \\;',
+            False,
+        ),
+        ("find lib -type f -exec sh -c 'cat \"$1\"' _ {} \\;", False),
+        ("find lib -type f -exec sh -c 'echo x > \"$1\"' _ {} \\;", True),
+        ("find lib -type f -exec sh -c 'sed -i s/a/b/ \"$1\"' _ {} \\;", True),
+        # A whole planning folder of documents is not code; one holding a script is.
+        ("rm -r docs/planning/user-story-0001-x", False),
+        ("rm -r docs/planning/tools", True),
+    ],
+)
+def test_find_exec_scripts_and_planning_folders(tmp_path, command, expected):
+    story = tmp_path / "docs/planning/user-story-0001-x"
+    story.mkdir(parents=True)
+    (story / "spec-user-story-0001-x.md").write_text("x", encoding="utf-8")
+    tools = tmp_path / "docs/planning/tools"
+    tools.mkdir()
+    (tools / "build.py").write_text("x", encoding="utf-8")
+    assert writes_code(command, tmp_path, None, "docs/planning") is expected

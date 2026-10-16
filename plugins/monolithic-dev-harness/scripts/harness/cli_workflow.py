@@ -201,6 +201,8 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     )
     decision_parser.add_argument(
         "--host",
+        # Claude Code is `claude`; agents often write its full name.
+        type=lambda value: {"claude-code": "claude"}.get(value, value),
         choices=("codex", "claude", "cursor", "zed", "kimi", "text"),
         default=_default_decision_host(),
     )

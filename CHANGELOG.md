@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0-rc.1] - 2026-10-16
+
 ### Added
 
 - `harness document path` names and places every document by its work item:
@@ -13,14 +15,6 @@ All notable changes to this project are documented here. The format follows
   Epic → Feature → Story (`references/document-layout.md`). On the local tracker a draft reserves its
   item's number, so nothing is renamed after creation.
 - Claude Code asks with its native question control by default (`--native-unavailable` opts out).
-
-### Changed
-
-- Documents under review are `status: draft` and become `active` once accepted; an approval pins
-  the reviewed documents, their `status` line aside.
-- Planning writes after `cd <dir> &&` are read in that folder, and an in-place editor's script is not
-  a file it edits; the standard Task titles Staging, Review and Breakdown pass the title check.
-
 - `tracker_update_work_item` changes the named fields of an existing work item (title,
   description, story points, a Task's hours, assignee, sprint) through the gateway and reads it
   back, for the local tracker, Azure DevOps and Linear.
@@ -80,6 +74,16 @@ All notable changes to this project are documented here. The format follows
 
 ### Changed
 
+- Documents under review are `status: draft` and become `active` once accepted; an approval pins
+  the reviewed documents, their `status` line aside.
+- `harness begin` binds the conversation to its work session even with `--repo "$PWD"`; a begin
+  the hooks cannot read is refused with the plain form, instead of binding nothing.
+- Hardening ends with the approach shown and approved (`plan-checkpoint`).
+- A `find -exec sh -c '<script>'` is a write only when its script writes; a planning subfolder that
+  holds only documents is not code. Folder paths such as `docs/planning` are kept out of questions.
+- BMad build no longer asks about initiatives; `--new story` and `--host claude-code` are accepted.
+- Planning writes after `cd <dir> &&` are read in that folder, and an in-place editor's script is not
+  a file it edits; the standard Task titles Staging, Review and Breakdown pass the title check.
 - Onboarding (formerly "six-stage onboarding") is Discovery → Planning → Hardening → Refinement →
   Preparation → Execution → Verify, with an optional idea route that may stop at a brief or spec.
   The older route family (`investigate-request`, `prepare-artifacts`, `implement-approved-item`,
@@ -748,7 +752,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.1...HEAD
+[0.7.0-rc.1]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.2...v0.7.0-rc.1
 [0.6.2]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.6.1
 [0.6.0]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.4...v0.6.0

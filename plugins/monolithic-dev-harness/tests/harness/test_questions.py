@@ -96,6 +96,7 @@ class ProblemsTests(unittest.TestCase):
             ("Revert the line in `.gitignore`?", "backticks"),
             ("Move the rule into .git/info/exclude?", "dotfile"),
             ("Edit projects/aplicatudo/lib/main.dart now?", "path"),
+            ("Should the plan go directly under docs/planning?", "path"),
             ("Update sources.json?", "file name"),
             ("The human-owned rule blocked this. Retry?", "rule name"),
             ("Is the spec ready for G2?", "gate number"),

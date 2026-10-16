@@ -41,6 +41,7 @@ from core.result import Err, Ok, Result, attempt, bind  # noqa: E402
 from harness import (  # noqa: E402
     adoption,
     code_content,
+    commands,
     decisions,
     gates,
     globs,
@@ -166,6 +167,19 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     entry = rules.rule_hook_entry(call)
     if not entry.allowed:
         _emit_decision(host, entry)
+        return 0
+    if call.kind == "shell" and commands.unreadable_begin(
+        call.command, Path(call.cwd or repo)
+    ):
+        _emit_decision(
+            host,
+            rules.Decision.deny(
+                "plain-begin",
+                'Run `harness begin --request "<exact request>" --repo .` on its own, as one plain '
+                "command: no variables, `$(…)`, `;`, `&&` or `||`. The harness links this "
+                "conversation to its work session only when it can read the command.",
+            ),
+        )
         return 0
     context = work_session_context.for_payload(repo, host, payload)
     request = (
