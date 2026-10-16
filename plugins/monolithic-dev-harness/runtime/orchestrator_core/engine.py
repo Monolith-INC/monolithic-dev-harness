@@ -6,8 +6,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+from core.result import Err, Ok
+
 from .adapters import build_skill_prompt, critiques_to_error_log
 from .artifact_validator import critiques_from_results, validate_artifact
+from .draft_review import evaluate
 from .handlers import execute_handler
 from .hooks import authorization_hook, cli_ui_hook
 from .ingest import ingest_file
@@ -36,6 +39,7 @@ class ToolCallResult:
                 "task_id": self.task_id,
                 "state": self.state,
                 "error": self.error,
+                "output": self.output,
             }
         )
         return [{"type": "text", "text": json.dumps(payload, indent=2)}]
@@ -79,10 +83,32 @@ class OrchestratorEngine:
             )
         return tools
 
+    def _draft_review(self, name: str, arguments: dict[str, Any]) -> ToolCallResult:
+        """One critic evaluation; a failed artifact is still a completed review."""
+        match evaluate(name, arguments, self.skills_dir, self.state_dir):
+            case Ok(output):
+                return self._review_result(output)
+            case Err(failure):
+                return ToolCallResult(ok=False, output=None, error=failure.message)
+
+    @staticmethod
+    def _review_result(output: dict[str, Any]) -> ToolCallResult:
+        return ToolCallResult(
+            ok=bool(output.get("ok")),
+            output=output,
+            error=output.get("error"),
+            state=output.get("mode", "completed"),
+        )
+
     def run_tool_call(
         self, name: str, arguments: dict[str, Any] | None
     ) -> ToolCallResult:
         arguments = arguments or {}
+        match name:
+            case "validate-artifact" | "auto-fix-artifact":
+                return self._draft_review(name, arguments)
+            case _:
+                pass
         if name not in self._manifests:
             return ToolCallResult(ok=False, output=None, error=f"unknown skill: {name}")
 

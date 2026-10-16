@@ -7,16 +7,18 @@ license: MIT
 
 # Decompose Backlog
 
-Conductor for turning a parent work item into its child tree in Azure DevOps: Feature → Stories
-(*story mode*), or Epic → Features → Stories (*tree mode*). Load the reference files
-as each phase needs them — they carry the self-contained rules so this file stays a score, not a
+Conductor for turning a parent work item into its child tree in the selected tracker: Feature →
+Stories (*story mode*), or Epic → Features → Stories (*tree mode*). Load the reference files as
+each phase needs them — they carry the self-contained rules so this file stays a score, not a
 textbook.
 
-References (in `../../references/`):
+## References
+
+In `../../references/`:
 
 - `decomposition-rules.md` — hierarchy, Feature sizing (Epic → Feature), Story sizing (1 Story = 1 sprint = 1 PR), story-point heuristic, DoR, parent-type branch.
 - `ticket-structure.md` — draft format + draft file constraints (frontmatter, filename regex).
-- `azure-mechanics.md` — create/link MCP calls + the two linking gotchas + rendering rules.
+- `azure-mechanics.md` — Azure DevOps rules (linking gotchas, rendering) when Azure is the tracker.
 - `audit-checklist.md` — fidelity / coverage / DoR postflight.
 
 Shape contracts and sub-pass notes:
@@ -72,9 +74,9 @@ Every relevant capability must land in at least one Story, and every Story must 
 capability when a product spec exists. A new constraint or architectural choice discovered while
 slicing goes back to the owning planning artifact; do not bury it in a Story.
 
-**── GATE 1 —** present the whole split (the tree, in tree mode) as one outline and WAIT for explicit
-approval before drafting anything. Edits the user asks for re-run DECOMPOSE; do not draft a partial
-tree.
+**── GATE 1 —** save the whole split (the tree, in tree mode) as one outline file in the artifacts
+path, show it, then ask `harness decision present --gate refinement-split --artifact <outline>`.
+Draft nothing until it is approved. Revise re-runs DECOMPOSE; do not draft a partial tree.
 
 ### 3. DRAFT
 
@@ -116,11 +118,13 @@ unchanged; say so when you ask.
 
 Per `../../common/providers.md` and `../../references/azure-mechanics.md`, create **top-down**:
 
-1. *Tree mode:* each new Feature (`workItemType: "Feature"`, Markdown description), linked to the
-   Epic with `type: "parent"`. Read it back, then rewrite every `parent_id: "pending:<stem>"` that
-   points at it to the real id and rename the Feature draft with its id.
-2. Each Story with Markdown, its points field set from `story_points`, and its **Feature** as the
-   immediate parent.
+1. *Tree mode:* each new Feature with `tracker_create_work_item` (`kind: "feature"`, Markdown
+   description, `parentRef` the Epic). Read it back, then rewrite every
+   `parent_id: "pending:<stem>"` that points at it to the real id and rename the Feature draft with
+   its id.
+2. Each Story with `tracker_create_work_item` (`kind: "user_story"`, Markdown description,
+   `parentRef` its **Feature**), then `tracker_update_work_item` with `storyPoints` from the
+   draft's `story_points`.
 
 Azure DevOps uses native work-item types; Linear uses the `agile:user-story` label. If a Feature
 create fails, stop before creating any Story under it.
@@ -141,8 +145,9 @@ report. Any gap STOPS and reports — no silent patching.
 
 ## Operating rules
 
-- Two hard gates (after DECOMPOSE, after ENRICH), in both modes. Never write to the artifacts path or
-  Azure without the matching approval. The harness approval hook enforces GATE 2 for Azure writes.
+- Two hard gates in both tree modes: `refinement-split` after DECOMPOSE, `publish-items` after
+  ENRICH. Never write to the tracker without the matching approval; the harness approval hook
+  enforces it.
 - Tree mode is one run: no stop between the Feature level and the Story level.
 - Every Azure-mutating step is followed by a read-back assertion.
 - If the host repo keeps a session artifacts path, write a checkpoint after CREATE and after AUDIT.

@@ -21,9 +21,12 @@ to be rewritten when it is not plain enough to show a person.
 from __future__ import annotations
 
 import argparse
+import contextlib
+import io
 import json
 import os
 import re
+import shlex
 import signal
 import sys
 from pathlib import Path
@@ -37,17 +40,21 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
 from core.result import Err, Ok, Result, attempt, bind  # noqa: E402
 from harness import (  # noqa: E402
     adoption,
+    code_content,
+    commands,
     decisions,
     gates,
-    gitstate,
     globs,
+    harness_controls,
     onboarding,
     preferences,
+    project_paths,
     questions,
     rules,
     settings,
     state,
     tracker_policy,
+    work_sessions,
     workflow,
 )
 from host_adapters import hook_bridge, work_session_context  # noqa: E402
@@ -60,12 +67,13 @@ from host_adapters.interactions import (  # noqa: E402
 )
 
 # The hosts give the hook 15 seconds and treat a timeout as "no decision", which lets the call
-# through. The rules get less than that, and running out counts as a failure.
-RULES_BUDGET_SECONDS = 10
+# through. The rules and the workflow policy share less than that, and running out counts as a
+# failure.
+RULES_BUDGET_SECONDS = 12
 
 
-class _OutOfTime(Exception):
-    pass
+class _OutOfTime(BaseException):
+    """Not an Exception, so no `except Exception` on the way can swallow it and let a call run."""
 
 
 def _out_of_time(_signum: int, _frame: Any) -> None:
@@ -95,7 +103,7 @@ def _workspace(payload: dict[str, Any], host: str = "claude") -> Path:
     for candidate in hook_bridge.workspace_candidates(host, payload):
         if isinstance(candidate, str) and candidate and Path(candidate).is_dir():
             start = Path(candidate)
-            return gitstate.repo_root(start) or start
+            return project_paths.root(start)
     return Path.cwd()
 
 
@@ -148,21 +156,38 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 
 
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
-    call = _tool_call(host, event, payload)
     repo = _workspace(payload, host)
+    match state.harness_mode(repo):
+        case "suspended":
+            _emit_decision(host, rules.Decision.allow())
+            return 0
+        case _:
+            pass
+    call = _tool_call(host, event, payload)
     entry = rules.rule_hook_entry(call)
     if not entry.allowed:
         _emit_decision(host, entry)
         return 0
-    # The user released the checks from their own prompt; only their records stay protected.
-    suspended = state.harness_mode(repo) == "suspended"
+    if call.kind == "shell" and commands.unreadable_begin(
+        call.command, Path(call.cwd or repo)
+    ):
+        _emit_decision(
+            host,
+            rules.Decision.deny(
+                "plain-begin",
+                'Run `harness begin --request "<exact request>" --repo .` on its own, as one plain '
+                "command: no variables, `$(…)`, `;`, `&&` or `||`. The harness links this "
+                "conversation to its work session only when it can read the command.",
+            ),
+        )
+        return 0
     context = work_session_context.for_payload(repo, host, payload)
     request = (
         work_session_context.requested(call.command, Path(call.cwd or repo))
         if call.kind == "shell"
         else None
     )
-    held = None if suspended else _held(repo, call, context, request)
+    held = _held(repo, call, context, request, host=host)
     if held is not None:
         _emit_decision(host, held)
         return 0
@@ -184,31 +209,38 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
         signal.signal(signal.SIGALRM, _out_of_time)
         signal.setitimer(signal.ITIMER_REAL, RULES_BUDGET_SECONDS)
     try:
-        loaded = settings.load(repo)
-        match suspended, loaded:
-            case True, _:
-                decision = rules.rule_human_owned(call, repo)
-            case False, Err(failure):
-                return _fail(
-                    host, call, f"the settings cannot be used: {failure.message}"
-                )
-            case False, Ok(chosen):
-                decision = rules.evaluate(
-                    call,
-                    repo,
-                    chosen,
-                    tracker_policy.build(repo, loaded),
-                    work_session_id,
-                )
+        return _governed_pre_tool(
+            host, event, payload, call, repo, work_session_id, request
+        )
     except (Exception, _OutOfTime) as exc:
-        # Any failure of the rules, including a crash or running out of time, blocks writes.
-        # A hook that exits with an error or times out is not a block: the host lets the call run.
+        # Any failure of the rules or the workflow policy, including a crash or running out of
+        # time, blocks writes. A hook that errors or times out is not a block: the host would let
+        # the call run.
         return _fail(
             host, call, f"harness rules could not run: {type(exc).__name__}: {exc}"
         )
     finally:
         if timed:
             signal.setitimer(signal.ITIMER_REAL, 0)
+
+
+def _governed_pre_tool(
+    host: str,
+    event: str,
+    payload: dict[str, Any],
+    call: rules.ToolCall,
+    repo: Path,
+    work_session_id: str | None,
+    request: tuple[str, str] | None,
+) -> int:
+    loaded = settings.load(repo)
+    match loaded:
+        case Err(failure):
+            return _fail(host, call, f"the settings cannot be used: {failure.message}")
+        case Ok(chosen):
+            decision = rules.evaluate(
+                call, repo, chosen, tracker_policy.build(repo, loaded), work_session_id
+            )
     match decision.allowed:
         case True:
             match _bind(repo, host, payload, work_session_id, request):
@@ -222,7 +254,7 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
                     pass
         case _:
             pass
-    if not decision.allowed or suspended:
+    if not decision.allowed:
         _emit_decision(host, decision)
         return 0
     if hook_bridge.delegates_workflow_policy(host, event):
@@ -236,6 +268,8 @@ def _held(
     call: rules.ToolCall,
     context: Any,
     request: tuple[str, str] | None,
+    *,
+    host: str = "codex",
 ) -> rules.Decision | None:
     """Why a write must wait: the conversation's session or a pending decision, checked once."""
     match _onboarding_control(call, repo):
@@ -253,22 +287,90 @@ def _held(
     mismatch = work_session_context.mismatch(current, request)
     if mismatch is not None:
         return rules.Decision.deny("work-session-mismatch", mismatch.message)
+    match _progress_control(call, repo):
+        case True:
+            return None
+        case _:
+            pass
     if decisions.blocking(repo, current) and not (
         decisions.status_command(call.command, Path(call.cwd or repo))
+        or decisions.show_command(call.command, Path(call.cwd or repo))
         or decisions.fallback_command(call.command, Path(call.cwd or repo))
         or work_session_context.recovery_allowed(repo, current, request)
     ):
+        pending = decisions.pending(repo, current)
         return rules.Decision.deny(
             "decision-pending",
-            "Wait for the human's answer before continuing this run.",
+            _pending_decision_guidance(repo, pending, host),
         )
     return None
+
+
+def _pending_decision_guidance(
+    repo: Path, pending: decisions.Pending | None, host: str
+) -> str:
+    """Give the agent a valid recovery path without weakening the pending-decision gate."""
+    session = (
+        f" --session-id {shlex.quote(pending.scope)}"
+        if pending is not None and pending.scope
+        else ""
+    )
+    available = "--async-available" if host == "codex" else "--native-unavailable"
+    fallback = (
+        "harness decision fallback"
+        f" --repo {shlex.quote(str(repo.resolve()))}{session}"
+        f" --host {shlex.quote(host)} {available}"
+    )
+    match pending:
+        case decisions.Pending() as waiting:
+            return (
+                f"Wait for the human's answer before continuing. Decision {waiting.id} is "
+                "still pending. Present the exact "
+                "question ID, wording, option labels, and descriptions returned by `harness decision "
+                "present`; do not paraphrase it or create a replacement question. If that "
+                f"control failed, run this supported fallback command exactly: {fallback}. "
+                "Do not add decision-id or reason flags."
+            )
+        case _:
+            return (
+                "Wait for the human's answer before continuing. A decision is still pending. "
+                "Check it with `harness decision status` "
+                "using only --repo and --session-id. If its control failed, run the supported "
+                f"fallback command exactly: {fallback}. Do not add decision-id or reason flags."
+            )
 
 
 def _onboarding_control(call: rules.ToolCall, repo: Path) -> bool:
     return call.kind == "shell" and onboarding.recovery_command(
         call.command, Path(call.cwd or repo), repo
     )
+
+
+def _progress_control(call: rules.ToolCall, repo: Path) -> bool:
+    """Saving progress and navigating do not answer or bypass the pending choice."""
+    from harness import commands
+
+    match call.kind, commands.harness_args(call.command, Path(call.cwd or repo)):
+        case "shell", ("workflow", operation, *args) if operation in {
+            "checkpoint",
+            "pause",
+            "resume",
+            "cancel",
+            "back",
+        }:
+            return (
+                all(
+                    sum(arg == name or arg.startswith(name + "=") for arg in args) <= 1
+                    for name in ("--repo", "--session-id")
+                )
+                and (
+                    Path(call.cwd or repo)
+                    / (commands.option(tuple(args), "--repo") or ".")
+                ).resolve()
+                == repo.resolve()
+            )
+        case _:
+            return False
 
 
 def _diagnostic_read(call: rules.ToolCall, repo: Path) -> bool:
@@ -336,21 +438,32 @@ def handle_startup(host: str, payload: dict[str, Any]) -> int:
     return 0
 
 
-def _pin_approved_notes(repo: Path, approval_id: str) -> str:
-    """Pin the notes marked approved in the artifacts path to this approval; a note for the user."""
+def _pin_reviewed_notes(
+    repo: Path, approval_id: str, binds: dict[str, Any] | None
+) -> str:
+    """Pin the artifacts-path notes this approval reviewed; a note for the user.
+
+    Only the files the approval is tied to count, so approving one Story's plan, or anything else,
+    never also approves another note. A general approval reviewed no file and pins nothing.
+    """
     # Imported here so only approvals pay for loading the artifacts-path reader.
     from harness import local_artifacts
 
+    reviewed = [
+        str((repo / str(entry[0])).resolve())
+        for entry in (binds or {}).get("artifacts", ())
+        if isinstance(entry, list | tuple) and entry
+    ]
     try:
-        notes = local_artifacts.approved_notes(repo)
+        notes = local_artifacts.reviewed_notes(repo, reviewed)
         state.pin_notes(repo, approval_id, notes)
     except (OSError, ValueError) as exc:
-        return f" Approved plan and spec notes were NOT pinned: {exc}"
+        return f" Reviewed plan and spec notes were NOT pinned: {exc}"
     if not notes:
         return ""
     return (
-        f" It also covers {len(notes)} plan or spec note(s) marked approved, as they read now;"
-        " editing one needs a new approval."
+        f" It also covers {len(notes)} reviewed plan or spec note(s), as they read now; set"
+        " their `status` to `active`, and any other edit needs a new approval."
     )
 
 
@@ -450,7 +563,7 @@ def _switch_harness(repo: Path, operation: str) -> str:
         return "[harness] every harness check applies again in this repository."
     return (
         "[harness] every harness check is suspended in this repository at the user's request; "
-        "edits to the harness's own records stay blocked. Type `harness resume` to restore them."
+        "no harness guard will veto tools. Type `harness resume` to restore checks."
     )
 
 
@@ -462,9 +575,22 @@ def _print_prompt(host: str, notes: list[str]) -> None:
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     prompt = hook_bridge.prompt_text(payload)
     repo = _workspace(payload, host)
-    match SUSPEND_RE.fullmatch(prompt):
-        case re.Match() as switch:
-            _print_prompt(host, [_switch_harness(repo, switch.group(1).lower())])
+    from host_adapters import native_session_id
+
+    match harness_controls.prompt_operation(
+        repo, prompt, native_session_id(host, payload) or ""
+    ):
+        case "suspend" | "resume" as operation:
+            harness_controls.prompt(
+                repo, prompt, native_session_id(host, payload) or ""
+            )
+            _print_prompt(host, [_switch_harness(repo, operation)])
+            return 0
+        case "free":
+            harness_controls.prompt(
+                repo, prompt, native_session_id(host, payload) or ""
+            )
+            onboarding.control(repo, "mode", "free")
             return 0
         case _:
             pass
@@ -473,6 +599,17 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         _print_prompt(host, [context.failure.message])
         return 0
     work_session_id = context.value
+    match state.harness_mode(repo), decisions.pending(repo, work_session_id):
+        case "suspended", decisions.Pending(id=identifier):
+            from harness import question_observation
+
+            match question_observation.foreign_prompt(repo, identifier, prompt):
+                case True:
+                    return 0
+                case _:
+                    pass
+        case _:
+            pass
     match _recover_prompt_answer(repo, host, payload, work_session_id):
         case notes, pending:
             pass
@@ -504,17 +641,13 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         state.open_approval(repo, approval_id, window, work_session_id=work_session_id)
         notes.append(
             f"[harness] approval {approval_id} recorded; tracker/SCM writes are open for {window} minutes."
-            + _pin_approved_notes(repo, approval_id)
+            + _pin_reviewed_notes(repo, approval_id, None)
         )
     for name in MANUAL_RE.findall(prompt):
-        try:
-            tree = gitstate.index_tree(repo)
-        except gitstate.GitError as exc:
-            notes.append(f"[harness] manual check {name} NOT recorded: {exc}")
-            continue
-        state.record_manual(repo, name, tree, prompt[:500])
+        code = code_content.current(repo)
+        state.record_manual(repo, name, code, prompt[:500])
         notes.append(
-            f"[harness] manual check {name} recorded for staged tree {tree[:12]}."
+            f"[harness] manual check {name} recorded for the code as it is now ({code[:12]})."
         )
     if output := hook_bridge.format_prompt(host, notes):
         print(output)
@@ -571,8 +704,8 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
     """
     repo = _workspace(payload, host)
     message = hook_bridge.stop_message(payload)
-    match onboarding.mode(repo):
-        case "free":
+    match onboarding.status(repo):
+        case {"mode": "free"} | {"status": "paused"}:
             return 0
         case _:
             pass
@@ -580,15 +713,47 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
         message is None
         or not settings.governed(repo)
         or state.harness_mode(repo) == "suspended"
-        or asks_the_user(message)
     ):
         return 0
     context = work_session_context.for_payload(repo, host, payload)
     if isinstance(context, Err):
         return 0
     scope = context.value
-    if decisions.blocking(repo, scope):
-        return 0
+    from host_adapters import native_session_id
+
+    match harness_controls.waiting(repo, native_session_id(host, payload) or ""):
+        case True:
+            return 0
+        case _:
+            pass
+    match harness_controls.pending_native(repo, native_session_id(host, payload) or ""):
+        case True:
+            print(
+                hook_bridge.format_stop(
+                    "[harness] Present lifecycle controls before stopping. If blocking UI failed, repeat harness decision present --gate harness-controls with --async-available, then --native-unavailable. Preserve the work decision; do not fall back to it."
+                )
+            )
+            return 0
+        case _:
+            pass
+    match decisions.pending(repo, scope):
+        case decisions.Pending(transport="chat"):
+            return 0
+        case decisions.Pending(
+            transport="async", presentation_id=str() as identifier
+        ) if identifier:
+            return 0
+        case decisions.Pending():
+            print(
+                hook_bridge.format_stop(
+                    "[harness] Present the staged native decision before ending the turn. "
+                    "If its control failed or returned without a captured answer, preserve it with "
+                    "harness decision fallback and use async then chat. Do not abandon the run."
+                )
+            )
+            return 0
+        case _:
+            pass
     match workflow.load(repo, scope):
         case Ok(current) if current.status == "active":
             pass
@@ -600,7 +765,9 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
             "[harness] The workflow is still active, and this turn ends without a question "
             "for the user or a pending menu, so the user would have to ask what's next. "
             + (f"The saved next action is: {upcoming}. " if upcoming else "")
-            + "Continue with it now. If you need the user, ask with a menu or a question batch. "
+            + "Continue with it now. If you need the user, stage the decision and attempt native "
+            "controls. If unavailable, preserve it through async then chat fallback; a prose "
+            "question alone does not fulfill the presentation contract. "
             "If the requested outcome is finished, mark the workflow complete "
             "(`harness workflow complete`) and say so."
         )
@@ -609,7 +776,31 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
 
 
 def handle_ask(host: str, payload: dict[str, Any]) -> int:
+    """Observe real questions while suspended, without giving the observer a veto."""
+    match _workspace(payload, host):
+        case Path() as repo if state.harness_mode(repo) == "suspended":
+            from harness import question_observation
+
+            question_observation.ask(repo, host, payload)
+            with contextlib.redirect_stdout(io.StringIO()):
+                attempt(
+                    lambda: _handle_ask(host, payload),
+                    "question_observation",
+                    "suspended question",
+                    Exception,
+                )
+            return 0
+        case _:
+            return _handle_ask(host, payload)
+
+
+def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     """Before a question is shown: send it back if a person would have to decode it."""
+    match harness_controls.observe(_workspace(payload, host), host, payload):
+        case True:
+            return 0
+        case _:
+            pass
     repo = _question_repo(payload, host)
     if repo is None:
         return 0
@@ -630,12 +821,18 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
             host,
             rules.Decision.deny(
                 "decision-pending",
-                "Answer the current question before presenting another.",
+                _pending_decision_guidance(repo, pending, host),
             ),
         )
         return 0
+    match _unseen_artifacts(repo, host, payload, pending if preparing else None):
+        case str() as reason:
+            _emit_decision(host, rules.Decision.deny("artifacts-not-shown", reason))
+            return 0
+        case None:
+            pass
     found = questions.problems(tool_input)
-    # While suspended only the wording check is off: the checks below pin what a click approves.
+    # Suspended observation may retain a valid binding but never veto presentation.
     if found and state.harness_mode(repo) != "suspended":
         _emit_decision(
             host,
@@ -661,8 +858,10 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
                 "claude",
                 rules.Decision.deny(
                     "plain-questions",
-                    "A guarded-change approval must apply to exactly one staged manual check. "
-                    "Stage only that change, describe what the user should validate, and ask again.",
+                    "A guarded-change approval must apply to exactly one manual check whose "
+                    "guarded file changed since the work item was linked. Link the work session "
+                    "(`harness work-session link --work-item <key>`) so the harness knows what "
+                    "changed, describe what the user should validate, and ask again.",
                 ),
             )
             return 0
@@ -733,6 +932,29 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
     return 0
 
 
+def _unseen_artifacts(
+    repo: Path, host: str, payload: dict[str, Any], pending: decisions.Pending | None
+) -> str | None:
+    """On Claude, a `shown` gate waits until its files are in the agent's own reply."""
+    match host, pending, payload.get("transcript_path"):
+        case "claude", decisions.Pending(scope=scope), str() as transcript:
+            from harness import artifact_review, gates
+
+            record = decisions.record(repo, scope) or {}
+            match gates.load():
+                case Ok((_, catalog)) if (
+                    gate := catalog.get(str(record.get("gate", "")))
+                ) and gate.shown:
+                    pass
+                case _:
+                    return None
+            names = [str(entry[0]) for entry in record.get("artifacts", ()) if entry]
+            result = artifact_review.shown_in_chat(repo, names, Path(transcript))
+            return result.failure.message if isinstance(result, Err) else None
+        case _:
+            return None
+
+
 def _artifacts(repo: Path, scope: str | None) -> tuple[tuple[str, str], ...]:
     """The reviewed files of the current checkpoint, so a changed one cannot be approved."""
     current = workflow.load(repo, scope)
@@ -763,7 +985,7 @@ def _tracker_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] 
 
 
 def _manual_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] | None:
-    """Pin one unmet manual guard and the exact staged tree before showing its button."""
+    """Pin one unmet manual guard and the exact code before showing its button."""
     text = questions.manual_signoff(tool_input)
     if text is None:
         return {}
@@ -771,21 +993,24 @@ def _manual_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any] |
         case _, Err():
             return None
         case str(), Ok(chosen):
-            staged = gitstate.staged_paths(repo)
-            tree = gitstate.index_tree(repo)
+            current = code_content.files(repo)
+            code = code_content.digest(current)
+            changed = code_content.changed_since_link(
+                repo, work_sessions.current(repo), current
+            )
             guards = tuple(
                 guard
                 for guard in chosen.guarded_paths
                 if guard.kind == "manual"
-                and globs.select(staged, [guard.path])
-                and not state.has_manual(repo, guard.name, tree)
+                and globs.select(changed, [guard.path])
+                and not state.has_manual(repo, guard.name, code)
             )
             match guards:
                 case (guard,):
                     return {
                         "manual": {
                             "name": guard.name,
-                            "tree": tree,
+                            "code": code,
                             "question": text,
                         }
                     }
@@ -817,6 +1042,37 @@ def _adoption_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any]
 
 def handle_answer(host: str, payload: dict[str, Any]) -> int:
     """After the user answers a question: record the decision, then what the question pinned."""
+    match harness_controls.answer(_workspace(payload, host), payload, host):
+        case "suspend" | "resume" as operation:
+            print(
+                hook_bridge.format_answer_context(
+                    _switch_harness(_workspace(payload, host), operation)
+                )
+            )
+            return 0
+        case "free":
+            onboarding.control(_workspace(payload, host), "mode", "free")
+            return 0
+        case _:
+            pass
+    match _workspace(payload, host):
+        case Path() as observed if state.harness_mode(observed) == "suspended":
+            from harness import question_observation
+
+            question_observation.answer(observed, host, payload)
+            match work_session_context.for_payload(observed, host, payload):
+                case Ok(scope):
+                    match decisions.pending(observed, scope):
+                        case decisions.Pending(id=identifier) if (
+                            identifier == hook_bridge.question_id(payload)
+                        ):
+                            pass
+                        case _:
+                            return 0
+                case _:
+                    return 0
+        case _:
+            pass
     repo = _question_repo(payload, host)
     tool_use_id = hook_bridge.question_id(payload)
     if repo is None or not tool_use_id:
@@ -940,7 +1196,12 @@ def _open_approval(
     """
     window = _window(repo)
     state.open_approval(
-        repo, approval_id, window, question, work_session_id=scope, binds=binds
+        repo,
+        approval_id,
+        window,
+        question,
+        work_session_id=scope,
+        binds=_with_bodies(repo, binds),
     )
     lasts = (
         "holds until it is revoked, the work session ends, or what was reviewed changes. "
@@ -951,8 +1212,25 @@ def _open_approval(
     return (
         f"[harness] the user approved; approval {approval_id} {lasts}. "
         "Make only the writes the question described."
-        + _pin_approved_notes(repo, approval_id)
+        + _pin_reviewed_notes(repo, approval_id, binds)
     )
+
+
+def _with_bodies(repo: Path, binds: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Add the digest of each reviewed file's body, so a work item written later can be held to
+    the draft the user approved even after the item replaces that draft."""
+    from harness import local_tracker
+
+    if not binds or not binds.get("artifacts"):
+        return binds
+    bodies = []
+    for entry in binds["artifacts"]:
+        try:
+            text = (repo / str(entry[0])).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError, IndexError, TypeError):
+            continue
+        bodies.append(local_tracker.body_digest(text))
+    return {**binds, "bodies": sorted(set(bodies))}
 
 
 def _answered_binds(repo: Path, scope: str | None, key: str) -> dict[str, Any] | None:
@@ -1017,8 +1295,8 @@ def _apply_marker(
                 tool_input,
                 response,
             )
-            current = gitstate.index_tree(repo)
-            recorded = chosen and current == manual.get("tree")
+            current = code_content.current(repo)
+            recorded = chosen and current == manual.get("code")
             match recorded:
                 case True:
                     state.record_manual(
@@ -1028,13 +1306,13 @@ def _apply_marker(
                         str(manual.get("question", ""))[:500],
                     )
                     note = (
-                        f"[harness] manual check {manual.get('name')} recorded for staged tree "
-                        f"{current[:12]}."
+                        f"[harness] manual check {manual.get('name')} recorded for the code as "
+                        f"it is now ({current[:12]})."
                     )
                 case False if chosen:
                     note = (
-                        "[harness] the staged change changed after the question was shown, so the "
-                        "manual check was not recorded. Show the updated change and ask again."
+                        "[harness] the code changed after the question was shown, so the manual "
+                        "check was not recorded. Show the updated change and ask again."
                     )
                 case False:
                     note = "[harness] the guarded change was not approved."
@@ -1103,7 +1381,9 @@ def _save_captured_language(repo: Path, answer: str) -> str | None:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--host", choices=("claude", "cursor", "codex"), required=True)
+    parser.add_argument(
+        "--host", choices=("claude", "cursor", "codex", "zed", "kimi"), required=True
+    )
     parser.add_argument(
         "--event",
         choices=(

@@ -62,6 +62,24 @@ class GatewayTest(unittest.TestCase):
         )
         self.assertEqual(self.call("tracker_describe").value["name"], "local")
 
+    def test_an_existing_item_is_updated_and_read_back(self) -> None:
+        story = self.call(
+            "tracker_create_work_item", kind="user_story", title="S"
+        ).value
+        updated = self.call(
+            "tracker_update_work_item",
+            ref=story["key"],
+            title="Refined",
+            description="refined text",
+            storyPoints=3,
+        ).value
+        self.assertEqual(
+            (updated["title"], updated["description"]), ("Refined", "refined text")
+        )
+        self.assertIsInstance(
+            self.call("tracker_update_work_item", ref=story["key"]).failure.message, str
+        )
+
     def test_arguments_are_checked_against_the_tool_schema(self) -> None:
         self.assertIn(
             "missing 'title'",
@@ -146,3 +164,14 @@ class GatewayTest(unittest.TestCase):
         )
         self.assertEqual(len(listed["result"]["tools"]), len(gateway.TOOLS))
         self.assertEqual(gateway.process_message("not json", self.root), "")
+
+    def test_every_tool_property_declares_a_json_schema_type(self) -> None:
+        # Kimi/Moonshot strictly validates tool schemas and rejects properties
+        # that lack a "type" (e.g. {"enum": [...]} alone); other providers tolerate it.
+        for tool in gateway.TOOLS:
+            for name, spec in tool["inputSchema"].get("properties", {}).items():
+                self.assertIn(
+                    "type",
+                    spec,
+                    f"{tool['name']}.{name} is missing a JSON Schema type",
+                )

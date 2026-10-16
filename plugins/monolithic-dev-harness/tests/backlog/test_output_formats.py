@@ -39,7 +39,7 @@ def _read_example(skill: str, name: str) -> str:
 COMPLIANT_GENERATE = """\
 # Login field validation
 
-[[Specs/6868-login-field-validation-spec]]
+[[spec-user-story-6870-login-field-validation]]
 
 ## Requisitos
 
@@ -196,7 +196,7 @@ class TestGenerateWorkItemFormat(unittest.TestCase):
 
     def test_missing_spec_wikilink_fails(self) -> None:
         body = COMPLIANT_GENERATE.replace(
-            "[[Specs/6868-login-field-validation-spec]]\n\n", ""
+            "[[spec-user-story-6870-login-field-validation]]\n\n", ""
         )
         result = validate_generate_work_item_body(body)
         self.assertFalse(result.ok)

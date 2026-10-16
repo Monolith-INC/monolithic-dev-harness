@@ -31,15 +31,23 @@ harness decision present --repo <project> --host <host> \
 | `setup-confirm` | The setup proposal is ready |
 | `next-step` | Setup is done and the request did not say what to do |
 | `starting-point` | An idea arrives with no clear starting point |
+| `idea-continue` | The idea route ends: continue into technical discovery, or stop with the brief or spec |
+| `refined-start` | The item the user started from is already refined: rework it, or use it as it is (`--value item=`) |
+| `planning-depth` | Discovery is done and the depth (Light, Standard, Hardcore) is not chosen yet |
+| `planning-methods` | Standard or Hardcore depth: shortlist, full catalog, or recommended methods |
 | `plan-checkpoint` | The discovery plan is ready (`--artifact` the plan) |
-| `publish-items`, `move-item`, `approve-spec`, `publish-branch`, `reply-pr`, `pause-tracking` | Approvals; see the harness skill's approval protocol |
+| `refinement-split` | A proposed split of an Epic, Feature or Story is ready (`--artifact` the outline); no write |
+| `harness-controls` | The user wants to suspend, resume, or use free mode |
+| `publish-items` (`--value count= --value tracker=`), `move-item` (`--value item= --value status= --value ref=`), `approve-spec`, `implementation-confirm`, `approve-document`, `publish-branch` (`--value branch=`), `reply-pr` (`--value pr=`), `pause-tracking` | Approvals; see the harness skill's approval protocol. `publish-items`, `implementation-confirm` and `approve-document` require the files shown first: run `harness workflow show`, put its output in your reply, run `harness decision status` (the host records a reply only once another tool runs), then ask |
 
 - Never pass a session id: the harness asks in the project's current work session, or
   project-wide when there is none. Asking never requires a session to exist.
 - `--value` fills the gate's `{slots}`; the command names any that are missing.
 - `--recommended` names an option id to mark instead of the gate's default.
 - Pass every reviewed file with `--artifact`. A changed file invalidates the earlier answer.
-- Say which controls are actually callable: `--blocking-available`, `--async-available`.
+- Codex and Claude Code get their native question control by default. Pass `--async-available` when
+  Codex can only ask without waiting, and `--native-unavailable` when no native control can be
+  called; other hosts pass `--blocking-available` when theirs can.
 
 A **one-off question** that no gate covers (a product choice specific to this work) uses
 `--question`, `--option` (at most three), `--detail` per option, `--recommended <label>`, and
@@ -53,7 +61,9 @@ The command returns one of:
   line so the human can reopen it. An approval is reused while it holds (not revoked, its work
   session still running, and what it is tied to unchanged).
 - `"state": "waiting_for_human"`, with a `transport`:
-  - `blocking` or `async`: invoke the returned native control. Show the review first.
+  - `blocking` or `async`: invoke the returned native control using its `questions` payload
+    verbatim. Keep each question ID, question text, option label, and description unchanged. Show
+    the review first.
   - `chat`: show the review, then `menu` exactly as written, and end the turn.
 
 ### Fallback
@@ -61,10 +71,16 @@ The command returns one of:
 Delivery problems are recoverable and invisible to the human. When a control fails to show, or its
 reply is not captured, run `harness decision fallback --repo <project> --host
 <host>` (add `--async-available` when that control is callable). It moves the same question to the
-next transport (blocking → async → chat) with the same options, details, and menu text. Never
+next transport (blocking → async → chat) with the same options, details, and menu text. A
+fallback is for that one question: present the next question with native controls again. Never
 replace the question, ask the human to diagnose hooks, or show internal errors. Reuse a captured
 answer rather than asking again. If an optional preference was not captured, continue with its
 default; do not keep retrying controls or repeat the preference question.
+
+The fallback command accepts only `--repo`, `--session-id`, `--host`, and transport-availability
+flags. Do not add a decision ID or a reason: the pending question is resolved from the saved
+project/session state. If a native presentation is rejected because its payload does not match,
+reuse the exact payload returned by `decision present`; do not invent a replacement question.
 
 ### Answers
 
@@ -136,3 +152,7 @@ creates no checkpoint; an interrupted projection is completed once on workflow r
 capture. Recovery never answers for the user or grants approval. A conflict preserves both records
 and stops advancement for inspection; do not replace either record or re-ask approval to bypass it.
 Questions without a workflow or in a paused workflow continue without an automatic checkpoint.
+
+## Native-first Codex delivery
+
+Codex `decision present` defaults to attempting the native blocking control. Invoke the returned tool with the returned questions. If only the asynchronous control is available, pass `--async-available`; if neither is callable, pass `--native-unavailable` and use the returned chat menu. If delivery or capture fails, preserve the decision and use `decision fallback`; never manufacture an answer or repeat an already captured choice. A same-workspace real native trial is required to establish live capture.

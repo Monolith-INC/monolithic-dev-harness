@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 from core.result import Err, Ok
-from harness import sessions
+from harness import local_tracker, sessions
 from tests.settings_fixture import write_settings
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
@@ -154,16 +154,10 @@ class SessionCommandTest(SessionTest):
 
     def test_start_needs_the_branch_to_carry_the_work_item(self) -> None:
         write_settings(self.repo)
-        tracker = self.repo / ".harness" / "tracker" / "in_progress"
-        tracker.mkdir(parents=True)
-        record = {
-            "key": "STORY-0001",
-            "id": "STORY-0001",
-            "title": "t",
-            "kind": "user_story",
-            "state": "in_progress",
-        }
-        (tracker / "STORY-0001.json").write_text(json.dumps(record))
+        local_tracker.write(
+            self.repo / "Tickets/InProgress/0001-t.md",
+            {"key": "STORY-0001", "kind": "user_story", "title": "t"},
+        )
         wrong = self.run_cli("session", "start", "STORY-0002")
         self.assertEqual(wrong.returncode, 2)
         self.assertIn("this branch is for STORY-0001", wrong.stderr)
@@ -179,18 +173,9 @@ class SessionCommandTest(SessionTest):
 
     def test_feature_session_requires_and_verifies_the_feature_base(self) -> None:
         write_settings(self.repo)
-        tracker = self.repo / ".harness" / "tracker" / "in_progress"
-        tracker.mkdir(parents=True)
-        (tracker / "STORY-0001.json").write_text(
-            json.dumps(
-                {
-                    "key": "STORY-0001",
-                    "id": "STORY-0001",
-                    "title": "t",
-                    "kind": "user_story",
-                    "state": "in_progress",
-                }
-            )
+        local_tracker.write(
+            self.repo / "Tickets/InProgress/0001-t.md",
+            {"key": "STORY-0001", "kind": "user_story", "title": "t"},
         )
         missing = self.run_cli(
             "session", "start", "STORY-0001", "--workflow", "feature-implementation"

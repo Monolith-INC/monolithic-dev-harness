@@ -2,7 +2,7 @@
 title: Release Process
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-16
 ---
 
 # Release Process
@@ -70,6 +70,21 @@ A maintainer approves the release pull request and pushes the tag.
 
 5. The release workflow re-runs the tests, builds the archive, and publishes the GitHub release with
    the CHANGELOG section as notes and the three assets attached.
+
+## Pre-release (version candidates)
+
+Every version candidate is cut as a pre-release, `X.Y.Z-rc.N`, and tried in a live trial before
+the final `X.Y.Z`:
+
+1. Bump every version source to `X.Y.Z-rc.N` (the README badge writes the hyphen as `--`:
+   `version-X.Y.Z--rc.N-orange`) and head the candidate's `CHANGELOG.md` section with it.
+2. `python3 scripts/check_versions.py` must pass; tag the commit `vX.Y.Z-rc.N` and push the tag.
+   The release workflow publishes it as a GitHub pre-release.
+3. The owner copies the test project, installs the pre-release into it with
+   `install.sh --version X.Y.Z-rc.N`, and runs the trial as a user would. The agent then reads the
+   run's transcript and its folder, confirming first that the installed version is the candidate.
+4. Fixes from the trial go into the next candidate (`rc.N+1`); the final release renames the
+   section to `X.Y.Z`.
 
 ## Post-release Validation
 

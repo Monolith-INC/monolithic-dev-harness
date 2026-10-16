@@ -17,8 +17,8 @@ from typing import Any
 from core.result import Err, Ok
 
 STATE_RELATIVE_PATH = Path(".harness") / "state"
-# Harness state and local tracker records belong to one clone: never committed, shared, or adopted.
-LOCAL_ONLY_PATHS = (".harness/state/", ".harness/tracker/")
+# Harness state belongs to one clone: never committed, shared, or adopted.
+LOCAL_ONLY_PATHS = (".harness/state/",)
 _SAFE_NAME = re.compile(r"^[A-Za-z0-9._-]{1,80}$")
 
 
@@ -299,29 +299,31 @@ def take_asked(
 # --- manual checks (guarded-paths) ------------------------------------------------------------
 
 
-def record_manual(repo: Path, name: str, tree: str, note: str) -> None:
+def record_manual(repo: Path, name: str, code: str, note: str) -> None:
+    """The user's hand confirmation of `name` for the code digest `code`."""
     write_json(
-        state_dir(repo) / "manual" / f"{safe_name(name)}-{tree}.json",
-        {"name": name, "tree": tree, "note": note, "recorded": _now().isoformat()},
+        state_dir(repo) / "manual" / f"{safe_name(name)}-{code}.json",
+        {"name": name, "code": code, "note": note, "recorded": _now().isoformat()},
     )
 
 
-def has_manual(repo: Path, name: str, tree: str) -> bool:
-    record = read_json(state_dir(repo) / "manual" / f"{safe_name(name)}-{tree}.json")
-    return bool(record) and record.get("tree") == tree and record.get("name") == name
+def has_manual(repo: Path, name: str, code: str) -> bool:
+    record = read_json(state_dir(repo) / "manual" / f"{safe_name(name)}-{code}.json")
+    return bool(record) and record.get("code") == code and record.get("name") == name
 
 
 # --- check evidence (guarded-paths, draft-reviewed-prs) ---------------------------------------
 
 
-def record_checks(repo: Path, tree: str, results: list[dict[str, Any]]) -> Path:
-    path = state_dir(repo) / "checks" / f"{tree}.json"
-    write_json(path, {"tree": tree, "recorded": _now().isoformat(), "results": results})
+def record_checks(repo: Path, code: str, results: list[dict[str, Any]]) -> Path:
+    """Check results for the code digest `code` (`harness.code_content`)."""
+    path = state_dir(repo) / "checks" / f"{code}.json"
+    write_json(path, {"code": code, "recorded": _now().isoformat(), "results": results})
     return path
 
 
-def passed_checks(repo: Path, tree: str) -> set[str]:
-    record = read_json(state_dir(repo) / "checks" / f"{tree}.json")
+def passed_checks(repo: Path, code: str) -> set[str]:
+    record = read_json(state_dir(repo) / "checks" / f"{code}.json")
     if not record:
         return set()
     return {r["name"] for r in record.get("results", []) if r.get("exit_code") == 0}
@@ -330,14 +332,15 @@ def passed_checks(repo: Path, tree: str) -> set[str]:
 # --- review verdicts (draft-reviewed-prs) -----------------------------------------------------
 
 
-def record_review(repo: Path, head: str, verdict: str, summary: str) -> Path:
+def record_review(repo: Path, code: str, verdict: str, summary: str) -> Path:
+    """The review verdict for the code digest `code` (`harness.code_content`)."""
     if verdict not in {"ready", "blocked"}:
         raise ValueError("verdict must be 'ready' or 'blocked'")
-    path = state_dir(repo) / "review" / f"{head}.json"
+    path = state_dir(repo) / "review" / f"{code}.json"
     write_json(
         path,
         {
-            "head": head,
+            "code": code,
             "verdict": verdict,
             "summary": summary,
             "recorded": _now().isoformat(),
@@ -346,6 +349,6 @@ def record_review(repo: Path, head: str, verdict: str, summary: str) -> Path:
     return path
 
 
-def review_verdict(repo: Path, head: str) -> str | None:
-    record = read_json(state_dir(repo) / "review" / f"{head}.json")
+def review_verdict(repo: Path, code: str) -> str | None:
+    record = read_json(state_dir(repo) / "review" / f"{code}.json")
     return record.get("verdict") if record else None

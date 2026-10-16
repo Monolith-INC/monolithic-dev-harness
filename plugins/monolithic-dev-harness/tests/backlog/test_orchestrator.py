@@ -33,7 +33,7 @@ tags: [ticket, user-story]
 
 # Validação de campos do formulário de login
 
-[[Specs/6869-login-form-validation-spec]]
+[[spec-user-story-6869-login-form-validation]]
 
 ## Requisitos
 

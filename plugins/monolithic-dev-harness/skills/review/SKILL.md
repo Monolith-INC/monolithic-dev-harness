@@ -48,12 +48,13 @@ deferred findings to `deferred-work.md` in the planning output folder, with a on
 ## 3. Fix and re-run
 
 Fix every `VERIFIED` finding at `high` or above, and any `error` or `gap` from the requirements
-pass, as new atomic commits (the commit hooks still apply). Re-run the checks on HEAD, then re-run
-the pass that produced each fixed finding. Any new commit invalidates an earlier verdict.
+pass (as new atomic commits when versioned delivery was selected). Re-run the checks, then re-run
+the pass that produced each fixed finding. Any later change to a code file invalidates an earlier
+verdict.
 
 ## 4. Verdict
 
-With a clean tree, record the verdict for HEAD:
+Record the verdict for the code as it is now:
 
 ```bash
 sh "<plugin root>/bin/harness-python" "<plugin root>/scripts/harness/review_verdict.py" --verdict ready --summary "<one line>"
@@ -65,8 +66,9 @@ blocker and do not open a pull request.
 
 ## 5. Pull request
 
-When GitHub or Azure Repos is configured, `branch-and-pr` can push and open the **draft** pull
-request linked to the Story (one `publish-branch` approval for both). Include the requirements coverage and
+When the user wants a pull request and GitHub or Azure Repos is configured, `branch-and-pr` can push
+and open the **draft** pull request linked to the Story (one `publish-branch` approval for both).
+Opening one is always the user's choice. Include the requirements coverage and
 the thermos verdict in the description. If no hosted service is configured, finish after recording
 the verdict; the local review is complete and must not be marked blocked for lack of a pull request.
 

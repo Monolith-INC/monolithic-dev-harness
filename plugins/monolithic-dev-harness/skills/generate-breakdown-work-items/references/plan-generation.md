@@ -35,7 +35,7 @@ Load the Story, and its parent Feature when it has one, before drafting the plan
 
 1. **Parent Feature body** (only when the Story has a parent)
    - Tracker: follow the normalized parent relationship and load the Feature through its adapter
-   - Artifacts: `parent_id_artifacts path`, `parent_id`, or Features/ path from frontmatter / links
+   - Artifacts: `parent_id`, or Features/ path from frontmatter / links
    - A Story with no parent is valid: set `feature: null` and plan from the Story alone. STOP and
      ask once only when the Story names a parent that cannot be read.
 2. **User Story body** — title, description/sections, assignee when present
@@ -104,11 +104,9 @@ Resolve the artifacts root with `bin/agile-backlog-toolkit config --show`. If un
 bootstrap to ask where plans should go and apply the reviewed setting. Never instruct manual JSON
 editing or invent a directory.
 
-**Filename:** `YYYY-MM-DD-<story-slug>.md`
-
-- Date: run date (UTC or local host date, consistent within the run)
-- `story-slug`: kebab-case from story title or id (`12345-intake-selection-ux`)
-- If a file already exists for the same story today: append `-2`, `-3`, … — do not overwrite without asking
+**Path:** `harness document path --type implementation-plan --item <story key>`, in the Story's
+folder (`../../../references/document-layout.md`). One plan per Story: when the file exists, revise
+it rather than writing a second one.
 
 **Frontmatter:**
 
@@ -125,19 +123,20 @@ created: YYYY-MM-DD
 ---
 ```
 
-`status` is allowed here (Implementation_Plans is not Tickets/). Keep `draft` while preparing the
-Task batch; update it after the combined plan-and-Task review.
+`status` is allowed here (Implementation_Plans is not Tickets/). Keep `draft` until the user
+accepts the plan (`implementation-confirm`), then set `active`. The approval pins the plan's content;
+its `status` line is not part of it, so only a change elsewhere needs a new approval.
 
 ### Save gate
 
 1. Write the file to disk.
 2. Re-read the file and assert it exists and is non-empty.
 3. Record `plan_path` on the run context.
-4. Continue to Task drafting. Present the complete plan with the Task batch at the material
-   publication review point; a path plus summary is insufficient.
+4. Have the plan approved as the skill's section 2 describes (`implementation-confirm`). Draft
+   Tasks only after it is approved.
 
 **STOP before Task creation:** PHASE 3 must check `plan_path` exists. If missing → STOP with
 "Implementation Plan not saved; refusing Task creation."
 
-No separate `proceed` gate is needed between saving the local plan and drafting Tasks. Edits must
-still cover every acceptance criterion before publication.
+The plan approval is required before Tasks are drafted. Edits must still cover every acceptance
+criterion, and an edited plan needs a new approval.

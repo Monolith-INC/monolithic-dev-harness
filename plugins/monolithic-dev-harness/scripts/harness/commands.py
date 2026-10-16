@@ -7,6 +7,7 @@ command with any shell operator, substitution, or redirection is not a harness i
 
 from __future__ import annotations
 
+import re
 import shlex
 import shutil
 from pathlib import Path
@@ -16,8 +17,15 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 _SHELL_SYNTAX = frozenset(";&|<>()`$\n\r")
 
 
+# `$PWD` is the folder the command runs in, so it is read as that folder, not as shell syntax.
+_PWD = re.compile(r'"\$PWD"|"\$\{PWD\}"|\$\{PWD\}|\$PWD\b')
+# Text that tries to run `harness begin`, whatever form it takes.
+_BEGIN = re.compile(r"\bharness\b.*\bbegin\b.*--request", re.DOTALL)
+
+
 def harness_args(command: str, cwd: Path) -> tuple[str, ...] | None:
     """The arguments after `harness` when `command` is exactly one harness run, else None."""
+    command = _PWD.sub(lambda _: shlex.quote(str(cwd)), command)
     if any(character in _SHELL_SYNTAX for character in command):
         return None
     try:
@@ -53,3 +61,8 @@ def option(args: tuple[str, ...], name: str) -> str | None:
         if (word == name and index + 1 < len(args)) or word.startswith(name + "=")
     ]
     return values[0] if len(values) == 1 else None
+
+
+def unreadable_begin(command: str, cwd: Path) -> bool:
+    """A `harness begin` written in a form the hooks cannot read, so it would bind nothing."""
+    return bool(_BEGIN.search(command)) and harness_args(command, cwd) is None

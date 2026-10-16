@@ -1,16 +1,13 @@
 """What a shell command runs, and what it could write.
 
-The rules ask two questions about a `Bash` call. Which commands does it run (is this a `git push`)?
-Which paths could it write (is this a write to the policy)? A regex answers both badly, in both
-directions: `2>/dev/null` looks like a write, while `sudo git push` and `timeout 5 sh -c '…'` do not
-look like anything. This module tokenizes the command once and answers both.
+One shared tokenization answers which commands run and which paths can be written.
+Unlike regex-only scanning, this distinguishes `2>/dev/null` from writes and follows
+`sudo git push` and `timeout 5 sh -c '…'`.
 
-`invocations` walks every simple command the shell would run: across lines and continuations,
-through wrappers (`sudo`, `env`, `timeout`), subshells, `if`/`for` bodies, `sh -c`, `eval`, `xargs`,
-and `find -exec`. Each invocation knows the directory it runs in.
+`invocations` follows lines, continuations, wrappers, subshells, control bodies, `sh -c`,
+`eval`, `xargs` and `find -exec`, preserving each command's working directory.
 
-`scan` classifies those invocations into what they write:
-
+`scan` classifies writes:
 - `targets`: paths a command writes or removes.
 - `trees`: directories whose whole contents a command may write or remove (`rm -r`, `git clean`,
   `find -delete`, extracting an archive).
@@ -18,9 +15,8 @@ and `find -exec`. Each invocation knows the directory it runs in.
   script, `xargs` fed from a pipe, a path held in a variable). A caller treats a protected path
   among them as written: this fails closed, never open.
 
-Unknown commands are writers. A command not listed as reading is assumed to write every path it
-names, so a new reader naming a protected file is refused until it is added to `NON_WRITERS` —
-never the other way round.
+Unknown commands are writers of their named paths. Add verified readers to `NON_WRITERS`;
+never exempt an unknown command merely because it names a protected file.
 """
 
 from __future__ import annotations
@@ -35,6 +31,9 @@ from collections.abc import Iterator
 from dataclasses import dataclass, field
 from itertools import islice
 from pathlib import Path
+
+from harness.shell_literals import expansion_source
+from harness.shell_parse_cache import parse
 
 # Commands that never write a file's content. Anything else is a writer of what it names.
 NON_WRITERS = frozenset(
@@ -97,6 +96,13 @@ IN_PLACE_FLAGS = {
     "awk": re.compile(r"^(-i|--in-place|--inplace)$"),
     "gawk": re.compile(r"^(-i|--in-place|--inplace)$"),
     "yq": re.compile(r"^(-[a-zA-Z]*i|--inplace)"),
+}
+# Options that give an in-place editor its script; without one, its first operand is the script.
+SCRIPT_OPTIONS = {
+    "sed": ("-e", "--expression", "-f", "--file"),
+    "awk": ("-f", "--file"),
+    "gawk": ("-f", "--file", "-e", "--source"),
+    "yq": ("--from-file",),
 }
 # Readers that write only the file named by one of these options.
 OUTPUT_OPTIONS = {
@@ -173,6 +179,8 @@ class Invocation:
     cwd: (
         str | None
     )  # relative to where the shell started; None when a `cd` cannot be followed
+    # Runs only after every `cd` it follows succeeded (`cd dir && …`), so `cwd` is certain.
+    cwd_certain: bool = False
     redirects: tuple[tuple[str, str], ...] = ()
     stdin_text: str = ""  # a heredoc or here-string body
     piped_from: tuple[str, ...] = ()  # words of the commands piped into this one
@@ -284,6 +292,8 @@ def _parse_line(
             current = flush("close")
         elif token in {"|", "|&"}:
             current = flush("pipe")
+        elif token == "&&":
+            current = flush("and")
         elif token in _CONTROL:
             current = flush("end")
         elif token in {"<", ">"} and following == "(":
@@ -310,7 +320,7 @@ def _parse_line(
 
 
 def _segments(command: str) -> Iterator[tuple[str, _Segment | None, bool]]:
-    """Yield ("run", segment, parsed), or ("pipe" | "end" | "open" | "close", None, parsed)."""
+    """Yield ("run", segment, parsed), or ("pipe" | "and" | "end" | "open" | "close", None, parsed)."""
     lines = command.split("\n")
     index = 0
     while index < len(lines):
@@ -393,15 +403,23 @@ def _substitutions(command: str) -> list[str]:
 
 
 def invocations(command: str, cwd: str | None = "", depth: int = 0) -> list[Invocation]:
+    return parse(_invocations, command, cwd, depth)
+
+
+def _invocations(
+    command: str, cwd: str | None = "", depth: int = 0
+) -> list[Invocation]:
     """Every simple command `command` runs, in order, including nested and dispatched ones."""
     if depth > MAX_DEPTH:
         # Raising makes the hook refuse the call, as it does for any command it cannot read.
         raise ValueError(f"the command nests more than {MAX_DEPTH} levels deep")
     found: list[Invocation] = []
-    for inner in _substitutions(command):
+    for inner in _substitutions(expansion_source(command)):
         found.extend(invocations(inner, cwd, depth + 1))
     stack: list[str | None] = []
     pipeline: list[str] = []
+    # A `cd` joined by `&&` to what follows: what follows runs only in the new directory.
+    after_cd = certain = False
     for kind, segment, parsed in _segments(command):
         if kind == "open":
             stack.append(cwd)
@@ -409,9 +427,16 @@ def invocations(command: str, cwd: str | None = "", depth: int = 0) -> list[Invo
         if kind == "close":
             cwd = stack.pop() if stack else cwd
             pipeline = []
+            after_cd = certain = False
+            continue
+        if kind == "and":
+            certain = certain or after_cd
+            after_cd = False
+            pipeline = []
             continue
         if kind == "end":
             pipeline = []
+            after_cd = certain = False
             continue
         if kind == "pipe" or segment is None:
             continue
@@ -426,10 +451,12 @@ def invocations(command: str, cwd: str | None = "", depth: int = 0) -> list[Invo
                 cwd = None
             else:
                 cwd = _resolve(destination, cwd)
+        after_cd = name in {"cd", "pushd"} and cwd is not None
         invocation = Invocation(
             name=name,
             args=args,
             cwd=cwd,
+            cwd_certain=certain,
             redirects=tuple(segment.redirects),
             stdin_text=segment.stdin_text,
             piped_from=tuple(pipeline),
@@ -439,6 +466,20 @@ def invocations(command: str, cwd: str | None = "", depth: int = 0) -> list[Invo
         found.extend(_dispatched(invocation, depth))
         pipeline.extend(segment.words)
     return found
+
+
+def plain_git_context(command: str) -> bool:
+    """Staging exemptions require Git-only calls with no environment-changing wrappers."""
+    return all(
+        invocation.name == "git" for invocation in invocations(command)
+    ) and not any(
+        _ASSIGNMENT.match(word)
+        or posixpath.basename(word)
+        in {"env", "export", "declare", "typeset", "local", "setenv"}
+        for _, segment, _ in _segments(command)
+        if segment is not None
+        for word in segment.words
+    )
 
 
 def _dispatched(invocation: Invocation, depth: int = 0) -> list[Invocation]:
@@ -510,6 +551,21 @@ class _Writes:
 
 def _operands(args: tuple[str, ...]) -> list[str]:
     return [a for a in args if a and not a.startswith("-") and a != "{}"]
+
+
+def _edited_files(args: tuple[str, ...], script_options: tuple[str, ...]) -> list[str]:
+    """The files an in-place editor rewrites: its operands, less the script it was given."""
+    separate = {
+        position + 1
+        for position, arg in enumerate(args)
+        if arg in script_options and position + 1 < len(args)
+    }
+    operands = [
+        arg
+        for position, arg in enumerate(args)
+        if position not in separate and arg and not arg.startswith("-") and arg != "{}"
+    ]
+    return operands if _option_values(args, script_options) else operands[1:]
 
 
 def _option_values(args: tuple[str, ...], options: tuple[str, ...]) -> list[str]:
@@ -605,7 +661,7 @@ def _classify(
         # A `cd` that fails leaves the shell where it was, so a relative path is checked both
         # from the tracked directory and from where the command started.
         resolved = [_resolve(path, cwd)]
-        if cwd and not path.startswith(("/", "~")):
+        if cwd and not invocation.cwd_certain and not path.startswith(("/", "~")):
             resolved.append(_resolve(path, ""))
         return resolved
 
@@ -707,7 +763,7 @@ def _classify(
         return
     if name in IN_PLACE_FLAGS:
         if any(IN_PLACE_FLAGS[name].match(arg) for arg in args):
-            for operand in _operands(args):
+            for operand in _edited_files(args, SCRIPT_OPTIONS[name]):
                 target(operand)
         return
     if name in NON_WRITERS:
@@ -782,6 +838,16 @@ def _exec_writes(rest: tuple[str, ...]) -> bool:
     name = posixpath.basename(inner[0])
     if name in IN_PLACE_FLAGS:
         return any(IN_PLACE_FLAGS[name].match(a) for a in inner[1:])
+    if name in SHELLS and "-c" in inner[1:-1]:
+        # `sh -c '<script>'`: the script decides, so read it like any other command line.
+        script = next((a for a in inner[inner.index("-c") + 1 :] if a != "--"), "")
+        return any(
+            _exec_writes((ran.name, *ran.args))
+            or any(
+                op in _REDIRECT_OUT and to != "/dev/null" for op, to in ran.redirects
+            )
+            for ran in invocations(script)
+        )
     return name not in NON_WRITERS
 
 
@@ -918,6 +984,38 @@ def _writes_operands(invocation: Invocation) -> bool:
     return any("\x00" in path for path in probe.targets + probe.trees)
 
 
+# A statement that only assigns a plain value: `F=docs/a.md`, `D="Tickets/Ready"`.
+_ASSIGNMENT = re.compile(
+    r"(?:^|(?<=[;&|\n(]))\s*([A-Za-z_][A-Za-z0-9_]*)="
+    r"(?:'([^'$`]*)'|\"([^\"$`]*)\"|([^\s;&|$`'\"()<>{}]*))"
+    r"(?=\s*(?:$|[;&|\n)]))"
+)
+
+
+def expand_plain_variables(command: str) -> str:
+    """Put in a variable's value where the command assigns it once, to a plain value.
+
+    A name bound any other way (a second assignment, `for`, `read`, `+=`, a substitution) is left
+    as it is, so the scanner still treats it as naming anything.
+    """
+    values: dict[str, str] = {}
+    for match in _ASSIGNMENT.finditer(command):
+        name = match.group(1)
+        value = next(group for group in match.groups()[1:] if group is not None)
+        bindings = re.findall(
+            rf"(?:\b{name}\+?=|\bfor\s+{name}\b|\bread\b[^;&|\n]*\b{name}\b)", command
+        )
+        if len(bindings) == 1:
+            values[name] = value
+    for name, value in values.items():
+        command = re.sub(
+            rf"\$(?:\{{{name}\}}|{name}(?![A-Za-z0-9_]))",
+            lambda _, value=value: value,
+            command,
+        )
+    return command
+
+
 def scan(
     command: str,
     cwd: str | None = "",
@@ -931,6 +1029,7 @@ def scan(
     default; a check that only asks "is this plainly a write?" turns it off.
     """
     writes = _Writes()
+    command = expand_plain_variables(command)
     for invocation in invocations(command, cwd):
         _classify(invocation, writes, base, command, unknown_writes=unknown_writes)
         if invocation.operands_from_pipe and _writes_operands(invocation):

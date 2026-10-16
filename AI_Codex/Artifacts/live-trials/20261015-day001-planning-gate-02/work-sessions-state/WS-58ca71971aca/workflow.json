@@ -1,0 +1,122 @@
+{
+  "cursor": 5,
+  "language": "en",
+  "points": [
+    {
+      "artifacts": [],
+      "completed_writes": [],
+      "decisions": [],
+      "id": 1,
+      "label": "First request",
+      "next_action": "Continue original request",
+      "pending": "",
+      "stage": "discovery"
+    },
+    {
+      "artifacts": [
+        [
+          "docs/planning/approach-show-both-task-counts.md",
+          "9b4dc5c089c1328d3f2797dee6a2c0da1b532f979c21ef41421153f54dd01923"
+        ]
+      ],
+      "completed_writes": [],
+      "decisions": [],
+      "id": 2,
+      "label": "Planning approach draft",
+      "next_action": "Resolve whether to run another planning method; then complete planning-depth hardening and preparation.",
+      "pending": "",
+      "stage": "planning"
+    },
+    {
+      "artifacts": [
+        [
+          "docs/planning/approach-show-both-task-counts.md",
+          "9b4dc5c089c1328d3f2797dee6a2c0da1b532f979c21ef41421153f54dd01923"
+        ]
+      ],
+      "completed_writes": [],
+      "decisions": [],
+      "id": 3,
+      "label": "Standard hardening",
+      "next_action": "Reconcile requirements, scope, edge cases, and technical choices, then prepare tracker drafts and the implementation bundle.",
+      "pending": "",
+      "stage": "hardening"
+    },
+    {
+      "artifacts": [
+        [
+          "docs/planning/approach-show-both-task-counts.md",
+          "9b4dc5c089c1328d3f2797dee6a2c0da1b532f979c21ef41421153f54dd01923"
+        ],
+        [
+          "docs/planning/Specs/draft-show-active-and-completed-task-counts-spec.md",
+          "cf25f078871cbd1d7a9eaa420e9487f0f30385b38371b775795a475c9a1f8693"
+        ]
+      ],
+      "completed_writes": [],
+      "decisions": [],
+      "id": 4,
+      "label": "Preparation blocked by code-change gate",
+      "next_action": "Resolve the preparation write-gate sequence without publishing or editing application source/tests.",
+      "pending": "Harness refused local implementation-plan and tracker/task-draft writes because work session WS-58ca71971aca has no linked Story; linking requires a Story key, but tracker publication is gated on the bundle approval.",
+      "stage": "preparation"
+    },
+    {
+      "artifacts": [
+        [
+          "docs/planning/approach-show-both-task-counts.md",
+          "9b4dc5c089c1328d3f2797dee6a2c0da1b532f979c21ef41421153f54dd01923"
+        ],
+        [
+          "docs/planning/Specs/draft-show-active-and-completed-task-counts-spec.md",
+          "cf25f078871cbd1d7a9eaa420e9487f0f30385b38371b775795a475c9a1f8693"
+        ],
+        [
+          "docs/planning/Tickets/Ready/draft-show-active-and-completed-task-counts.md",
+          "617015d3d823aeb507cd1bada31a9f864f2d2c5c271d11d1e99146597aa096b1"
+        ],
+        [
+          "docs/planning/2026-10-15-show-active-and-completed-task-counts.md",
+          "408290ec4edc50d627ee328560a812c936df40e9bab3d69dcfab10ba0bf8add4"
+        ]
+      ],
+      "completed_writes": [],
+      "decisions": [],
+      "id": 5,
+      "label": "Preparation blocked by code-change gate",
+      "next_action": "Resolve preparation write-gate ordering; then finish the tracker batch, manifest, final plan, and implementation-confirm bundle without editing source/tests.",
+      "pending": "Harness refused local Task draft writes because session WS-58ca71971aca has no linked Story; linking requires a Story key, but tracker publication is gated on final bundle approval.",
+      "stage": "preparation"
+    },
+    {
+      "artifacts": [
+        [
+          "docs/planning/approach-show-both-task-counts.md",
+          "9b4dc5c089c1328d3f2797dee6a2c0da1b532f979c21ef41421153f54dd01923"
+        ],
+        [
+          "docs/planning/Specs/draft-show-active-and-completed-task-counts-spec.md",
+          "cf25f078871cbd1d7a9eaa420e9487f0f30385b38371b775795a475c9a1f8693"
+        ],
+        [
+          "docs/planning/Tickets/Ready/draft-show-active-and-completed-task-counts.md",
+          "617015d3d823aeb507cd1bada31a9f864f2d2c5c271d11d1e99146597aa096b1"
+        ],
+        [
+          "docs/planning/2026-10-15-show-active-and-completed-task-counts.md",
+          "408290ec4edc50d627ee328560a812c936df40e9bab3d69dcfab10ba0bf8add4"
+        ]
+      ],
+      "completed_writes": [],
+      "decisions": [],
+      "id": 6,
+      "label": "Preparation gate order decision",
+      "next_action": "Follow the selected recovery path; never publish without the specific publish-items approval.",
+      "pending": "Waiting on a harness-presented choice about whether to stop or request a separate approval to publish the local Story before final bundle review.",
+      "stage": "preparation"
+    }
+  ],
+  "request": "I can see how many tasks I still need to do, but I also want to see how many I have finished. Show both counts on the task screen.",
+  "status": "active",
+  "version": 1
+}

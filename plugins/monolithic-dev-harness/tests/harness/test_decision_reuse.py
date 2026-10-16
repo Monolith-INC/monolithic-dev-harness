@@ -48,6 +48,12 @@ def present(
 
 
 def present_gate(repo: Path, *args: str) -> dict:
+    subprocess.run(
+        [str(CLI), "workflow", "show", "--repo", str(repo), "--artifact", "plan.md"],
+        capture_output=True,
+        timeout=30,
+        check=True,
+    )
     result = subprocess.run(
         [
             str(CLI),

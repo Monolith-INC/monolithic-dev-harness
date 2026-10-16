@@ -22,18 +22,12 @@ PROJECT_CONTEXT_TOTAL_LIMIT = 96_000
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 LOCAL_OPERATIONS = {
     "harness.bootstrap.inspect": "Inspect project settings, saved progress, and repository state.",
-    "harness.work-session.route": "Match the exact request to saved project work or present a new-session choice.",
-    "harness.work-session.start": "Start a separate project work session for the selected request.",
-    "harness.work-session.resume": "Resume a paused project work session.",
-    "harness.work-session.pause": "Pause project work while preserving its saved context.",
-    "harness.work-session.stop": "Stop a project work session without deleting its history.",
-    "harness.work-session.select": "Bind this host conversation to one project work session.",
     "harness.doctor": "Check local harness setup and required tools.",
     "harness.workflow.status": "Read the current saved workflow checkpoint.",
     "harness.workflow.checkpoint": "Save a workflow checkpoint without granting write approval.",
+    "harness.knowledge.catalog": "List the bounded project knowledge routing catalog.",
     "harness.knowledge.find": "Search the selected harness knowledge store.",
     "harness.knowledge.fetch": "Read a selected harness knowledge item.",
-    "harness.suspension.status": "Read whether the user suspended the harness checks; only their own `harness suspend` message does.",
 }
 
 
@@ -85,6 +79,70 @@ def _routes(plugin_root: Path) -> dict[str, tuple[str, ...]]:
             raise _Invalid(f"route {route_id!r} refers to an unknown stage")
         checked[route_id] = tuple(stage_ids)
     return checked
+
+
+_FIELDS = ("description", "stage", "skill", "how")
+
+
+def stage_requirements(
+    stage_id: str, plugin_root: Path = PLUGIN_ROOT
+) -> Result[tuple[dict[str, str], ...]]:
+    """What a stage needs before its work starts (code changes, for execution), in catalog order:
+    id, description, and the stage and skill that produce each."""
+    return attempt(
+        lambda: _stage_requirements(load_catalog(plugin_root), stage_id, plugin_root),
+        "prepared_workflow_invalid",
+        "prepared workflow",
+        _Invalid,
+    )
+
+
+def completion_requirements(
+    plugin_root: Path = PLUGIN_ROOT,
+) -> Result[tuple[dict[str, str], ...]]:
+    """What must hold before a Story or Bug is marked done: the catalog's one `completion` list."""
+    return attempt(
+        lambda: _completion_requirements(load_catalog(plugin_root), plugin_root),
+        "prepared_workflow_invalid",
+        "prepared workflow",
+        _Invalid,
+    )
+
+
+def _stage_requirements(
+    catalog: dict[str, Any], stage_id: str, plugin_root: Path
+) -> tuple[dict[str, str], ...]:
+    stage = catalog.get("stages", {}).get(stage_id)
+    if not isinstance(stage, dict):
+        raise _Invalid(f"unknown prepared stage: {stage_id}")
+    return _requirements(catalog, stage.get("requires", ()), plugin_root)
+
+
+def _completion_requirements(
+    catalog: dict[str, Any], plugin_root: Path
+) -> tuple[dict[str, str], ...]:
+    return _requirements(catalog, catalog.get("completion", ()), plugin_root)
+
+
+def _requirements(
+    catalog: dict[str, Any], ids: Iterable[str], plugin_root: Path
+) -> tuple[dict[str, str], ...]:
+    stages = catalog.get("stages", {})
+    declared = catalog.get("requirements", {})
+    entries: list[dict[str, str]] = []
+    for requirement_id in ids:
+        entry = declared.get(requirement_id)
+        if not isinstance(entry, dict) or not all(
+            isinstance(entry.get(name), str) and entry[name].strip() for name in _FIELDS
+        ):
+            raise _Invalid(f"undeclared or incomplete requirement: {requirement_id}")
+        if entry["stage"] not in stages:
+            raise _Invalid(f"requirement {requirement_id!r} names an unknown stage")
+        _inside(plugin_root, f"skills/{entry['skill']}/SKILL.md", "producing skill")
+        entries.append(
+            {"id": requirement_id, **{name: entry[name] for name in _FIELDS}}
+        )
+    return tuple(entries)
 
 
 def _digest(path: Path) -> str:
@@ -193,11 +251,13 @@ def prepare_stage(
     plugin_root: Path = PLUGIN_ROOT,
     original_request: str = "",
     available_operations: Iterable[str] | None = None,
+    git_delivery: bool,
 ) -> Result[dict[str, Any]]:
     """A read-only step package with verified references and skill guidance.
 
     The step is `ready` only when its inputs are present and the host confirmed, through
-    `available_operations`, every tracker or SCM operation it needs.
+    `available_operations`, every tracker or SCM operation it needs. Skills marked
+    `"delivery": "git"` are recommended only when the user chose Git-based delivery.
     """
     return attempt(
         lambda: _prepare_stage(
@@ -207,6 +267,7 @@ def prepare_stage(
             plugin_root,
             original_request,
             available_operations,
+            git_delivery,
         ),
         "prepared_workflow_invalid",
         "prepared workflow",
@@ -221,6 +282,7 @@ def _prepare_stage(
     plugin_root: Path,
     original_request: str,
     available_operations: Iterable[str] | None,
+    git_delivery: bool,
 ) -> dict[str, Any]:
     canonical_repo = repo.resolve()
     if not canonical_repo.is_dir():
@@ -241,6 +303,8 @@ def _prepare_stage(
     )
     skill_entries: list[dict[str, str]] = []
     for recommendation in stage.get("skills", ()):
+        if recommendation.get("delivery") == "git" and not git_delivery:
+            continue
         name = recommendation.get("name", "")
         when = recommendation.get("when", "")
         skill_file = _inside(
@@ -319,6 +383,12 @@ def _prepare_stage(
         ],
         "operations": operations,
         "recommended_skills": skill_entries,
+        "entry_requirements": list(_stage_requirements(catalog, stage_id, plugin_root)),
+        "completion_requirements": list(
+            _completion_requirements(catalog, plugin_root)
+            if stage.get("completes_work_item")
+            else ()
+        ),
         "expected_outputs": list(stage.get("outputs", ())),
         "checks": list(stage.get("checks", ())),
         "recovery": list(stage.get("recovery", ())),

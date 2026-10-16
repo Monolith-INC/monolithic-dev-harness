@@ -1,10 +1,10 @@
 # User Story Spec Blueprint
 
-Blank form for specs written to **`<artifacts>/Specs/`** before the User Story ticket.
+Blank form for specs written to **the item's folder in the artifacts path** before the User Story ticket.
 
 ## Artifacts filename
 
-`<parent-feature-id>-<kebab-slug>-spec.md`, or `draft-<kebab-slug>-spec.md` when the Story has no Feature
+`spec-<scope>.md`, from `harness document path --type spec` (see `references/document-layout.md`)
 
 ## Frontmatter
 

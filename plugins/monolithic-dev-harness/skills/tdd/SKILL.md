@@ -9,9 +9,9 @@ For every Task in `implement-story`, turn one acceptance criterion into a focuse
 before the change and passes after it. For a bug, the test reproduces the defect.
 
 Adapted from pstack's `tdd` (MIT, Lauren Tan), widened from bug fixes to every Task. The harness
-enforces the outcome deterministically: a commit that changes source files without test changes in
-the commit or on the branch is blocked (rule `tests-with-code`), and a pull request needs passing check evidence
-for its exact tree (rule `draft-reviewed-prs`).
+enforces the outcome deterministically: a work item whose source files changed without matching
+test changes since it was linked cannot be marked done (completion requirement `tests_with_code`),
+and passing check evidence must describe the code exactly as it is (`checks_passed`).
 
 ## Workflow
 
@@ -32,7 +32,7 @@ Say so explicitly before implementing, and choose the closest executable check (
 an emulator scenario, a manual reproduction the user runs). Prefer no new test over a bad one: tests
 that mostly test mocks, encode implementation details, depend on timing, or need heavy
 infrastructure for a small change. A guarded path without an automated suite goes through the
-manual-check flow instead (rule `guarded-paths`).
+manual-check flow instead (completion requirement `guarded_paths_verified`).
 
 ## Guardrails
 

@@ -29,8 +29,8 @@ def _value(result):
             raise PreparedFailed(failure.message)
 
 
-def prepare(*args, **kwargs):
-    return _value(prepared.prepare_stage(*args, **kwargs))
+def prepare(*args, git_delivery: bool = False, **kwargs):
+    return _value(prepared.prepare_stage(*args, git_delivery=git_delivery, **kwargs))
 
 
 def routes(*args):
@@ -47,20 +47,89 @@ class PreparedWorkflowTests(unittest.TestCase):
         (self.project / "README.md").write_text("Project overview\n", encoding="utf-8")
         (self.project / "AGENTS.md").write_text("Project guidance\n", encoding="utf-8")
 
-    def test_every_named_route_has_known_stages(self) -> None:
-        route_map = routes()
+    def test_onboarding_is_the_one_route_family(self) -> None:
+        onboarding = (
+            "discovery",
+            "planning",
+            "hardening",
+            "refinement",
+            "preparation",
+            "execution",
+            "verify",
+        )
         self.assertEqual(
-            set(route_map),
+            routes(),
+            {"onboarding": onboarding, "explore-idea": ("ideate", *onboarding)},
+        )
+        self.assertEqual(
+            set(prepared.load_catalog()["stages"]), {"ideate", *onboarding}
+        )
+
+    def test_refinement_runs_the_backlog_toolkit_against_the_tracker(self) -> None:
+        package = prepare(self.project, "onboarding", "refinement")
+        self.assertEqual(
+            {skill["name"] for skill in package["recommended_skills"]},
             {
-                "investigate-request",
-                "explore-idea",
-                "prepare-artifacts",
-                "implement-approved-item",
-                "resume-work",
-                "suspend-checks",
+                "amend-workitems",
+                "validate-artifact",
+                "auto-fix-artifact",
+                "generate-work-item",
+                "enrich-work-item",
+                "decompose-backlog",
+                "split-story",
+                "generate-breakdown-work-items",
+                "generate-plain-language-documentation",
             },
         )
-        self.assertEqual(routes()["suspend-checks"], ("suspend",))
+        operations = {item["name"] for item in package["operations"]}
+        self.assertLessEqual(
+            {
+                "tracker_create_work_item",
+                "tracker_update_work_item",
+                "tracker_list_children",
+                "tracker_publish_artifact",
+            },
+            operations,
+        )
+
+    def test_the_plan_and_its_tasks_come_from_refinement(self) -> None:
+        produced = {
+            item["id"]: item["stage"]
+            for item in _value(prepared.stage_requirements("execution"))
+        }
+        self.assertEqual(produced["tasks_parented"], "refinement")
+        self.assertEqual(produced["plan_approved"], "refinement")
+
+    def test_verify_completes_the_work_item_and_execution_does_not(self) -> None:
+        self.assertFalse(
+            prepare(self.project, "onboarding", "execution")["completion_requirements"]
+        )
+        self.assertTrue(
+            prepare(self.project, "onboarding", "verify")["completion_requirements"]
+        )
+
+    def test_git_delivery_skills_are_prepared_only_with_git_delivery(self) -> None:
+        git_only = {
+            "branch-and-pr",
+            "review-pr",
+            "reconcile-feature-stack",
+            "merge-story-stack-into-feature",
+            "commit-prep",
+            "repository-sync",
+        }
+
+        def prepared_skills(git_delivery: bool) -> set[str]:
+            return {
+                skill["name"]
+                for stage in ("execution", "verify")
+                for skill in prepare(
+                    self.project, "onboarding", stage, git_delivery=git_delivery
+                )["recommended_skills"]
+            }
+
+        self.assertFalse(git_only & prepared_skills(False))
+        self.assertLessEqual(git_only, prepared_skills(True))
+        self.assertIn("finish-feature-development", prepared_skills(False))
 
     def test_every_route_stage_has_resolved_knowledge_skills_and_operations(
         self,
@@ -71,6 +140,10 @@ class PreparedWorkflowTests(unittest.TestCase):
             for stage_id in stage_ids
         )
         self.assertGreaterEqual(len(packages), 15)
+        self.assertEqual(
+            {package["step"]["id"] for package in packages},
+            set(prepared.load_catalog()["stages"]),
+        )
         self.assertTrue(all(package["harness_knowledge"] for package in packages))
         self.assertTrue(all(package["operations"] for package in packages))
         self.assertTrue(all(package["recommended_skills"] for package in packages))
@@ -78,13 +151,24 @@ class PreparedWorkflowTests(unittest.TestCase):
     def test_prepare_returns_project_bound_complete_handoff(self) -> None:
         package = prepare(
             self.project,
-            "implement-approved-item",
-            "build",
+            "onboarding",
+            "execution",
             original_request="Implement item X",
         )
         self.assertEqual(package["project_root"], str(self.project.resolve()))
-        self.assertEqual(package["route"]["stages"], ["setup", "build", "verify"])
-        self.assertEqual(package["step"]["id"], "build")
+        self.assertEqual(
+            package["route"]["stages"],
+            [
+                "discovery",
+                "planning",
+                "hardening",
+                "refinement",
+                "preparation",
+                "execution",
+                "verify",
+            ],
+        )
+        self.assertEqual(package["step"]["id"], "execution")
         self.assertTrue(package["digest"])
         self.assertTrue(package["expected_outputs"])
         self.assertTrue(package["checks"])
@@ -92,7 +176,7 @@ class PreparedWorkflowTests(unittest.TestCase):
         self.assertEqual(package["original_request"], "Implement item X")
 
     def test_project_guidance_is_attached_with_digest(self) -> None:
-        package = prepare(self.project, "investigate-request", "discover")
+        package = prepare(self.project, "onboarding", "discovery")
         project_files = {
             Path(item["path"]).relative_to(self.project.resolve()).as_posix(): item
             for item in package["project_knowledge"]
@@ -115,7 +199,7 @@ class PreparedWorkflowTests(unittest.TestCase):
         (self.project / "README.md").write_text(
             "See [product](docs/) and [backlog](backlog/).\n", encoding="utf-8"
         )
-        package = prepare(self.project, "investigate-request", "discover")
+        package = prepare(self.project, "onboarding", "discovery")
         project_files = {
             Path(item["path"]).relative_to(self.project.resolve()).as_posix(): item
             for item in package["project_knowledge"]
@@ -141,7 +225,7 @@ class PreparedWorkflowTests(unittest.TestCase):
         self.assertTrue(idea_skill["digest"])
 
     def test_block_description_is_readable_from_skill_frontmatter(self) -> None:
-        package = prepare(self.project, "prepare-artifacts", "backlog")
+        package = prepare(self.project, "onboarding", "refinement")
         skill = next(
             item
             for item in package["recommended_skills"]
@@ -151,16 +235,16 @@ class PreparedWorkflowTests(unittest.TestCase):
         self.assertNotEqual(skill["description"], ">")
 
     def test_harness_knowledge_references_are_resolved_with_digests(self) -> None:
-        package = prepare(self.project, "investigate-request", "discover")
+        package = prepare(self.project, "onboarding", "discovery")
         references = {Path(item["path"]).name for item in package["harness_knowledge"]}
         self.assertEqual(
             references,
-            {"workflow-storyboard.md", "SKILL.md"},
+            {"onboarding.md", "human-decisions.md", "project-knowledge.md"},
         )
         self.assertTrue(all(item["digest"] for item in package["harness_knowledge"]))
 
     def test_adapter_operations_come_from_the_gateway_contract(self) -> None:
-        package = prepare(self.project, "prepare-artifacts", "backlog")
+        package = prepare(self.project, "onboarding", "refinement")
         operation_names = {item["name"] for item in package["operations"]}
         self.assertIn("tracker_describe", operation_names)
         self.assertIn("tracker_create_work_item", operation_names)
@@ -173,20 +257,20 @@ class PreparedWorkflowTests(unittest.TestCase):
         )
 
     def test_handoff_does_not_claim_host_tool_availability(self) -> None:
-        package = prepare(self.project, "implement-approved-item", "build")
+        package = prepare(self.project, "onboarding", "execution")
         self.assertIn("active host must confirm", package["host_tool_check"])
         self.assertFalse(package["host_tools_checked"])
         self.assertFalse(package["ready"])
 
     def test_discovery_requires_exact_original_request(self) -> None:
-        package = prepare(self.project, "investigate-request", "discover")
+        package = prepare(self.project, "onboarding", "discovery")
         self.assertEqual(package["missing_inputs"], ["original_request"])
         self.assertFalse(package["ready"])
 
     def test_step_is_ready_only_after_host_confirms_each_adapter_operation(
         self,
     ) -> None:
-        route, stage = "investigate-request", "discover"
+        route, stage = "onboarding", "discovery"
         package = prepare(
             self.project,
             route,
@@ -213,13 +297,13 @@ class PreparedWorkflowTests(unittest.TestCase):
 
     def test_missing_project_returns_a_clear_error(self) -> None:
         with self.assertRaisesRegex(PreparedFailed, "does not exist"):
-            prepare(self.root / "missing", "investigate-request", "discover")
+            prepare(self.root / "missing", "onboarding", "discovery")
 
     def test_unknown_route_and_stage_are_rejected(self) -> None:
         with self.assertRaisesRegex(PreparedFailed, "unknown prepared route"):
-            prepare(self.project, "invented", "discover")
+            prepare(self.project, "invented", "discovery")
         with self.assertRaisesRegex(PreparedFailed, "not part of route"):
-            prepare(self.project, "explore-idea", "build")
+            prepare(self.project, "onboarding", "ideate")
 
     def test_route_listing_is_read_only_even_with_no_project_setup(self) -> None:
         result = subprocess.run(
@@ -237,7 +321,7 @@ class PreparedWorkflowTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertIn("investigate-request", json.loads(result.stdout))
+        self.assertIn("onboarding", json.loads(result.stdout))
         self.assertFalse((self.project / ".harness").exists())
 
     def test_prepare_cli_includes_skills_and_adapter_operations(self) -> None:
@@ -250,9 +334,9 @@ class PreparedWorkflowTests(unittest.TestCase):
                 "--repo",
                 str(self.project),
                 "--route",
-                "investigate-request",
+                "onboarding",
                 "--prepared-stage",
-                "discover",
+                "discovery",
                 "--request",
                 "Investigate DAY-001 and prepare its plan",
             ],
@@ -343,14 +427,6 @@ class PreparedWorkflowTests(unittest.TestCase):
         with self.assertRaisesRegex(PreparedFailed, "unknown stage"):
             routes(plugin)
 
-    def test_suspension_route_is_standalone_and_reads_suspension_status(self) -> None:
-        package = prepare(self.project, "suspend-checks", "suspend")
-        self.assertEqual(package["route"]["stages"], ["suspend"])
-        self.assertIn(
-            "harness.suspension.status",
-            {tool["name"] for tool in package["operations"]},
-        )
-
 
 if __name__ == "__main__":
     unittest.main()
@@ -365,9 +441,9 @@ def test_the_cli_marks_a_step_ready_once_the_host_confirms_its_tools(
         "workflow",
         "prepare",
         "--route",
-        "investigate-request",
+        "onboarding",
         "--prepared-stage",
-        "discover",
+        "discovery",
         "--request",
         "Show both counts",
         "--repo",

@@ -6,6 +6,7 @@ The hook is driven as a subprocess with the payloads Claude Code sends for AskUs
 
 from __future__ import annotations
 
+import hashlib
 import json
 import subprocess
 import sys
@@ -95,6 +96,7 @@ class ProblemsTests(unittest.TestCase):
             ("Revert the line in `.gitignore`?", "backticks"),
             ("Move the rule into .git/info/exclude?", "dotfile"),
             ("Edit projects/aplicatudo/lib/main.dart now?", "path"),
+            ("Should the plan go directly under docs/planning?", "path"),
             ("Update sources.json?", "file name"),
             ("The human-owned rule blocked this. Retry?", "rule name"),
             ("Is the spec ready for G2?", "gate number"),
@@ -251,21 +253,39 @@ class ApprovalByClickTests(unittest.TestCase):
         self.assertIn("approved", out["hookSpecificOutput"]["additionalContext"])
         self.assertIsNotNone(state.active_approval(self.repo))
 
-    def test_clicking_approve_pins_the_notes_marked_approved(self) -> None:
+    def test_a_general_approval_pins_no_note(self) -> None:
         write_settings(self.repo, artifacts_path="Vault")
         (self.repo / "Vault").mkdir()
         (self.repo / "Vault/plan.md").write_text(
-            "---\nstory: 7824\nstatus: approved\n---\n"
-        )
-        (self.repo / "Vault/draft.md").write_text(
-            "---\nstory: 7825\nstatus: draft\n---\n"
+            "---\nstory: 7824\nstatus: draft\n---\n"
         )
         run(self.repo, "ask", {"tool_use_id": "toolu_1", "tool_input": ask()})
         out = self._answer("Approve")
-        self.assertIn(
-            "1 plan or spec note", out["hookSpecificOutput"]["additionalContext"]
+        self.assertNotIn(
+            "plan or spec note", out["hookSpecificOutput"]["additionalContext"]
         )
-        self.assertEqual(len(state.pinned_notes(self.repo)), 1)
+        self.assertEqual(state.pinned_notes(self.repo), {})
+
+    def test_an_approval_pins_only_the_notes_it_reviewed(self) -> None:
+        from harness import hook
+
+        write_settings(self.repo, artifacts_path="Vault")
+        (self.repo / "Vault").mkdir()
+        for name, story in (("reviewed.md", 7824), ("other.md", 7825)):
+            (self.repo / "Vault" / name).write_text(
+                f"---\ntype: spec\nstory: {story}\nstatus: draft\n---\n"
+            )
+        digest = hashlib.sha256(
+            (self.repo / "Vault/reviewed.md").read_bytes()
+        ).hexdigest()
+        binds = {"artifacts": [["Vault/reviewed.md", digest]]}
+        state.open_approval(self.repo, "HD-1", 20, binds=binds)
+        note = hook._pin_reviewed_notes(self.repo, "HD-1", binds)
+        self.assertIn("1 reviewed plan or spec note", note)
+        self.assertEqual(
+            list(state.pinned_notes(self.repo)),
+            [str((self.repo / "Vault/reviewed.md").resolve())],
+        )
 
     def test_not_now_opens_nothing(self) -> None:
         run(self.repo, "ask", {"tool_use_id": "toolu_1", "tool_input": ask()})

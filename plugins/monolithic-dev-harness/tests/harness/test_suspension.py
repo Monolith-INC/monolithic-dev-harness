@@ -1,4 +1,4 @@
-"""Suspension: the user's typed `harness suspend` releases every check but `human-owned`."""
+"""Human suspension releases every harness veto, including protected-record checks."""
 
 from __future__ import annotations
 
@@ -79,19 +79,16 @@ class TestTypedSwitch(SuspensionTestCase):
         self.type("harness suspend")
         self.assertAllowed(self.claude("Write", {"file_path": target}))
 
-    def test_human_owned_records_stay_protected_while_suspended(self) -> None:
+    def test_suspension_releases_human_owned_record_checks(self) -> None:
         self.type("harness suspend")
         record = str(self.repo / ".harness/state/suspension.json")
-        self.assertDenied(
+        self.assertAllowed(
             self.claude(
                 "Edit", {"file_path": str(self.repo / ".harness/settings.json")}
             ),
-            "human-owned",
         )
-        self.assertDenied(self.claude("Write", {"file_path": record}), "human-owned")
-        self.assertDenied(
-            self.bash("echo '{}' > .harness/state/suspension.json"), "human-owned"
-        )
+        self.assertAllowed(self.claude("Write", {"file_path": record}))
+        self.assertAllowed(self.bash("echo '{}' > .harness/state/suspension.json"))
 
     def test_a_suspended_repository_with_broken_settings_is_released(self) -> None:
         (self.repo / ".harness" / "settings.json").write_text("{not json")

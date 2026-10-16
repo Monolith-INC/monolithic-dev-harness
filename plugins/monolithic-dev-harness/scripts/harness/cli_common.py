@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from core.result import Err, Ok, Result
-from harness import gitstate
+from harness import project_paths
 
 
 def print_result(result: Result[str]) -> int:
@@ -20,7 +20,7 @@ def print_result(result: Result[str]) -> int:
 
 
 def resolve_repo(value: str) -> Path:
-    return gitstate.repo_root(Path(value)) or Path(value).resolve()
+    return project_paths.root(Path(value))
 
 
 def pairs(values: list[str] | None) -> tuple[tuple[str, str], ...]:

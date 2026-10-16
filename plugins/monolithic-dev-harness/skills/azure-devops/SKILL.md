@@ -26,7 +26,7 @@ machine environment.
 | Describe tracker fields, states, and hierarchy | `tracker_describe` |
 | Read or search work items | `tracker_get_work_item`, `tracker_search_work_items` |
 | Read child work items | `tracker_list_children` |
-| Create or transition a work item | `tracker_create_work_item`, `tracker_transition_work_item` |
+| Create, update or transition a work item | `tracker_create_work_item`, `tracker_update_work_item`, `tracker_transition_work_item` |
 | Read or publish harness artifacts | `tracker_list_artifacts`, `tracker_publish_artifact` |
 | Link a work item to a branch or pull request | `tracker_link_development_artifact` |
 | Read or create a pull request | `scm_get_pull_request`, `scm_create_pull_request` |

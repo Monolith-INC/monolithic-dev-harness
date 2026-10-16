@@ -14,8 +14,9 @@ try:
 except ImportError:  # imported as `scripts.policy`, as the tests do
     from scripts.harness import globs, shellscan
 
-# Never code, whatever the policy says: git's own files and the harness's.
-_NOT_CODE = (".git", ".harness")
+# Never code, whatever the policy says: git's own files, the harness's, and the local tracker's
+# tickets (the agile-backlog-toolkit's `Tickets/`).
+_NOT_CODE = (".git", ".harness", "Tickets")
 
 
 def git_commands(command: str) -> list[list[str]]:
@@ -23,7 +24,19 @@ def git_commands(command: str) -> list[list[str]]:
     return [argv for _directory, argv in shellscan.git_commands(command)]
 
 
-def is_code(relative: str, patterns: Sequence[str] | None, tree: bool = False) -> bool:
+# Documents and data a planning folder holds. Without source globs these are not code there; any
+# other file, such as a script, still is, so the planning folder cannot carry code past the gate.
+PLANNING_DOCUMENTS = frozenset(
+    {".md", ".json", ".jsonl", ".yaml", ".yml", ".csv", ".txt"}
+)
+
+
+def is_code(
+    relative: str,
+    patterns: Sequence[str] | None,
+    tree: bool = False,
+    planning: str = "",
+) -> bool:
     """Whether writing `relative` (repository-relative) could change code.
 
     `patterns` are the policy's source and test globs; `None` means the policy names none, and then
@@ -37,6 +50,18 @@ def is_code(relative: str, patterns: Sequence[str] | None, tree: bool = False) -
         return False
     if parts[:1] and parts[0] in _NOT_CODE:
         return False
+    match patterns, tree, "/".join(parts), planning:
+        case None, False, path, folder if (
+            folder
+            and path.startswith(folder.rstrip("/") + "/")
+            # `plan.md.tmp`, written then moved over `plan.md`, is a planning document too.
+            and any(
+                suffix.lower() in PLANNING_DOCUMENTS for suffix in Path(path).suffixes
+            )
+        ):
+            return False
+        case _:
+            pass
     if patterns is None:
         return True
     path = "/".join(parts)
@@ -52,7 +77,10 @@ def is_code(relative: str, patterns: Sequence[str] | None, tree: bool = False) -
 
 
 def writes_code(
-    command: str, root: str | Path | None, patterns: Sequence[str] | None
+    command: str,
+    root: str | Path | None,
+    patterns: Sequence[str] | None,
+    planning: str = "",
 ) -> bool:
     """Whether the command plainly writes a code file inside the repository.
 
@@ -69,17 +97,55 @@ def writes_code(
     ):
         for path in paths:
             relative = _inside(path, base)
-            if relative is not None and is_code(relative, patterns, tree):
+            if escapes_checkout(path, base) or (
+                relative is not None
+                and is_code(relative, patterns, tree, planning)
+                and not (tree and _only_documents(base, relative, patterns, planning))
+            ):
                 return True
     return False
 
 
+def _only_documents(
+    base: Path | None, relative: str, patterns: Sequence[str] | None, planning: str
+) -> bool:
+    """A folder inside the planning folder that holds only planning documents and data."""
+    if base is None or not planning:
+        return False
+    folder = base / relative
+    files = (
+        [path for path in folder.rglob("*") if path.is_file()]
+        if folder.is_dir()
+        else []
+    )
+    return bool(files) and all(
+        not is_code(path.relative_to(base).as_posix(), patterns, False, planning)
+        for path in files
+    )
+
+
+def escapes_checkout(path: str, root: Path | None) -> bool:
+    """A path through this checkout must not exempt a symlink's external destination."""
+    match root:
+        case None:
+            return False
+        case Path() as base:
+            return (base / Path(path).expanduser()).is_relative_to(base) and not (
+                base / Path(path).expanduser()
+            ).resolve().is_relative_to(base)
+
+
 def _inside(path: str, base: Path | None) -> str | None:
-    if not path.startswith(("/", "~")):
-        return path
-    if base is None:
-        return None
-    try:
-        return Path(path).resolve().relative_to(base).as_posix()
-    except ValueError:
-        return None
+    match base:
+        case None:
+            return None if path.startswith(("/", "~")) else path
+        case Path() as root:
+            try:
+                return (
+                    (root / Path(path).expanduser())
+                    .resolve()
+                    .relative_to(root)
+                    .as_posix()
+                )
+            except ValueError:
+                return None

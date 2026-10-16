@@ -40,6 +40,7 @@ class Gate:
     recommended: str = ""
     binds: str = ""
     kind: str = "required"
+    shown: bool = False  # its files must be shown, as they read now, before it is asked
 
 
 @dataclass(frozen=True)
@@ -56,6 +57,7 @@ class Rendered:
     bound: bool  # an approval tied to a context (no expiry); False: a general, short window
     target: tuple[str, str] | None
     kind: str = "required"
+    shown: bool = False
 
 
 def load(path: Path = CATALOG) -> Result[tuple[tuple[str, ...], dict[str, Gate]]]:
@@ -101,6 +103,7 @@ def _gate(entry: dict[str, Any], languages: tuple[str, ...]) -> Result[Gate]:
         recommended=str(entry.get("recommended", "")),
         binds=str(entry.get("binds", "")),
         kind=_kind(entry),
+        shown=bool(entry.get("shown", False)),
     )
     problems = _problems(gate, languages)
     return (
@@ -136,6 +139,10 @@ def _problems(gate: Gate, languages: tuple[str, ...]) -> list[str]:
             ),
             ("has an unknown binds value", not _BINDS.match(gate.binds)),
             ("binds only matter for approvals", bool(gate.binds) and not gate.approval),
+            (
+                "only a gate that reviews files can require them shown",
+                gate.shown and not gate.artifact,
+            ),
             (
                 "cannot both approve and take free text",
                 gate.approval and gate.free_text,
@@ -234,6 +241,7 @@ def render(
             artifact=gate.artifact,
             bound=gate.approval and bool(gate.binds),
             target=_target(gate.binds, fill),
+            shown=gate.shown,
         )
     )
 

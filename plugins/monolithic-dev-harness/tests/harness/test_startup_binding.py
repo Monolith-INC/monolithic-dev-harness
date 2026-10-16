@@ -406,3 +406,26 @@ def test_pending_recovery_keeps_the_global_gate_and_same_scope_boundary(
     assert (
         "decision-pending" in run_hook(project, "pre-tool", payload(cmd), "codex")
     ) == global_question
+
+
+def test_pwd_is_read_as_the_folder_the_command_runs_in(project):
+    """Trial test-013: `--repo "$PWD"` made the begin unreadable, so nothing was bound."""
+    selected = session(project)
+    cmd = (
+        shlex.join((HARNESS, "begin", "--request", selected.request)) + ' --repo "$PWD"'
+    )
+    assert startup_context.invocation(cmd, project).request == selected.request
+
+
+def test_a_begin_the_hooks_cannot_read_is_refused_with_the_plain_form(project):
+    selected = session(project)
+    cmd = command(project, selected.request)
+    for unreadable in (
+        "$(command -v harness) begin --request x --repo .",
+        cmd + " && ls",
+    ):
+        shown = run_hook(project, "pre-tool", payload(unreadable))
+        assert "deny" in shown and "one plain" in shown
+    assert work_session_context.resolve_session(project, "codex", "conversation") == Ok(
+        None
+    )

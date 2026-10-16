@@ -15,7 +15,7 @@ def project(tmp_path, monkeypatch):
     return prepare(tmp_path / "project")
 
 
-@pytest.mark.parametrize("stage", ("discover", "build"))
+@pytest.mark.parametrize("stage", ("discovery", "execution"))
 @pytest.mark.parametrize("operation", ("pause", "stop"))
 @pytest.mark.parametrize("command", ("begin", "resume"))
 def test_resume_verifies_before_changing_session_or_pointer(

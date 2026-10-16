@@ -41,7 +41,7 @@ bin/agile-backlog-toolkit evaluate --skill auto-fix-artifact --file <path>
 
 For reflection retries, resubmit revised `draft_content` via MCP or re-run `evaluate` after saving.
 Circuit breaker trips after 3 attempts or identical critiques → `blocked_requires_review`.
-Resume only after human types `IMPLEMENTATION APPROVED` (or `ORCHESTRATOR_INTERACTIVE=1` CLI).
+Each call evaluates the supplied draft once and returns its findings. FAIL is a completed review, not a tool failure. The actor revises and resubmits the draft. If reflection stalls or exhausts its budget, review the findings and start a fresh draft-review cycle with `attempt=0`; pass returned `reflection.last_critiques` on continuing cycles. This does not authorize implementation, publication or saving. General implementation approval rules are unchanged.
 3. **Report:** Display the validation report to the user on the screen.
 
 ---
@@ -55,7 +55,7 @@ Resume only after human types `IMPLEMENTATION APPROVED` (or `ORCHESTRATOR_INTERA
 
 **If any checks FAIL or WARN:**
 - Show the report to the user.
-- Ask the user (using `ask_question` or standard prompt): *"Validation found issues. Would you like me to automatically fix these problems?"*
+- Ask the user through `harness decision present` (see the harness skill's human-decisions contract): *"Validation found issues. Would you like me to automatically fix these problems?"*
 - Wait for user confirmation.
 - If the user declines, save the report to the artifacts path and stop.
 - If the user approves, proceed to Phase 3.
@@ -69,7 +69,7 @@ Systematically address each FAIL and WARN result:
 ### a) STRUCTURAL Fixes
 - **Frontmatter:** Add missing `type:` keys, remove invalid `status:` keys.
 - **Filename:** Suggest/apply filename renames to match `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+`.
-- **Body Sections:** Add missing required sections (e.g., `Contexto`, `Critérios de Aceite`, `Tarefas Técnicas`, etc.) with placeholder or derived content. 
+- **Body Sections:** Add the missing sections of the item type's template (`../../common/templates/canonical-*.md`, in the draft's language) with content derived from the item, keeping its original text in Original Description.
 
 ### b) HIERARCHY Fixes
 - A missing parent is not a defect for an Epic, Feature, or User Story; leave it alone. Only a Task needs a parent.
@@ -91,14 +91,17 @@ Systematically address each FAIL and WARN result:
 ## PHASE 4 — OUTPUT & PERSIST
 
 1. **Review:** Output the corrected version of the artifact (or a diff) to the screen.
-2. **Prompt for Save:** Ask the user: *"The artifact has been corrected. Would you like to save this version?"* with options depending on the source:
-   - "Save to Azure DevOps" only when the configured gateway exposes a supported update operation.
-   - "Save to Artifacts/Artifacts" (if source was file/text, uses `write_to_file`/`replace_file_content`)
-   - "Discard"
+2. **Save with approval:** save the corrected version as a draft file and show it. Depending on the
+   source:
+   - A tracker item: ask the `publish-items` approval gate with the draft as `--artifact`, then
+     write it with `tracker_update_work_item` (`description`, and `title` when it changed) and read
+     it back.
+   - A local file: ask the `approve-document` gate with the draft as `--artifact`, then save it.
+   - Otherwise discard it.
 3. **Persist Report:** Save the final validation report with `bin/agile-backlog-toolkit validate --file <path> --persist`, which writes to `.harness/backlog/reports/`.
 
 ---
 
 ## Guardrails
-- **User Consent:** Never overwrite Azure work items or local files without explicit user approval in Phase 4.
+- **User Consent:** Never overwrite a tracker item or a local file without its approval in Phase 4.
 - **Traceability:** When updating Azure, ensure a comment is added noting that the artifacts path applied automated quality fixes.

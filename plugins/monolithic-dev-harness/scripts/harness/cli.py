@@ -6,9 +6,10 @@ harness doctor [--repo <dir>] [--tools]
 harness bootstrap --repo <dir> [--inspect | --propose | --apply-digest <hash>]
 harness session start <work item> [--workflow <name>] | status | pause | resume | close
 harness work-session route --request <text> | start --request <text> | list | select <id> | pause|stop|resume|complete <id>
-harness workflow start | render | checkpoint | list | status | routes | prepare | back | pause | resume | cancel | complete --session-id <id>
+                    | track [<id>] --work-item <key> | link [<id>] --work-item <key>
+harness workflow start | render | checkpoint | list | status | requirements | routes | prepare | back | pause | resume | cancel | complete --session-id <id>
 harness preference show | language <en|pt-br>
-harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...]
+harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...] | tree
 harness adoption assess | plan | status | materialize ...
 harness knowledge <operation> ...
 """
@@ -41,13 +42,16 @@ from harness import (  # noqa: E402
     adoption,
     bmad,
     cli_workflow,  # noqa: E402
+    documents,
     gitstate,
     knowledge,
     local_tracker,
     preferences,
+    project_paths,
     sessions,
     settings,
     state,
+    tracker_tree,
 )
 from harness.cli_common import pairs, print_result, resolve_repo  # noqa: E402
 from integrations import (  # noqa: E402
@@ -147,9 +151,26 @@ def doctor(args: argparse.Namespace) -> int:
                 "Codex",
                 "plugin installed" if codex_installed else "plugin not installed",
             )
+    zed_settings = (
+        Path(os.environ.get("ZED_CONFIG_DIR", Path.home() / ".config" / "zed"))
+        / "settings.json"
+    )
+    zed_configured = False
+    if zed_settings.is_file():
+        try:
+            zed_configured = "backlog-orchestrator" in zed_settings.read_text(
+                encoding="utf-8"
+            )
+        except OSError:
+            zed_configured = False
+    report.line(
+        "ok" if zed_configured else "skip",
+        "Zed",
+        "MCP context servers registered" if zed_configured else "plugin not installed",
+    )
 
     print("Repository")
-    repo = gitstate.repo_root(Path(args.repo)) or Path(args.repo).resolve()
+    repo = project_paths.root(Path(args.repo))
     if not settings.governed(repo):
         report.line("skip", str(repo), "not opted in (run `harness bootstrap`)")
     else:
@@ -201,10 +222,10 @@ def _repository(report: Report, repo: Path, args: argparse.Namespace) -> None:
     for problem in registry.problems(repo):
         report.line("warn", "tracker folder", problem.message)
     report.line("ok", "tracking", state.tracking_mode(repo))
-    if gitstate.repo_root(repo) is not None:
+    if settings.git_delivery(repo):
         report.line("ok", "session", sessions.describe(sessions.resolve(repo)))
     else:
-        report.line("skip", "session", "version control is not in use")
+        report.line("skip", "session", "Git-based delivery is not selected")
     if args.tools and isinstance(selected, Ok):
         report.line(*_tools(repo, selected.value))
 
@@ -251,7 +272,7 @@ def _tools(repo: Path, active: registry.Active) -> tuple[str, str, str]:
 def bootstrap(extra: list[str]) -> int:
     args = list(extra)
     if "--repo" not in args:
-        repo = gitstate.repo_root(Path.cwd()) or Path.cwd().resolve()
+        repo = project_paths.root(Path.cwd())
         args += ["--repo", str(repo)]
     script = PLUGIN_ROOT / "scripts" / "harness" / "bootstrap.py"
     return subprocess.call([sys.executable, str(script), *args])
@@ -434,6 +455,13 @@ def tracker_command(args: argparse.Namespace) -> int:
             )
         case "preflight":
             return _tracker_preflight(repo)
+        case "tree":
+            return print_result(
+                bind(
+                    registry.selected(repo, settings.load(repo)),
+                    lambda active: tracker_tree.render(repo, active.manifest),
+                )
+            )
     return 2
 
 
@@ -552,7 +580,8 @@ def knowledge_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def parser() -> argparse.ArgumentParser:
+    """Every `harness` command and its arguments."""
     parser = argparse.ArgumentParser(
         prog="harness",
         description=__doc__,
@@ -593,11 +622,13 @@ def main(argv: list[str] | None = None) -> int:
     preference_parser.add_argument("operation", choices=("show", "language"))
     preference_parser.add_argument("value", nargs="?")
     preference_parser.add_argument("--repo")
+    documents.add_parser(sub)
     tracker_parser = sub.add_parser(
-        "tracker", help="list or inspect trackers, check readiness, or stage a new one"
+        "tracker",
+        help="list or inspect trackers, check readiness, stage a new one, or print the work-item tree",
     )
     tracker_parser.add_argument(
-        "operation", choices=("list", "show", "stage", "preflight")
+        "operation", choices=("list", "show", "stage", "preflight", "tree")
     )
     tracker_parser.add_argument(
         "target", nargs="?", help="a tracker name (show) or folder (stage)"
@@ -640,10 +671,15 @@ def main(argv: list[str] | None = None) -> int:
     knowledge_parser.add_argument("terms", nargs="*")
     knowledge_parser.add_argument("--repo", default=".")
     knowledge_parser.add_argument("--store", default="project")
-    args, extra = parser.parse_known_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    command_line = parser()
+    args, extra = command_line.parse_known_args(argv)
     match args.command, extra:
         case "workflow", [*unknown] if unknown:
-            parser.error("unrecognized workflow arguments: " + " ".join(unknown))
+            command_line.error("unrecognized workflow arguments: " + " ".join(unknown))
         case _:
             pass
     if args.command in cli_workflow.COMMANDS:
@@ -661,6 +697,8 @@ def main(argv: list[str] | None = None) -> int:
         return preference_command(args)
     if args.command == "tracker":
         return tracker_command(args)
+    if args.command == "document":
+        return documents.command(args)
     if args.command == "adoption":
         return adoption_command(args)
     return bootstrap(extra)

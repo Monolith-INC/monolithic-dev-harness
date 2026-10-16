@@ -38,7 +38,7 @@ class SetupTests(unittest.TestCase):
             current = workflow.add_point(
                 workflow.start("Continue DAY-001 task counts", "en").value,
                 "Review the plan",
-                "discover",
+                "discovery",
                 pending="Plan review",
                 next_action="Present the saved plan",
             ).value
@@ -235,12 +235,13 @@ class SetupTests(unittest.TestCase):
         before = setup.inspect(self.repo).value
         self.assertEqual(before["status"], "ready")
         self.assertTrue(before["tracker_storage"]["ready"])
-        self.assertFalse(before["repository"]["has_committed_head"])
+        self.assertIsNone(before["repository"]["has_committed_head"])
+        self.assertEqual(before["repository"]["git_access"], "deferred")
         paused = workflow.pause(
             workflow.add_point(
                 workflow.start("DAY-001").value,
                 "Old blocker",
-                "discover",
+                "discovery",
                 pending="No first commit",
             ).value
         ).value
@@ -263,8 +264,8 @@ class SetupTests(unittest.TestCase):
             check=True,
         )
         after = setup.inspect(self.repo).value
-        self.assertTrue(after["repository"]["has_committed_head"])
-        self.assertTrue(after["repository"]["head"])
+        self.assertIsNone(after["repository"]["has_committed_head"])
+        self.assertEqual(after["repository"]["head"], "")
         self.assertEqual(after["workflow"]["pending"], "No first commit")
 
     def test_existing_local_settings_prepare_missing_folders_without_replacing_records(
@@ -278,9 +279,9 @@ class SetupTests(unittest.TestCase):
             ).value["candidate"],
         )
         self.assertIn("tracker.storage", setup.inspect(self.repo).value["missing"])
-        record = self.repo / ".harness/tracker/backlog/STORY-0001.json"
+        record = self.repo / "Tickets/Ready/0001-story.md"
         record.parent.mkdir(parents=True)
-        record.write_text('{"key":"STORY-0001"}\n')
+        record.write_text("---\nprovider_id: STORY-0001\n---\n")
         before = record.read_bytes()
         command = subprocess.run(
             [

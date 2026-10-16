@@ -1,12 +1,12 @@
 ---
 name: feature-implementation
-description: Implement a Feature with several User Stories on stacked branches — a Feature branch, one Story branch per Story, each Story through spec, implementation, and review — then land the stack and close the Feature. Use when the user wants to build a whole Feature rather than a single Story.
+description: Implement a Feature with several User Stories in dependency order, each Story through spec, implementation, and review — on stacked branches (a Feature branch, one Story branch per Story) with Git-based delivery, in the working copy without it — then close the Feature. Use when the user wants to build a whole Feature rather than a single Story.
 ---
 
 # Feature implementation
 
-A Feature with several Stories runs the Story flow once per Story, on branches stacked under one
-Feature branch:
+A Feature with several Stories can run the Story flow once per Story. When the user selects
+versioned delivery, use branches stacked under one Feature branch:
 
 ```text
 <base branch>
@@ -18,6 +18,10 @@ Feature branch:
 
 Before using the tracker, call `workflow_tracking_status`. If tracking is paused, report that this
 skill is unavailable until `/resume-tracker`.
+
+Without Git-based delivery, implement the Feature's Stories, each from its approved plan, in their
+dependency order in the current working copy, then close the Feature with
+`finish-feature-development` in its local mode. Do not create branches, commits, or PRs.
 
 ## Procedure
 

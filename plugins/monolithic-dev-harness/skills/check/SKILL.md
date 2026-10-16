@@ -1,35 +1,37 @@
 ---
 name: check
-description: Run the repository's configured compile, lint, type-check, and test commands, fix what fails, and record check evidence keyed to the exact git tree. Use after each Task, before committing a guarded path, and before the review stage.
+description: Run the repository's configured compile, lint, type-check, and test commands, fix what fails, and record check evidence for the code exactly as it is on disk. Use after each Task, after changing a guarded path, and before the review stage.
 ---
 
 # Check
 
 Adapted from cursor-team-kit's `check-compiler-errors` (MIT). The commands are not guessed: they
 come from `.harness/settings.json` → `checks`, where each entry has a `name`, the `run` command, and
-`when` globs that decide which checks apply to the files the branch changes.
+`when` globs that decide which checks apply to the files changed since the work session linked its
+work item.
 
 ## Run
 
 From the repository root:
 
 ```bash
-sh "<plugin root>/bin/harness-python" "<plugin root>/scripts/harness/checks.py"            # committed HEAD (clean tree required)
-sh "<plugin root>/bin/harness-python" "<plugin root>/scripts/harness/checks.py" --staged   # index, only when working files match it exactly
+sh "<plugin root>/bin/harness-python" "<plugin root>/scripts/harness/checks.py"
 sh "<plugin root>/bin/harness-python" "<plugin root>/scripts/harness/checks.py" --only <name> ...
 ```
 
 The script runs every applicable check, prints each exit code, and writes evidence to
-`.harness/state/checks/<tree>.json`. Evidence is keyed to the git tree, so any later change makes
-it stale. The hooks read it:
+`.harness/state/checks/<code digest>.json`. Evidence is keyed to a digest of the code files on
+disk, staged or not, and version control plays no part; any later change to a code file makes it
+stale. A check that changes code files itself (a formatter with `--fix`) records nothing: run it
+again on the result. The harness reads the evidence:
 
-- **`guarded-paths`:** committing a guarded path whose evidence is `check:<name>` needs that check to pass for the
-staged tree. Stage, run with `--staged`, then commit.
-- **`draft-reviewed-prs`:** creating the pull request needs every applicable check to pass for HEAD's tree.
+- **Completion:** a work item is done only when every applicable check passed on the code as it is
+  now, and each changed guarded path with `check:<name>` evidence has that check passing
+  (`harness workflow requirements --gate completion`).
+- **`draft-reviewed-prs`:** with Git-based delivery, creating the pull request needs the same
+  evidence.
 
-`--staged` fails before running anything when unstaged or untracked content makes the working-file
-tree differ from the index. Use a clean worktree whose files exactly match what will be committed;
-never treat results from one version as proof for another.
+Never treat results from one version of the code as proof for another.
 
 ## When something fails
 

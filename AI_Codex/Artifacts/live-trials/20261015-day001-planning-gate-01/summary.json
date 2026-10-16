@@ -1,0 +1,38 @@
+{
+  "command_execution_items": 11,
+  "explicit_file_read_requests": 0,
+  "failed_command_execution_items": 2,
+  "item_types": {
+    "agent_message": 5,
+    "command_execution": 22,
+    "error": 1,
+    "unknown": 3
+  },
+  "non_json_lines": 0,
+  "note": "Direct file displays are counted only for completed commands with exit code 0. Failed or incomplete command operands are listed as unverified; indirect reads and searches are not counted.",
+  "read_paths": [],
+  "simple_shell_read_paths": [
+    "_bmad/render/bmad-build/project-e486dcae9141/b5b4445d75f56e0bc594/workflow.md",
+    "_bmad/render/bmad-build/project-e486dcae9141/b5b4445d75f56e0bc594/step-01-clarify-and-route.md",
+    "docs/README.md",
+    "docs/00-context/current-state.md",
+    "docs/01-product/vision.md",
+    "docs/01-product/opportunity.md",
+    "docs/02-design/current-interaction.md",
+    "docs/03-engineering/architecture.md",
+    "backlog/DAY-001-task-counts.md",
+    "/tmp/monolithic-dev-harness-test-run-5_drvn8m/codex-home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2/references/human-decisions.md",
+    "/tmp/monolithic-dev-harness-test-run-5_drvn8m/codex-home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2/references/harness-stage-guide.md"
+  ],
+  "simple_shell_read_requests": 11,
+  "transcript": "/home/monolith/projects/monolithic-dev-harness/AI_Codex/Artifacts/live-trials/20261015-day001-planning-gate-01/transcript.jsonl",
+  "unique_read_paths": 0,
+  "unique_simple_shell_read_paths": 11,
+  "unverified_shell_read_operands": [
+    "/tmp/monolithic-dev-harness-test-run-5_drvn8m/codex-home/config.toml",
+    "/tmp/monolithic-dev-harness-test-run-5_drvn8m/codex-home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.6.2/skills/harness/SKILL.md",
+    "README.md",
+    ".harness/*",
+    "2>/dev/null"
+  ]
+}

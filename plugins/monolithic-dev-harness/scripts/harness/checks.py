@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
-"""Run the repository's configured checks and record evidence keyed to a git tree.
+"""Run the repository's configured checks and record evidence for the code as it is now.
 
-    checks.py [--repo <dir>] [--staged | --head] [--only <name> ...]
+    checks.py [--repo <dir>] [--session-id <id>] [--only <name> ...]
 
---head (default) runs against the committed HEAD and records evidence for HEAD's tree; the working
-tree must be clean so the result describes exactly what was committed. --staged records evidence for
-the index tree only when the working files are byte-for-byte the same tree; this fail-closed rule
-prevents checks run against unstaged content from proving a different staged version.
-Checks come from `.harness/settings.json` → `checks: [{name, run, when}]`; `when` globs select the
-checks that apply to the files changed on the branch.
+Evidence is keyed to the digest of the project's code files (`harness.code_content`), so it
+describes exactly the code on disk; any later change to a code file needs a new run. Version
+control plays no part. Checks come from `.harness/settings.json` → `checks: [{name, run, when}]`;
+`when` globs select the checks that apply to the files changed since the work session linked its
+work item (all code files when that is unknown). A check that changes code files records nothing:
+its result would describe code that no longer exists.
 """
 
 from __future__ import annotations
@@ -22,8 +22,13 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from core.result import Err  # noqa: E402
-from harness import gitstate, settings, state  # noqa: E402
-from harness.rules import applicable_checks  # noqa: E402
+from harness import (  # noqa: E402
+    code_content,
+    project_paths,
+    settings,
+    state,
+    work_sessions,
+)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -31,45 +36,26 @@ def main(argv: list[str] | None = None) -> int:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument("--repo", default=".")
-    mode = parser.add_mutually_exclusive_group()
-    mode.add_argument("--head", action="store_true")
-    mode.add_argument("--staged", action="store_true")
+    parser.add_argument(
+        "--session-id", help="the work session (default: the current one)"
+    )
     parser.add_argument("--only", nargs="*", default=None)
     parser.add_argument("--timeout", type=int, default=1800, help="seconds per check")
     args = parser.parse_args(argv)
 
-    repo = gitstate.repo_root(Path(args.repo)) or Path(args.repo).resolve()
+    repo = project_paths.root(Path(args.repo))
     loaded = settings.load(repo)
     if isinstance(loaded, Err):
         print(f"cannot run checks: {loaded.failure.message}", file=sys.stderr)
         return 2
     chosen = loaded.value
-    if args.staged:
-        try:
-            tree = gitstate.index_tree(repo)
-            worktree = gitstate.worktree_tree(repo)
-        except gitstate.GitError as exc:
-            print(f"cannot compare staged and working files: {exc}", file=sys.stderr)
-            return 2
-        if tree != worktree:
-            print(
-                "staged and working files differ; checks would not prove the staged tree. "
-                "Use a clean worktree whose files exactly match the index.",
-                file=sys.stderr,
-            )
-            return 2
-        changed = gitstate.staged_paths(repo)
-    else:
-        if gitstate.git(repo, "status", "--porcelain", "--untracked-files=no"):
-            print(
-                "working tree has uncommitted changes; commit them or use --staged",
-                file=sys.stderr,
-            )
-            return 2
-        tree = gitstate.head_tree(repo)
-        changed = gitstate.branch_paths(repo, chosen.base_branch)
+    before = code_content.files(repo)
+    digest = code_content.digest(before)
+    changed = code_content.changed_since_link(
+        repo, args.session_id or work_sessions.current(repo), before
+    )
 
-    applicable = applicable_checks(repo, chosen, changed)
+    applicable = code_content.applicable_checks(chosen, changed)
     selected = [
         check
         for check in chosen.checks
@@ -77,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
     ]
     if not selected:
         print("no configured checks apply to the changed files")
-        state.record_checks(repo, tree, [])
+        state.record_checks(repo, digest, [])
         return 0
 
     results = []
@@ -99,9 +85,16 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"--- {check.name}: exit {code}", flush=True)
 
-    path = state.record_checks(repo, tree, results)
+    if code_content.digest(code_content.files(repo)) != digest:
+        print(
+            "the checks changed code files, so their results describe code that is gone; "
+            "nothing was recorded. Review the changes and run the checks again.",
+            file=sys.stderr,
+        )
+        return 2
+    path = state.record_checks(repo, digest, results)
     failed = [r["name"] for r in results if r["exit_code"] != 0]
-    print(f"evidence: {path.relative_to(repo)} (tree {tree[:12]})")
+    print(f"evidence: {path.relative_to(repo)} (code {digest[:12]})")
     if failed:
         print(f"FAILED: {', '.join(failed)}", file=sys.stderr)
         return 1

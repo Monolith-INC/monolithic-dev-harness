@@ -1,0 +1,30 @@
+{
+  "trial": "20261015-day001-planning-gate-01",
+  "harness_checkout": "/home/monolith/projects/monolithic-dev-harness",
+  "source_revision": "67970e95bb540799057a5f8faf5d314e974f77e3",
+  "dirty_state": "untracked AI_Codex/ notes and .root-architect/ mailbox only",
+  "testing": "current source, installed from source into an isolated Codex home",
+  "mode": "--no-interactive (chosen by the human; the Claude host has release 0.5.2 installed, which lacks the gates under test)",
+  "host": "Codex CLI codex exec",
+  "model": "gpt-6-luna",
+  "capability_tier": "economical general-purpose coding tier (skill default)",
+  "reasoning_effort": "low",
+  "sandbox": "workspace-write (the earlier task-counts-03 run used read-only and could not create a work session)",
+  "config": "isolated trial Codex home; --ignore-user-config omitted so installed plugin registration stays available (as in task-counts-03)",
+  "python": "/home/monolith/.local/bin/python3.14",
+  "profile": "local-planning",
+  "scenario": "I can see how many tasks I still need to do, but I also want to see how many I have finished. Show both counts on the task screen.",
+  "stopping_checkpoint": "first grounded proposal or human decision checkpoint; no implementation",
+  "allowed_writes": "local workflow setup, preferences, session state, planning artifacts and checkpoints inside the disposable trial root; evidence in this directory",
+  "evidence": {
+    "briefing": "briefing.md",
+    "transcript": "transcript.jsonl",
+    "stderr": "stderr.log",
+    "result": "result.md",
+    "summary": "summary.json",
+    "installer_log": "installer.log",
+    "plugin_list": "plugin-list.json",
+    "project_status": "project-status.txt",
+    "project_artifacts": "project-artifacts.tar.gz"
+  }
+}

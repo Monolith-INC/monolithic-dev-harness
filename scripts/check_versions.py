@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fail unless every version source agrees (and, with --tag, matches the release tag).
 
-    check_versions.py [--tag vX.Y.Z]
+    check_versions.py [--tag vX.Y.Z | --tag vX.Y.Z-rc.N]
 
 Sources: both plugin manifests, the Claude marketplace entry, the newest CHANGELOG heading, and
 the README version badge.
@@ -17,6 +17,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "plugins" / "monolithic-dev-harness"
+# A release (`1.2.3`) or a pre-release candidate (`1.2.3-rc.1`).
+VERSION = r"\d+\.\d+\.\d+(?:-[0-9A-Za-z.]+)?"
 
 
 def sources() -> dict[str, str]:
@@ -38,15 +40,18 @@ def sources() -> dict[str, str]:
         if p["name"] == "monolithic-dev-harness"
     )
     heading = re.search(
-        r"^## \[(\d+\.\d+\.\d+)\]", (ROOT / "CHANGELOG.md").read_text(), re.M
+        rf"^## \[({VERSION})\]", (ROOT / "CHANGELOG.md").read_text(), re.M
     )
     found["CHANGELOG.md (newest release)"] = (
         heading.group(1) if heading else "<missing>"
     )
+    # shields.io writes a hyphen inside a badge value as `--`.
     badge = re.search(
-        r"badge/version-(\d+\.\d+\.\d+)-", (ROOT / "README.md").read_text()
+        r"badge/version-((?:[^-]|--)+)-", (ROOT / "README.md").read_text()
     )
-    found["README.md (version badge)"] = badge.group(1) if badge else "<missing>"
+    found["README.md (version badge)"] = (
+        badge.group(1).replace("--", "-") if badge else "<missing>"
+    )
     return found
 
 

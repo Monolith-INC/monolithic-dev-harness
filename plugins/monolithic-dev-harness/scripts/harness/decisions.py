@@ -55,7 +55,11 @@ class Pending:
             and self.transport == transport
             and (
                 question.get("id") == self.id
-                or (transport == "async" and question.get("question") == self.question)
+                # Async questions and Claude's AskUserQuestion carry no id; match the wording.
+                or (
+                    (transport == "async" or "id" not in question)
+                    and question.get("question") == self.question
+                )
             )
             and not self.presentation_id
         )
@@ -128,6 +132,27 @@ def cancel_onboarding(repo: Path) -> Result[dict[str, Any]]:
             return bind(review_decisions.recover(repo), lambda _: _cancel_ready(repo))
         case current:
             return Ok(current or {})
+
+
+def cancel_preparation(repo: Path, scope: str | None) -> Result[object]:
+    """A reset abandons a pending preparation question; it grants no approval."""
+    return bind(
+        _path(repo, scope),
+        lambda path: _cancel_preparation_at(path),
+    )
+
+
+def _cancel_preparation_at(path: Path) -> Result[object]:
+    match state.read_json(path):
+        case {"status": "pending"} as current:
+            return attempt(
+                lambda: _archive_dismissal(path, {**current, "status": "cancelled"}),
+                "decision_invalid",
+                "archive preparation question",
+                OSError,
+            )
+        case _:
+            return Ok(None)
 
 
 def _cancel_ready(repo: Path) -> Result[dict[str, Any]]:
@@ -697,6 +722,19 @@ def status_command(command: str, cwd: Path) -> bool:
             return False
 
 
+def show_command(command: str, cwd: Path) -> bool:
+    """Whether a shell command only shows files (`harness workflow show`), so a waiting question
+    about them can be shown again. Anything but exactly one show invocation disqualifies it."""
+    match commands.harness_args(command, cwd):
+        case ("workflow", "show", *options):
+            return len(options) % 2 == 0 and all(
+                flag in ("--repo", "--session-id", "--artifact")
+                for flag in options[::2]
+            )
+        case _:
+            return False
+
+
 def fallback_command(command: str, cwd: Path) -> bool:
     """Only the controlled transport change may pass the waiting gate."""
     match commands.harness_args(command, cwd):
@@ -710,7 +748,7 @@ def _fallback_options(options: tuple[str, ...]) -> bool:
     match options:
         case ():
             return True
-        case ("--async-available", *rest):
+        case ("--async-available" | "--native-unavailable", *rest):
             return _fallback_options(tuple(rest))
         case ("--repo" | "--session-id" | "--host", value, *rest) if (
             not value.startswith("--")

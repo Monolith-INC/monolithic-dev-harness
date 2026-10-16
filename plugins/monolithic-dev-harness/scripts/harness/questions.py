@@ -135,6 +135,13 @@ _JARGON = (
     (re.compile(r"(?<![\w.])\.[A-Za-z][\w.-]*"), "a dotfile or folder name"),
     (re.compile(r"(?:^|\s)(?:~|\.{1,2})?/[\w.-]"), "a path"),
     (re.compile(r"\b[\w-]+/[\w./-]*\.\w{1,5}\b"), "a path"),
+    # A folder path without an extension, starting at a usual project folder (`docs/planning`).
+    (
+        re.compile(
+            r"\b(?:docs|src|lib|tests?|scripts|config|Tickets|backlog|_bmad\w*)/[\w.-]"
+        ),
+        "a path",
+    ),
     (
         re.compile(r"\b[\w-]+\.(?:json|md|py|ts|tsx|js|dart|ya?ml|sh|toml|lock|txt)\b"),
         "a file name",

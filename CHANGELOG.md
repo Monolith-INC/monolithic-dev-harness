@@ -6,7 +6,24 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0-rc.1] - 2026-10-16
+
 ### Added
+
+- `harness document path` names and places every document by its work item:
+  `<document-type>-<work-item-type>-<number>-<title-slug>.md` in the item's folder, nested
+  Epic → Feature → Story (`references/document-layout.md`). On the local tracker a draft reserves its
+  item's number, so nothing is renamed after creation.
+- Claude Code asks with its native question control by default (`--native-unavailable` opts out).
+- `tracker_update_work_item` changes the named fields of an existing work item (title,
+  description, story points, a Task's hours, assignee, sprint) through the gateway and reads it
+  back, for the local tracker, Azure DevOps and Linear.
+- Gates `refinement-split`, `approve-document`, `refined-start` and `idea-continue`.
+- `CONSTITUTION.md` records the settled rules for the workflow.
+
+- Planning-only Markdown edits in the configured artifacts folder no longer require an
+  implementation session. Verified Breakdown completion uses a bounded publication receipt;
+  ordinary implementation completion keeps its session and evidence requirements.
 
 - Optional, restartable onboarding and sessionless free mode. Preferences use safe defaults;
   missing language capture never blocks work. Required decisions and action approvals retain their
@@ -42,7 +59,76 @@ All notable changes to this project are documented here. The format follows
   or pull request) and do not expire: they hold until revoked, the work session ends, or that
   context changes. A typed `approve HB-…` keeps the short general window.
 
+### Fixed
+
+- `harness tracker publish` reads only the work session's last `implementation-confirm` answer:
+  a later **Revise** or **Stop here**, or an approval of different drafts, withdraws an earlier
+  approval, as it already did for code changes.
+- Draft critics evaluate each submitted draft once and retain findings without requesting
+  implementation approval. Reflection history survives revised submissions.
+- Codex presentation attempts native controls before chat; namespaced question tools are routed
+  by hooks and transcript recovery. Explicit unavailable controls retain graceful fallback.
+- Plan length is advisory; splitting is offered only for independently shippable goals.
+- Setup reports inaccessible Git metadata distinctly from an absent repository, without
+  automatically modifying global trust.
+
 ### Changed
+
+- Documents under review are `status: draft` and become `active` once accepted; an approval pins
+  the reviewed documents, their `status` line aside.
+- `harness begin` binds the conversation to its work session even with `--repo "$PWD"`; a begin
+  the hooks cannot read is refused with the plain form, instead of binding nothing.
+- Hardening ends with the approach shown and approved (`plan-checkpoint`).
+- A `find -exec sh -c '<script>'` is a write only when its script writes; a planning subfolder that
+  holds only documents is not code. Folder paths such as `docs/planning` are kept out of questions.
+- BMad build no longer asks about initiatives; `--new story` and `--host claude-code` are accepted.
+- Planning writes after `cd <dir> &&` are read in that folder, and an in-place editor's script is not
+  a file it edits; the standard Task titles Staging, Review and Breakdown pass the title check.
+- Onboarding (formerly "six-stage onboarding") is Discovery → Planning → Hardening → Refinement →
+  Preparation → Execution → Verify, with an optional idea route that may stop at a brief or spec.
+  The older route family (`investigate-request`, `prepare-artifacts`, `implement-approved-item`,
+  `resume-work`, `suspend-checks`) and its stages are removed.
+- Refinement runs the agile-backlog-toolkit skills against the selected tracker as their workflow
+  is written: each work item is approved before it is created (`refinement-split`,
+  `publish-items`), and each Story's implementation plan is shown and approved on its own with
+  `implementation-confirm` before its Tasks are proposed and approved.
+- A work session tracks the Epic, Feature or Story the user started from
+  (`harness work-session track`); linking a Story outside that item is refused.
+- `write-spec` writes only the technical spec kinds a Story still lacks; it no longer writes an
+  implementation plan.
+- `finish-feature-development` closes a Feature without Git-based delivery once every Story is
+  done. A Feature or Epic is done when every child is done or cancelled and it holds a resolution
+  report and verification evidence.
+- A pull request is never required to mark a Story, Feature or Epic done: opening one is the
+  user's choice, with or without Git-based delivery (`pull_request_linked` is removed).
+- Without source globs, documents and data in the planning folder (`.md`, `.json`, `.yaml`, ...)
+  are not code; scripts there still are.
+
+- **No harness decision depends on version control.** Code changes wait for the execution
+  stage's `requires` in `config/prepared-workflows.json`: the work session is linked to its Story or
+  Bug (`harness work-session link --work-item <key>`), the tracker holds that item in progress with
+  its Tasks parented to it, and an approved, unchanged implementation plan names it. Marking a
+  Story or Bug done waits for the verify stage's `completes`: tests with code, checks, guarded-path
+  evidence, a `ready` review, verification and resolution reports, and a pull request only with
+  Git-based delivery to a remote host. A Task closes inside its Story's work session. Refusals
+  name the next workflow step for the agent; `harness workflow requirements [--gate completion]`
+  shows the same state. Projects without commits are no longer exempt.
+- Check, review, and manual-check evidence is keyed to a digest of the code files on disk instead
+  of a Git tree or commit. `checks.py` drops `--staged` and `--head` and records nothing when a
+  check rewrites code. The project is found by its `.harness` folder, not by `.git`.
+- A work item's code baseline is recorded once per project, at its first link; relinking or a new
+  work session cannot hide changes. Check and review evidence, code baselines, and local tracker
+  records are human-owned. The workflow policy shares the hook's time budget, so a slow tracker
+  blocks instead of timing out into an allow. Without source or test globs, build and test output
+  folders are not code. With Git delivery, a pull request needs a clean working tree, and commits
+  and pushes need the code-change requirements on the linked item's branch (the branch-bound
+  session no longer grants them).
+- **Breaking:** `tests-with-code` and `guarded-paths` no longer refuse commits; they are completion
+  requirements. The protected-branch guard, branch naming convention, `history-preserved`,
+  `feature-branch`, the draft pull-request requirements, and the branch-bound session check for
+  commits and pushes now apply only with Git-based delivery (`git.delivery: true`, set with
+  `harness bootstrap --propose --git-delivery on`). Existing projects that rely on them must opt
+  in.
 
 - Replies to a pending question are matched loosely on every transport: a number, an ordinal, the
   label in any case or accents, a unique prefix, or a unique set of its words. A loose reply never
@@ -55,6 +141,11 @@ All notable changes to this project are documented here. The format follows
 - Discovery asks all open questions in one message with trade-offs and a recommendation, accepts
   answers in any form, re-checks scope after the answers, and never compresses a plan to fit the
   token budget. The approval summary lists every recorded decision instead of re-asking them.
+
+### Removed
+
+- `tracker-drafts.json`, `harness tracker publish` and the single approval of a whole preparation
+  bundle.
 
 ## [0.6.2] - 2026-10-06
 
@@ -83,8 +174,6 @@ All notable changes to this project are documented here. The format follows
 - The decision protocol explains recovery without repeated answers or suspension just for diagnosis.
 
 ## [0.6.0] - 2026-10-06
-
-### Added
 
 - Project work sessions: several tickets can be in flight in one project, each bound to its own
   host conversation, with `harness work-session` lifecycle commands (start, list, route, select,
@@ -663,7 +752,8 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.1...HEAD
+[0.7.0-rc.1]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.2...v0.7.0-rc.1
 [0.6.2]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.6.1
 [0.6.0]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.4...v0.6.0

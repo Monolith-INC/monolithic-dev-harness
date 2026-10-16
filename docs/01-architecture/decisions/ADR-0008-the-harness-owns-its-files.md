@@ -95,9 +95,9 @@ decision's scope, recorded here so they are not lost:
 
 - **Work already in progress:** no workflow adopts an in-flight branch, maps its commits to the
   Story's Tasks, and resumes; a session can bind only a branch that carries the work item's key.
-- **Test-first vs `tests-with-code`:** the `tdd` skill allows a Task with no practical automated
-  test to use a manual check, but the hook blocks a source commit with no test changes in the
-  commit or on the branch, so such a Task cannot be the first commit on a branch.
+- **Test-first vs tests with code (resolved):** tests with code is now a completion requirement
+  checked when the Story is done, not a commit rule, so a Task with no practical automated test
+  no longer blocks the first commit on a branch.
 - **Brainstorming:** no step for exploring a problem or deciding whether to build something; the
   harness starts once the team knows what to build.
 - **Worker agents:** implementation is one agent, one Task at a time; nothing dispatches Tasks or

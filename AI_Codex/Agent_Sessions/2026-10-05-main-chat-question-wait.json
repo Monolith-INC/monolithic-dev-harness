@@ -1,0 +1,16 @@
+{
+  "scope": "main-chat native UI and waiting behavior; candidate installed hooks not verified",
+  "question": "Let the countdown expire, reopen this question with Answer question, then choose Continue or Stop. I\u2019ll keep waiting without doing other work.",
+  "call_id": "call_6JXT3WP6PUCnZWB2ZF77LWvL",
+  "answer": "Continue",
+  "wait_intervals_elapsed_seconds": [
+    20.0027,
+    6.742
+  ],
+  "dependent_work_during_wait": false,
+  "follow_up_questions_during_wait": false,
+  "actual_reply_received": true,
+  "expiry_and_reopening_confirmed": true,
+  "limitation": "Expiry and reopening confirmed by the human; installed candidate hook activation remains unverified. Wait duration is not independent measurement of the UI timer.",
+  "confirmation_source": "Human explicitly reported: i waited for it to end and reopened"
+}

@@ -1,0 +1,18 @@
+{
+  "gate": "code-change",
+  "work_session": "WS-58ca71971aca",
+  "work_item": "",
+  "ready": false,
+  "met": [],
+  "missing": [
+    {
+      "id": "work_item_linked",
+      "description": "The work session names the Story or Bug it implements.",
+      "stage": "execution",
+      "skill": "start-ticket",
+      "how": "run `harness work-session link --work-item <key>` for the Story or Bug being implemented",
+      "detail": "work session WS-58ca71971aca names no work item"
+    }
+  ],
+  "unreachable": ""
+}

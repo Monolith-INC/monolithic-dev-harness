@@ -10,7 +10,7 @@ SCRIPTS = Path(__file__).resolve().parents[1]
 if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
-from harness import gitstate  # noqa: E402
+from harness import project_paths  # noqa: E402
 from integrations.gateway import process_message  # noqa: E402
 
 
@@ -24,7 +24,7 @@ def project_root() -> Path:
         "",
     )
     start = Path(named) if named else Path.cwd()
-    return gitstate.repo_root(start) or start
+    return project_paths.root(start)
 
 
 def main() -> None:

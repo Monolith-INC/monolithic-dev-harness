@@ -57,6 +57,51 @@ def test_git_inspects_hook_source_without_running_it(operation: str) -> None:
     assert rules.runs_harness_hook(f"git {operation} --ext-diff -- {HOOK}")
 
 
+@pytest.mark.parametrize("prefix", ("git", "git -c core.filemode=false", "git -C /tmp"))
+def test_git_stages_hook_source_without_running_it(prefix: str) -> None:
+    assert not rules.runs_harness_hook(f"{prefix} add -- {HOOK}")
+    assert rules.runs_harness_hook(
+        f"{prefix} add -- {HOOK}; python3 {HOOK} --event prompt"
+    )
+    assert rules.runs_harness_hook(
+        f"{prefix} add -- {HOOK} $(python3 {HOOK} --event prompt)"
+    )
+
+
+def test_git_staging_does_not_allow_executable_configuration() -> None:
+    assert rules.runs_harness_hook(
+        f"git -c core.fsmonitor='python3 {HOOK} --event prompt' add -- {HOOK}"
+    )
+    assert rules.runs_harness_hook(
+        f"GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.fsmonitor GIT_CONFIG_VALUE_0='python3 {HOOK} --event prompt' git add -- {HOOK}"
+    )
+    assert rules.runs_harness_hook(
+        f"env GIT_CONFIG_GLOBAL=/tmp/execute-hook.config git add -- {HOOK}"
+    )
+    assert rules.runs_harness_hook(
+        f"env GIT_''CONFIG_COUNT=1 GIT_''CONFIG_KEY_0=core.fsmonitor GIT_''CONFIG_VALUE_0='python3 {HOOK} --event prompt' git add -- {HOOK}"
+    )
+    assert rules.runs_harness_hook(
+        f"env -S \"GIT_''CONFIG_GLOBAL=/tmp/execute-hook.config git add -- {HOOK}\""
+    )
+    assert rules.runs_harness_hook(
+        f"/usr/bin/env -S \"GIT_''CONFIG_GLOBAL=/tmp/execute-hook.config git add -- {HOOK}\""
+    )
+    assert rules.runs_harness_hook(
+        f"sh <<'SCRIPT'\nenv GIT_CONFIG_GLOBAL=/tmp/execute-hook.config git add -- {HOOK}\nSCRIPT"
+    )
+    assert rules.runs_harness_hook(f". /tmp/execute-hook.config; git add -- {HOOK}")
+
+
+@pytest.mark.parametrize(
+    "mode", ("-e", "--edit", "-i", "--interactive", "-p", "--patch", "-ve", "--ed")
+)
+def test_git_staging_cannot_execute_hooks_through_an_editor(mode: str) -> None:
+    assert rules.runs_harness_hook(
+        f"GIT_EDITOR='python3 {HOOK} --host codex --event prompt #' git add {mode} -- {HOOK} < reply.json"
+    )
+
+
 @pytest.mark.parametrize(
     "command",
     (

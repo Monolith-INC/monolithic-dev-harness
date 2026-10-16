@@ -27,9 +27,9 @@ Enricher prompts are bundled under `./enrichers/` — authoritative; no local ov
 
 ## Artifacts output paths (when persisting to artifacts path)
 
-**Spec** (optional): `<artifacts>/Specs/[<parent-id>-]<kebab-slug>-spec.md`
+**Spec** (optional): `harness document path --type spec …` (`../../references/document-layout.md`)
 
-**Enriched draft**: `<artifacts>/Tickets/Ready/<prefix>-<kebab-slug>.md` (default; adapt to host layout)
+**Enriched draft**: `Tickets/Ready/<prefix>-<kebab-slug>.md` (default; adapt to host layout)
 
 ## Shared plugin references
 

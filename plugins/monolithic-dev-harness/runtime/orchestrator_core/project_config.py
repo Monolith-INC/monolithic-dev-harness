@@ -11,12 +11,30 @@ reported by `missing()`, never guessed.
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 
 from core.result import Ok, Result
 from harness import settings
 from harness.settings import Settings
+
+
+def project_root() -> Path:
+    return next(
+        (
+            Path(os.environ[key].strip())
+            for key in (
+                "CODEX_PROJECT_ROOT",
+                "CURSOR_PROJECT_DIR",
+                "CLAUDE_PROJECT_DIR",
+                "ZED_WORKTREE_ROOT",
+            )
+            if os.environ.get(key, "").strip()
+        ),
+        Path.cwd(),
+    )
+
 
 PLUGIN_DIRNAME = ".harness/backlog"
 

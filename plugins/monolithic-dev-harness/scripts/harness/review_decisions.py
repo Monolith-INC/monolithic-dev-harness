@@ -55,7 +55,10 @@ def begin(
 
 
 def _checkpoint(
-    repo: Path, scope: str | None, question: str, artifacts: tuple[tuple[str, str], ...]
+    repo: Path,
+    scope: str | None,
+    question: str,
+    artifacts: tuple[tuple[str, str], ...],
 ) -> Result[dict | None]:
     match artifacts:
         case ():
@@ -69,11 +72,12 @@ def _checkpoint(
                 case Ok(current) if current.status != "active":
                     return Ok(None)
                 case Ok(current):
+                    stage = current.current.stage
                     return fmap(
                         workflow.add_point(
                             current,
                             question,
-                            current.current.stage,
+                            stage,
                             artifacts=artifacts,
                             pending=question,
                             next_action="Continue from the human's answer to: "

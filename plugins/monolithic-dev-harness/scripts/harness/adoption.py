@@ -21,7 +21,7 @@ from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
 from integrations import branches, registry
 from integrations.contracts import ArtifactRef, LogicalState, WorkItem
 
-from . import gitstate, rules, sessions, settings, state
+from . import code_content, gitstate, local_tracker, sessions, settings, state
 
 SCHEMA = "harness-adoption-assessment:v1"
 PLAN_SCHEMA = "harness-adoption-plan:v1"
@@ -39,11 +39,13 @@ PATCH_OPTIONS = (
 ID_PATTERN = re.compile(r"HA-[A-F0-9]{10}")
 # Worktree creation and patch transfer scale with the repository, unlike the rules' quick queries.
 TRANSFER_TIMEOUT_SECONDS = 300
-# What adoption inventories and carries: everything except this clone's own harness records.
+# What adoption inventories and carries: everything except this clone's own harness records and
+# the local tracker's tickets, which every worktree reads from the main one.
 SCOPE = (
     "--",
     ".",
     *(f":(exclude){path.rstrip('/')}" for path in state.LOCAL_ONLY_PATHS),
+    f":(exclude){local_tracker.ROOT.as_posix()}",
 )
 
 
@@ -241,8 +243,14 @@ def _assessment(
     loaded = settings.load(repo)
     chosen = loaded.value if isinstance(loaded, Ok) else None
     settings_error = loaded.failure.message if isinstance(loaded, Err) else ""
-    required = rules.applicable_checks(repo, chosen) if chosen is not None else set()
-    passed = state.passed_checks(repo, gitstate.head_tree(repo))
+    required = (
+        code_content.applicable_checks(
+            chosen, tuple(gitstate.branch_paths(repo, chosen.base_branch))
+        )
+        if chosen is not None
+        else set()
+    )
+    passed = state.passed_checks(repo, code_content.current(repo))
     staged = _changed(repo, "--cached")
     unstaged = _changed(repo)
     # HEAD evidence covers the adopted content only when nothing uncommitted or untracked is carried.

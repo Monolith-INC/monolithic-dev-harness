@@ -2,62 +2,29 @@
 title: Runtime Workflows
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-10-06
+last_reviewed: 2026-10-15
 ---
 
 # Runtime Workflows
 
 ## End-to-end flow
 
-```text
-idea / work item
-  -> 0 DISCOVER  bmad-build: read assigned request -> investigate repository (subagents)
-                 -> plan + one batch of open questions -> scope check -> Deepen (optional)
-                 -> approve technical implementation plan -> checkpoint for backlog drafting
-                 optional plan-initiative remains for product ideation when requested
-  -> 1 BACKLOG   generate-work-item -> enrich-work-item -> decompose-backlog
-                 -> generate-breakdown-work-items
-                 G1: Feature Owner / PO approve the outline, then the bodies (one batch each)
-  -> 2 TECH PLAN start-ticket -> write-spec (Actor-Critic)
-                 G2: Tech Lead approves the spec
-  -> 3 BUILD     implement-story: one verified commit per Task; e2e tests at Story done
-  -> 4 VERIFY    review: preflight -> thermos + bmad-review lenses -> triage -> branch-and-pr (draft)
-                 G3: staging validation
-                 G4: a person publishes and approves the pull request
-```
+Discovery → Planning → Hardening → Refinement → Preparation → Execution → Verify.
+See [the main-flow specification](specs/harness-main-flow.md) and the
+[constitution](../../CONSTITUTION.md) for the settled rules.
 
-The target flow, its gates, and the interaction contract are specified in
-[specs/harness-main-flow.md](specs/harness-main-flow.md). The `harness` skill conducts this flow. Stage 0 is the default for assigned requests that need
-technical investigation; a user can go directly to backlog drafting when the request is ready.
-Stacked Features run stages 2–4 once per Story inside
-`feature-implementation`, on Story branches based on the Feature branch.
+Discovery investigates the request and relevant project evidence first; an already-refined Epic,
+Feature or Story can be reworked or used as it is. Planning then offers Light, Standard or Hardcore
+depth before drafting, with contextual methods, full catalog or agent recommendations. Hardening
+reconciles requirements and triages reviewer findings. Refinement writes the work items in the
+selected tracker, each approved before it is created, and per Story approves the implementation
+plan, then the Tasks. Preparation writes the risk and verification documents, each approved, and a
+reading manifest. Execution and Verify run Story by Story. Native failure falls back to async and
+then chat without discarding the decision. Decisions are saved throughout and reused unchanged;
+nothing is approved in bulk.
 
-## Discovery stage
-
-For an assigned ticket or draft feature request, Stage 0 uses the bundled BMad Build workflow to
-inspect the repository, investigate feasible approaches, and produce a reviewed feature-level
-implementation plan. The plan is checkpointed and passed to backlog drafting. Tracker reads are
-read-only; no ticket state, branch, session, or tracker item is changed in this stage. BMad runtime
-files are bundled with this plugin and set up from those local files.
-
-Discovery follows BMad's depth model:
-
-- **Investigation** runs as subagent searches that return short summaries into the plan's Code Map.
-  `bmad-deep-recon` handles unfamiliar code or domains. Drift between the code and the project's
-  agent instructions is recorded and fixed with `bmad-project-context`.
-- **Questions** the investigation cannot settle are asked together in one message, each with its
-  trade-offs and a recommendation. Answers in any form (number, name, paraphrase) are accepted.
-- **Scope** is checked twice: on the request, and again on the decided plan. An over-long or
-  multi-goal plan is offered a split; it is never compressed to fit the token budget.
-- **Memory**: every answer, accepted proposal, and approval is appended to a memlog beside the
-  plan (`plan-<slug>.memlog.md`). Resume reads it first.
-- **Approval checkpoint** lists every recorded decision once and offers *Approve and continue*,
-  *Deepen*, *Revise*, or *Approve and stop*. *Deepen* runs `bmad-review` (adversarial and
-  edge-case lenses as parallel subagents), then `bmad-advanced-elicitation`, and offers
-  `bmad-party-mode` for contested decisions; it returns to the checkpoint.
-
-A change of direction at any later stage goes through `bmad-correct-course`, which proposes the
-changes and routes back to the earliest stage whose approved output is invalidated.
+Versioning is optional and detected only at execution entry. Pausing preserves progress;
+suspension disables every harness veto. Free mode remains available without a session.
 
 Product ideation remains available when a user asks to explore which product or problem to pursue:
 
@@ -74,62 +41,71 @@ unclear idea
   |
   `--> product-spec           canonical Why / CAP-N / constraints / non-goals / success signal
            |
-           `--> ask whether to begin backlog drafting
+           `--> idea-continue: continue into technical discovery, or stop here
 ```
 
 These are independent tools, not a fixed waterfall. The product spec adopts load-bearing UX and
 architecture artifacts as companions. Planning creates no tracker item, branch, commit, or pull
-request. The existing approval protocol begins when the user chooses to enter the backlog stage.
+request. The approval protocol begins when the work reaches refinement.
 
 For a feature request with no clear starting point, the agent defaults to technical discovery and
 may ask whether to investigate first or draft work items directly. Product ideation is a separate
 optional route, offered when the user wants to explore which product or problem to pursue. Routing
 is not approval and opens no write window.
 
-## Backlog stage
+## Refinement stage
 
 ```text
-source text (product spec, idea, or existing item)
+hardened approach (or an item used as it is)
   |
   v
-generate-work-item    top ancestor draft (usually an Epic); Descrição Original kept verbatim
+amend-workitems / enrich-work-item   approach changes reach existing items first
   |
   v
-enrich-work-item      team format: O quê, Por quê, Comportamento, Critérios, Notas, Complexidade
+validate-artifact     an item already in its type's template is only checked
   |
+  v
+generate-work-item    new top item; Descrição Original kept verbatim
+enrich-work-item      the type's template: O quê, Por quê, Comportamento, Critérios, Notas,
+  |                   Complexidade, Descrição Original               <- publish-items
   v
 decompose-backlog     tree mode for an Epic:
   |                     DECOMPOSE  Features (existing reused), Stories under each;
   |                                preserve CAP-N coverage when a product spec exists
-  |                     GATE 1     one outline for the whole tree
+  |                     GATE 1     one outline for the whole tree     <- refinement-split
   |                     DRAFT      Feature + Story drafts; Stories under new Features use
   |                                parent_id "pending:<feature draft>"
   |                     ENRICH     team format, Story Points per the 6-driver MAX
-  |                     GATE 2     one batch: every body with points
+  |                     GATE 2     every body with points            <- publish-items
   |                     CREATE     top-down: Features, then Stories under the real Feature ids
   |                     VERIFY     read back: parent chain, points field set
   |                     AUDIT      Epic slice -> Feature -> Story coverage; orphans, scope creep
   v
-generate-breakdown-work-items   per Story: atomic Tasks + Staging + Review + Breakdown (done)
+generate-breakdown-work-items   per Story:
+                        PLAN       saved, shown, approved            <- implementation-confirm
+                        TASKS      atomic Tasks + Staging + Review + Breakdown (done), with
+                                   hours                              <- publish-items
 ```
 
-## Build stage (per Story)
+## Execution stage (per Story)
 
 ```text
-start-ticket (Story -> in progress) --> branch-and-pr: branch {category}/{key}-{slug}
+start-ticket (Story -> in progress, session linked) --> branch-and-pr: branch
+  |                                                        (Git-based delivery only)
+write-spec            technical spec kinds the Story still lacks   <- approve-spec
   |
   v
 for each Task, in breakdown order:
   architect         only when the Task adds or reshapes an interface
   tdd               failing test for the Task's acceptance criterion
   implement         smallest change that passes it
-  check             configured checks; --staged before committing a guarded path
+  check             configured checks on the code as it is
   deslop            remove AI slop from the Task's diff
-  commit            one Task, one commit      <- tests-with-code, generated-files, guarded-paths
+  commit            one Task, one commit, when versioned delivery was chosen
   transition Task   approval batch            <- approval-required
   |
   v
-check on HEAD (clean tree) -> prove-it-works -> review
+check on the final code -> prove-it-works -> review
 ```
 
 ## Verify stage
@@ -141,10 +117,14 @@ thermos                  two parallel reviewers: correctness/security, maintaina
   |
 fix VERIFIED findings    new commits; re-run checks and the pass that found them
   |
-review_verdict.py        ready for HEAD (clean tree required)
+review_verdict.py        ready for the code as it is now
   |
 branch-and-pr            push + draft PR linked to the Story   <- approval-required,
-                                                                   draft-reviewed-prs
+                         (only when the user asks for one)       draft-reviewed-prs
+  |
+resolve-ticket           resolution report and verification evidence; the Story is done
+  |
+finish-feature-development   once every Story of the Feature is done (local mode without Git)
 ```
 
 ## Orchestrated skill call
@@ -185,10 +165,12 @@ tool call
   -> approval-required  tracker/SCM write or git push
                         without an open window?          -> deny
   -> generated-files    hand edit of a generated file?   -> deny
-  -> git commit?        tests-with-code, guarded-paths   -> deny
-  -> workflow policy    active session, branch convention,
-                        state, spec, evidence, protected
-                        branches, stack order            -> deny
+  -> workflow policy    code change before the execution
+                        requirements hold; done before the
+                        completion list holds; with Git
+                        delivery: protected branches,
+                        branch convention, the item's
+                        branch, stack order              -> deny
   -> allow (and log the write to the open approval window)
 ```
 
@@ -198,13 +180,13 @@ tool call
 start-ticket
   -> work item's branch checked out (branch_template + the tracker's ids.branch_key)
   -> tracker_transition_work_item in_progress        (approval)
-  -> harness session start <work item>               binds the item to this checkout
+  -> harness work-session link --work-item <key>     names the item; records the code as it is
 implement-story / review
-  -> code changes allowed while the session is active, the item is in progress, and a spec is
-     accepted (the workflow policy reads the session's item, not the branch name)
-  -> harness session pause / resume                  when work stops and starts again
+  -> code changes allowed once `harness workflow requirements` is ready: Tasks parented to
+     the item, an approved unchanged implementation plan, the item in progress
+  -> harness work-session pause / resume             when work stops and starts again
 resolve-ticket
-  -> tracker_transition_work_item done               checked against the session's item
+  -> tracker_transition_work_item done               the catalog's completion list for the item
   -> harness session close                           frees the checkout
 ```
 
@@ -228,7 +210,8 @@ agent                          you                      prompt hook          pre
   |---------------------------------------------------------------------------->  | deny: approval-required
 ```
 
-The agent cannot open a window: approval records are human-owned. `harness revoke` closes windows.
+The agent cannot open a window: approval records are human-owned. The user typing `harness revoke`
+in chat closes them.
 In Claude and Codex the agent asks a standard approval gate (`Approve` / `Not now`) instead of
 quoting a batch id; the click or a typed `Approve` opens the approval. A gate's approval is tied to
 what was reviewed (the drafts or spec, one item, one branch, or one pull request) and has no time
@@ -256,16 +239,18 @@ a turn would end mid-workflow with no question and no pending menu, with the sav
 ### Idea to backlog tree
 
 ```text
-You:    Take "students can add a profile photo" through the backlog stage. pt-BR.
+You:    Take "students can add a profile photo" through refinement. pt-BR.
 Agent:  drafts the Epic, enriches it, proposes:
           Feature 1  Photo upload and cropping   Stories: 5, 3, 3 pts
           Feature 2  Avatar across the app       Stories: 3, 2 pts
-        GATE 1: approve the outline?
+        refinement-split: approve the split?
 You:    merge the two avatar Stories
 Agent:  shows every body with points
-        GATE 2: batch HB-4F9A (1 Epic, 2 Features, 4 Stories, 7 parent links)
-You:    approve HB-4F9A
+        publish-items: publish these 7 work items?
+You:    Approve
 Agent:  creates top-down, reads back parents and points, reports coverage
+        per Story: shows its plan -> implementation-confirm -> proposes its Tasks
+        and hours -> publish-items -> creates them
 ```
 
 ```text
@@ -283,21 +268,22 @@ Epic: Profile photo
         `-- Breakdown (done)
 ```
 
-### A rule stopping a commit
+### A Story that is not done yet
 
 ```text
-Agent:  git commit -m "feat: avatar widget"
-Hook:   [harness tests-with-code] this commit changes 2 source file(s) (e.g. src/profile/avatar.ts)
-        and neither the commit nor the branch changes a test matching ['src/**/*.test.ts'].
-        New code ships with tests.
-Agent:  adds src/profile/avatar.test.ts, runs the check, commits again -> allowed
+Agent:  tracker_transition_work_item STORY-42 done
+Hook:   [harness] Marking the work item done waits for what the workflow catalog requires.
+        Next: add or update the tests that cover the changed source files (`tdd` skill).
+        Found: 2 source file(s) changed (e.g. src/profile/avatar.ts) and no test matching
+        ['src/**/*.test.ts'] changed with them.
+Agent:  adds src/profile/avatar.test.ts, runs the checks and the review, marks it done -> allowed
 ```
 
 ### A guarded path with no automated suite
 
 ```text
-Agent:  stages infra/main.tf, asks you to validate the change by hand
+Agent:  changes infra/main.tf, asks you to validate the change by hand
 You:    validated in the sandbox — harness manual-check infra ok
-Hook:   [harness] manual check infra recorded for staged tree 3f2a91c0d4e1
-Agent:  git commit -> allowed (the evidence matches the staged tree exactly)
+Hook:   [harness] manual check infra recorded for the code as it is now (3f2a91c0d4e1)
+Agent:  marks the Story done -> allowed (the evidence matches the code on disk exactly)
 ```

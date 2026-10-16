@@ -82,7 +82,7 @@ bin/agile-backlog-toolkit estimate-breakdown --input <tasks>.json --replies <spr
 Exit codes: `0` estimated and fits, `2` **blocked** (see below), `1` could not run.
 
 The command prints the per-Task figures, the assignee's remaining capacity, and the exact field
-writes to apply — it writes nothing itself. Apply the printed `write_ops` in PHASE 4.
+writes to apply — it writes nothing itself. Apply the printed `write_ops` in PHASE 4 with `tracker_update_work_item`.
 
 Where the tracker supports hour fields, estimates are **applied, not negotiated** — they derive
 from the Story's points, so there is nothing to approve item by item. Relay the command's change
@@ -139,7 +139,7 @@ write approval. The local Implementation Plan remains in the configured artifact
 
 When the user chose local Task drafts, or the workflow also keeps local copies:
 
-1. Write one markdown draft per Task under the artifacts path (prefer `Tickets/Ready/` or a host Task folder).
+1. Write one markdown draft per Task in `Tickets/Ready/` at the project root.
 2. Filename pattern per `../../../references/ticket-structure.md`:
    `task-<kebab-title>` is invalid as a bare prefix — use `task-<slug>` only if the host regex
    allows `task-`; otherwise `<story-id-or-0000>-task-<slug>.md` matching
@@ -165,9 +165,10 @@ When Azure DevOps is the selected Task destination, use `workflow-integrations` 
 1. Parent must be the **User Story** reference (never Feature/Epic).
 2. Create approved Tasks individually with `tracker_create_work_item`, using `kind: "task"`,
    `parentRef`, title, and description.
-3. The gateway does not expose arbitrary assignee, state, iteration, or estimate updates. Do not
-   call native Azure MCP tools, Azure CLI, or direct APIs as a fallback. If a required field cannot
-   be set through the gateway, stop and report the missing capability.
+3. Set each Task's hours (`hours`, with `firstEstimate: true` on its first figure), assignee and
+   sprint with `tracker_update_work_item`; the adapter writes Remaining Work, and Original
+   Estimate where the project's process has it. Set the Breakdown Task to Done with
+   `tracker_transition_work_item`. Do not call native Azure MCP tools, Azure CLI, or direct APIs.
 4. Read each created Task back with `tracker_get_work_item` and verify its parent reference.
 
 ### Shared Azure notes (Azure only)

@@ -1,16 +1,21 @@
 """The harness rules, evaluated on every governed tool call. Each deny names its rule.
 
-human-owned         The settings, approvals, manual-check records, sessions, and tracker trust are human-owned.
+human-owned         The settings, approvals, manual-check, check and review records, sessions, code baselines,
+                    local tracker records, and tracker trust are human-owned.
 tracker-invalid     While the selected tracker is missing or broken, tracker and SCM writes are refused, and so is
                     every call to an MCP server that is not the harness's own.
 approval-required   Tracker and SCM writes need an approval window opened by the user (a prompt or a click).
 protected-items     Protected work items are never written, linked, or parented — approval does not override.
-tests-with-code     A commit that changes source files must come with test changes (in the commit or the branch).
 generated-files     Generated files are never edited by hand.
-guarded-paths       A commit touching a guarded path needs that path's evidence for the tree being committed.
-draft-reviewed-prs  Pull requests are created as drafts, only with a `ready` review verdict and passing checks
-                    for HEAD; publishing a draft and voting are left to humans.
-history-preserved   Branch history is never rewritten: no rebase, squash merge, or force-push.
+draft-reviewed-prs  Publishing a draft pull request and voting are left to humans. With Git-based delivery,
+                    pull requests are created as drafts, only with a `ready` review verdict and passing
+                    checks for the code as it is now.
+history-preserved   With Git-based delivery, branch history is never rewritten: no rebase, squash merge, or
+                    force-push.
+feature-branch      With Git-based delivery, a Feature's Story pull request targets the Feature branch.
+
+Tests with code and guarded-path evidence are completion requirements in the workflow catalog
+(`harness.workflow_requirements`), checked before a work item is done; no rule reads a commit.
 """
 
 from __future__ import annotations
@@ -19,6 +24,7 @@ import hashlib
 import os
 import posixpath
 import re
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from fnmatch import fnmatch
 from pathlib import Path
@@ -26,13 +32,24 @@ from typing import Any
 
 from core.result import Ok
 
-from . import gitstate, globs, sessions, shellscan, state, tracker_policy
+from . import (
+    code_content,
+    gitstate,
+    globs,
+    local_tracker,
+    sessions,
+    shellscan,
+    state,
+    tracker_policy,
+    work_sessions,
+)
 from .settings import Settings
 from .tracker_policy import TrackerPolicy
 
 GATEWAY_WRITES = frozenset(
     {
         "tracker_create_work_item",
+        "tracker_update_work_item",
         "tracker_transition_work_item",
         "tracker_publish_artifact",
         "tracker_link_development_artifact",
@@ -268,11 +285,18 @@ _OWNED_DIRS = (
     (".harness", "state", "approvals"),
     (".harness", "state", "manual"),
     (".harness", "state", "asked"),
+    (".harness", "state", "control-questions"),
+    (".harness", "state", "question-observations"),
     (".harness", "state", "sessions"),
     (".harness", "state", "work_sessions"),
     (".harness", "state", "host_sessions"),
     (".harness", "state", "trackers"),
     (".harness", "state", "adoptions"),
+    # Evidence the workflow requirements trust: written by checks.py, review_verdict.py, and
+    # the code baseline at link time, never by hand.
+    (".harness", "state", "checks"),
+    (".harness", "state", "review"),
+    (".harness", "state", "code-baselines"),
 )
 
 
@@ -309,7 +333,16 @@ def is_human_owned(relative: str, tree: bool = False) -> bool:
 
 
 def _names_harness(word: str) -> bool:
-    return any(fnmatch(".harness", part) for part in word.split("/") if part)
+    """Whether a word from code the scanner cannot follow could name `.harness`.
+
+    A wildcard-only word such as `.**` (Markdown bold in a heredoc) is prose, not a target; a glob
+    counts once it spells part of the name, as `.h*` does.
+    """
+    return any(
+        fnmatch(".harness", part) and any(char.isalnum() for char in part)
+        for part in word.split("/")
+        if part
+    )
 
 
 def shell_human_owned_write(call: ToolCall, repo: Path) -> str | None:
@@ -360,12 +393,52 @@ def runs_harness_hook(command: str) -> bool:
     stdin, so an agent that pipes a payload into them could answer for the user.
     """
     return any(
-        _invocation_mentions_hook(invocation)
+        _invocation_mentions_hook(
+            invocation, allow_staging=shellscan.plain_git_context(command)
+        )
         for invocation in shellscan.invocations(command)
     )
 
 
-def _invocation_mentions_hook(invocation: shellscan.Invocation) -> bool:
+def _stages_hook_source(args: tuple[str, ...]) -> bool:
+    """Allow index staging with directory/filemode options, never executable Git configuration."""
+    match args:
+        case ("add", *rest):
+            return _noninteractive_staging(tuple(rest))
+        case ("-C", _, *rest) | ("-c", "core.filemode=false", *rest):
+            return _stages_hook_source(tuple(rest))
+        case _:
+            return False
+
+
+def _noninteractive_staging(args: tuple[str, ...]) -> bool:
+    match args:
+        case () | ("--", *_):
+            return True
+        case (option, *rest) if not option.startswith("-") or option in {
+            "-A",
+            "--all",
+            "-u",
+            "--update",
+            "-f",
+            "--force",
+            "-N",
+            "--intent-to-add",
+            "--renormalize",
+            "-n",
+            "--dry-run",
+            "-v",
+            "--verbose",
+            "--ignore-errors",
+        }:
+            return _noninteractive_staging(tuple(rest))
+        case _:
+            return False
+
+
+def _invocation_mentions_hook(
+    invocation: shellscan.Invocation, *, allow_staging: bool
+) -> bool:
     """Readers may inspect hooks; execution and copying remain protected."""
     return (
         invocation.name not in shellscan.NON_WRITERS
@@ -375,8 +448,13 @@ def _invocation_mentions_hook(invocation: shellscan.Invocation) -> bool:
         )
         and not (
             invocation.name == "git"
-            and invocation.args[:1] in (("diff",), ("show",), ("status",))
-            and "--ext-diff" not in invocation.args
+            and (
+                (allow_staging and _stages_hook_source(invocation.args))
+                or (
+                    invocation.args[:1] in (("diff",), ("show",), ("status",))
+                    and "--ext-diff" not in invocation.args
+                )
+            )
         )
         and (
             invocation.name not in shellscan.IN_PLACE_FLAGS
@@ -435,7 +513,8 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
                     "human-owned",
                     f"{_relative(repo, path)} is human-owned. Approvals, manual checks, and tracker trust are "
                     "recorded from the user's own prompt; checkout sessions change through `harness session`, "
-                    "and work sessions through `harness work-session`; the "
+                    "and work sessions through `harness work-session`; check results and review verdicts "
+                    "are recorded by scripts/harness/checks.py and review_verdict.py; the "
                     "settings are edited by a person (or created once by bootstrap).",
                 )
     if call.kind == "shell":
@@ -444,6 +523,39 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
             return Decision.deny(
                 "human-owned",
                 f"this command could write {written}, which is human-owned harness state or settings.",
+            )
+    return Decision.allow()
+
+
+_PROVIDER_ID = re.compile(r"^provider_id:", re.MULTILINE)
+
+
+def rule_tracked_tickets(call: ToolCall, repo: Path, settings: Settings) -> Decision:
+    """With the local tracker, a ticket that is a tracked item changes only through its tools.
+
+    Drafts in `Tickets/` (no `provider_id`) are written by the agile-backlog-toolkit's skills.
+    """
+    if call.kind != "edit" or settings.tracker.name != "local":
+        return Decision.allow()
+    root = local_tracker.storage_root(repo).resolve()
+    written = " ".join(
+        str(call.tool_input.get(name) or "") for name in ("content", "new_string")
+    )
+    for path in call.file_paths:
+        target = (repo / _relative(repo, path)).resolve()
+        if not target.is_relative_to(root):
+            continue
+        if (
+            local_tracker.ATTACHMENTS in target.relative_to(root).parts
+            or (target.is_file() and local_tracker.is_item(target))
+            or _PROVIDER_ID.search(written)
+        ):
+            return Decision.deny(
+                "tracked-tickets",
+                f"{_relative(repo, path)} is a work item in the local tracker (or its "
+                "attachment). Change it with the tracker tools (`tracker_update_work_item`, "
+                "`tracker_transition_work_item`, `tracker_publish_artifact`) after the user "
+                "approves the change. A draft without `provider_id` may be written directly.",
             )
     return Decision.allow()
 
@@ -526,7 +638,9 @@ def _shell_protected_mentions(call: ToolCall, policy: TrackerPolicy) -> Decision
     )
 
 
-def rule_draft_reviewed_prs(call: ToolCall, repo: Path, settings: Settings) -> Decision:
+def rule_draft_reviewed_prs(
+    call: ToolCall, repo: Path, settings: Settings, work_session_id: str | None = None
+) -> Decision:
     action = call.tool_input.get("action")
     if call.name == "repo_pull_request_write" and action == "vote":
         return Decision.deny(
@@ -542,7 +656,7 @@ def rule_draft_reviewed_prs(call: ToolCall, repo: Path, settings: Settings) -> D
             "draft-reviewed-prs",
             "publishing a draft pull request is a human decision (gate G4). Do it in Azure Repos.",
         )
-    if not _creates_pull_request(call):
+    if not _creates_pull_request(call) or not settings.git_delivery:
         return Decision.allow()
     draft = call.tool_input.get("isDraft", call.tool_input.get("draft"))
     if settings.require_draft and draft is not True:
@@ -550,26 +664,44 @@ def rule_draft_reviewed_prs(call: ToolCall, repo: Path, settings: Settings) -> D
             "draft-reviewed-prs",
             "pull requests must be created as drafts (isDraft: true); a human publishes them (gate G4).",
         )
+    # Evidence describes the files on disk; a pull request carries commits. With Git-based delivery
+    # they must be the same code.
     try:
-        head = gitstate.head_sha(repo)
-        tree = gitstate.head_tree(repo)
+        uncommitted = gitstate.git(
+            repo, "status", "--porcelain", "--untracked-files=no"
+        )
     except gitstate.GitError as exc:
         return Decision.deny(
-            "draft-reviewed-prs", f"cannot read HEAD to verify review and checks: {exc}"
+            "draft-reviewed-prs", f"cannot read the working tree: {exc}"
         )
-    if settings.require_review_verdict and state.review_verdict(repo, head) != "ready":
+    if uncommitted:
         return Decision.deny(
             "draft-reviewed-prs",
-            f"no `ready` review verdict for HEAD {head[:12]}. Run the review stage; it records the verdict "
-            "with scripts/harness/review_verdict.py after the requirements check and thermos pass.",
+            "the working tree has uncommitted changes, so the review and check evidence would "
+            "describe code the pull request does not carry. Commit (and re-run the checks and "
+            "review) first.",
         )
-    required = applicable_checks(repo, settings)
-    missing = required - state.passed_checks(repo, tree)
+    current = code_content.files(repo)
+    digest = code_content.digest(current)
+    if (
+        settings.require_review_verdict
+        and state.review_verdict(repo, digest) != "ready"
+    ):
+        return Decision.deny(
+            "draft-reviewed-prs",
+            f"no `ready` review verdict for the code as it is now ({digest[:12]}). Run the review "
+            "stage; it records the verdict with scripts/harness/review_verdict.py after the "
+            "requirements check and thermos pass.",
+        )
+    required = code_content.applicable_checks(
+        settings, code_content.changed_since_link(repo, work_session_id, current)
+    )
+    missing = required - state.passed_checks(repo, digest)
     if missing:
         return Decision.deny(
             "draft-reviewed-prs",
-            f"checks {sorted(missing)} have no passing evidence for HEAD tree {tree[:12]}. "
-            "Run scripts/harness/checks.py on the committed code.",
+            f"checks {sorted(missing)} have no passing evidence for the code as it is now "
+            f"({digest[:12]}). Run scripts/harness/checks.py.",
         )
     return Decision.allow()
 
@@ -624,36 +756,16 @@ def rule_feature_branch(call: ToolCall, repo: Path) -> Decision:
             return Decision.allow()
 
 
-def applicable_checks(
-    repo: Path, settings: Settings, paths: list[str] | None = None
-) -> set[str]:
-    """The checks whose `when` globs match the branch's changes (or `paths`, when given)."""
-    changed = (
-        paths
-        if paths is not None
-        else (_branch_paths(repo, settings.base_branch) if settings.checks else [])
-    )
-    return {
-        check.name
-        for check in settings.checks
-        if not check.when or globs.select(changed, list(check.when))
-    }
-
-
-def _branch_paths(repo: Path, base: str) -> list[str]:
-    try:
-        return gitstate.branch_paths(repo, base)
-    except gitstate.GitError:
-        return []
-
-
 # What a remote write is about: ("branch", name), ("pr", ref), ("item", ref) for an existing work
-# item, ("tracker", "") for a new one, or ("general", "").
+# item, ("content", ref) for rewriting an existing item's text or size, ("tracker", "") for a new
+# one, or ("general", "").
 Target = tuple[str, str]
 _BRANCH_WRITES = frozenset({"scm_create_pull_request"})
 _PR_WRITES = frozenset({"scm_reply_to_thread", "scm_link_work_item"})
 # Pausing enforcement is a general permission: only a short general window covers it.
 _GENERAL_WRITES = frozenset({"workflow_skip_tracker"})
+# Fields whose change rewrites what an item says; only an approval of the reviewed text covers it.
+_CONTENT_FIELDS = frozenset({"title", "description", "storyPoints"})
 
 
 def write_targets(call: ToolCall, repo: Path) -> tuple[Target, ...]:
@@ -673,6 +785,10 @@ def write_targets(call: ToolCall, repo: Path) -> tuple[Target, ...]:
         return (("pr", str(call.tool_input.get("pullRequestRef", ""))),)
     if call.name in _GENERAL_WRITES:
         return (("general", ""),)
+    if call.name == "tracker_update_work_item" and _CONTENT_FIELDS & set(
+        call.tool_input
+    ):
+        return (("content", str(call.tool_input.get("ref", ""))),)
     return tuple(("item", ref) for ref in referenced_values(call.tool_input)) or (
         ("tracker", ""),
     )
@@ -702,8 +818,13 @@ def _pushed_branches(args: list[str], where: Path) -> tuple[str, ...]:
 
 
 def _context_unchanged(repo: Path, binds: dict[str, Any]) -> bool:
+    """Every reviewed file reads as it did. A reviewed draft in `Tickets/` that is gone became its
+    item (the toolkit renames a draft once the item exists); its approved body is still held."""
+    tickets = local_tracker.storage_root(repo).resolve()
     for name, digest in binds.get("artifacts", ()):
         path = repo / str(name)
+        if not path.exists() and path.resolve().is_relative_to(tickets):
+            continue
         try:
             current = hashlib.sha256(path.read_bytes()).hexdigest()
         except OSError:
@@ -723,15 +844,16 @@ def _covers(record: dict[str, Any], target: Target) -> bool:
         case [bound_kind, bound_value]:
             return (bound_kind, bound_value) == (kind, value) and bool(value)
         case _:
-            # Reviewed content with no target (drafts, an approved spec) covers tracker writes.
-            return kind in ("tracker", "item")
+            # Reviewed content with no target (drafts, an approved spec) covers tracker writes,
+            # including rewriting an item's text; an approval tied to one item (move-item) does
+            # not cover that.
+            return kind in ("tracker", "item", "content")
 
 
 def _session_ended(repo: Path, work_session_id: str | None) -> bool:
     """Approvals end with their work session: a stopped or completed one covers nothing."""
     if work_session_id is None:
         return False
-    from . import work_sessions
 
     match work_sessions.select(repo, work_session_id):
         case Ok(session):
@@ -761,6 +883,26 @@ def covering_approval(
     return None, stale
 
 
+_TEXT_WRITES = ("tracker_create_work_item", "tracker_update_work_item")
+
+
+def _written_body(call: ToolCall) -> str | None:
+    """The description a create or update writes, when it writes one."""
+    if call.name not in _TEXT_WRITES or "description" not in call.tool_input:
+        return None
+    return str(call.tool_input.get("description") or "")
+
+
+def _approved_body(repo: Path, work_session_id: str | None, body: str) -> bool:
+    """Whether an open approval, its reviewed files unchanged, holds a draft with this body."""
+    digest = hashlib.sha256(body.strip().encode("utf-8")).hexdigest()
+    return not _session_ended(repo, work_session_id) and any(
+        digest in (record.get("binds") or {}).get("bodies", ())
+        and _context_unchanged(repo, record.get("binds") or {})
+        for _, record in state.open_approvals(repo, work_session_id)
+    )
+
+
 def rule_approval_required(
     call: ToolCall,
     repo: Path,
@@ -769,6 +911,17 @@ def rule_approval_required(
 ) -> Decision:
     if not is_remote_write(call, policy):
         return Decision.allow()
+    match _written_body(call):
+        case str() as body if not _approved_body(repo, work_session_id, body):
+            return Decision.deny(
+                "approval-required",
+                f"`{call.name}` writes a work item's text that no approved draft holds. Write "
+                "the item as its draft (the agile-backlog-toolkit's skills write drafts to "
+                "`Tickets/Ready/`), show it with `harness workflow show --artifact <draft>`, and "
+                "ask `harness decision present --gate publish-items --artifact <draft>`. The "
+                "description must be the draft's body, word for word. You cannot approve it "
+                "yourself.",
+            )
     match covering_approval(call, repo, work_session_id):
         case (_, _), _:
             return Decision.allow()
@@ -810,109 +963,6 @@ def rule_generated_files(call: ToolCall, repo: Path, settings: Settings) -> Deci
                 f"{written} is generated; this command would edit it by hand.",
             )
     return Decision.allow()
-
-
-def commit_rules(call: ToolCall, repo: Path, settings: Settings) -> Decision:
-    if call.kind != "shell":
-        return Decision.allow()
-    for directory, argv in git_invocations(call.command, _shell_start(call, repo)):
-        if not argv or argv[0] != "commit":
-            continue
-        target = (
-            (repo / directory)
-            if directory and not Path(directory).is_absolute()
-            else Path(directory or repo)
-        )
-        target_root = gitstate.repo_root(target) or repo
-        all_tracked = any(
-            a in {"-a", "--all"}
-            or (a.startswith("-") and not a.startswith("--") and "a" in a)
-            for a in argv[1:]
-        )
-        try:
-            staged = gitstate.staged_paths(
-                target_root, include_tracked_modifications=all_tracked
-            )
-        except gitstate.GitError as exc:
-            return Decision.deny(
-                "tests-with-code", f"cannot read the staged changes: {exc}"
-            )
-        for rule in (rule_tests_with_code, rule_guarded_paths):
-            decision = rule(target_root, settings, staged)
-            if not decision.allowed:
-                return decision
-    return Decision.allow()
-
-
-def rule_tests_with_code(repo: Path, settings: Settings, staged: list[str]) -> Decision:
-    missing = next(
-        (
-            (sources, group)
-            for group in settings.tests_required
-            if (
-                sources := globs.select(staged, list(group.source), list(group.exclude))
-            )
-            and not globs.select(staged, list(group.tests))
-            and not globs.select(
-                gitstate.branch_paths(repo, settings.base_branch), list(group.tests)
-            )
-        ),
-        None,
-    )
-    match missing:
-        case (sources, group):
-            return Decision.deny(
-                "tests-with-code",
-                f"this commit changes {len(sources)} source file(s) (e.g. {sources[0]}) and neither the commit nor "
-                f"the branch changes a test matching {list(group.tests)}. New code ships with tests.",
-            )
-        case _:
-            return Decision.allow()
-
-
-def rule_guarded_paths(repo: Path, settings: Settings, staged: list[str]) -> Decision:
-    guarded = tuple(
-        guard for guard in settings.guarded_paths if globs.select(staged, [guard.path])
-    )
-    if not guarded:
-        return Decision.allow()
-    try:
-        tree = gitstate.index_tree(repo)
-    except gitstate.GitError as exc:
-        return Decision.deny(
-            "guarded-paths", f"cannot compute the tree being committed: {exc}"
-        )
-    unmet = next(
-        (
-            guard
-            for guard in guarded
-            if not _evidence(repo, guard.kind, guard.name, tree)
-        ),
-        None,
-    )
-    match unmet:
-        case None:
-            return Decision.allow()
-        case guard if guard.kind == "check":
-            return Decision.deny(
-                "guarded-paths",
-                f"{guard.path} changed; check `{guard.name}` needs passing evidence for this exact tree. "
-                "Stage the change, run scripts/harness/checks.py --staged, then commit.",
-            )
-        case guard:
-            return Decision.deny(
-                "guarded-paths",
-                f"{guard.path} changed and has no automated suite. After the user validates it by hand, they "
-                f"reply `harness manual-check {guard.name} ok` with the change staged; that records the evidence.",
-            )
-
-
-def _evidence(repo: Path, kind: str, name: str, tree: str) -> bool:
-    return (
-        name in state.passed_checks(repo, tree)
-        if kind == "check"
-        else state.has_manual(repo, name, tree)
-    )
 
 
 _FORCE_PUSH_FLAGS = frozenset(
@@ -975,6 +1025,11 @@ def rule_history_preserved(call: ToolCall) -> Decision:
     return Decision.allow()
 
 
+def _delivery(settings: Settings, rule: Callable[[], Decision]) -> Decision:
+    """A rule about Git commands applies only when the user chose Git-based delivery."""
+    return rule() if settings.git_delivery else Decision.allow()
+
+
 def evaluate(
     call: ToolCall,
     repo: Path,
@@ -988,14 +1043,14 @@ def evaluate(
             decision
             for rule in (
                 lambda: rule_human_owned(call, repo),
+                lambda: rule_tracked_tickets(call, repo, settings),
                 lambda: rule_tracker_valid(call, policy),
                 lambda: rule_protected_items(call, policy),
-                lambda: rule_feature_branch(call, repo),
-                lambda: rule_draft_reviewed_prs(call, repo, settings),
-                lambda: rule_history_preserved(call),
+                lambda: _delivery(settings, lambda: rule_feature_branch(call, repo)),
+                lambda: rule_draft_reviewed_prs(call, repo, settings, work_session_id),
+                lambda: _delivery(settings, lambda: rule_history_preserved(call)),
                 lambda: rule_approval_required(call, repo, policy, work_session_id),
                 lambda: rule_generated_files(call, repo, settings),
-                lambda: commit_rules(call, repo, settings),
             )
             if not (decision := rule()).allowed
         ),

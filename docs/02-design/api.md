@@ -158,8 +158,9 @@ Always `0`; the decision is in stdout.
 ### Cross-field Invariants
 
 A deny reason always starts with `[harness <rule>]` (`human-owned`, `tracker-invalid`,
-`approval-required`, `protected-items`, `tests-with-code`, `generated-files`, `guarded-paths`, `feature-branch`,
-`draft-reviewed-prs`, `history-preserved`, `harness-error`) or comes from the workflow policy.
+`approval-required`, `protected-items`, `generated-files`, `feature-branch`, `draft-reviewed-prs`,
+`history-preserved`, `harness-error`) or comes from the workflow policy, whose refusals name the
+next workflow step from `config/prepared-workflows.json`.
 
 ### Failure Behavior
 
@@ -178,8 +179,8 @@ echo '{"tool_name":"Bash","tool_input":{"command":"git push"},"cwd":"."}' \
 
 | Command | Writes | Exit codes |
 | --- | --- | --- |
-| `scripts/harness/checks.py [--head \| --staged] [--only <name>…]` | `.harness/state/checks/<tree>.json` | `0` all passed or none applied; `1` a check failed; `2` `--head` with uncommitted tracked changes, or `--staged` when the working files differ from the index |
-| `scripts/harness/review_verdict.py --verdict ready\|blocked --summary <text>` | `.harness/state/review/<commit>.json` | `0` recorded; `2` `ready` with uncommitted tracked changes |
+| `scripts/harness/checks.py [--session-id <id>] [--only <name>…]` | `.harness/state/checks/<code digest>.json` | `0` all passed or none applied; `1` a check failed; `2` the checks changed code files, so nothing was recorded |
+| `scripts/harness/review_verdict.py --verdict ready\|blocked --summary <text>` | `.harness/state/review/<code digest>.json` | `0` recorded |
 | `scripts/harness/bootstrap.py --repo <dir> --settings-from <file>` | `.harness/settings.json` (once), `.git/info/exclude`, the knowledge store | `0`; `2` not a repository root, invalid settings, or an unusable selected tracker |
 | `bin/agile-backlog-toolkit <command>` | backlog reports | per command; `config --show` exits non-zero while required values are missing |
 
@@ -198,15 +199,16 @@ harness makes when the user chooses a tracker.
 | --- | --- | --- |
 | `tracker` | `{name, source?: shipped\|onboarded, values{}}` | registry, gateway, rules, backlog stage |
 | `scm` | `{name: github\|azure-repos, values{}}` | gateway |
-| `branch_template` | string containing `{key}` | workflow policy, `harness session start` |
+| `branch_template` | string containing `{key}` | Git delivery: branch convention, commits on the item's branch |
 | `protected_work_items` | string[] | `protected-items` |
 | `artifacts_path` | string | backlog stage, spec gate |
-| `git.base_branch` | string (default `develop`) | branch diffs, `tests-with-code`, `check` |
+| `git.base_branch` | string (default `develop`) | adoption branch diffs |
+| `git.delivery` | boolean (default false) | whether the rules about Git commands apply |
 | `approvals.window_minutes` | 1–240 (default 20) | `approval-required` |
-| `checks[]` | `{name, run, when[]}` | `checks.py`, `guarded-paths`, `draft-reviewed-prs` |
-| `tests_required[]` | `{source[], tests[], exclude[]}` | `tests-with-code`, spec gate |
+| `checks[]` | `{name, run, when[]}` | `checks.py`, completion requirements, `draft-reviewed-prs` |
+| `tests_required[]` | `{source[], tests[], exclude[]}` | which files are code; `tests_with_code` completion requirement |
 | `generated[]` | glob[] | `generated-files` |
-| `guarded_paths[]` | `{path, evidence: check:<name>\|manual:<name>}` | `guarded-paths` |
+| `guarded_paths[]` | `{path, evidence: check:<name>\|manual:<name>}` | `guarded_paths_verified` completion requirement |
 | `pull_requests` | `{require_draft, require_review_verdict}` (both default true) | `draft-reviewed-prs` |
 
 ### Cross-field Invariants
@@ -262,7 +264,7 @@ story tasks; `ids.pattern`, `ids.branch_key` (with a named group `id`), and ever
 | Tool | Write (needs approval) |
 | --- | --- |
 | `tracker_describe`, `tracker_get_work_item`, `tracker_search_work_items`, `tracker_list_children`, `tracker_list_artifacts` | no |
-| `tracker_create_work_item`, `tracker_transition_work_item`, `tracker_publish_artifact`, `tracker_link_development_artifact` | yes |
+| `tracker_create_work_item`, `tracker_update_work_item`, `tracker_transition_work_item`, `tracker_publish_artifact`, `tracker_link_development_artifact` | yes |
 | `scm_get_pull_request`, `scm_list_review_threads` | no |
 | `scm_create_pull_request` (drafts only), `scm_reply_to_thread`, `scm_link_work_item` | yes |
 | `workflow_tracking_status`, `workflow_resume_tracker` | no |
@@ -278,7 +280,7 @@ not offered.
 | --- | --- |
 | `approve HB-XXXX` / `aprovo HB-XXXX` | opens an approval window (`approvals.window_minutes`) |
 | `harness revoke` | closes every open window |
-| `harness manual-check <name> ok` | records manual evidence for the currently staged tree (in Claude, click **Approve change**) |
+| `harness manual-check <name> ok` | records manual evidence for the code as it is now (in Claude, click **Approve change**) |
 | `approve HT-XXXXXX` | Cursor: trusts the onboarded tracker whose current version has that short id |
 | `use HT-XXXXXX` | Cursor: selects that trusted tracker, writing it into the settings file |
 | `stop trusting <tracker>` | Cursor: withdraws trust from the tracker named by label or name |

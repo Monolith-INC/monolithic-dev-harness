@@ -1,0 +1,213 @@
+{
+  "answers": [
+    {
+      "allow_free_text": false,
+      "answer": "Standard (Recommended)",
+      "approval": false,
+      "artifacts": [],
+      "details": [
+        "A focused review and self-check; faster, with fewer scenarios explored.",
+        "Explore relevant approaches, risks, edge cases and technical choices.",
+        "Add adversarial reviews and deeper checks of assumptions and verification."
+      ],
+      "gate": "planning-depth",
+      "id": "HD-a5e0df521c789504",
+      "kind": "preference",
+      "options": [
+        "Light",
+        "Standard (Recommended)",
+        "Hardcore"
+      ],
+      "presentation_id": "",
+      "question": "How thoroughly should we explore this work before drafting the plan?",
+      "status": "answered",
+      "transport": "chat",
+      "work_session_id": "WS-58ca71971aca"
+    },
+    {
+      "allow_free_text": false,
+      "answer": "",
+      "approval": false,
+      "artifacts": [],
+      "details": [
+        "Choose from five methods selected for the discovered work and its risks.",
+        "See every available method and choose one or several.",
+        "Review a suggested combination with reasons, then select or revise it."
+      ],
+      "gate": "planning-methods",
+      "id": "HD-da347cd994cfcbf3",
+      "kind": "preference",
+      "options": [
+        "Contextual shortlist (Recommended)",
+        "Full catalog",
+        "Agent recommendations"
+      ],
+      "question": "How would you like to choose the planning methods?",
+      "status": "dismissed",
+      "transport": "blocking",
+      "work_session_id": "WS-58ca71971aca"
+    },
+    {
+      "allow_free_text": false,
+      "answer": "Contextual shortlist (Recommended)",
+      "approval": false,
+      "artifacts": [],
+      "details": [
+        "Choose from five methods selected for the discovered work and its risks.",
+        "See every available method and choose one or several.",
+        "Review a suggested combination with reasons, then select or revise it."
+      ],
+      "gate": "planning-methods",
+      "id": "HD-0655556353854f97",
+      "kind": "preference",
+      "options": [
+        "Contextual shortlist (Recommended)",
+        "Full catalog",
+        "Agent recommendations"
+      ],
+      "presentation_id": "",
+      "question": "How would you like to choose the planning methods?",
+      "status": "answered",
+      "transport": "chat",
+      "work_session_id": "WS-58ca71971aca"
+    },
+    {
+      "allow_free_text": false,
+      "answer": "Boundary & Edge Case Sweep",
+      "approval": false,
+      "artifacts": [],
+      "details": [
+        "Check zero counts, singular versus plural, counts across filters and search, and count updates when completion changes.",
+        "Review the proposed approach for gaps and improve it before drafting.",
+        "See the other methods selected for this request."
+      ],
+      "id": "call_e272c5c599c4440382924e8f04dcdbd5",
+      "kind": "required",
+      "options": [
+        "Boundary & Edge Case Sweep",
+        "Critique and Refine",
+        "More choices"
+      ],
+      "presentation_id": "HD-af935d5dd45290d2",
+      "question": "Which method should I apply first to the planning approach?",
+      "status": "answered",
+      "transport": "async",
+      "work_session_id": "WS-58ca71971aca"
+    },
+    {
+      "allow_free_text": false,
+      "answer": "Apply",
+      "approval": false,
+      "artifacts": [],
+      "details": [
+        "Include full-list counts independent of search/filter results, update both counts after completion toggles, and cover zero/singular/plural labels.",
+        "Keep the current approach without these refinements.",
+        "Provide guidance for a different refinement."
+      ],
+      "id": "call_ffa705fc766047b789fe50e8111353b3",
+      "kind": "required",
+      "options": [
+        "Apply",
+        "Reject",
+        "Give direction"
+      ],
+      "presentation_id": "HD-3a3f2729b029dbe7",
+      "question": "Should I apply the edge-case refinements to the planning approach?",
+      "status": "answered",
+      "transport": "async",
+      "work_session_id": "WS-58ca71971aca"
+    },
+    {
+      "allow_free_text": false,
+      "answer": "Critique and Refine",
+      "approval": false,
+      "artifacts": [],
+      "details": [
+        "Review the proposed approach for gaps and improve it before drafting.",
+        "Strip back assumptions about where the counts come from and reconstruct the simplest correct approach.",
+        "See the other methods selected for this request."
+      ],
+      "id": "call_f9363994ab4a4cedaa071ffb5a484722",
+      "kind": "required",
+      "options": [
+        "Critique and Refine",
+        "First Principles Analysis",
+        "More choices"
+      ],
+      "presentation_id": "HD-8b8b94a7a666db7e",
+      "question": "Which method should I apply next?",
+      "status": "answered",
+      "transport": "async",
+      "work_session_id": "WS-58ca71971aca"
+    },
+    {
+      "allow_free_text": false,
+      "answer": "Apply",
+      "approval": false,
+      "artifacts": [],
+      "details": [
+        "Show active and completed totals for the whole list and check their labels and updates.",
+        "Keep the approach as it is.",
+        "Tell me what you would change."
+      ],
+      "id": "call_c8cb628b843743299470d813fcb68a21",
+      "kind": "required",
+      "options": [
+        "Apply",
+        "Reject",
+        "Give direction"
+      ],
+      "presentation_id": "HD-6a36a0dbdf79299b",
+      "question": "Should I apply the critique refinements to the planning approach?",
+      "status": "answered",
+      "transport": "async",
+      "work_session_id": "WS-58ca71971aca"
+    },
+    {
+      "allow_free_text": false,
+      "answer": "Proceed",
+      "approval": false,
+      "artifacts": [],
+      "details": [
+        "Strip back assumptions about where the counts come from and reconstruct the simplest correct approach.",
+        "See the other methods selected for this request.",
+        "Finish method selection and draft the approach with the accepted refinements."
+      ],
+      "id": "call_a6af682e22674d55806e0dc42838c77b",
+      "kind": "required",
+      "options": [
+        "First Principles Analysis",
+        "More choices",
+        "Proceed"
+      ],
+      "presentation_id": "HD-716a1246ffecb787",
+      "question": "Which method should I apply next?",
+      "status": "answered",
+      "transport": "async",
+      "work_session_id": "WS-58ca71971aca"
+    },
+    {
+      "allow_free_text": false,
+      "answer": "Proceed",
+      "approval": false,
+      "artifacts": [],
+      "details": [
+        "Explore another angle before continuing.",
+        "Continue with Standard hardening and planning preparation.",
+        "See the rest of the planning methods."
+      ],
+      "id": "call_142d96cf65a74fb294166cbcce8b0c7f",
+      "kind": "required",
+      "options": [
+        "Run another method",
+        "Proceed",
+        "More choices"
+      ],
+      "presentation_id": "HD-19291b52e7f7c405",
+      "question": "What would you like to do with the planning approach now?",
+      "status": "answered",
+      "transport": "async",
+      "work_session_id": "WS-58ca71971aca"
+    }
+  ]
+}

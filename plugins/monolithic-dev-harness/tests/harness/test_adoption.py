@@ -11,7 +11,7 @@ import unittest
 from pathlib import Path
 
 from core.result import Err, Ok
-from harness import adoption, gitstate
+from harness import adoption, gitstate, local_tracker
 from integrations.contracts import LogicalState, WorkItem, WorkItemKind
 from tests.settings_fixture import write_settings
 
@@ -226,18 +226,9 @@ class AdoptionTest(unittest.TestCase):
         from integrations import registry
 
         (self.repo / "notes.txt").unlink()
-        folder = self.repo / ".harness/tracker/in_progress"
-        folder.mkdir(parents=True)
-        (folder / "STORY-0001.json").write_text(
-            json.dumps(
-                {
-                    "key": "STORY-0001",
-                    "id": "STORY-0001",
-                    "title": "Story",
-                    "kind": "user_story",
-                    "state": "in_progress",
-                }
-            )
+        local_tracker.write(
+            self.repo / "Tickets/InProgress/0001-story.md",
+            {"key": "STORY-0001", "kind": "user_story", "title": "Story"},
         )
         destination = self.parent / "adopted"
         report = self._approved(destination)
@@ -313,31 +304,18 @@ class AdoptionTest(unittest.TestCase):
 
     def test_cli_assessment_reads_the_story_and_tasks_from_the_tracker(self) -> None:
         (self.repo / "notes.txt").unlink()
-        tracker = self.repo / ".harness/tracker"
-        (tracker / "in_progress").mkdir(parents=True)
-        (tracker / "done").mkdir(parents=True)
-        (tracker / "in_progress/STORY-0001.json").write_text(
-            json.dumps(
-                {
-                    "key": "STORY-0001",
-                    "id": "STORY-0001",
-                    "title": "Story",
-                    "kind": "user_story",
-                    "state": "in_progress",
-                }
-            )
+        local_tracker.write(
+            self.repo / "Tickets/InProgress/0001-story.md",
+            {"key": "STORY-0001", "kind": "user_story", "title": "Story"},
         )
-        (tracker / "done/TASK-0001.json").write_text(
-            json.dumps(
-                {
-                    "key": "TASK-0001",
-                    "id": "TASK-0001",
-                    "title": "Existing work",
-                    "kind": "task",
-                    "state": "done",
-                    "parentId": "STORY-0001",
-                }
-            )
+        local_tracker.write(
+            self.repo / "Tickets/Done/0002-existing-work.md",
+            {
+                "key": "TASK-0001",
+                "kind": "task",
+                "title": "Existing work",
+                "parentId": "STORY-0001",
+            },
         )
         result = subprocess.run(
             [
@@ -363,14 +341,14 @@ class AdoptionTest(unittest.TestCase):
 
     def test_local_harness_records_are_never_inventoried_or_carried(self) -> None:
         (self.repo / "notes.txt").unlink()
-        (self.repo / ".harness/tracker/done").mkdir(parents=True)
-        (self.repo / ".harness/tracker/done/TASK-0001.json").write_text("{}\n")
+        (self.repo / "Tickets/Done").mkdir(parents=True)
+        (self.repo / "Tickets/Done/0001-x.md").write_text("x\n")
         destination = self.parent / "adopted"
         report = self._approved(destination)
         self.assertEqual(report["changes"]["untracked"], ())
         self.assertEqual(report["tasks"][0]["classification"], "completed")
         self.assertIsInstance(adoption.materialize(self.repo, report["id"]), Ok)
-        self.assertFalse((destination / ".harness/tracker").exists())
+        self.assertFalse((destination / "Tickets").exists())
 
 
 if __name__ == "__main__":

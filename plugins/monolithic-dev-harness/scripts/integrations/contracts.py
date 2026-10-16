@@ -22,9 +22,9 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from core.result import Result
+from core.result import Ok, Result, err
 
-from .planning import EstimableItem, IterationReading
+from .planning import EstimableItem, HourFields, IterationReading
 
 EMPTY: Mapping[str, Any] = MappingProxyType({})
 
@@ -37,6 +37,14 @@ class WorkItemKind(str, Enum):
     USER_STORY = "user_story"
     TASK = "task"
     BUG = "bug"
+
+
+# What a work session implements, and what an implementation plan is approved for.
+BUILDABLE_KINDS = frozenset({WorkItemKind.USER_STORY, WorkItemKind.BUG})
+# What work may start from (the item a work session tracks).
+ENTRY_KINDS = frozenset(
+    {WorkItemKind.EPIC, WorkItemKind.FEATURE, WorkItemKind.USER_STORY, WorkItemKind.BUG}
+)
 
 
 class LogicalState(str, Enum):
@@ -62,6 +70,13 @@ class WorkItem:
     provider_data: Mapping[str, Any] = field(
         default_factory=lambda: EMPTY, compare=False
     )
+
+    def is_child_of(self, parent: WorkItem) -> bool:
+        """Whether this item names `parent` as its parent, by id or key."""
+        return bool(self.parent_id) and self.parent_id.casefold() in {
+            parent.id.casefold(),
+            parent.key.casefold(),
+        }
 
 
 @dataclass(frozen=True)
@@ -198,10 +213,76 @@ class AdapterContext:
 
 
 @dataclass(frozen=True)
+class Hours:
+    """A Task's effort; `first_estimate` also records it as the original estimate where the
+    tracker keeps one."""
+
+    value: float
+    first_estimate: bool = False
+
+
+@dataclass(frozen=True)
+class WorkItemChanges:
+    """The fields of an existing work item to change; `None` leaves a field as it is.
+
+    `description` carries the whole refined body, acceptance criteria included.
+    """
+
+    title: str | None = None
+    description: str | None = None
+    story_points: float | None = None
+    hours: Hours | None = None
+    assignee: str | None = None
+    iteration: str | None = None
+
+
+@dataclass(frozen=True)
+class FieldNames:
+    """A tracker's own name for each field `WorkItemChanges` can set."""
+
+    title: str
+    description: str
+    story_points: str
+    assignee: str
+    iteration: str
+
+
+def changed_fields(
+    changes: WorkItemChanges, names: FieldNames, hours: HourFields
+) -> Result[dict[str, Any]]:
+    """The tracker fields to write for `changes`: only the named ones, hours in the tracker's own
+    hour fields. Refused when nothing changes, or when hours change on a tracker that keeps none."""
+    named = {
+        names.title: changes.title,
+        names.description: changes.description,
+        names.story_points: changes.story_points,
+        names.assignee: changes.assignee,
+        names.iteration: changes.iteration,
+    }
+    fields: dict[str, Any] = {
+        name: value for name, value in named.items() if value is not None
+    }
+    match changes.hours:
+        case Hours(value, first) if not hours(value, first):
+            return err("unsupported", "this tracker records no hours on a work item")
+        case Hours(value, first):
+            fields.update(hours(value, first))
+        case None:
+            pass
+    return (
+        Ok(fields)
+        if fields
+        else err("invalid_request", "name at least one field to change")
+    )
+
+
+@dataclass(frozen=True)
 class TrackerOps:
     get_work_item: Callable[[str], Result[WorkItem]]
     search_work_items: Callable[[str, str], Result[Page]]
     create_work_item: Callable[[WorkItemKind, str, str, str], Result[WorkItem]]
+    # Changes the named fields of an existing item and returns it as the tracker now holds it.
+    update_work_item: Callable[[str, WorkItemChanges], Result[WorkItem]]
     transition_work_item: Callable[[str, LogicalState], Result[WorkItem]]
     list_children: Callable[[str], Result[tuple[WorkItem, ...]]]
     list_artifacts: Callable[[str], Result[tuple[ArtifactRef, ...]]]
@@ -209,13 +290,13 @@ class TrackerOps:
     link_development_artifact: Callable[[str, str, str], Result[Mapping[str, Any]]]
     # Planning: (replies, sprint reference) in. The reference "current", or none, means the active
     # sprint (`planning.CURRENT`); a tracker that cannot tell which that is refuses it. A reply
-    # that was given but holds no data is refused, never read as an empty sprint. Hour fields:
-    # (hours, first estimate) -> the provider fields to write; empty when it records no hours.
+    # that was given but holds no data is refused, never read as an empty sprint.
+    # `records_hours`: whether a Task's hours can be written (`update_work_item`) at all.
     read_iteration: Callable[[Mapping[str, Any], str], Result[IterationReading]]
     iteration_items: Callable[
         [Mapping[str, Any], str], Result[tuple[EstimableItem, ...]]
     ]
-    hour_fields: Callable[[float, bool], Mapping[str, float]]
+    records_hours: bool
 
 
 @dataclass(frozen=True)

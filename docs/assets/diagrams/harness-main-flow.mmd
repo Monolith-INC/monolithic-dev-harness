@@ -1,0 +1,20 @@
+flowchart TD
+  I[Idea route: shape the idea, product spec] -->|Continue| D
+  I -->|Stop here| X[Keep the brief or spec]
+  D[Discovery: request, code and evidence] --> RS{Entry item already refined?}
+  RS -->|Rework it, or a draft| P[Planning: choose depth before drafting]
+  RS -->|Use it as it is| R
+  P --> M[Contextual shortlist / full catalog / recommendations]
+  M --> H[Hardening: reconcile and triage selected reviews]
+  H --> R[Refinement: work items in the tracker, each approved]
+  R --> PL{Per Story: plan approved?}
+  PL -->|Approve| T[Tasks proposed, approved and created]
+  PL -->|Revise| R
+  T --> PR[Preparation: risk and verification documents, each approved]
+  PR --> E[Execution per Story: start, missing specs, implement]
+  E --> V[Verify: review, resolution, Feature close]
+  U[Native controls → async → chat fallback] -.-> P
+  U -.-> PL
+  S[Pause / resume / reset / restart / drop anytime] -.-> D
+  F[Suspend: every harness veto disabled] -.-> S
+  V --> W[Git delivery only: push, draft PR, merge decisions]

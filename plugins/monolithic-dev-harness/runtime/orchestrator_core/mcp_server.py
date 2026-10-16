@@ -23,11 +23,9 @@ def resolve_skills_dir() -> Path:
 
 
 def resolve_project_root() -> Path:
-    for key in ("CODEX_PROJECT_ROOT", "CURSOR_PROJECT_DIR", "CLAUDE_PROJECT_DIR"):
-        value = os.environ.get(key, "").strip()
-        if value:
-            return Path(value)
-    return Path.cwd()
+    from .project_config import project_root
+
+    return project_root()
 
 
 def resolve_state_dir(project_root: Path) -> Path:

@@ -35,7 +35,8 @@ SETTINGS = {
     },
     "branch_template": "{category}/{key}-{slug}",
     "protected_work_items": ["1001"],
-    "git": {"base_branch": "develop"},
+    # A Git project delivering through Azure Repos: the rules about Git commands apply.
+    "git": {"base_branch": "develop", "delivery": True},
     "checks": [
         {"name": "unit", "run": "true", "when": ["lib/**"]},
         {"name": "rules", "run": "true", "when": ["security.rules"]},
@@ -293,6 +294,9 @@ class TestHumanOwned(HookTestCase):
             ".harness/state/trackers/x.json",
             ".harness/state/tracking.json",
             ".harness/state/adoptions/HA-0123456789/approval.json",
+            ".harness/state/checks/0123abcd.json",
+            ".harness/state/review/0123abcd.json",
+            ".harness/state/code-baselines/STORY-0001.json",
         ):
             with self.subTest(path=path):
                 self.assertDenied(
@@ -412,6 +416,48 @@ class TestTrackers(HookTestCase):
         self.assertAllowed(
             self.claude(
                 "Bash", {"command": "git commit --allow-empty -m 'STORY-0001 notes'"}
+            )
+        )
+
+    def test_local_tracker_items_change_only_through_the_tracker_tools(self) -> None:
+        """A draft in Tickets/ is the agent's to write; a tracked item (it has a provider_id) is
+        the tracker's, so writing one directly would skip the approval its tools require."""
+        self.select({"name": "local"})
+        ready = self.repo / "Tickets/Ready"
+        ready.mkdir(parents=True)
+        item = ready / "0001-reset-notice.md"
+        item.write_text('---\nprovider_id: "STORY-0001"\n---\n\nBody\n')
+        draft = ready / "draft-reset-notice.md"
+        self.assertAllowed(
+            self.claude(
+                "Write",
+                {"file_path": str(draft), "content": "---\ntype: ticket\n---\n"},
+            )
+        )
+        for tool, payload in (
+            ("Edit", {"file_path": str(item), "old_string": "Body", "new_string": "x"}),
+            (
+                "Write",
+                {
+                    "file_path": str(draft),
+                    "content": '---\nprovider_id: "STORY-0002"\n---\n',
+                },
+            ),
+            (
+                "Write",
+                {
+                    "file_path": str(self.repo / "Tickets/Attachments/STORY-0001/x.md"),
+                    "content": "x",
+                },
+            ),
+        ):
+            with self.subTest(tool=tool, payload=payload):
+                self.assertDenied(self.claude(tool, payload), "tracked-tickets")
+        self.select({"name": "linear", "values": {"team": "ENG"}})
+        self.assertAllowed(
+            self.claude(
+                "Edit",
+                {"file_path": str(item), "old_string": "Body", "new_string": "x"},
             )
         )
 
@@ -792,6 +838,13 @@ class TestApproval(HookTestCase):
         )
         self.assertDenied(
             self.claude(
+                "mcp__plugin_monolithic-dev-harness_workflow-integrations__tracker_update_work_item",
+                {"ref": "12", "title": "Refined"},
+            ),
+            "approval-required",
+        )
+        self.assertDenied(
+            self.claude(
                 "mcp__plugin_monolithic-dev-harness_workflow-integrations__workflow_skip_tracker",
                 {},
             ),
@@ -1024,23 +1077,14 @@ class TestProtected(HookTestCase):
         )
 
 
-class TestTestsRequired(HookTestCase):
-    def test_source_change_without_tests_is_denied(self) -> None:
-        self.write("lib/a.dart")
-        sh(self.repo, "add", "lib/a.dart")
-        self.assertDenied(self.commit_call(), "tests-with-code")
+class TestCommitsAreNotGates(HookTestCase):
+    """Tests with code and guarded-path evidence are completion requirements, not commit rules
+    (tests/harness/test_workflow_requirements.py covers them)."""
 
-    def test_source_change_with_tests_in_commit_or_branch_is_allowed(self) -> None:
-        self.write("test/a_test.dart")
-        sh(self.repo, "add", "test/a_test.dart")
-        sh(self.repo, "commit", "-q", "-m", "test first")
+    def test_a_commit_is_not_refused_for_its_content(self) -> None:
         self.write("lib/a.dart")
-        sh(self.repo, "add", "lib/a.dart")
-        self.assertAllowed(self.commit_call())
-
-    def test_generated_sources_are_excluded(self) -> None:
-        self.write("lib/a.g.dart")
-        sh(self.repo, "add", "lib/a.g.dart")
+        self.write("security.rules")
+        sh(self.repo, "add", "-A")
         self.assertAllowed(self.commit_call())
 
 
@@ -1095,63 +1139,43 @@ class TestGenerated(HookTestCase):
 
 
 class TestGuarded(HookTestCase):
-    def test_guarded_path_needs_check_evidence_for_the_staged_tree(self) -> None:
+    """Guarded-path evidence is recorded for the code as it is on disk, staged or not."""
+
+    def code(self) -> str:
+        from harness import code_content
+
+        return code_content.current(self.repo)
+
+    def test_check_evidence_describes_the_files_on_disk(self) -> None:
+        from harness import state
+
         self.write("security.rules")
-        sh(self.repo, "add", "security.rules")
-        self.assertDenied(self.commit_call(), "guarded-paths")
         subprocess.run(
-            [
-                sys.executable,
-                str(CHECKS),
-                "--repo",
-                str(self.repo),
-                "--staged",
-                "--only",
-                "rules",
-            ],
+            [sys.executable, str(CHECKS), "--repo", str(self.repo), "--only", "rules"],
             check=True,
             capture_output=True,
         )
-        self.assertAllowed(self.commit_call())
+        self.assertIn("rules", state.passed_checks(self.repo, self.code()))
         self.write("security.rules", "changed after the check\n")
-        sh(self.repo, "add", "security.rules")
-        self.assertDenied(self.commit_call(), "guarded-paths")
+        self.assertNotIn("rules", state.passed_checks(self.repo, self.code()))
 
-    def test_staged_checks_refuse_different_working_files(self) -> None:
-        self.write("security.rules", "staged\n")
-        sh(self.repo, "add", "security.rules")
-        self.write("security.rules", "unstaged\n")
-        checked = subprocess.run(
-            [
-                sys.executable,
-                str(CHECKS),
-                "--repo",
-                str(self.repo),
-                "--staged",
-                "--only",
-                "rules",
-            ],
-            capture_output=True,
-            text=True,
-        )
-        self.assertEqual(checked.returncode, 2)
-        self.assertIn("staged and working files differ", checked.stderr)
-        self.assertDenied(self.commit_call(), "guarded-paths")
+    def test_a_typed_manual_check_is_recorded_for_the_code_as_it_is(self) -> None:
+        from harness import state
 
-    def test_manual_guard_needs_the_users_record(self) -> None:
         self.write("infra/main.tf")
-        sh(self.repo, "add", "infra/main.tf")
-        self.assertDenied(self.commit_call(), "guarded-paths")
         self.hook(
             "claude",
             "prompt",
             {"prompt": "validated by hand: harness manual-check infra ok"},
         )
-        self.assertAllowed(self.commit_call())
+        self.assertTrue(state.has_manual(self.repo, "infra", self.code()))
+        self.write("infra/main.tf", "changed afterwards\n")
+        self.assertFalse(state.has_manual(self.repo, "infra", self.code()))
 
-    def test_manual_guard_can_be_approved_by_a_tree_bound_button(self) -> None:
+    def test_manual_guard_can_be_approved_by_a_content_bound_button(self) -> None:
+        from harness import state
+
         self.write("infra/main.tf")
-        sh(self.repo, "add", "infra/main.tf")
         question = "Did you validate the infrastructure change shown above?"
         tool_input = {
             "questions": [
@@ -1192,7 +1216,7 @@ class TestGuarded(HookTestCase):
             },
         )
         self.assertIn("manual check infra recorded", str(answered))
-        self.assertAllowed(self.commit_call())
+        self.assertTrue(state.has_manual(self.repo, "infra", self.code()))
 
 
 class TestPullRequest(HookTestCase):
@@ -1275,7 +1299,7 @@ class TestPullRequest(HookTestCase):
         )
         self.assertAllowed(self.pr(isDraft=True))
 
-    def test_new_commit_invalidates_the_verdict(self) -> None:
+    def test_a_code_change_invalidates_the_verdict(self) -> None:
         self.approve()
         self.ship_ready_commit()
         subprocess.run(
@@ -1301,6 +1325,17 @@ class TestPullRequest(HookTestCase):
         sh(self.repo, "add", "-A")
         sh(self.repo, "commit", "-q", "-m", "more")
         self.assertDenied(self.pr(isDraft=True), "draft-reviewed-prs")
+
+    def test_uncommitted_changes_block_the_pull_request(self) -> None:
+        """Evidence describes files on disk; the pull request carries commits."""
+        self.approve()
+        self.ship_ready_commit()
+        self.write("lib/a.dart", "edited after the commit\n")
+        result = self.pr(isDraft=True)
+        self.assertDenied(result, "draft-reviewed-prs")
+        self.assertIn(
+            "uncommitted", result["hookSpecificOutput"]["permissionDecisionReason"]
+        )
 
     def test_publishing_and_voting_are_human_only(self) -> None:
         self.approve()
@@ -1447,6 +1482,29 @@ class TestFailClosed(HookTestCase):
             mock.patch.object(
                 hook.rules, "evaluate", side_effect=lambda *a: time.sleep(3)
             ),
+        ):
+            result = self._in_process("Write", {"file_path": str(self.repo / "a")})
+        self.assertDenied(result, "harness-error")
+
+    def test_a_slow_workflow_policy_blocks_writes_within_the_budget(self) -> None:
+        """The workflow policy (a slow tracker) shares the budget, so the host never times out
+        and lets the call through; a broad `except Exception` on the way cannot swallow it."""
+        import time
+        from unittest import mock
+
+        from scripts import hook_runtime
+
+        def stall(*_args):
+            try:
+                time.sleep(3)
+            except Exception:
+                return 0
+            return 0
+
+        hook = self._hook_module()
+        with (
+            mock.patch.object(hook, "RULES_BUDGET_SECONDS", 1),
+            mock.patch.object(hook_runtime, "run", side_effect=stall),
         ):
             result = self._in_process("Write", {"file_path": str(self.repo / "a")})
         self.assertDenied(result, "harness-error")

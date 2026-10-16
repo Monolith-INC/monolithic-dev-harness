@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "tracker": {
+    "name": "local"
+  },
+  "scm": {
+    "name": "local"
+  },
+  "branch_template": "{key}-{slug}",
+  "artifacts_path": "docs/planning"
+}
