@@ -1,7 +1,7 @@
 ---
 name: generate-work-item
 description: >
-  Generates a raw Epic, Feature, User Story, or Task work item from a title and description: requirement bullets, acceptance criteria, Context7 research, a Specs note, and a Tickets/Ready draft; creates the selected local, Azure DevOps, or Linear item after approval. Use when the user runs /generate-work-item, says "start ticket", "create a ticket", "create an issue", "create a user story", "create a feature", "create an epic", "generate a work item", or provides a work-item type plus a problem to turn into backlog work. For team-format enrichment (emoji sections, story-point drivers), use enrich-work-item instead. For plain-language requirement and acceptance-criteria prose, this skill delegates a sub-pass to generate-plain-language-documentation in PHASE 4.
+  Generates a raw Epic, Feature, User Story, or Task work item from a title and description: requirement bullets, acceptance criteria, Context7 research, a spec in the item's folder, and a Tickets/Ready draft; creates the selected local, Azure DevOps, or Linear item after approval. Use when the user runs /generate-work-item, says "start ticket", "create a ticket", "create an issue", "create a user story", "create a feature", "create an epic", "generate a work item", or provides a work-item type plus a problem to turn into backlog work. For team-format enrichment (emoji sections, story-point drivers), use enrich-work-item instead. For plain-language requirement and acceptance-criteria prose, this skill delegates a sub-pass to generate-plain-language-documentation in PHASE 4.
 license: MIT
 ---
 
@@ -19,7 +19,7 @@ Start at `../../common/workflows/generate-work-item.md`:
 - `../../common/templates/output-formats.md` — **uniform ticket body**.
 - `../../common/templates/` — **read-only shape contracts**. Validate every draft
   against the matching template before presenting.
-- `../../common/specs/generate-work-item/` — spec forms written to `<artifacts>/Specs/`:
+- `../../common/specs/generate-work-item/` — spec forms, written where `../../references/document-layout.md` says:
   - `spec-epic.md`, `spec-feature.md`, `spec-work-item.md`
 - `../../references/decomposition-rules.md` — hierarchy and parent rules.
 - `../../references/ticket-structure.md` — draft file constraints (frontmatter, filename).
@@ -114,7 +114,9 @@ Pick blueprint from `../../common/specs/generate-work-item/`:
 | `user-story` | `spec-work-item.md` |
 | `task` | `spec-work-item.md` |
 
-Write to `<artifacts>/Specs/<prefix>-<kebab-slug>-spec.md`. Populate all sections from inputs + research.
+Write to the path `harness document path --type spec --new <type> --title "<title>" [--parent <key>]`
+prints (`--item <key>` when the item exists; see `../../references/document-layout.md`). Populate
+all sections from inputs + research.
 **Do not skip** — spec is the analysis artifacts path.
 
 When a product spec exists, this file is work-item analysis and traceability rather than a second
@@ -130,11 +132,12 @@ first.** Every draft uses the **same** body shape (canonical templates are immut
 not modify):
 
 - `# <Title>`
-- `[[Specs/<spec-basename>]]` wikilink under the title
+- `[[<spec file name without .md>]]` wikilink under the title (the spec's final name)
 - `## Requisitos` — requirement bullets (from `description`, parent context, attachment, research)
 - `## Critérios de Aceite` — `- [ ]` checkboxes, testable, infinitive verbs
 
-Path: `Tickets/Ready/<prefix>-<kebab-slug>.md` only — never artifacts root or `Specs/`.
+Path: `harness document path --type ticket --new <type> --title "<title>" [--parent <key>]`, in
+`Tickets/Ready/` only — never the artifacts path.
 
 **Plain-language sub-pass:** Before presenting, read
 `../generate-plain-language-documentation/references/integration-notes.md` § generate-work-item and

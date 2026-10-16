@@ -177,7 +177,8 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     workflow_parser.add_argument(
         "--document",
         action="append",
-        help="JSON entry with path, purpose, read_when and owner",
+        help='one document per flag, a JSON object: {"path": "<file in the project>", '
+        '"purpose": "<what it holds>", "read_when": "<when to load it>", "owner": "<skill>"}',
     )
     workflow_parser.add_argument("--route", help="prepared route to inspect")
     workflow_parser.add_argument(
@@ -434,7 +435,7 @@ def decision_command(args: argparse.Namespace) -> int:
                 args.host,
                 args.blocking_available
                 or (
-                    args.host == "codex"
+                    args.host in ("codex", "claude")
                     and not args.async_available
                     and not args.native_unavailable
                 ),

@@ -34,7 +34,7 @@ from scripts import hook_runtime
 from scripts.policy import CanonicalToolEvent
 from tests.settings_fixture import write_settings
 
-PLAN = 'type: implementation-plan\nstory: "STORY-0001"\nstatus: approved'
+PLAN = 'type: implementation-plan\nstory: "STORY-0001"\nstatus: draft'
 
 
 class Project(unittest.TestCase):
@@ -64,7 +64,11 @@ class Project(unittest.TestCase):
         plan.write_text(f"---\n{PLAN}\n---\n\n# Plan\n", encoding="utf-8")
         state.open_approval(self.root, "HB-Q0001", 20)
         state.pin_notes(
-            self.root, "HB-Q0001", local_artifacts.approved_notes(self.root)
+            self.root,
+            "HB-Q0001",
+            local_artifacts.reviewed_notes(
+                self.root, map(str, self.root.rglob("*.md"))
+            ),
         )
         return plan
 
@@ -129,11 +133,15 @@ class TestRequirements(Project):
         note = self.vault / "Specs" / "adr.md"
         note.parent.mkdir(parents=True)
         note.write_text(
-            "---\ntype: adr\nstory: STORY-0001\nstatus: approved\n---\n", "utf-8"
+            "---\ntype: adr\nstory: STORY-0001\nstatus: draft\n---\n", "utf-8"
         )
         state.open_approval(self.root, "HB-Q0001", 20)
         state.pin_notes(
-            self.root, "HB-Q0001", local_artifacts.approved_notes(self.root)
+            self.root,
+            "HB-Q0001",
+            local_artifacts.reviewed_notes(
+                self.root, map(str, self.root.rglob("*.md"))
+            ),
         )
         self.assertEqual(self.missing(), ["plan_approved"])
 

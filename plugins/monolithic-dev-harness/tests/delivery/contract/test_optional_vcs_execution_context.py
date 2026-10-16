@@ -73,13 +73,17 @@ class OptionalVcsExecutionContextTests(unittest.TestCase):
         work_sessions.link(self.root, self.scope, story.key)
         self.plan.parent.mkdir(parents=True)
         self.plan.write_text(
-            f'---\ntype: implementation-plan\nstory: "{story.key}"\nstatus: approved\n'
+            f'---\ntype: implementation-plan\nstory: "{story.key}"\nstatus: draft\n'
             "---\n\n# Plan\n",
             encoding="utf-8",
         )
         state.open_approval(self.root, "HB-Q0001", 20)
         state.pin_notes(
-            self.root, "HB-Q0001", local_artifacts.approved_notes(self.root)
+            self.root,
+            "HB-Q0001",
+            local_artifacts.reviewed_notes(
+                self.root, map(str, self.root.rglob("*.md"))
+            ),
         )
 
     def test_an_approved_unchanged_plan_allows_local_edit_on_main(self) -> None:

@@ -141,7 +141,9 @@ def evaluate_event(
         ):
             code_decision = _evaluate_code_change(event, work_session_id)
             if code_decision.is_denied():
-                return code_decision
+                return PolicyDecision.deny(
+                    f"{code_decision.reason}\n{_SHELL_WRITE_HINT}"
+                )
         if delivery and _is_mutating_git(command):
             return _evaluate_git_delivery(event, work_session_id)
         return PolicyDecision.allow()
@@ -157,6 +159,13 @@ def evaluate_event(
     if event.kind == "edit" and _edits_code(event):
         return _evaluate_code_change(event, work_session_id)
     return PolicyDecision.allow()
+
+
+_SHELL_WRITE_HINT = (
+    "If this command writes only planning documents or ticket drafts, name each file plainly in "
+    "the command (no shell variables bound more than once, loops or functions), or write it with "
+    "the file-editing tool: a write whose file cannot be read from the command counts as code."
+)
 
 
 def _evaluate_code_change(

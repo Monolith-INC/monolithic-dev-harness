@@ -58,12 +58,12 @@ Before listing artifacts, resolve existing workflow state in this order. Skip th
 3. The ticket tree
    With no argument and no intent from the conversation, run `{{ workflow.tickets_command }} next`.
    - Non-zero exit (no active initiative, a store refusal, a malformed tree) → say in one line that the ticket tree is unavailable and why, then go to 4.
-   - A row in any group whose `status` is `draft`, `ready-for-dev`, `in-progress`, or `in-review` has a started plan when the file at `find <ref>`'s `plan` exists. When any row has one, or `{{ config.output_folder }}/{active_initiative}/` holds a `plan-*.md` with one of those statuses, go to 4.
+   - A row in any group whose `status` is `draft`, `ready-for-dev`, `in-progress`, or `in-review` has a started plan when the file at `find <ref>`'s `plan` exists. When any row has one, or the artifacts path holds an `approach-*.md` with one of those statuses, go to 4.
    - No `ready_to_start` row → say in one line that nothing in the tree is ready, naming what is ready to refine, in progress, or blocked, then go to 4.
    - Otherwise run `find <ref>` with the first `ready_to_start` row's `ref`, tell the user in one line which entry you are building, and follow **Ticket resolution**.
 
 4. Otherwise — scan artifacts and ask
-   - Active plans (`draft`, `ready-for-dev`, `in-progress`, `in-review`) among `{{ config.output_folder }}/{active_initiative}/plan-*.md`, or started plans in the tree from branch 3? → List them all and HALT. Give the user a choice:
+   - Active plans (`draft`, `ready-for-dev`, `in-progress`, `in-review`) among the `approach-*.md` files in the artifacts path, or started plans in the tree from branch 3? → List them all and HALT. Give the user a choice:
      - Resume one of the listed plans
      - **Next entry** — when branch 3 found a `ready_to_start` row with no `status`, the first one: run `find <ref>` with its `ref` and follow **Ticket resolution**
      - **New** — start new work
@@ -124,7 +124,7 @@ This runs on the output of `tickets.py find` for one ticket. Find's `description
    - If the user chooses **Keep all goals**: Proceed as-is.
 5. Set the plan file.
 
-   Derive a valid kebab-case slug from the current intent. If the intent references a tracking identifier (story number, issue number, ticket ID), lead the slug with it (e.g. `3-2-digest-delivery`, `gh-47-fix-auth`). If `{{ config.output_folder }}/{active_initiative}/plan-{slug}.md` already exists: if its status is `draft`, treat it as the same work and resume it (set `plan_file` to that path, **EARLY EXIT** → `{{ rendered("step-02-plan.md") }}`); otherwise append `-2`, `-3`, etc. Set `plan_file` = `{{ config.output_folder }}/{active_initiative}/plan-{slug}.md`.
+   The plan file is the approach, a document of the item the work is for, named and placed as the harness's `references/document-layout.md` says. When the work session tracks an item, set `plan_file` to the path `harness document path --type approach --item <key>` prints. Otherwise set it to the path `harness document path --type approach --new <type> --title "<title>"` prints for the item refinement will create from this request (a Story unless the request is clearly larger), with `--parent <key>` when it belongs under one. If that file already exists with `status: draft`, treat it as the same work and resume it (**EARLY EXIT** → `{{ rendered("step-02-plan.md") }}`).
 
 ## NEXT
 

@@ -9,7 +9,9 @@ and never replay completed tracker writes. Suspension disables all harness vetoe
 
 Read the request, ticket, relevant project documents and code. Use subagent investigations and
 focused deep reconnaissance when useful. Record the Code Map, constraints and unresolved choices.
-Investigate before asking. Do not inspect branches, commits or repository readiness here.
+Investigate before asking. Do not inspect branches, commits or repository readiness here. The
+approach and its decision log are documents of the item the work is for, named and placed as
+[document layout](document-layout.md) says.
 
 ## Planning
 
@@ -72,13 +74,24 @@ set source globs, which then decide what is code.
 ## Preparation
 
 Write the risk and verification documents with `generate-plain-language-documentation`, as notes in
-the artifacts path that name their Story (`story: <key>`). For each one, when it is complete: set
-`status: approved`, show it with `harness workflow show --artifact <document>` and put the output
-in your reply, then ask `harness decision present --gate approve-document --artifact <document>`. Approving pins its exact content; editing it afterwards needs a new approval. With a
+the Story's folder that name their Story (`story: <key>`), with `status: draft`: their paths come
+from `harness document path --type risk-assessment --item <key>` and `--type verification-plan`
+([document layout](document-layout.md)). For each one, when
+it is complete: show it with `harness workflow show --artifact <document>` and put the output
+in your reply, then ask `harness decision present --gate approve-document --artifact <document>`. Once approved, set its `status` to `active`; approving pins its content (the `status` line aside),
+so any other edit needs a new approval. With a
 remote tracker, then publish it to its Story with `tracker_publish_artifact` so the team sees it
 where the work item lives. Build the reading manifest over the approved plans and documents so later
-stages load only what they need; the manifest is harness state, not a document to approve. Keep
-source decisions in the memlog.
+stages load only what they need; the manifest is harness state, not a document to approve. One
+`--document` per file, each a JSON object; the output path comes from
+`harness document path --type reading-manifest --item <key>`:
+
+```bash
+harness workflow manifest --manifest-output <reading-manifest path> \
+  --document '{"path": "<plan>", "purpose": "Steps and acceptance criteria", "read_when": "Before each Task", "owner": "generate-breakdown-work-items"}'
+```
+
+Keep source decisions in the memlog.
 
 ## Execution
 

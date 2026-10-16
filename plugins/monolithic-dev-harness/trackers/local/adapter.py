@@ -24,6 +24,7 @@ from integrations.contracts import (
     ArtifactRef,
     FieldNames,
     LogicalState,
+    Manifest,
     Page,
     TrackerOps,
     WorkItem,
@@ -217,13 +218,10 @@ def _allowed_child(
     return kinds[kind] in children
 
 
-def _next_key(found: tuple[Record, ...], kind: WorkItemKind) -> str:
-    """The next number across every kind, so the number alone names the file."""
-    numbers = tuple(
-        int(match.group(1))
-        for _, record in found
-        if (match := re.match(r"^[A-Z]+-(\d+)$", str(record.get("key", ""))))
-    )
+def _next_key(root: Path, manifest: Manifest, kind: WorkItemKind) -> str:
+    """The next number across every kind and every draft's reserved one, so the number alone
+    names the file."""
+    numbers = local_tracker.used_numbers(root, manifest)
     return f"{PREFIXES[kind]}-{max(numbers, default=0) + 1:04d}"
 
 
@@ -247,8 +245,9 @@ def _create(
             ),
             lambda _: bind(
                 _records(context, root),
-                lambda found: _store_new(
-                    context, root, found, kind, title, description, found_parent
+                # Reading every item first surfaces a broken ticket file before anything is written.
+                lambda _found: _store_new(
+                    context, root, kind, title, description, found_parent
                 ),
             ),
         ),
@@ -258,15 +257,14 @@ def _create(
 def _store_new(
     context: AdapterContext,
     root: Path,
-    found: tuple[Record, ...],
     kind: WorkItemKind,
     title: str,
     description: str,
     parent: Record | None,
 ) -> Result[WorkItem]:
     """Write the item's ticket file. A draft with the same body becomes this item: its front matter
-    (points, language, tags) is kept and the draft file is replaced."""
-    key = _next_key(found, kind)
+    (points, language, tags) is kept, the number its file name reserved becomes the item's, and the
+    draft file is replaced."""
     draft = next(
         (
             (file, fields)
@@ -274,6 +272,14 @@ def _store_new(
             if body.strip() == description.strip()
         ),
         None,
+    )
+    reserved = (
+        local_tracker.draft_number(draft[0], root, context.manifest) if draft else None
+    )
+    key = (
+        f"{PREFIXES[kind]}-{reserved:04d}"
+        if reserved is not None
+        else _next_key(root, context.manifest, kind)
     )
     record = {
         **(local_tracker.draft_fields(draft[1]) if draft else {}),

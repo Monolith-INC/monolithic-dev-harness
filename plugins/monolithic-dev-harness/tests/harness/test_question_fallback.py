@@ -449,3 +449,38 @@ def test_claude_free_text_menu_from_the_trial_is_shown_verbatim(tmp_path: Path) 
         },
     )
     assert decisions.record(tmp_path)["presentation_id"] == shown["decision_id"]
+
+
+def _claude_present(repo: Path, *available: str) -> dict:
+    return json.loads(
+        subprocess.run(
+            [
+                str(CLI),
+                "decision",
+                "present",
+                "--repo",
+                str(repo),
+                "--host",
+                "claude",
+                *available,
+                "--gate",
+                "planning-depth",
+            ],
+            cwd=repo,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    )
+
+
+def test_claude_asks_with_its_native_control_unless_told_it_cannot(
+    tmp_path: Path,
+) -> None:
+    """Trial test-012: the agent never passed --blocking-available, so every question was a typed menu."""
+    write_settings(tmp_path)
+    assert _claude_present(tmp_path)["tool"] == "AskUserQuestion"
+    fallback_repo = tmp_path / "fallback"
+    fallback_repo.mkdir()
+    write_settings(fallback_repo)
+    assert _claude_present(fallback_repo, "--native-unavailable")["transport"] == "chat"

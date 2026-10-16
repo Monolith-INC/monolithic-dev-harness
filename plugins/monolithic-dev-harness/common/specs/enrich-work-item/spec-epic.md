@@ -1,13 +1,13 @@
 # Epic Spec Blueprint
 
-Blank form for specs written to **`<artifacts>/Specs/`** before the Epic ticket. Context7 research
+Blank form for specs written to **the item's folder in the artifacts path** before the Epic ticket. Context7 research
 feeds **Tech stack** and **Research summary**; strategic content feeds the Epic ticket body.
 
 Source enricher: `../../workflows/enrichers/epic-enricher.prompt.md`
 
 ## Artifacts filename
 
-`[<epic-id>-]<kebab-slug>-spec.md`
+`spec-<scope>.md`, from `harness document path --type spec` (see `references/document-layout.md`)
 
 ## Frontmatter
 

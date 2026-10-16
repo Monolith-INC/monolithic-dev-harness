@@ -1,7 +1,7 @@
 """What makes a file the implementation plan `implementation-confirm` may be asked about.
 
-The question is about exactly one note of type `implementation-plan`, marked `status: approved` so
-the approval pins it, that names exactly one Story or Bug, and that Story or Bug exists in the
+The question is about exactly one note of type `implementation-plan` in the artifacts path, which the
+approval pins, that names exactly one Story or Bug, and that Story or Bug exists in the
 selected tracker and is refined (it passes `validate-artifact`): the toolkit writes a Story's plan
 from its refined acceptance criteria. The Story comes from the plan, so the agent never names it separately. That the
 plan was shown first is the gate's own `shown` rule (`artifact_review`).
@@ -67,11 +67,6 @@ def _plan_story(name: str, note: local_artifacts.Note | None) -> Result[str]:
         ):
             return err(
                 "plan_invalid", f"{name} is not a note of type implementation-plan"
-            )
-        case local_artifacts.Note() if not note.approved:
-            return err(
-                "plan_invalid",
-                f"set `status: approved` in {name} before asking, so the approval pins it",
             )
         case local_artifacts.Note(work_items=(key,)):
             return Ok(key)

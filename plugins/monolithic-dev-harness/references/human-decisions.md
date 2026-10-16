@@ -38,14 +38,16 @@ harness decision present --repo <project> --host <host> \
 | `plan-checkpoint` | The discovery plan is ready (`--artifact` the plan) |
 | `refinement-split` | A proposed split of an Epic, Feature or Story is ready (`--artifact` the outline); no write |
 | `harness-controls` | The user wants to suspend, resume, or use free mode |
-| `publish-items`, `move-item`, `approve-spec`, `implementation-confirm`, `approve-document`, `publish-branch`, `reply-pr`, `pause-tracking` | Approvals; see the harness skill's approval protocol. `publish-items`, `implementation-confirm` and `approve-document` require the files shown first: run `harness workflow show`, put its output in your reply, run `harness decision status` (the host records a reply only once another tool runs), then ask |
+| `publish-items` (`--value count= --value tracker=`), `move-item` (`--value item= --value status= --value ref=`), `approve-spec`, `implementation-confirm`, `approve-document`, `publish-branch` (`--value branch=`), `reply-pr` (`--value pr=`), `pause-tracking` | Approvals; see the harness skill's approval protocol. `publish-items`, `implementation-confirm` and `approve-document` require the files shown first: run `harness workflow show`, put its output in your reply, run `harness decision status` (the host records a reply only once another tool runs), then ask |
 
 - Never pass a session id: the harness asks in the project's current work session, or
   project-wide when there is none. Asking never requires a session to exist.
 - `--value` fills the gate's `{slots}`; the command names any that are missing.
 - `--recommended` names an option id to mark instead of the gate's default.
 - Pass every reviewed file with `--artifact`. A changed file invalidates the earlier answer.
-- Say which controls are actually callable: `--blocking-available`, `--async-available`.
+- Codex and Claude Code get their native question control by default. Pass `--async-available` when
+  Codex can only ask without waiting, and `--native-unavailable` when no native control can be
+  called; other hosts pass `--blocking-available` when theirs can.
 
 A **one-off question** that no gate covers (a product choice specific to this work) uses
 `--question`, `--option` (at most three), `--detail` per option, `--recommended <label>`, and

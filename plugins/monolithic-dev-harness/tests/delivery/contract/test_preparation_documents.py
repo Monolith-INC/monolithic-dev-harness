@@ -15,5 +15,5 @@ def test_each_document_is_approved_then_saved_and_published() -> None:
     assert preparation.index("--gate approve-document") < preparation.index(
         "tracker_publish_artifact"
     )
-    assert "status: approved" in preparation
+    assert "status: draft" in preparation
     assert "needs a new approval" in preparation

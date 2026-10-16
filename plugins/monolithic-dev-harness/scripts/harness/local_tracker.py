@@ -183,6 +183,39 @@ def drafts(root: Path) -> tuple[tuple[Path, dict[str, Any], str], ...]:
     return tuple(found)
 
 
+_NUMBERED = re.compile(r"^(\d+)-(.+?)(?:\.md)?$")
+_KEY_NUMBER = re.compile(r"^[A-Z]+-(\d+)$")
+
+
+def numbered(name: str) -> tuple[int, str] | None:
+    """The number and slug of a `<number>-<slug>` name, or None."""
+    match = _NUMBERED.match(name)
+    return (int(match.group(1)), match.group(2)) if match else None
+
+
+def used_numbers(root: Path, manifest: Manifest) -> set[int]:
+    """Numbers held by tracked items and by drafts (whose file names reserve theirs)."""
+    held = {
+        int(match.group(1))
+        for _, record in records(root, manifest)
+        if (match := _KEY_NUMBER.match(str(record.get("key", ""))))
+    }
+    return held | {
+        found[0] for path, _, _ in drafts(root) if (found := numbered(path.name))
+    }
+
+
+def draft_number(path: Path, root: Path, manifest: Manifest) -> int | None:
+    """The number a draft's file name reserved, unless a tracked item already holds it."""
+    found = numbered(path.name)
+    taken = {
+        int(match.group(1))
+        for _, record in records(root, manifest)
+        if (match := _KEY_NUMBER.match(str(record.get("key", ""))))
+    }
+    return found[0] if found and found[0] not in taken else None
+
+
 def draft_fields(frontmatter: Mapping[str, Any]) -> dict[str, Any]:
     """What an item keeps from its draft's front matter: points, hours, language, tags and the
     like. Its identity, type and parent come from the tracker, and `status` is never kept."""
@@ -243,12 +276,21 @@ def render(record: Mapping[str, Any]) -> str:
 
 def file_name(key: str, title: str) -> str:
     """`<number>-<slug>.md`, the toolkit's ticket file name."""
-    number = key.rpartition("-")[2]
+    return f"{key_number(key)}-{title_slug(title)}.md"
+
+
+def key_number(key: str) -> str:
+    """The number the toolkit's file names use: the key's last part (`STORY-0001` → `0001`)."""
+    return key.rpartition("-")[2].lower()
+
+
+def title_slug(title: str) -> str:
+    """The title in lowercase ASCII words joined by hyphens, at most 60 characters."""
     ascii_title = (
         unicodedata.normalize("NFKD", title).encode("ascii", "ignore").decode("ascii")
     )
     slug = re.sub(r"[^a-z0-9]+", "-", ascii_title.lower()).strip("-")[:60].strip("-")
-    return f"{number}-{slug or 'item'}.md"
+    return slug or "item"
 
 
 def write(path: Path, record: Mapping[str, Any]) -> None:

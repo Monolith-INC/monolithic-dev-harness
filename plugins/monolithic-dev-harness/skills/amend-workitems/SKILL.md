@@ -38,7 +38,7 @@ stop and ask for a resolvable id, URL, or path.
 
 Read `references/backup-and-ledger.md` before resolving the source. Create a backup of the entire tree before
 semantic analysis. The snapshot must include every Epic, Feature, Story, and Task body; ids,
-revisions, parent links, child links, attachments, and related `Implementation_Plans/` notes. Verify
+revisions, parent links, child links, attachments, and related documents in the items' folders (`../../references/document-layout.md`). Verify
 that the backup is readable and complete. A failed or partial backup is a hard stop.
 
 Resolve the reference and enumerate descendants from Epic → Feature → User Story → Task before

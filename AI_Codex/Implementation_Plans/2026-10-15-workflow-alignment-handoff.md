@@ -132,3 +132,50 @@ All questions are settled as owner decisions 1–12 in that document.
   thermos dispatch) and older `AI_Codex/` notes (`Agent_Sessions/codex-all-conversations.md`,
   `Artifacts/2026-10-05-*`, older `live-trials/2026100*`, `Implementation_Plans/2026-10-05-*`,
   `Specs/BMAD-HOST-INTERFACE-SPEC.md`). Review them before committing.
+
+## Handoff — 2026-10-16 (agile backlog workflow, trials test-010 and test-011)
+
+**State of the branch** (`codex/planning-and-interaction-reliability`, PR #37 draft):
+- Committed and pushed `0e6f6aa`: local tracker = toolkit's `Tickets/` at the project root
+  (`Ready/`, `InProgress/`, `Done/`, `Attachments/<KEY>/`, `capacity-<sprint>.json` beside it);
+  `.harness/tracker/` removed; `tracked-tickets` rule; approvals record draft body digests and the
+  gateway writes item text only when it is an approved draft's body; `publish-items` is `shown`;
+  `implementation-confirm` requires the Story to pass `validate-artifact` (`scripts/harness/refined.py`);
+  Breakdown title rule fixed; project-file start documented; constitution Articles 7 and 8 record
+  the owner decisions of 2026-10-16.
+- **Uncommitted** (fixes from test-011, full suite was running when the session stopped:
+  background task output `/tmp/claude-1004/.../tasks/bairklt3r.output`; rerun it):
+  - B1 drafts go to root `Tickets/Ready/` (ticket-structure.md, generate-work-item, enrich-work-item,
+    split-story, atomic-tasks.md, common/workflows/*).
+  - B2 `trackers/local/adapter.py` + `local_tracker.drafts/draft_fields`: create keeps the draft's
+    front matter (points, language, tags; never `status`).
+  - B3 `decisions.show_command` lets `harness workflow show` run while a question waits; refusal and
+    `references/human-decisions.md` say: show, put in reply, run `harness decision status`, then ask
+    (Claude Code writes reply text to the transcript only after another tool runs).
+  - C1 chat fallback is for one question (`host_adapters/interactions.py`, human-decisions.md).
+  - C2 `shellscan.expand_plain_variables` follows a variable assigned once to a plain value;
+    `policy/commands._NOT_CODE` includes `Tickets`; `plan.md.tmp` in the artifacts path is planning.
+  - S1 `scripts/acceptance_trial.py launch_command`; `prepare --install claude` prints it.
+  - Tests added/updated in test_planning_reliability, test_shellscan, test_adapters, test_decisions,
+    test_acceptance_trial.
+
+**Trial test-012** (`AI_Codex/Artifacts/live-trials/20261016-day001-claude-04/problems.md`): ran
+discovery through `start-ticket`; the user declined moving the Story to In progress, so no code edit
+was attempted. D1–D8 fixed in the commit after `813cf18` (native questions on Claude, `cd &&` and
+`sed` script in the shell check, standard Task titles, `draft` → `active` status, document layout
+and `harness document path`, manifest and gate-value docs, plain checkpoint commands). The owner's
+document layout is Constitution Article 8a.
+
+**Next steps:**
+1. Prepare test-013 (`.venv/bin/python scripts/acceptance_trial.py prepare --profile local-planning
+   --install claude`), run DAY-001 again through `start-ticket` with the move approved, and one
+   code edit before and after linking.
+2. Check in the run: documents land in `docs/planning/user-story-0001-…/` with their final names,
+   the ticket draft reserves its number, and questions use the native control.
+3. Open: how a remote tracker (Azure, Linear) names a document before its item exists (`--new` is
+   refused there); BMad idea-route documents (brief, PRD, product spec) are not yet in the layout;
+   C3 (state diffs shown by Claude Code).
+
+**Notes:** `AI_Codex/Artifacts/live-trials/20261016-day001-claude-02/problems.md` (test-010, P1–P3
+list) and `20261016-day001-claude-03/problems.md` (test-011, with "Fixed after this run").
+Use `.venv/bin/python` (system python3 lacks tomllib/pytest).

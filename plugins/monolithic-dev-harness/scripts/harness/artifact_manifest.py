@@ -15,7 +15,8 @@ def document(repo: Path, encoded: str) -> Result[dict[str, str]]:
         attempt(
             lambda: json.loads(encoded),
             "manifest_invalid",
-            "document entry",
+            '--document takes a JSON object: {"path": ..., "purpose": ..., "read_when": ..., '
+            '"owner": ...}',
             ValueError,
         ),
         lambda entry: _document(repo, entry),

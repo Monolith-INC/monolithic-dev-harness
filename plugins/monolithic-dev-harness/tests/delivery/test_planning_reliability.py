@@ -326,3 +326,26 @@ def test_corrected_receipt_supersedes_prior_revision(tmp_path):
         ),
         Err,
     )
+
+
+@pytest.mark.parametrize(
+    "command,expected",
+    [
+        # Trial test-012: the sed script named a source file, and counted as the file edited.
+        (
+            "cd docs/planning && sed -i 's/(`lib\\/a.dart:68`)/(`lib\\/a.dart:67`)/' approach.md",
+            False,
+        ),
+        ("sed -i -e 's/a/b/' docs/planning/approach.md", False),
+        ("sed -i 's/a/b/' lib/a.dart", True),
+        ("sed -i -e 's/a/b/' lib/a.dart", True),
+        ("sed -i.bak 's/a/b/' docs/planning/approach.md lib/a.dart", True),
+        # After `cd dir &&`, the write runs only in that folder; after `;` the `cd` may have failed.
+        ("cd docs/planning && echo x > approach.md", False),
+        ("cd docs/planning && true && echo x > approach.md", False),
+        ("cd docs/planning; echo x > approach.md", True),
+        ("cd docs/planning || true && echo x > approach.md", True),
+    ],
+)
+def test_in_place_editor_script_is_not_a_file(tmp_path, command, expected):
+    assert writes_code(command, tmp_path, None, "docs/planning") is expected

@@ -104,11 +104,9 @@ Resolve the artifacts root with `bin/agile-backlog-toolkit config --show`. If un
 bootstrap to ask where plans should go and apply the reviewed setting. Never instruct manual JSON
 editing or invent a directory.
 
-**Filename:** `YYYY-MM-DD-<story-slug>.md`
-
-- Date: run date (UTC or local host date, consistent within the run)
-- `story-slug`: kebab-case from story title or id (`12345-intake-selection-ux`)
-- If a file already exists for the same story today: append `-2`, `-3`, … — do not overwrite without asking
+**Path:** `harness document path --type implementation-plan --item <story key>`, in the Story's
+folder (`../../../references/document-layout.md`). One plan per Story: when the file exists, revise
+it rather than writing a second one.
 
 **Frontmatter:**
 
@@ -125,9 +123,9 @@ created: YYYY-MM-DD
 ---
 ```
 
-`status` is allowed here (Implementation_Plans is not Tickets/). Keep `draft` while writing the
-plan; set `approved` when it is complete, just before it is shown and `implementation-confirm` is
-asked. The approval pins that exact content.
+`status` is allowed here (Implementation_Plans is not Tickets/). Keep `draft` until the user
+accepts the plan (`implementation-confirm`), then set `active`. The approval pins the plan's content;
+its `status` line is not part of it, so only a change elsewhere needs a new approval.
 
 ### Save gate
 

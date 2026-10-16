@@ -254,7 +254,7 @@ class TestGitDeliveryCommits(TrackedRepo):
         )
 
 
-PLAN = 'type: implementation-plan\nstory: "STORY-0001"\nstatus: approved'
+PLAN = 'type: implementation-plan\nstory: "STORY-0001"\nstatus: draft'
 
 
 class TestPlanNotes(TrackedRepo):
@@ -274,7 +274,17 @@ class TestPlanNotes(TrackedRepo):
         """What the hook does when the user clicks Approve or types `approve HB-…`."""
         state.open_approval(self.root, approval_id, 20)
         state.pin_notes(
-            self.root, approval_id, local_artifacts.approved_notes(self.root)
+            self.root,
+            approval_id,
+            local_artifacts.reviewed_notes(
+                self.root,
+                map(
+                    str,
+                    (local_artifacts.artifacts_dir(self.root) or self.root).rglob(
+                        "*.md"
+                    ),
+                ),
+            ),
         )
 
     def planned(self) -> bool:
@@ -287,17 +297,7 @@ class TestPlanNotes(TrackedRepo):
         self.assertTrue(self.planned())
         self.assertFalse(self.evaluate().is_denied())
 
-    def test_draft_plan_from_the_backlog_stage_does_not_count_even_after_an_approval(
-        self,
-    ):
-        self.note(
-            "Implementation_Plans/plan.md",
-            'type: implementation-plan\nstory: "STORY-0001"\nstatus: draft',
-        )
-        self.approve()
-        self.assertFalse(self.planned())
-
-    def test_plan_marked_approved_without_a_later_approval_does_not_count(self):
+    def test_plan_written_after_the_approval_does_not_count(self):
         self.approve()
         self.note("Implementation_Plans/plan.md", PLAN)
         self.assertFalse(self.planned())
@@ -317,7 +317,7 @@ class TestPlanNotes(TrackedRepo):
     def test_ticket_field_names_the_parent_and_does_not_count(self):
         self.note(
             "Plans/plan.md",
-            "type: implementation-plan\nticket: STORY-0001\nstatus: approved",
+            "type: implementation-plan\nticket: STORY-0001\nstatus: draft",
         )
         self.approve()
         self.assertFalse(self.planned())
@@ -325,20 +325,20 @@ class TestPlanNotes(TrackedRepo):
     def test_work_item_field_names_the_item(self):
         self.note(
             "Plans/plan.md",
-            "type: implementation-plan\nwork_item: STORY-0001\nstatus: approved",
+            "type: implementation-plan\nwork_item: STORY-0001\nstatus: draft",
         )
         self.approve()
         self.assertTrue(self.planned())
 
     def test_another_spec_kind_is_not_the_implementation_plan(self):
-        self.note("Specs/adr.md", "type: adr\nstory: STORY-0001\nstatus: approved")
+        self.note("Specs/adr.md", "type: adr\nstory: STORY-0001\nstatus: draft")
         self.approve()
         self.assertFalse(self.planned())
 
     def test_plan_for_another_story_does_not_count(self):
         self.note(
             "Implementation_Plans/plan.md",
-            'type: implementation-plan\nstory: "STORY-0002"\nstatus: approved',
+            'type: implementation-plan\nstory: "STORY-0002"\nstatus: draft',
         )
         self.approve()
         self.assertFalse(self.planned())

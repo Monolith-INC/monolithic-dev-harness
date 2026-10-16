@@ -23,14 +23,14 @@ child Stories first, then process the chosen set without re-asking destination o
 
 ## 2. Save the plan and have it approved
 
-Save an Implementation Plan in the configured artifacts path, re-read it, and verify that every
-acceptance criterion maps to a delivery step. When it is complete, set `status: approved` in its
-frontmatter, show it with `harness workflow show --artifact <plan>` and put that output in your
+Save the Story's Implementation Plan where `harness document path --type implementation-plan --item
+<story key>` says (its folder in the artifacts path), re-read it, and verify that every
+acceptance criterion maps to a delivery step. When it is complete (still `status: draft`), show it with `harness workflow show --artifact <plan>` and put that output in your
 reply, then ask `harness decision present --gate implementation-confirm --artifact <plan>`. This
 approval is required and comes before any Task is proposed. The harness reads the Story from the
-plan's `story` field and refuses the question unless the note is an approved implementation plan
+plan's `story` field and refuses the question unless the note is an implementation plan in the artifacts path
 naming exactly one Story, that Story exists in the tracker, and the plan was shown as it reads now
-(on Claude, in your own reply); approving pins the plan. On Revise, change the plan and ask again;
+(on Claude, in your own reply); approving pins the plan, then set its `status` to `active`. On Revise, change the plan and ask again;
 editing an approved plan needs a new approval.
 
 ## 3. Propose, approve and create the Tasks

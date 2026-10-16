@@ -6,7 +6,7 @@ Entry point for the skill reference library.
 COLLECT → INGEST → RESEARCH (Context7) → WRITE SPEC (blueprint) → GENERATE DRAFT → GATE → PERSIST
          │                              │                        │
          │                              ▼                        ▼
-         │                       <artifacts>/Specs/           Tickets/Ready/
+         │                       <artifacts>/<item folder>/   Tickets/Ready/
          └─ parent + attachment context
 ```
 
@@ -26,9 +26,9 @@ Prose polish for requirement bullets: **`generate-plain-language-documentation`*
 
 ## Artifacts output paths
 
-**Spec** (PHASE 3): `<artifacts>/Specs/[<parent-id>-]<kebab-slug>-spec.md`
+**Spec** (PHASE 3): `harness document path --type spec …` (`../../references/document-layout.md`)
 
-**Ticket draft** (PHASE 4): `Tickets/Ready/<prefix>-<kebab-slug>.md`
+**Ticket draft** (PHASE 4): `harness document path --type ticket --new …`
 
 Shared spec frontmatter:
 

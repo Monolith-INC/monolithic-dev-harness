@@ -8,6 +8,19 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
+- `harness document path` names and places every document by its work item:
+  `<document-type>-<work-item-type>-<number>-<title-slug>.md` in the item's folder, nested
+  Epic → Feature → Story (`references/document-layout.md`). On the local tracker a draft reserves its
+  item's number, so nothing is renamed after creation.
+- Claude Code asks with its native question control by default (`--native-unavailable` opts out).
+
+### Changed
+
+- Documents under review are `status: draft` and become `active` once accepted; an approval pins
+  the reviewed documents, their `status` line aside.
+- Planning writes after `cd <dir> &&` are read in that folder, and an in-place editor's script is not
+  a file it edits; the standard Task titles Staging, Review and Breakdown pass the title check.
+
 - `tracker_update_work_item` changes the named fields of an existing work item (title,
   description, story points, a Task's hours, assignee, sprint) through the gateway and reads it
   back, for the local tracker, Azure DevOps and Linear.

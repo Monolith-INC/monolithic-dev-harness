@@ -424,37 +424,32 @@ def handle_startup(host: str, payload: dict[str, Any]) -> int:
     return 0
 
 
-def _pin_approved_notes(
+def _pin_reviewed_notes(
     repo: Path, approval_id: str, binds: dict[str, Any] | None
 ) -> str:
-    """Pin the notes marked approved that this approval reviewed; a note for the user.
+    """Pin the artifacts-path notes this approval reviewed; a note for the user.
 
     Only the files the approval is tied to count, so approving one Story's plan, or anything else,
-    never also approves another note that happens to be marked approved. A general approval
-    reviewed no file and pins nothing.
+    never also approves another note. A general approval reviewed no file and pins nothing.
     """
     # Imported here so only approvals pay for loading the artifacts-path reader.
     from harness import local_artifacts
 
-    reviewed = {
+    reviewed = [
         str((repo / str(entry[0])).resolve())
         for entry in (binds or {}).get("artifacts", ())
         if isinstance(entry, list | tuple) and entry
-    }
+    ]
     try:
-        notes = {
-            path: digest
-            for path, digest in local_artifacts.approved_notes(repo).items()
-            if path in reviewed
-        }
+        notes = local_artifacts.reviewed_notes(repo, reviewed)
         state.pin_notes(repo, approval_id, notes)
     except (OSError, ValueError) as exc:
-        return f" Approved plan and spec notes were NOT pinned: {exc}"
+        return f" Reviewed plan and spec notes were NOT pinned: {exc}"
     if not notes:
         return ""
     return (
-        f" It also covers {len(notes)} plan or spec note(s) marked approved, as they read now;"
-        " editing one needs a new approval."
+        f" It also covers {len(notes)} reviewed plan or spec note(s), as they read now; set"
+        " their `status` to `active`, and any other edit needs a new approval."
     )
 
 
@@ -632,7 +627,7 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         state.open_approval(repo, approval_id, window, work_session_id=work_session_id)
         notes.append(
             f"[harness] approval {approval_id} recorded; tracker/SCM writes are open for {window} minutes."
-            + _pin_approved_notes(repo, approval_id, None)
+            + _pin_reviewed_notes(repo, approval_id, None)
         )
     for name in MANUAL_RE.findall(prompt):
         code = code_content.current(repo)
@@ -1203,7 +1198,7 @@ def _open_approval(
     return (
         f"[harness] the user approved; approval {approval_id} {lasts}. "
         "Make only the writes the question described."
-        + _pin_approved_notes(repo, approval_id, binds)
+        + _pin_reviewed_notes(repo, approval_id, binds)
     )
 
 

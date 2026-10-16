@@ -6,6 +6,7 @@ The record describes progress; it never grants permission to write to a tracker 
 from __future__ import annotations
 
 import hashlib
+import re
 import secrets
 import subprocess
 from dataclasses import asdict, dataclass, replace
@@ -432,10 +433,29 @@ def _save(destination: Path, workflow: Workflow) -> Path:
     return destination
 
 
+# A front-matter `status:` line: a document's place in its lifecycle, not its content.
+_STATUS_LINE = re.compile(rb"^status:[^\n]*\n", re.MULTILINE)
+_FRONT_MATTER = re.compile(rb"\A(?:\xef\xbb\xbf)?---\r?\n.*?\n---\r?\n", re.DOTALL)
+
+
+def document_digest(content: bytes) -> str:
+    """The digest of a file's content, its front-matter `status` left out.
+
+    Marking a reviewed document accepted (`status: draft` to `active`, as the
+    agile-backlog-toolkit does) keeps what was reviewed, so it keeps the approval.
+    """
+    match _FRONT_MATTER.match(content):
+        case None:
+            pass
+        case found:
+            content = _STATUS_LINE.sub(b"", found.group(0)) + content[found.end() :]
+    return hashlib.sha256(content).hexdigest()
+
+
 def file_digest(file: Path) -> Result[str]:
     return fmap(
         attempt(lambda: file.read_bytes(), "artifact_unreadable", str(file), OSError),
-        lambda content: hashlib.sha256(content).hexdigest(),
+        document_digest,
     )
 
 

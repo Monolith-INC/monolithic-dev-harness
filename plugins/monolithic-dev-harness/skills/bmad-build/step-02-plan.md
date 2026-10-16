@@ -56,7 +56,7 @@ not remove the preference for native controls. Never require a session to commun
    For full, set `route: 'full'` and `route_source: 'auto'`, then continue.
 {% endif %}
 {% if workflow.route != "oneshot" %}
-4. Read `{{ rendered("plan-template.md") }}` fully and create a **planning approach draft**, not the final implementation plan. Save it as `approach-<slug>.md` beside `{plan_file}`, with `type: planning-approach` and `status: draft`. Include the Code Map, proposed approach, scope, constraints, provisional tasks and unresolved choices. If `preserved_intent` is non-empty, retain its frozen intent. Do not mark it approved or present it as the execution contract.
+4. Read `{{ rendered("plan-template.md") }}` fully and create a **planning approach draft**, not the final implementation plan. Save it as `{plan_file}`, with `type: approach` and `status: draft`. Include the Code Map, proposed approach, scope, constraints, provisional tasks and unresolved choices. If `preserved_intent` is non-empty, retain its frozen intent. Do not mark it approved or present it as the execution contract.
 5. Self-review the approach against READY FOR DEVELOPMENT. For anything important that's missing: if the repository can tell you, go look and fix the approach; if a human has to decide, add an `## Open Questions` entry. Do not invent the answer.
 6. Resolve the gates before the checkpoint, combining the following in one message when both apply. **Plan length** (see SCOPE STANDARD) is advisory: measure once after drafting, and again only after a material plan edit. Edit repetition and irrelevant detail while preserving requirements and evidence. Length alone never creates a decision gate or justifies splitting a cohesive goal.
 

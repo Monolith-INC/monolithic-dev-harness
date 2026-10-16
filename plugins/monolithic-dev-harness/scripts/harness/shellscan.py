@@ -97,6 +97,13 @@ IN_PLACE_FLAGS = {
     "gawk": re.compile(r"^(-i|--in-place|--inplace)$"),
     "yq": re.compile(r"^(-[a-zA-Z]*i|--inplace)"),
 }
+# Options that give an in-place editor its script; without one, its first operand is the script.
+SCRIPT_OPTIONS = {
+    "sed": ("-e", "--expression", "-f", "--file"),
+    "awk": ("-f", "--file"),
+    "gawk": ("-f", "--file", "-e", "--source"),
+    "yq": ("--from-file",),
+}
 # Readers that write only the file named by one of these options.
 OUTPUT_OPTIONS = {
     "sort": ("-o", "--output"),
@@ -172,6 +179,8 @@ class Invocation:
     cwd: (
         str | None
     )  # relative to where the shell started; None when a `cd` cannot be followed
+    # Runs only after every `cd` it follows succeeded (`cd dir && …`), so `cwd` is certain.
+    cwd_certain: bool = False
     redirects: tuple[tuple[str, str], ...] = ()
     stdin_text: str = ""  # a heredoc or here-string body
     piped_from: tuple[str, ...] = ()  # words of the commands piped into this one
@@ -283,6 +292,8 @@ def _parse_line(
             current = flush("close")
         elif token in {"|", "|&"}:
             current = flush("pipe")
+        elif token == "&&":
+            current = flush("and")
         elif token in _CONTROL:
             current = flush("end")
         elif token in {"<", ">"} and following == "(":
@@ -309,7 +320,7 @@ def _parse_line(
 
 
 def _segments(command: str) -> Iterator[tuple[str, _Segment | None, bool]]:
-    """Yield ("run", segment, parsed), or ("pipe" | "end" | "open" | "close", None, parsed)."""
+    """Yield ("run", segment, parsed), or ("pipe" | "and" | "end" | "open" | "close", None, parsed)."""
     lines = command.split("\n")
     index = 0
     while index < len(lines):
@@ -407,6 +418,8 @@ def _invocations(
         found.extend(invocations(inner, cwd, depth + 1))
     stack: list[str | None] = []
     pipeline: list[str] = []
+    # A `cd` joined by `&&` to what follows: what follows runs only in the new directory.
+    after_cd = certain = False
     for kind, segment, parsed in _segments(command):
         if kind == "open":
             stack.append(cwd)
@@ -414,9 +427,16 @@ def _invocations(
         if kind == "close":
             cwd = stack.pop() if stack else cwd
             pipeline = []
+            after_cd = certain = False
+            continue
+        if kind == "and":
+            certain = certain or after_cd
+            after_cd = False
+            pipeline = []
             continue
         if kind == "end":
             pipeline = []
+            after_cd = certain = False
             continue
         if kind == "pipe" or segment is None:
             continue
@@ -431,10 +451,12 @@ def _invocations(
                 cwd = None
             else:
                 cwd = _resolve(destination, cwd)
+        after_cd = name in {"cd", "pushd"} and cwd is not None
         invocation = Invocation(
             name=name,
             args=args,
             cwd=cwd,
+            cwd_certain=certain,
             redirects=tuple(segment.redirects),
             stdin_text=segment.stdin_text,
             piped_from=tuple(pipeline),
@@ -531,6 +553,21 @@ def _operands(args: tuple[str, ...]) -> list[str]:
     return [a for a in args if a and not a.startswith("-") and a != "{}"]
 
 
+def _edited_files(args: tuple[str, ...], script_options: tuple[str, ...]) -> list[str]:
+    """The files an in-place editor rewrites: its operands, less the script it was given."""
+    separate = {
+        position + 1
+        for position, arg in enumerate(args)
+        if arg in script_options and position + 1 < len(args)
+    }
+    operands = [
+        arg
+        for position, arg in enumerate(args)
+        if position not in separate and arg and not arg.startswith("-") and arg != "{}"
+    ]
+    return operands if _option_values(args, script_options) else operands[1:]
+
+
 def _option_values(args: tuple[str, ...], options: tuple[str, ...]) -> list[str]:
     values = []
     for position, arg in enumerate(args):
@@ -624,7 +661,7 @@ def _classify(
         # A `cd` that fails leaves the shell where it was, so a relative path is checked both
         # from the tracked directory and from where the command started.
         resolved = [_resolve(path, cwd)]
-        if cwd and not path.startswith(("/", "~")):
+        if cwd and not invocation.cwd_certain and not path.startswith(("/", "~")):
             resolved.append(_resolve(path, ""))
         return resolved
 
@@ -726,7 +763,7 @@ def _classify(
         return
     if name in IN_PLACE_FLAGS:
         if any(IN_PLACE_FLAGS[name].match(arg) for arg in args):
-            for operand in _operands(args):
+            for operand in _edited_files(args, SCRIPT_OPTIONS[name]):
                 target(operand)
         return
     if name in NON_WRITERS:

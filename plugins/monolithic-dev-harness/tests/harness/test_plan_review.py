@@ -66,7 +66,7 @@ def _plan(
     repo: Path,
     story: str,
     kind: str = "implementation-plan",
-    status: str = "approved",
+    status: str = "draft",
     body: str = "# Plan\n\n## Steps\n\nDo it.\n",
 ) -> str:
     path = repo / PLAN
@@ -150,18 +150,15 @@ def test_exactly_one_plan_is_approved_at_a_time(tmp_path: Path) -> None:
     )
 
 
-def test_the_note_must_be_an_approved_plan_for_that_story(tmp_path: Path) -> None:
+def test_the_note_must_be_a_plan_for_one_story(tmp_path: Path) -> None:
     story = _project(tmp_path)
 
     _plan(tmp_path, story, kind="design-doc")
     assert "type implementation-plan" in _confirm(tmp_path, PLAN).stderr
 
-    _plan(tmp_path, story, status="draft")
-    assert "status: approved" in _confirm(tmp_path, PLAN).stderr
-
     path = tmp_path / PLAN
     path.write_text(
-        "---\ntype: implementation-plan\nstatus: approved\n---\n\n# Plan\n",
+        "---\ntype: implementation-plan\nstatus: draft\n---\n\n# Plan\n",
         encoding="utf-8",
     )
     assert "exactly one Story" in _confirm(tmp_path, PLAN).stderr
@@ -249,7 +246,7 @@ def test_the_plan_lives_in_the_artifacts_path(tmp_path: Path) -> None:
     outside = tmp_path / "docs" / "plan.md"
     outside.parent.mkdir()
     outside.write_text(
-        f'---\ntype: implementation-plan\nstory: "{story}"\nstatus: approved\n---\n',
+        f'---\ntype: implementation-plan\nstory: "{story}"\nstatus: draft\n---\n',
         encoding="utf-8",
     )
     assert "artifacts path" in _confirm(tmp_path, "docs/plan.md").stderr

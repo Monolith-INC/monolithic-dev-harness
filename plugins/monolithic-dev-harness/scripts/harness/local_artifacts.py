@@ -2,19 +2,17 @@
 
 The tracker is the usual home of an approved spec: publishing one needs the user's approval. A note
 in the artifacts path gets the same guarantee from the approval hooks. When the user approves, the
-hook pins the path and exact content of every note marked `status: approved` (`state.pin_notes`),
-and only pinned content counts. A draft, a note edited after the approval, or one marked approved
-without a later approval is never read as approved.
+hook pins the path and content of every note the approval reviewed (`state.pin_notes`), and only
+pinned content counts. The note's own `status` (`draft`, then `active` once accepted) is not part
+of what is pinned; a note never reviewed, or edited after the approval, is never read as approved.
 
 This module only reads notes. Which kinds count as a spec is the spec gate's decision.
 """
 
 from __future__ import annotations
 
-import hashlib
-import os
 import sys
-from collections.abc import Iterator
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -24,15 +22,13 @@ if str(_RUNTIME_DIR) not in sys.path:
     sys.path.insert(0, str(_RUNTIME_DIR))
 
 from harness import state  # noqa: E402
+from harness.workflow import document_digest  # noqa: E402
 from orchestrator_core.ingest import parse_frontmatter  # noqa: E402
 from orchestrator_core.project_config import load_project_config  # noqa: E402
 
 # `ticket` is left out: the work-item templates use it for the parent of the item being drafted.
 WORK_ITEM_FIELDS = ("story", "work_item")
-APPROVED_STATUS = "approved"
 _FRONTMATTER_BYTES = 16 * 1024
-# Folders an artifacts path set to the repository root would otherwise drag into the scan.
-_SKIPPED_DIRS = frozenset({"node_modules", "__pycache__"})
 
 
 def artifacts_dir(project_root: Path) -> Path | None:
@@ -42,7 +38,7 @@ def artifacts_dir(project_root: Path) -> Path | None:
 
 @dataclass(frozen=True)
 class Note:
-    """A note's frontmatter and the digest of its whole content."""
+    """A note's frontmatter and the digest of its content (`workflow.document_digest`)."""
 
     frontmatter: dict[str, Any]
     digest: str
@@ -50,12 +46,6 @@ class Note:
     @property
     def kind(self) -> str:
         return str(self.frontmatter.get("type") or "")
-
-    @property
-    def approved(self) -> bool:
-        return (
-            str(self.frontmatter.get("status", "")).strip().lower() == APPROVED_STATUS
-        )
 
     @property
     def work_items(self) -> tuple[str, ...]:
@@ -79,16 +69,21 @@ def note(path: Path) -> Note | None:
         return None
     head = content[:_FRONTMATTER_BYTES].decode("utf-8-sig", errors="replace")
     frontmatter, _ = parse_frontmatter(head)
-    return Note(frontmatter, hashlib.sha256(content).hexdigest())
+    return Note(frontmatter, document_digest(content))
 
 
-def approved_notes(project_root: Path) -> dict[str, str]:
-    """Path -> content digest of each note marked `status: approved`, for an approval to pin."""
+def reviewed_notes(project_root: Path, reviewed: Iterable[str]) -> dict[str, str]:
+    """Path -> content digest of each reviewed file that is a note in the artifacts path."""
+    folder = artifacts_dir(project_root)
     notes: dict[str, str] = {}
-    for path in _markdown_files(artifacts_dir(project_root)):
-        found = note(path)
-        if found is not None and found.approved:
-            notes[str(path.resolve())] = found.digest
+    if folder is None:
+        return notes
+    root = folder.resolve()
+    for name in reviewed:
+        path = Path(name).resolve()
+        found = note(path) if path.is_relative_to(root) else None
+        if found is not None and found.kind:
+            notes[str(path)] = found.digest
     return notes
 
 
@@ -104,20 +99,7 @@ def approved_kinds_for(project_root: Path, key: str) -> set[str]:
             found is not None
             and found.digest in digests
             and found.kind
-            and found.approved
             and key in found.work_items
         ):
             kinds.add(found.kind)
     return kinds
-
-
-def _markdown_files(root: Path | None) -> Iterator[Path]:
-    if root is None or not root.is_dir():
-        return
-    for directory, subdirs, files in os.walk(root):
-        subdirs[:] = [
-            d for d in subdirs if not d.startswith(".") and d not in _SKIPPED_DIRS
-        ]
-        for name in files:
-            if name.endswith(".md"):
-                yield Path(directory) / name

@@ -6,11 +6,12 @@ to a selected provider.
 ## Draft location
 
 `Tickets/Ready/` at the project root, the folder the harness's local tracker keeps its items in
-(Constitution, Article 7). Specs and plans stay under the artifacts path.
+(Constitution, Article 7).
 
-With the local tracker, creating the item turns its draft into the tracked ticket: the harness
-gives it its `provider_id` and file name and keeps its front matter. Do not rename or edit the
-draft afterwards. With another tracker, record the returned identifier as below.
+With the local tracker, creating the item turns its draft into the tracked ticket in the same file:
+the harness gives it its `provider_id`, the number its file name reserved, and keeps its front
+matter. Do not rename or edit the draft afterwards. With another tracker, record the returned
+identifier as below. Specs and plans go in the item's folder (`document-layout.md`).
 
 ## Frontmatter (hook-validated)
 
@@ -43,11 +44,13 @@ in `Tickets/`. Lifecycle lives in the selected provider, not in frontmatter.
 
 Regex: `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+`, all lowercase.
 
-Until a provider assigns the real id, prefix with the immediate parent id (for example,
-`6868-us1-...`). An item with no parent (an Epic, or a standalone Feature or Story) uses `draft-`
-(for example, `draft-login-oauth.md`). With a tracker other than the local one,
-rename it after creation with the provider identifier and set `provider_id`; the local tracker does
-this itself.
+With the local tracker, the file name is the item's final one from the start:
+`<number>-<title-slug>.md`, from `harness document path --type ticket --new <type> --title "<title>"`
+(`document-layout.md`). The number is the one the item will get.
+
+With another tracker, until it assigns the real id, prefix with the immediate parent id (for
+example, `6868-us1-...`), or `draft-` for an item with no parent; after creation, rename it with the
+provider identifier and set `provider_id`.
 Provider identifiers and `parent_id` are strings. Legacy keys `azure_id`, `parent_feature`, and
 `parent_epic` are invalid.
 

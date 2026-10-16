@@ -75,8 +75,7 @@ do not inspect implementation files to second-guess the command. Summarize only 
 the selected work-item tracker and artifact destination. Do not show raw settings, inferred remote,
 branch, or source-control fields. Show the selected language, work-item tracker, and planning
 folder once, then ask the `setup-confirm` gate: `harness decision present --repo <project> --host
-<host> --gate setup-confirm`, adding `--blocking-available` or `--async-available` according to the
-tools actually available. Invoke the returned control, or show the returned `menu` in chat. This
+<host> --gate setup-confirm` (see `references/human-decisions.md` for the control flags). Invoke the returned control, or show the returned `menu` in chat. This
 works before settings exist. Do not ask another confirmation after Yes. No returns to changing the
 selected choices while keeping their current values.
 

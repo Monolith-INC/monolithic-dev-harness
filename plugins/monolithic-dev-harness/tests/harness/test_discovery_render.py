@@ -99,6 +99,7 @@ def check_package(
         "planning approach draft"
     )
     assert "Refinement" in plan_step and "implementation-confirm" not in plan_step
+    assert shlex.split(package["context"]["status_command"])[0] == "harness"
     assert shlex.split(package["context"]["status_command"])[-2:] == [
         "--session-id",
         selected.id,

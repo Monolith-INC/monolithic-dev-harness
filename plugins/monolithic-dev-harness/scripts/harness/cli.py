@@ -42,6 +42,7 @@ from harness import (  # noqa: E402
     adoption,
     bmad,
     cli_workflow,  # noqa: E402
+    documents,
     gitstate,
     knowledge,
     local_tracker,
@@ -621,6 +622,7 @@ def parser() -> argparse.ArgumentParser:
     preference_parser.add_argument("operation", choices=("show", "language"))
     preference_parser.add_argument("value", nargs="?")
     preference_parser.add_argument("--repo")
+    documents.add_parser(sub)
     tracker_parser = sub.add_parser(
         "tracker",
         help="list or inspect trackers, check readiness, stage a new one, or print the work-item tree",
@@ -695,6 +697,8 @@ def main(argv: list[str] | None = None) -> int:
         return preference_command(args)
     if args.command == "tracker":
         return tracker_command(args)
+    if args.command == "document":
+        return documents.command(args)
     if args.command == "adoption":
         return adoption_command(args)
     return bootstrap(extra)

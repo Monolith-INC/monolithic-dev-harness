@@ -110,6 +110,18 @@ the body) in `Tickets/Ready`, `Tickets/InProgress` or `Tickets/Done`. A ticket w
   approach that refinement takes as input, never a Story's implementation plan. BMad's ticket list
   (`tickets.py`) is read as input only; `Tickets/` is the only backlog (owner, 2026-10-16).
 
+## Article 8a — Where documents live and what they are called
+
+- Every document belongs to one work item and lives in that item's folder in the artifacts path,
+  nested Epic → Feature → Story. Nothing from planning lies loose in a flat folder.
+- A document is named `<document-type>-<work-item-type>-<number>-<title-slug>.md`, the scope written
+  the way the agile-backlog-toolkit names ticket files:
+  `spec-user-story-0001-show-to-do-and-done-task-counts-on-the-task-screen.md`.
+- A document carries its final name from the start; nothing is renamed once its item is created.
+- A document under review is `status: draft` and becomes `active` once accepted, as in the toolkit.
+- `harness document path` gives every path; the layout is
+  `plugins/monolithic-dev-harness/references/document-layout.md` (owner, 2026-10-16).
+
 ## Article 9 — Where work starts and where it may stop
 
 - A work session tracks the item the user starts from: an Epic, a Feature or a Story.

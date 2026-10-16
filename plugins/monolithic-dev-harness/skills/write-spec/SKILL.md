@@ -52,6 +52,7 @@ material needed to decide is visible, ask the `approve-spec` gate with the spec 
 pane controls do not record harness approval. That approval covers publishing this spec while it is
 unchanged. An edited digest requires a new review. `implement-story` starts only after it.
 
-When the spec lives only in the artifacts path, set its frontmatter to `status: approved` before
-you ask. The user's approval pins that exact content; any later edit to the note needs a new
-approval.
+When the spec lives only in the artifacts path, write it where `harness document path --type <kind>
+--item <story key>` says (`tech-spec`, `design-doc`, `adr` or `api-contract`), with `status: draft` and set `active`
+after the user approves. The approval pins its content (the `status` line aside); any other edit to
+the note needs a new approval.

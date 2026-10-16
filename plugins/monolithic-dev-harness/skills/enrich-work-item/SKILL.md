@@ -101,7 +101,8 @@ For user-story sources, classify Bug vs User Story per enricher §1 keywords whe
 ## PHASE 3 — WRITE SPEC (optional artifacts path)
 
 When the user will persist locally, fill the matching common `spec-*.md`
-into `<artifacts>/Specs/[<parent-id>-]<kebab-slug>-spec.md`. Skip when destination is chat-only.
+into the path `harness document path --type spec --item <key>` prints (`--new` before the item
+exists; see `../../references/document-layout.md`). Skip when destination is chat-only.
 
 ---
 
