@@ -22,7 +22,8 @@ _DEFAULT_CHAT_INSTRUCTION = (
     "Show the review, then `menu` exactly as written, and end the turn to receive the "
     "actual human reply. Do not reword, renumber, or add options. Preserve the review, "
     "choices, and progress; resume this same run when the human answers. Do not report "
-    "internal tool failures or abandon the run."
+    "internal tool failures or abandon the run. The chat menu is for this one question: "
+    "present the next question with native controls again."
 )
 
 

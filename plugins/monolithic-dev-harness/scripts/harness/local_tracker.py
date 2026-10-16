@@ -166,8 +166,8 @@ def records(root: Path, manifest: Manifest) -> tuple[tuple[Path, Record], ...]:
     )
 
 
-def drafts(root: Path) -> tuple[tuple[Path, str], ...]:
-    """Every draft (a ticket file with no `provider_id`) and its body."""
+def drafts(root: Path) -> tuple[tuple[Path, dict[str, Any], str], ...]:
+    """Every draft (a ticket file with no `provider_id`): its file, front matter and body."""
     found = []
     for path in sorted(root.rglob("*.md")) if root.is_dir() else ():
         if ATTACHMENTS in path.relative_to(root).parts:
@@ -177,8 +177,20 @@ def drafts(root: Path) -> tuple[tuple[Path, str], ...]:
         except (OSError, UnicodeDecodeError):
             continue
         if not frontmatter.get("provider_id"):
-            found.append((path, body.removeprefix("\n")))
+            found.append(
+                (path, frontmatter, body.removeprefix("\n").removesuffix("\n"))
+            )
     return tuple(found)
+
+
+def draft_fields(frontmatter: Mapping[str, Any]) -> dict[str, Any]:
+    """What an item keeps from its draft's front matter: points, hours, language, tags and the
+    like. Its identity, type and parent come from the tracker, and `status` is never kept."""
+    return {
+        name: value
+        for name, value in frontmatter.items()
+        if name not in _OWN and name not in _RECORD_ONLY and name != "status"
+    }
 
 
 def body_digest(text: str) -> str:
@@ -198,6 +210,8 @@ def _scalar(value: Any) -> str:
             return "true" if value else "false"
         case int() | float():
             return str(value)
+        case list() | tuple():
+            return "[" + ", ".join(str(item) for item in value) + "]"
         case _:
             return '"' + str(value).replace("\n", " ").replace('"', "'") + '"'
 

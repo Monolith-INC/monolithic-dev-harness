@@ -14,8 +14,9 @@ try:
 except ImportError:  # imported as `scripts.policy`, as the tests do
     from scripts.harness import globs, shellscan
 
-# Never code, whatever the policy says: git's own files and the harness's.
-_NOT_CODE = (".git", ".harness")
+# Never code, whatever the policy says: git's own files, the harness's, and the local tracker's
+# tickets (the agile-backlog-toolkit's `Tickets/`).
+_NOT_CODE = (".git", ".harness", "Tickets")
 
 
 def git_commands(command: str) -> list[list[str]]:
@@ -53,7 +54,10 @@ def is_code(
         case None, False, path, folder if (
             folder
             and path.startswith(folder.rstrip("/") + "/")
-            and Path(path).suffix.lower() in PLANNING_DOCUMENTS
+            # `plan.md.tmp`, written then moved over `plan.md`, is a planning document too.
+            and any(
+                suffix.lower() in PLANNING_DOCUMENTS for suffix in Path(path).suffixes
+            )
         ):
             return False
         case _:

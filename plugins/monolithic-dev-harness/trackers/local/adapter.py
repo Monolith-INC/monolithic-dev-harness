@@ -264,9 +264,19 @@ def _store_new(
     description: str,
     parent: Record | None,
 ) -> Result[WorkItem]:
-    """Write the item's ticket file; a draft with the same body becomes this item."""
+    """Write the item's ticket file. A draft with the same body becomes this item: its front matter
+    (points, language, tags) is kept and the draft file is replaced."""
     key = _next_key(found, kind)
+    draft = next(
+        (
+            (file, fields)
+            for file, fields, body in local_tracker.drafts(root)
+            if body.strip() == description.strip()
+        ),
+        None,
+    )
     record = {
+        **(local_tracker.draft_fields(draft[1]) if draft else {}),
         "key": key,
         "title": title,
         "kind": kind.value,
@@ -279,9 +289,8 @@ def _store_new(
 
     def store() -> None:
         local_tracker.write(path, record)
-        for draft, body in local_tracker.drafts(root):
-            if body.strip() == description.strip() and draft != path:
-                draft.unlink()
+        if draft and draft[0] != path:
+            draft[0].unlink()
 
     return bind(
         attempt(store, "local_storage_error", f"could not write {path.name}", OSError),

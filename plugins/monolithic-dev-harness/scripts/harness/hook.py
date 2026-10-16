@@ -280,6 +280,7 @@ def _held(
             pass
     if decisions.blocking(repo, current) and not (
         decisions.status_command(call.command, Path(call.cwd or repo))
+        or decisions.show_command(call.command, Path(call.cwd or repo))
         or decisions.fallback_command(call.command, Path(call.cwd or repo))
         or work_session_context.recovery_allowed(repo, current, request)
     ):

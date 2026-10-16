@@ -38,7 +38,7 @@ harness decision present --repo <project> --host <host> \
 | `plan-checkpoint` | The discovery plan is ready (`--artifact` the plan) |
 | `refinement-split` | A proposed split of an Epic, Feature or Story is ready (`--artifact` the outline); no write |
 | `harness-controls` | The user wants to suspend, resume, or use free mode |
-| `publish-items`, `move-item`, `approve-spec`, `implementation-confirm`, `approve-document`, `publish-branch`, `reply-pr`, `pause-tracking` | Approvals; see the harness skill's approval protocol. `implementation-confirm` and `approve-document` require the files shown first with `harness workflow show` |
+| `publish-items`, `move-item`, `approve-spec`, `implementation-confirm`, `approve-document`, `publish-branch`, `reply-pr`, `pause-tracking` | Approvals; see the harness skill's approval protocol. `publish-items`, `implementation-confirm` and `approve-document` require the files shown first: run `harness workflow show`, put its output in your reply, run `harness decision status` (the host records a reply only once another tool runs), then ask |
 
 - Never pass a session id: the harness asks in the project's current work session, or
   project-wide when there is none. Asking never requires a session to exist.
@@ -69,7 +69,8 @@ The command returns one of:
 Delivery problems are recoverable and invisible to the human. When a control fails to show, or its
 reply is not captured, run `harness decision fallback --repo <project> --host
 <host>` (add `--async-available` when that control is callable). It moves the same question to the
-next transport (blocking → async → chat) with the same options, details, and menu text. Never
+next transport (blocking → async → chat) with the same options, details, and menu text. A
+fallback is for that one question: present the next question with native controls again. Never
 replace the question, ask the human to diagnose hooks, or show internal errors. Reuse a captured
 answer rather than asking again. If an optional preference was not captured, continue with its
 default; do not keep retrying controls or repeat the preference question.

@@ -62,6 +62,9 @@ HUMAN_OWNED_READS = (
 
 HUMAN_OWNED_WRITES = (
     "echo x > .harness/settings.json",
+    # A variable assigned once is followed to its value, or counts as naming anything.
+    "F=.harness/settings.json; echo x > $F",
+    "F=docs/a.md; F=.harness/settings.json; echo x > $F",
     # Evidence the workflow requirements trust is recorded by the harness, never by hand.
     "echo x > .harness/state/checks/abc.json",
     "echo x > .harness/state/review/abc.json",

@@ -722,6 +722,19 @@ def status_command(command: str, cwd: Path) -> bool:
             return False
 
 
+def show_command(command: str, cwd: Path) -> bool:
+    """Whether a shell command only shows files (`harness workflow show`), so a waiting question
+    about them can be shown again. Anything but exactly one show invocation disqualifies it."""
+    match commands.harness_args(command, cwd):
+        case ("workflow", "show", *options):
+            return len(options) % 2 == 0 and all(
+                flag in ("--repo", "--session-id", "--artifact")
+                for flag in options[::2]
+            )
+        case _:
+            return False
+
+
 def fallback_command(command: str, cwd: Path) -> bool:
     """Only the controlled transport change may pass the waiting gate."""
     match commands.harness_args(command, cwd):

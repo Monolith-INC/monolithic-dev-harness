@@ -134,7 +134,7 @@ not modify):
 - `## Requisitos` — requirement bullets (from `description`, parent context, attachment, research)
 - `## Critérios de Aceite` — `- [ ]` checkboxes, testable, infinitive verbs
 
-Path: `<artifacts>/Tickets/Ready/<prefix>-<kebab-slug>.md` only — never artifacts root or `Specs/`.
+Path: `Tickets/Ready/<prefix>-<kebab-slug>.md` only — never artifacts root or `Specs/`.
 
 **Plain-language sub-pass:** Before presenting, read
 `../generate-plain-language-documentation/references/integration-notes.md` § generate-work-item and

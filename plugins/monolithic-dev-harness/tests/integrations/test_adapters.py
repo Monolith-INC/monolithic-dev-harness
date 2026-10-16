@@ -613,7 +613,8 @@ class LocalTest(unittest.TestCase):
         drafts = self.repo / "Tickets/Ready"
         drafts.mkdir(parents=True)
         (drafts / "draft-reset-notice.md").write_text(
-            "---\ntype: ticket\nwork_item_type: User Story\n---\n\nThe body.\n"
+            "---\ntype: ticket\nwork_item_type: User Story\nstory_points: 2\n"
+            "language: en\ntags: [ticket, user-story]\nstatus: draft\n---\n\nThe body.\n"
         )
         (drafts / "draft-other.md").write_text(
             "---\ntype: ticket\nwork_item_type: User Story\n---\n\nAnother.\n"
@@ -626,6 +627,13 @@ class LocalTest(unittest.TestCase):
             ["0001-reset-notice.md", "draft-other.md"],
         )
         self.assertEqual(story.key, "STORY-0001")
+        # The draft's front matter stays with the item; `status` never does.
+        kept = self.tracker.get_work_item(story.key).value.provider_data
+        self.assertEqual(
+            (kept["story_points"], kept["language"], kept["tags"]),
+            (2, "en", ["ticket", "user-story"]),
+        )
+        self.assertNotIn("status", kept)
 
 
 class PublishTest(unittest.TestCase):

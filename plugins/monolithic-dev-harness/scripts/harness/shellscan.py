@@ -937,6 +937,38 @@ def _writes_operands(invocation: Invocation) -> bool:
     return any("\x00" in path for path in probe.targets + probe.trees)
 
 
+# A statement that only assigns a plain value: `F=docs/a.md`, `D="Tickets/Ready"`.
+_ASSIGNMENT = re.compile(
+    r"(?:^|(?<=[;&|\n(]))\s*([A-Za-z_][A-Za-z0-9_]*)="
+    r"(?:'([^'$`]*)'|\"([^\"$`]*)\"|([^\s;&|$`'\"()<>{}]*))"
+    r"(?=\s*(?:$|[;&|\n)]))"
+)
+
+
+def expand_plain_variables(command: str) -> str:
+    """Put in a variable's value where the command assigns it once, to a plain value.
+
+    A name bound any other way (a second assignment, `for`, `read`, `+=`, a substitution) is left
+    as it is, so the scanner still treats it as naming anything.
+    """
+    values: dict[str, str] = {}
+    for match in _ASSIGNMENT.finditer(command):
+        name = match.group(1)
+        value = next(group for group in match.groups()[1:] if group is not None)
+        bindings = re.findall(
+            rf"(?:\b{name}\+?=|\bfor\s+{name}\b|\bread\b[^;&|\n]*\b{name}\b)", command
+        )
+        if len(bindings) == 1:
+            values[name] = value
+    for name, value in values.items():
+        command = re.sub(
+            rf"\$(?:\{{{name}\}}|{name}(?![A-Za-z0-9_]))",
+            lambda _, value=value: value,
+            command,
+        )
+    return command
+
+
 def scan(
     command: str,
     cwd: str | None = "",
@@ -950,6 +982,7 @@ def scan(
     default; a check that only asks "is this plainly a write?" turns it off.
     """
     writes = _Writes()
+    command = expand_plain_variables(command)
     for invocation in invocations(command, cwd):
         _classify(invocation, writes, base, command, unknown_writes=unknown_writes)
         if invocation.operands_from_pipe and _writes_operands(invocation):

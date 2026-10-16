@@ -274,6 +274,19 @@ def _trial_metadata(project_arg: str) -> tuple[Path, Path, dict]:
     return project, trial_root, marker
 
 
+def launch_command(project_arg: str) -> str:
+    """The shell command that starts Claude Code in the trial copy with its own environment."""
+    project, _, _ = _trial_metadata(project_arg)
+    environment = runner_environment(project_arg)
+    variables = " ".join(
+        f"{key}={shlex.quote(value)}"
+        for key, value in sorted(environment.items())
+        if key != "PATH"
+    )
+    path = shlex.quote(environment["PATH"].split(os.pathsep, 1)[0])
+    return f"cd {shlex.quote(str(project))} && {variables} PATH={path}:$PATH claude"
+
+
 def runner_environment(project_arg: str) -> dict[str, str]:
     _, trial_root, marker = _trial_metadata(project_arg)
     if marker.get("format") != 2:
@@ -617,6 +630,8 @@ def main() -> int:
                 if args.install:
                     install_harness(str(project), args.install)
                 print(project)
+                if args.install == "claude":
+                    print(launch_command(str(project)))
             case "discard":
                 print(f"Discarded {discard(args.project_path)}")
             case "environment":

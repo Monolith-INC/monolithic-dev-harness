@@ -28,6 +28,10 @@ class AcceptanceTrialTests(unittest.TestCase):
                 (project / ".harness/knowledge/stores/project/catalog.json").is_file()
             )
             environment = acceptance_trial.runner_environment(str(project))
+            launch = acceptance_trial.launch_command(str(project))
+            for key in ("CLAUDE_CONFIG_DIR", "HARNESS_USER_STATE_DIR", "HARNESS_HOME"):
+                self.assertIn(f"{key}={environment[key]}", launch)
+            self.assertTrue(launch.endswith(":$PATH claude"))
             self.assertEqual(Path(environment["TMPDIR"]).stat().st_mode & 0o777, 0o700)
             self.assertEqual(
                 Path(environment["HARNESS_USER_STATE_DIR"]).stat().st_mode & 0o777,

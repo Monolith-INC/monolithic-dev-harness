@@ -6,7 +6,7 @@ Entry point for the skill reference library.
 COLLECT → INGEST → RESEARCH (Context7) → WRITE SPEC (blueprint) → GENERATE DRAFT → GATE → PERSIST
          │                              │                        │
          │                              ▼                        ▼
-         │                       <artifacts>/Specs/           <artifacts>/Tickets/Ready/
+         │                       <artifacts>/Specs/           Tickets/Ready/
          └─ parent + attachment context
 ```
 
@@ -28,7 +28,7 @@ Prose polish for requirement bullets: **`generate-plain-language-documentation`*
 
 **Spec** (PHASE 3): `<artifacts>/Specs/[<parent-id>-]<kebab-slug>-spec.md`
 
-**Ticket draft** (PHASE 4): `<artifacts>/Tickets/Ready/<prefix>-<kebab-slug>.md`
+**Ticket draft** (PHASE 4): `Tickets/Ready/<prefix>-<kebab-slug>.md`
 
 Shared spec frontmatter:
 

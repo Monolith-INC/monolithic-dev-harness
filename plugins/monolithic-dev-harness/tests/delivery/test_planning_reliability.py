@@ -29,6 +29,9 @@ from scripts.policy.commands import is_code, writes_code
         ("docs/planning", True, True),
         ("docs/planning-other/draft.md", False, True),
         ("lib/source.dart", False, True),
+        # The local tracker's tickets are backlog, never code.
+        ("Tickets/Ready/draft-counts.md", False, False),
+        ("Tickets/Ready/draft-counts.md.new", False, False),
     ],
 )
 def test_planning_documents_and_data_are_not_code_without_source_globs(
@@ -39,6 +42,28 @@ def test_planning_documents_and_data_are_not_code_without_source_globs(
 
 def test_explicit_source_globs_take_precedence():
     assert is_code("docs/planning/source.md", ["**/*.md"], planning="docs/planning")
+
+
+@pytest.mark.parametrize(
+    "command,expected",
+    [
+        # A variable assigned once to a plain path is that path.
+        (
+            "F=docs/planning/d.md && { cat <<'EOF'\nx\nEOF\n} > $F.tmp && mv $F.tmp $F",
+            False,
+        ),
+        ("S=/tmp/scratch; mkdir -p $S; cat > $S/tasks.json <<'EOF'\n{}\nEOF\n", False),
+        ('D="Tickets/Ready"; echo x > "$D/draft.md"', False),
+        ("F=lib/a.dart; echo x > $F", True),
+        ("F=lib/a.dart && echo x > ${F}", True),
+        # Bound more than once, or by a loop, or from a command: it cannot be followed.
+        ("F=docs/x.md; F=lib/a.dart; echo x > $F", True),
+        ("for F in lib/a.dart; do echo x > $F; done", True),
+        ("F=$(ls lib | head -1); echo x > $F", True),
+    ],
+)
+def test_shell_variables_assigned_once_are_followed(tmp_path, command, expected):
+    assert writes_code(command, tmp_path, None, "docs/planning") is expected
 
 
 def test_shell_planning_write_and_source_write_are_distinct(tmp_path):

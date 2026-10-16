@@ -129,7 +129,9 @@ def test_implementation_confirmation_keeps_the_refinement_stage_and_recovers(
     assert workflow.load(tmp_path).value.current.stage == "refinement"
 
 
-def test_only_a_plain_status_query_passes_the_pending_gate(tmp_path: Path) -> None:
+def test_only_a_plain_status_query_or_show_passes_the_pending_gate(
+    tmp_path: Path,
+) -> None:
     write_settings(tmp_path)
     decisions.begin(tmp_path, "d1", "Continue?", ("Continue",), "chat")
     fake = tmp_path / "bin" / "harness"
@@ -145,7 +147,12 @@ def test_only_a_plain_status_query_passes_the_pending_gate(tmp_path: Path) -> No
         )
 
     assert "deny" not in shell(f"{CLI} decision status --repo {tmp_path}")
+    # Showing the files a question is about only reads them, so it may run while it waits.
+    assert "deny" not in shell(
+        f"{CLI} workflow show --repo {tmp_path} --artifact docs/plan.md --artifact b.md"
+    )
     for command in (
+        f"{CLI} workflow show --artifact a.md; touch P4",
         "touch notes.txt",
         f"{CLI} decision status; touch P1",
         f'{CLI} decision status --repo "$(touch P2)"',

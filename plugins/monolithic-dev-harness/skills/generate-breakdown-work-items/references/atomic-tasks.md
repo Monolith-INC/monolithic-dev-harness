@@ -139,7 +139,7 @@ write approval. The local Implementation Plan remains in the configured artifact
 
 When the user chose local Task drafts, or the workflow also keeps local copies:
 
-1. Write one markdown draft per Task under the artifacts path (prefer `Tickets/Ready/` or a host Task folder).
+1. Write one markdown draft per Task in `Tickets/Ready/` at the project root.
 2. Filename pattern per `../../../references/ticket-structure.md`:
    `task-<kebab-title>` is invalid as a bare prefix — use `task-<slug>` only if the host regex
    allows `task-`; otherwise `<story-id-or-0000>-task-<slug>.md` matching

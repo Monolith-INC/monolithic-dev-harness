@@ -120,7 +120,9 @@ def _all_present(expected: tuple[str, ...], text: str) -> Result[None]:
             "artifact_not_in_reply",
             "the human has not seen the files: tool output is hidden from them. Put the "
             "`harness workflow show` output in your reply (missing, for example: "
-            f"{missing[0]!r}), then ask again",
+            f"{missing[0]!r}). The host records your reply only once another tool runs, so "
+            "text written in the same message as the question is not seen yet: write the files "
+            "in your reply, run `harness decision status`, then ask again",
         )
     )
 

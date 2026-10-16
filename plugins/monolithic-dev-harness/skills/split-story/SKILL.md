@@ -154,8 +154,8 @@ before writing any files.
 **Spike mode** (Branch B confirmed):
 
 1. Draft one local file at:
-   `<artifacts>/Tickets/Ready/<parent_id>-spike-<slug>.md`, or
-   `<artifacts>/Tickets/Ready/draft-spike-<slug>.md` when the story has no parent
+   `Tickets/Ready/<parent_id>-spike-<slug>.md`, or
+   `Tickets/Ready/draft-spike-<slug>.md` when the story has no parent
 2. Fill all 7 body sections using the Spike stub format from `./references/scoring-guide.md`.
 3. Fill each `[placeholder]` with content derived from the original story.
 
@@ -165,7 +165,7 @@ For each approved sub-story:
 
 1. Filename: `<parent_id>-<n>-<kebab-slug>.md` — e.g., `6868-1-register-flow.md`. When the
    story has no parent, use `draft-<n>-<kebab-slug>.md`: a filename never contains `None`.
-2. Path: `<artifacts>/Tickets/Ready/<filename>`.
+2. Path: `Tickets/Ready/<filename>`.
 3. Frontmatter (hook-valid — no `status:` and no `provider_id` before provider creation):
 
 ```yaml
