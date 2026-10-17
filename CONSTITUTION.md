@@ -38,8 +38,8 @@ The agile-backlog-toolkit in particular has already solved the backlog questions
 is, when an item is ready, how changes reach existing items, how Stories are broken down). Do not
 reason from a skill's name: read the skill before describing, placing or changing it.
 
-Source copies: agile-backlog-toolkit at `/home/monolith/projects/agile-backlog-toolkit`;
-codex-workflows-plugin at `/home/monolith/projects/codex-workflows-plugin` (owner, 2026-10-16).
+Source copies: agile-backlog-toolkit at `/mnt/DATA/Projects/Personal/agile-backlog-toolkit`;
+codex-workflows-plugin at `/mnt/DATA/Projects/Personal/codex-workflows-plugin`.
 
 ## Article 3 — What refinement is
 

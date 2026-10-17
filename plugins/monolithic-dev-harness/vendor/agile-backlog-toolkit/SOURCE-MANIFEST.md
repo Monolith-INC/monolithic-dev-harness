@@ -2,8 +2,8 @@
 
 ## Provenance
 
-- Upstream project: `agile-backlog-toolkit` (local source `/home/monolith/projects/agile-backlog-toolkit`)
-- Version 0.12.1, source revision `e7ae82c31771a0ccda22c21858eee066168de1f2`, clean tree, copied 2026-10-16
+- Upstream project: `agile-backlog-toolkit` (local source `/mnt/DATA/Projects/Personal/agile-backlog-toolkit`)
+- Version 0.12.1, source revision `e7ae82c31771a0ccda22c21858eee066168de1f2`, copied 2026-10-16 (the skills, references and common folders match that revision)
 - License: MIT; see [LICENSE](LICENSE).
 
 ## Files in this repository

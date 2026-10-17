@@ -2,13 +2,13 @@
 
 ## Provenance
 
-- Upstream project: `codex-workflows-plugin` (local source `/home/monolith/projects/codex-workflows-plugin`)
+- Upstream project: `codex-workflows-plugin` (local source `/mnt/DATA/Projects/Personal/codex-workflows-plugin`)
 - Version 0.5.26, source revision `75c22f0bfd9e7e3c428f33383970dfb2a3e0eabd`, copied 2026-10-16
 
 ## Files in this repository
 
 `upstream/skills/` holds the eleven delivery skills exactly as the source has them, and
-`upstream/skills/codex_workflows/` the four stage sequences (`resources/`) and their rule files.
+`upstream/skills/codex_workflows/` the four stage sequences (`resources/`) and their rule files (`rules/`).
 
 The harness runs the copies under `../../skills/<name>/`, each copied over from `upstream/` and
 aligned only where the source conflicts with the harness contract
