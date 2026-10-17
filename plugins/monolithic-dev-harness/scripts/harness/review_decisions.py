@@ -80,8 +80,6 @@ def _checkpoint(
                             stage,
                             artifacts=artifacts,
                             pending=question,
-                            next_action="Continue from the human's answer to: "
-                            + question,
                         ),
                         lambda updated: {
                             "before": asdict(current),
@@ -135,7 +133,6 @@ def _validated(
                                 previous.current.stage,
                                 artifacts=intended.current.artifacts,
                                 pending=intended.current.pending,
-                                next_action=intended.current.next_action,
                             )
                             == Ok(intended),
                             "review_recovery_invalid",

@@ -2,7 +2,7 @@
 title: Harness Main Flow
 status: implementation
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-16
 ---
 
 # Harness main flow
@@ -10,8 +10,11 @@ last_reviewed: 2026-10-15
 ![Onboarding flow](../../assets/diagrams/harness-main-flow.svg)
 
 Discovery → Planning → Hardening → Refinement → Preparation → Execution → Verify, with an optional
-idea route in front. The bundled [onboarding contract](../../../plugins/monolithic-dev-harness/references/onboarding.md)
-is the agent-facing source of truth; the settled rules behind it are in the
+idea route in front. The order is the route in
+[`config/prepared-workflows.json`](../../../plugins/monolithic-dev-harness/config/prepared-workflows.json):
+`harness next` gives the agent its next step from it, the guards read their requirements from it,
+and the diagram above is drawn from it (`scripts/harness/route_diagram.py`; the repository check
+fails when they differ). The settled rules behind it are in the
 [constitution](../../../CONSTITUTION.md).
 
 ## User experience

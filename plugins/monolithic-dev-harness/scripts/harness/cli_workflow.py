@@ -23,6 +23,7 @@ from harness import (
     prepared_workflows,
     questions,
     review_decisions,
+    route_facts,
     settings,
     startup,
     state,
@@ -38,6 +39,7 @@ from integrations import registry
 COMMANDS = (
     "plan",
     "begin",
+    "next",
     "work-session",
     "workflow",
     "decision",
@@ -95,6 +97,15 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     )
     begin_parser.add_argument(
         "--new", action="store_true", help="start a new session even if one matches"
+    )
+    next_parser = sub.add_parser(
+        "next",
+        help="the one next step of the current work session: the skill to run, the question "
+        "to ask, or the command to use",
+    )
+    next_parser.add_argument("--repo", default=".")
+    next_parser.add_argument(
+        "--session-id", help="a work session other than the current one"
     )
     work_session_parser = sub.add_parser(
         "work-session",
@@ -164,12 +175,15 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
         help="requirements only: code-change (before editing code) or completion (before done)",
     )
     workflow_parser.add_argument("--point", type=int)
-    workflow_parser.add_argument("--stage", choices=workflow.STAGES)
+    workflow_parser.add_argument(
+        "--stage",
+        choices=workflow.STAGES,
+        help="render only: the stage to render (discovery)",
+    )
     workflow_parser.add_argument("--label")
     workflow_parser.add_argument("--artifact", action="append")
     workflow_parser.add_argument("--decision", action="append")
     workflow_parser.add_argument("--pending")
-    workflow_parser.add_argument("--next-action")
     workflow_parser.add_argument("--write-id", action="append")
     workflow_parser.add_argument(
         "--manifest-output", help="local Markdown reading manifest"
@@ -268,6 +282,13 @@ def run(args: argparse.Namespace) -> int:
                     startup.begin(
                         resolve_repo(args.repo), args.request, args.session, args.new
                     ),
+                    lambda value: json.dumps(value, ensure_ascii=False),
+                )
+            )
+        case "next":
+            return print_result(
+                fmap(
+                    route_facts.next_for(resolve_repo(args.repo), args.session_id),
                     lambda value: json.dumps(value, ensure_ascii=False),
                 )
             )
@@ -723,15 +744,22 @@ def _workflow_point(repo: Path, args: argparse.Namespace) -> Result[workflow.Wor
             lambda artifacts: workflow.add_point(
                 current,
                 args.label or "",
-                args.stage or "",
+                _derived_stage(repo, args.session_id, current),
                 artifacts,
                 pairs(args.decision),
                 args.pending or "",
-                args.next_action or "",
                 tuple(args.write_id or ()),
             ),
         ),
     )
+
+
+def _derived_stage(
+    repo: Path, session_id: str | None, current: workflow.Workflow
+) -> str:
+    """The stage the route puts the work session in; the agent never names it."""
+    stage = route_facts.next_stage(repo, session_id)
+    return stage if stage in workflow.STAGES else current.current.stage
 
 
 def _workflow_artifacts(
@@ -908,7 +936,6 @@ def workflow_command(args: argparse.Namespace) -> int:
                                     "stage": point.stage,
                                     "current": index == current.cursor,
                                     "pending": point.pending,
-                                    "next_action": point.next_action,
                                     "artifacts": [name for name, _ in point.artifacts],
                                 }
                                 for index, point in enumerate(current.points)

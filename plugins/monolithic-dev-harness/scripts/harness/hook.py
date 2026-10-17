@@ -759,13 +759,11 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
             pass
         case _:
             return 0
-    upcoming = current.current.next_action.strip()
     print(
         hook_bridge.format_stop(
             "[harness] The workflow is still active, and this turn ends without a question "
             "for the user or a pending menu, so the user would have to ask what's next. "
-            + (f"The saved next action is: {upcoming}. " if upcoming else "")
-            + "Continue with it now. If you need the user, stage the decision and attempt native "
+            + "Run `harness next` and do the step it gives now. If you need the user, stage the decision and attempt native "
             "controls. If unavailable, preserve it through async then chat fallback; a prose "
             "question alone does not fulfill the presentation contract. "
             "If the requested outcome is finished, mark the workflow complete "

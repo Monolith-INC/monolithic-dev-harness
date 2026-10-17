@@ -99,7 +99,6 @@ def _workflow_snapshot(repo: Path) -> dict[str, Any]:
                 "pending": current.current.pending,
                 "point": current.current.id,
                 "label": current.current.label,
-                "next_action": current.current.next_action,
                 "artifacts": [
                     {"path": str((repo / name).resolve()), "digest": digest}
                     for name, digest in current.current.artifacts
@@ -137,7 +136,7 @@ def _handoff(
             "HARNESS_USER_STATE_DIR": str(preferences.path().resolve().parent)
         },
         "original_request": current.get("request", ""),
-        "next_action": current.get("next_action", ""),
+        "next_step": "harness next --repo " + str(repo.resolve()),
         "workflow_status": current.get("status", "absent"),
         "harness_suspended": state.harness_mode(repo) == "suspended",
         "waiting_for_answer": decisions.waiting(repo),

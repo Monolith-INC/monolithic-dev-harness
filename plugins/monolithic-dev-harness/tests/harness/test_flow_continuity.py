@@ -28,7 +28,7 @@ def repo(tmp_path: Path) -> Path:
     )
     started = workflow.start("DAY-003: share a list").value
     planned = workflow.add_point(
-        started, "Plan drafted", "discovery", (), (), "", "Ask the open questions", ()
+        started, "Plan drafted", "discovery", (), (), "", ()
     ).value
     assert isinstance(workflow.save(tmp_path, planned, session), Ok)
     return tmp_path
@@ -59,10 +59,10 @@ def session_of(repo: Path) -> str:
     return work_sessions.list_sessions(repo).value[0].id
 
 
-def test_a_silent_stop_is_sent_back_with_the_next_action(repo: Path) -> None:
+def test_a_silent_stop_is_sent_back_to_the_next_step(repo: Path) -> None:
     out = json.loads(stop(repo, "Both choices are saved. Next: supported devices."))
     assert out["decision"] == "block"
-    assert "Ask the open questions" in out["reason"]
+    assert "harness next" in out["reason"]
 
 
 def test_a_prose_question_requires_the_presentation_contract(repo: Path) -> None:

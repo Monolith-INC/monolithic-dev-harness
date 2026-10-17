@@ -48,6 +48,7 @@ Use this map instead of searching plugin files to rediscover workflow capabiliti
 
 | Need | Source |
 | --- | --- |
+| The one next step of the current work session | `harness next --repo <project>` |
 | Project language confirmation, tracker choices, missing settings | `harness bootstrap --inspect` |
 | Saved workflow and local tracker readiness; versioning deferred to execution | `harness bootstrap --inspect` |
 | Work sessions for this exact request | `harness work-session route --request "<exact request>" --repo <project>` |

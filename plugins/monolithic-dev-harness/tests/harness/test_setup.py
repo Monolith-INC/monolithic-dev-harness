@@ -40,7 +40,6 @@ class SetupTests(unittest.TestCase):
                 "Review the plan",
                 "discovery",
                 pending="Plan review",
-                next_action="Present the saved plan",
             ).value
             workflow.save(self.repo, current)
             decisions.begin(
@@ -56,7 +55,9 @@ class SetupTests(unittest.TestCase):
             self.preference_env["HARNESS_USER_STATE_DIR"],
         )
         self.assertEqual(context["original_request"], "Continue DAY-001 task counts")
-        self.assertEqual(context["next_action"], "Present the saved plan")
+        self.assertEqual(
+            context["next_step"], f"harness next --repo {self.repo.resolve()}"
+        )
         self.assertTrue(context["waiting_for_answer"])
         self.assertEqual(context["pending_question"]["id"], "q1")
         self.assertTrue(context["harness_suspended"])

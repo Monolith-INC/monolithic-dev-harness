@@ -69,7 +69,7 @@ def test_every_project_script_is_one_setup_installs(skill: Path) -> None:
 
 def test_discovery_routes_to_bmad_build() -> None:
     harness = (SKILLS / "harness" / "SKILL.md").read_text(encoding="utf-8")
-    assert "../../references/harness-stage-guide.md" in harness
+    assert "harness next" in harness
     guide = (PLUGIN / "references/harness-stage-guide.md").read_text(encoding="utf-8")
     discovery = guide[
         guide.index("## Discovery, planning and hardening") : guide.index(

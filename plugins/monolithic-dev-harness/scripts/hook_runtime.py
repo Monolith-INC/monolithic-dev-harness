@@ -24,7 +24,13 @@ from harness import (
 from host_adapters import select_adapter
 from host_adapters.hook_bridge import project_root_hint, should_emit_allow
 from integrations import branches, registry
-from integrations.contracts import LogicalState, TrackerOps, WorkItem, WorkItemKind
+from integrations.contracts import (
+    BUILDABLE_KINDS,
+    LogicalState,
+    TrackerOps,
+    WorkItem,
+    WorkItemKind,
+)
 from policy import CanonicalToolEvent, PolicyDecision
 from policy.commands import escapes_checkout, git_commands, is_code, writes_code
 from policy.git_branch_guard import evaluate_git_branch_guard
@@ -154,6 +160,17 @@ def evaluate_event(
             return _evaluate_completion(
                 event, str(arguments.get("ref", "")), work_session_id
             )
+        if arguments.get("state") == "in_progress":
+            return _evaluate_start(
+                event, str(arguments.get("ref", "")), work_session_id
+            )
+        return PolicyDecision.allow()
+
+    if event.tool_name == "tracker_create_work_item":
+        arguments = event.arguments or {}
+        parent = str(arguments.get("parentRef") or "")
+        if arguments.get("kind") == WorkItemKind.TASK.value and parent:
+            return _evaluate_tasks(event, parent, work_session_id)
         return PolicyDecision.allow()
 
     if event.kind == "edit" and _edits_code(event):
@@ -359,6 +376,52 @@ def _evaluate_completion(
         else workflow_requirements.linked_session(root, item.key)
     )
     return _gate(root, scope, workflow_requirements.COMPLETION, item.key)[0]
+
+
+def _evaluate_start(
+    event: CanonicalToolEvent, ref: str, work_session_id: str | None
+) -> PolicyDecision:
+    """A Story or Bug moves to in progress only once the route's earlier steps for it are done:
+    refined, planned, broken into Tasks, and prepared."""
+    root = Path(event.workspace_root or ".")
+    if not _enforced(root):
+        return PolicyDecision.allow()
+    match _buildable(root, ref):
+        case Ok(None):
+            return PolicyDecision.allow()
+        case Ok(key):
+            scope = work_session_id or work_sessions.current(root)
+            return _gate(root, scope, workflow_requirements.STORY_START, key)[0]
+        case Err(failure):
+            return PolicyDecision.deny(failure.message)
+
+
+def _evaluate_tasks(
+    event: CanonicalToolEvent, parent: str, work_session_id: str | None
+) -> PolicyDecision:
+    """A Story's Tasks are created only from its approved implementation plan."""
+    root = Path(event.workspace_root or ".")
+    if not _enforced(root):
+        return PolicyDecision.allow()
+    match _buildable(root, parent):
+        case Ok(None):
+            return PolicyDecision.allow()
+        case Ok(key):
+            scope = work_session_id or work_sessions.current(root)
+            return _gate(root, scope, workflow_requirements.TASKS_PUBLISH, key)[0]
+        case Err(failure):
+            return PolicyDecision.deny(failure.message)
+
+
+def _buildable(root: Path, ref: str) -> Result[str | None]:
+    """The item's key when it is a Story or Bug; None for any other kind."""
+    return bind(
+        registry.open_selected(root, settings.load(root)),
+        lambda ops: fmap(
+            ops.get_work_item(ref),
+            lambda item: item.key if item.kind in BUILDABLE_KINDS else None,
+        ),
+    )
 
 
 def _receipt_route(ops: TrackerOps, item: WorkItem, receipts: tuple) -> Result[object]:

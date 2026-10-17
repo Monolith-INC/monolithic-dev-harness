@@ -12,11 +12,13 @@ def _flat(relative: str) -> str:
     return " ".join((PLUGIN / relative).read_text(encoding="utf-8").split())
 
 
-def test_discovery_asks_about_an_already_refined_entry_item() -> None:
-    step = _flat("skills/bmad-build/step-01-clarify-and-route.md")
-    assert "--gate refined-start" in step
-    assert "validate-artifact" in step
-    assert "--stage refinement" in step
+def test_the_route_asks_about_an_already_refined_entry_item() -> None:
+    catalog = json.loads((PLUGIN / "config/prepared-workflows.json").read_text())
+    step = next(s for s in catalog["route"] if s["id"] == "refined-start")
+    assert step["gate"] == "refined-start"
+    assert step["when"] == ["entry_refined_at_start"]
+    discovery = _flat("skills/bmad-build/step-01-clarify-and-route.md")
+    assert "--gate refined-start" not in discovery
 
 
 def test_the_idea_route_ends_with_a_choice_to_continue_or_stop() -> None:

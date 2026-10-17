@@ -19,6 +19,7 @@ from integrations import registry
 from integrations.contracts import LogicalState, WorkItemKind
 from scripts import hook_runtime
 from scripts.policy import CanonicalToolEvent
+from tests import route_fixture
 from tests.settings_fixture import write_settings
 
 
@@ -67,7 +68,8 @@ class OptionalVcsExecutionContextTests(unittest.TestCase):
     def _start_story(self) -> None:
         """A Story in progress with a Task, linked, whose approved plan is pinned."""
         ops = registry.open_selected(self.root, settings.load(self.root)).value
-        story = ops.create_work_item(WorkItemKind.USER_STORY, "Story", "", "").value
+        story = ops.get_work_item(route_fixture.refined_story(ops)).value
+        route_fixture.prepared(self.root, ops, story.key, self.plan.parents[1])
         ops.transition_work_item(story.key, LogicalState.IN_PROGRESS)
         ops.create_work_item(WorkItemKind.TASK, "Task", "", story.key)
         work_sessions.link(self.root, self.scope, story.key)

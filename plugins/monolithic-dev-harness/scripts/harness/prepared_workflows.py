@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from core.result import Result, attempt
+from harness import route
 from integrations.gateway import TOOLS_BY_NAME
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
@@ -51,98 +52,88 @@ def load_catalog(plugin_root: Path = PLUGIN_ROOT) -> dict[str, Any]:
 
 
 def routes(plugin_root: Path = PLUGIN_ROOT) -> Result[dict[str, tuple[str, ...]]]:
+    """The stage sequences the route gives: `onboarding` from discovery, `explore-idea` from
+    the idea stage. Both are read from the route, never written separately."""
     return attempt(
         lambda: _routes(plugin_root),
         "prepared_workflow_invalid",
         "prepared workflow",
         _Invalid,
+        ValueError,
     )
 
 
 def _routes(plugin_root: Path) -> dict[str, tuple[str, ...]]:
-    catalog = load_catalog(plugin_root)
-    raw_routes = catalog.get("routes")
-    stages = catalog.get("stages")
-    if not isinstance(raw_routes, dict) or not isinstance(stages, dict):
-        raise _Invalid("prepared workflow catalog is missing routes or stages")
-    checked: dict[str, tuple[str, ...]] = {}
-    for route_id, stage_ids in raw_routes.items():
-        if (
-            not isinstance(route_id, str)
-            or not isinstance(stage_ids, list)
-            or not stage_ids
-            or not all(
-                isinstance(stage_id, str) and stage_id in stages
-                for stage_id in stage_ids
-            )
-        ):
-            raise _Invalid(f"route {route_id!r} refers to an unknown stage")
-        checked[route_id] = tuple(stage_ids)
-    return checked
-
-
-_FIELDS = ("description", "stage", "skill", "how")
+    onboarding = tuple(
+        s
+        for s in route.load_or_raise(plugin_root).stages
+        if s not in ("setup", "ideate")
+    )
+    return {"onboarding": onboarding, "explore-idea": ("ideate", *onboarding)}
 
 
 def stage_requirements(
     stage_id: str, plugin_root: Path = PLUGIN_ROOT
 ) -> Result[tuple[dict[str, str], ...]]:
-    """What a stage needs before its work starts (code changes, for execution), in catalog order:
-    id, description, and the stage and skill that produce each."""
+    """What a stage's guarded action needs (code changes, for execution), in route order: id,
+    description, and the stage and skill that produce each. A stage without one needs nothing."""
     return attempt(
-        lambda: _stage_requirements(load_catalog(plugin_root), stage_id, plugin_root),
+        lambda: _stage_requirements(stage_id, plugin_root),
         "prepared_workflow_invalid",
         "prepared workflow",
         _Invalid,
+        ValueError,
+    )
+
+
+def guard_requirements(
+    guard: str, plugin_root: Path = PLUGIN_ROOT
+) -> Result[tuple[dict[str, str], ...]]:
+    """What must hold before a guarded action (`code-change`, `completion`, `story-start`,
+    `tasks-publish`), as the route gives it."""
+    return attempt(
+        lambda: _as_entries(
+            route.guard_requirements(route.load_or_raise(plugin_root), guard)
+        ),
+        "prepared_workflow_invalid",
+        "prepared workflow",
+        _Invalid,
+        ValueError,
     )
 
 
 def completion_requirements(
     plugin_root: Path = PLUGIN_ROOT,
 ) -> Result[tuple[dict[str, str], ...]]:
-    """What must hold before a Story or Bug is marked done: the catalog's one `completion` list."""
-    return attempt(
-        lambda: _completion_requirements(load_catalog(plugin_root), plugin_root),
-        "prepared_workflow_invalid",
-        "prepared workflow",
-        _Invalid,
+    """What must hold before a Story or Bug is marked done."""
+    return guard_requirements("completion", plugin_root)
+
+
+_STAGE_GUARD = {"execution": "code-change"}
+
+
+def _stage_requirements(stage_id: str, plugin_root: Path) -> tuple[dict[str, str], ...]:
+    if stage_id not in load_catalog(plugin_root).get("stages", {}):
+        raise _Invalid(f"unknown prepared stage: {stage_id}")
+    guard = _STAGE_GUARD.get(stage_id)
+    if guard is None:
+        return ()
+    return _as_entries(
+        route.guard_requirements(route.load_or_raise(plugin_root), guard)
     )
 
 
-def _stage_requirements(
-    catalog: dict[str, Any], stage_id: str, plugin_root: Path
-) -> tuple[dict[str, str], ...]:
-    stage = catalog.get("stages", {}).get(stage_id)
-    if not isinstance(stage, dict):
-        raise _Invalid(f"unknown prepared stage: {stage_id}")
-    return _requirements(catalog, stage.get("requires", ()), plugin_root)
-
-
-def _completion_requirements(
-    catalog: dict[str, Any], plugin_root: Path
-) -> tuple[dict[str, str], ...]:
-    return _requirements(catalog, catalog.get("completion", ()), plugin_root)
-
-
-def _requirements(
-    catalog: dict[str, Any], ids: Iterable[str], plugin_root: Path
-) -> tuple[dict[str, str], ...]:
-    stages = catalog.get("stages", {})
-    declared = catalog.get("requirements", {})
-    entries: list[dict[str, str]] = []
-    for requirement_id in ids:
-        entry = declared.get(requirement_id)
-        if not isinstance(entry, dict) or not all(
-            isinstance(entry.get(name), str) and entry[name].strip() for name in _FIELDS
-        ):
-            raise _Invalid(f"undeclared or incomplete requirement: {requirement_id}")
-        if entry["stage"] not in stages:
-            raise _Invalid(f"requirement {requirement_id!r} names an unknown stage")
-        _inside(plugin_root, f"skills/{entry['skill']}/SKILL.md", "producing skill")
-        entries.append(
-            {"id": requirement_id, **{name: entry[name] for name in _FIELDS}}
-        )
-    return tuple(entries)
+def _as_entries(found: Iterable[route.Requirement]) -> tuple[dict[str, str], ...]:
+    return tuple(
+        {
+            "id": r.id,
+            "description": r.description,
+            "stage": r.stage,
+            "skill": r.skill,
+            "how": r.how,
+        }
+        for r in found
+    )
 
 
 def _digest(path: Path) -> str:
@@ -383,9 +374,11 @@ def _prepare_stage(
         ],
         "operations": operations,
         "recommended_skills": skill_entries,
-        "entry_requirements": list(_stage_requirements(catalog, stage_id, plugin_root)),
+        "entry_requirements": list(_stage_requirements(stage_id, plugin_root)),
         "completion_requirements": list(
-            _completion_requirements(catalog, plugin_root)
+            _as_entries(
+                route.guard_requirements(route.load_or_raise(plugin_root), "completion")
+            )
             if stage.get("completes_work_item")
             else ()
         ),

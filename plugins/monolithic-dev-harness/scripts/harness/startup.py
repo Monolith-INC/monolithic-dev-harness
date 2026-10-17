@@ -8,6 +8,7 @@ from harness import (
     decisions,
     discovery,
     onboarding,
+    route_facts,
     setup,
     startup_receipts,
     work_lifecycle,
@@ -126,22 +127,31 @@ def _begin_workflow(
             return failure
 
 
+# Steps before refinement run inside bmad-build's rendered instructions.
+_DISCOVERY_STAGES = frozenset({"discovery", "planning", "hardening"})
+
+
 def _begin_output(
     repo: Path,
     selected: work_sessions.Session,
     current: workflow.Workflow,
     report: dict,
 ) -> Result[dict]:
-    match (current.status, current.current.stage):
-        case ["active", "discovery"]:
-            return fmap(
-                discovery.render(repo, selected.id),
-                lambda package: _begin_payload(
-                    selected, current, report, package["entry"]
-                ),
-            )
-        case _:
-            return Ok(_begin_payload(selected, current, report, ""))
+    if current.status != "active":
+        return Ok(_begin_payload(selected, current, report, "", {}))
+    match route_facts.next_for(repo, selected.id):
+        case Ok(found):
+            step = found
+        case Err(failure):
+            step = {"state": failure.code, "say": failure.message}
+    if step.get("stage") in _DISCOVERY_STAGES:
+        return fmap(
+            discovery.render(repo, selected.id),
+            lambda package: _begin_payload(
+                selected, current, report, package["entry"], step
+            ),
+        )
+    return Ok(_begin_payload(selected, current, report, "", step))
 
 
 def _begin_payload(
@@ -149,20 +159,18 @@ def _begin_payload(
     current: workflow.Workflow,
     report: dict,
     entry: str,
+    step: dict,
 ) -> dict:
     return {
         "state": current.status,
         "session_id": selected.id,
         "request": selected.request,
         "language": report["language"],
-        "workflow": {
-            "stage": current.current.stage,
-            "checkpoint": current.current.label,
-            "next_action": current.current.next_action,
-            "saved_points": len(current.points),
-        },
+        "next": step,
         "discover_entry": entry,
-        "next": "Follow saved next_action; for fresh discovery read discover_entry. Paused work requires explicit resume.",
+        "instruction": "Do the step in `next`, then run `harness next` and do the step it "
+        "gives, until it says the work is complete. When `discover_entry` is set, the "
+        "step's skill starts there. Paused work requires an explicit resume.",
     }
 
 

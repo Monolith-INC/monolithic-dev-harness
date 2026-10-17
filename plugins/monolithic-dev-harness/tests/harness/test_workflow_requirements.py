@@ -20,6 +20,7 @@ for path in (ROOT, SCRIPTS_DIR):
 from core.result import Err, Ok, err
 from harness import (
     code_content,
+    documents,
     local_artifacts,
     prepared_workflows,
     settings,
@@ -29,9 +30,15 @@ from harness import (
     workflow_requirements,
 )
 from integrations import registry
-from integrations.contracts import ArtifactDraft, LogicalState, WorkItemKind
+from integrations.contracts import (
+    ArtifactDraft,
+    LogicalState,
+    WorkItemChanges,
+    WorkItemKind,
+)
 from scripts import hook_runtime
 from scripts.policy import CanonicalToolEvent
+from tests.harness.test_plan_review import REFINED  # noqa: E402
 from tests.settings_fixture import write_settings
 
 PLAN = 'type: implementation-plan\nstory: "STORY-0001"\nstatus: draft'
@@ -49,8 +56,12 @@ class Project(unittest.TestCase):
         state.set_tracking_mode(self.root, "enforced")
         self.ops = registry.open_selected(self.root, settings.load(self.root)).value
         self.story = self.ops.create_work_item(
-            WorkItemKind.USER_STORY, "Example", "", ""
+            WorkItemKind.USER_STORY,
+            "Explain what a settings reset removes",
+            REFINED,
+            "",
         ).value.key
+        self.ops.update_work_item(self.story, WorkItemChanges(story_points=2))
         self.ops.transition_work_item(self.story, LogicalState.IN_PROGRESS)
         self.ops.create_work_item(WorkItemKind.TASK, "Do it", "", self.story)
         self.session = work_sessions.start(self.root, "Build the example").value.id
@@ -58,10 +69,25 @@ class Project(unittest.TestCase):
     def link(self, key: str = "STORY-0001") -> None:
         self.assertIsInstance(work_sessions.link(self.root, self.session, key), Ok)
 
-    def approve_plan_note(self) -> Path:
+    def approve_plan_note(self, plan_note: bool = True) -> Path:
+        """Approve the Story's plan and its preparation documents, and build its manifest:
+        everything the route does for a Story before it starts."""
         plan = self.vault / "Implementation_Plans" / "plan.md"
-        plan.parent.mkdir(parents=True, exist_ok=True)
-        plan.write_text(f"---\n{PLAN}\n---\n\n# Plan\n", encoding="utf-8")
+        if plan_note:
+            plan.parent.mkdir(parents=True, exist_ok=True)
+            plan.write_text(f"---\n{PLAN}\n---\n\n# Plan\n", encoding="utf-8")
+        for kind in ("risk-assessment", "verification-plan"):
+            note = self.vault / "Preparation" / f"{kind}.md"
+            note.parent.mkdir(parents=True, exist_ok=True)
+            note.write_text(
+                f'---\ntype: {kind}\nstory: "STORY-0001"\nstatus: draft\n---\n\n# {kind}\n',
+                encoding="utf-8",
+            )
+        manifest = documents.document_path(
+            self.root, self.ops, "STORY-0001", "reading-manifest"
+        ).value
+        manifest.parent.mkdir(parents=True, exist_ok=True)
+        manifest.write_text("# Prepared artifact manifest\n", encoding="utf-8")
         state.open_approval(self.root, "HB-Q0001", 20)
         state.pin_notes(
             self.root,
@@ -135,14 +161,7 @@ class TestRequirements(Project):
         note.write_text(
             "---\ntype: adr\nstory: STORY-0001\nstatus: draft\n---\n", "utf-8"
         )
-        state.open_approval(self.root, "HB-Q0001", 20)
-        state.pin_notes(
-            self.root,
-            "HB-Q0001",
-            local_artifacts.reviewed_notes(
-                self.root, map(str, self.root.rglob("*.md"))
-            ),
-        )
+        self.approve_plan_note(plan_note=False)
         self.assertEqual(self.missing(), ["plan_approved"])
 
     def test_a_plan_edited_after_its_approval_does_not_count(self) -> None:
@@ -153,6 +172,7 @@ class TestRequirements(Project):
 
     def test_a_tracker_plan_artifact_counts(self) -> None:
         self.link()
+        self.approve_plan_note(plan_note=False)
         self.ops.add_artifact(
             self.story, ArtifactDraft("implementation_plan", "Plan", "text", "1")
         )
@@ -269,20 +289,19 @@ class TestEntryItem(Project):
 
 
 class TestCatalog(unittest.TestCase):
-    def test_every_required_check_is_declared_and_implemented(self) -> None:
-        catalog = prepared_workflows.load_catalog()
-        declared = set(catalog["requirements"])
-        self.assertEqual(declared, workflow_requirements.CHECKED)
-        for stage in catalog["stages"].values():
-            self.assertLessEqual(set(stage.get("requires", ())), declared)
-        self.assertLessEqual(set(catalog["completion"]), declared)
-        self.assertEqual(
-            catalog["stages"]["execution"]["requires"][0], "work_item_linked"
-        )
-        self.assertEqual(catalog["completion"][0], "work_item_linked")
+    def test_every_guarded_requirement_has_a_check(self) -> None:
+        for gate in workflow_requirements.GATES.values():
+            for entry in gate.read().value:
+                self.assertIn(entry["id"], workflow_requirements.CHECKED, gate.name)
+
+    def test_code_changes_and_completion_start_from_the_link(self) -> None:
+        code = [e["id"] for e in workflow_requirements.CODE_CHANGE.read().value]
+        done = [e["id"] for e in workflow_requirements.COMPLETION.read().value]
+        self.assertIn("work_item_linked", code)
+        self.assertEqual(done[: len(code)], code)
 
     def test_the_implementing_stages_show_the_one_completion_list(self) -> None:
-        catalog = prepared_workflows.load_catalog()
+        completion = [e["id"] for e in workflow_requirements.COMPLETION.read().value]
         with tempfile.TemporaryDirectory() as directory:
             for route, stage in (
                 ("onboarding", "verify"),
@@ -293,7 +312,7 @@ class TestCatalog(unittest.TestCase):
                 ).value
                 self.assertEqual(
                     [entry["id"] for entry in package["completion_requirements"]],
-                    catalog["completion"],
+                    completion,
                 )
 
     def test_the_prepared_step_shows_its_entry_requirements(self) -> None:
@@ -303,7 +322,7 @@ class TestCatalog(unittest.TestCase):
             ).value
         self.assertEqual(
             [entry["id"] for entry in package["entry_requirements"]],
-            prepared_workflows.load_catalog()["stages"]["execution"]["requires"],
+            [e["id"] for e in workflow_requirements.CODE_CHANGE.read().value],
         )
 
 
@@ -320,6 +339,7 @@ class Verified(Project):
             guarded_paths=[{"path": "lib/secure.dart", "evidence": "manual:secure"}],
         )
         self.code("lib/a.dart", "old\n")
+        self.approve_plan_note()
         self.assertIsInstance(
             work_lifecycle.link(self.root, self.session, self.story), Ok
         )
@@ -433,7 +453,7 @@ class TestCompletion(Verified):
         self.code("lib/a.dart", "new\n")
         self.finish()
         self.assertEqual(self.completion(), ["tests_with_code"])
-        self.assertIn("tdd", self.done().reason)
+        self.assertIn("implement-story", self.done().reason)
 
     def test_an_edit_after_the_checks_needs_new_evidence(self) -> None:
         self.code("lib/a.dart", "new\n")

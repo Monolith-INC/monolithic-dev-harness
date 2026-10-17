@@ -1,62 +1,47 @@
 ---
 name: harness
-description: Default entry point when the user asks to add, build, change, or fix a meaningful feature in a project, even if they do not mention the harness or provide a tracker item. Start with technical discovery for feature requests, then follow the product and delivery workflow as requested. Also use when the user asks to take an idea or work item through the whole process, asks what comes next in a harness run, or asks how the process works. Keep small mechanical edits on the direct path.
+description: Default entry point when the user asks to add, build, change, or fix a meaningful feature in a project, or to work on a work item (an id or a tracker link), even if they do not mention the harness. Also use when the user asks to take an idea or work item through the whole process, asks what comes next in a harness run, or asks how the process works. Keep small mechanical edits on the direct path.
 ---
 
 # Harness
 
-Follow [onboarding](../../references/onboarding.md): Discovery → Planning →
-Hardening → Refinement → Preparation → Execution → Verify. Choose depth after discovery and before
-drafting. Approve each work item, Story plan and document when it is created; nothing is approved in
-bulk.
-No versioning prerequisite applies before execution.
+The harness knows the workflow's order; you do not have to. Its route runs Discovery → Planning →
+Hardening → Refinement → Preparation → Execution → Verify, and it computes the next step from what
+is already done: the work items, the approvals and the documents.
 
-Use the bundled `bin/harness` when `harness` is unavailable on PATH.
-Onboarding is optional. If the user wants skills or guidance without a session, use
-`harness mode free --repo <project>` and invoke the relevant skill directly. Free mode preserves
-all action approvals and protected-state rules; it is not suspension. Ideation can be added to
-ongoing work without restarting that work.
-Start with `harness begin --request "<exact request>" --repo <project>`, run on its own as one plain
-command (`--repo .` or an absolute path; no variables, `$(…)`, `;` or `&&`): the harness links this
-conversation to its work session only when it can read the command.
-It checks setup, routes the session, creates the workflow when absent, and returns pinned discovery instructions.
+1. Start with `harness begin --request "<the user's exact request>" --repo <project>`, run on its
+   own as one plain command (`--repo .` or an absolute path; no variables, `$(…)`, `;` or `&&`).
+   Use the bundled `bin/harness` when `harness` is not on PATH.
+2. Do exactly the step in its `next` field:
+   - `skill`: invoke that skill and follow it as it is written. When `discover_entry` is set, the
+     skill starts there.
+   - `gate`: ask that question with `harness decision present --gate <gate>` (with the `--value`s
+     and `--artifact`s the step names), never in your own words.
+   - `command`: run it, replacing `<key>` with the work item's key.
+   - `say`: what the step is for, and anything to do before asking.
+   - `missing`: what is not true yet, and how it becomes true.
+3. When the step is done, run `harness next --repo <project>` and do the step it gives. Repeat
+   until it answers `complete`.
 
-- `setup_needed`: follow the bootstrap skill, preserving the returned request, then repeat begin.
-- `free`: provide the requested guidance or skill without creating a session or requiring setup.
-- `choose_session`: offer its candidates and Start new through native controls; repeat begin with the chosen `--session` or `--new`.
-- `waiting_for_human`: present the saved question through the best available host control.
-- Active discovery: read the returned `discover_entry` and follow it. Later stages: follow the saved next action.
-- Paused or terminal work: consult the user; never silently restart it.
+Never invoke a stage skill that `harness next` did not name, and never skip ahead: a guard refuses
+an action whose earlier steps are not done, and its refusal names the step to do instead.
 
-## Just-in-time references
+Other states `begin` and `next` can return:
 
-Read [stage guide](../../references/harness-stage-guide.md) for the current stage, approval boundaries,
-suspension, or recovery. Read [human decisions](../../references/human-decisions.md) when asking a question;
-read [storyboard](../../references/workflow-storyboard.md) when changing stage or navigating saved work.
-Do not preload all references at startup.
+- `setup_needed`: follow the bootstrap skill, keeping the request, then run `begin` again.
+- `free`: give the requested guidance or skill without a session.
+- `choose_session`: offer its candidates and Start new as a menu; run `begin` again with the
+  chosen `--session` or `--new`.
+- `waiting_for_human`: the user has not answered the saved question; show it again with
+  `harness decision fallback`.
+- `tracker_unreachable`: retry once; then tell the user the tracker is unreachable.
+- Paused work: ask the user before resuming; never restart it silently.
 
-Use catalog gates in the selected language; keep native controls and gracefully fallback via
-`harness decision fallback`. A hook-recorded answer needs no `decision status` call;
-For Codex, invoke the native tool returned by `decision present` with the returned question
-payload verbatim, including its question ID, wording, option labels, and descriptions. Do not
-rephrase it, invent a different ID, or replace it with a chat menu when callable. Use
-`--async-available` for async-only hosts, or `--native-unavailable` when no native control is
-callable. Default Codex presentation attempts blocking buttons. If the hook rejects a presentation,
-follow its recovery command exactly; `decision fallback` takes only the repository, optional
-session, host, and transport-availability flags. Do not add decision IDs or explanatory flags.
-use status only for recovery when capture is uncertain. A gate with `--artifact` automatically saves
-its review checkpoint when a workflow exists. Save manual checkpoints at stage completion or material
-progress without a question. Communication works without any active session.
-Language is optional: use the captured project choice, saved preference, or English. Never stop
-because language confirmation or capture is missing. Optional preferences do not block progress.
-`harness onboarding skip|dismiss|restart|reset|drop|pause|resume --repo <project>` controls onboarding
-without a session and preserves engineering evidence.
+Questions: every question goes through `harness decision present` (a gate by `--gate`, or a
+one-off with `--question` and `--option`s). Show the material a question is about before asking
+it. If the native control fails, use `harness decision fallback`. Read
+[human decisions](../../references/human-decisions.md) when asking.
 
-`workflow prepare` is optional reference material, not a mandatory capability-declaration ceremony.
-Discover tools at the point of use and report genuinely missing capabilities. Explicit `--available`
-remains available for diagnostic validation. Inspect plan size and advisory scope signals with
-`harness plan check <file> --repo <project>`.
-
-Keep investigation subagents, scope decomposition, formal Deepen, adversarial review, and verification
-from the stage workflows. Approved artifacts and context-bound writes retain the recorded approval
-rules; reduced bookkeeping never grants permission. Consult the user when relevant circumstances change.
+`harness mode free --repo <project>` gives skills and guidance without a session; approvals and
+protected records still apply. The user can suspend every harness check by sending
+`harness suspend`; never ask them to.

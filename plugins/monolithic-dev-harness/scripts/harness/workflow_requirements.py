@@ -1,9 +1,9 @@
 """What the workflow requires before code changes and before a work item is done, checked.
 
-The requirements, and the stage and skill that produce each one, come from the prepared-workflow
-catalog (`config/prepared-workflows.json`): the execution stage's `requires` must hold before code
-changes, and the catalog's `completion` list before a Story or Bug is marked done. This module only
-knows how to check them. Nothing here reads version control: code is compared as content
+The requirements, and the stage and skill that produce each one, come from the route
+(`route` in `config/prepared-workflows.json`, read by `harness.route`): everything the route does
+for a Story before the step that performs a guarded action must hold before that action. This
+module only knows how to check them. Nothing here reads version control: code is compared as content
 (`code_content`) against the record taken when the work item was first linked.
 
 The first requirement of both lists, `work_item_linked`, is the precondition the others are read
@@ -22,9 +22,11 @@ from typing import Any
 from core.result import Err, Failure, Ok, Result, fmap
 from harness import (
     code_content,
+    documents,
     globs,
     local_artifacts,
     prepared_workflows,
+    refined,
     settings,
     state,
     work_sessions,
@@ -56,14 +58,26 @@ class Gate:
 CODE_CHANGE = Gate(
     "code-change",
     "Code changes",
-    lambda: prepared_workflows.stage_requirements("execution"),
+    lambda: prepared_workflows.guard_requirements("code-change"),
 )
 COMPLETION = Gate(
     "completion",
     "Marking the work item done",
-    prepared_workflows.completion_requirements,
+    lambda: prepared_workflows.guard_requirements("completion"),
 )
-GATES = {gate.name: gate for gate in (CODE_CHANGE, COMPLETION)}
+STORY_START = Gate(
+    "story-start",
+    "Moving the Story to in progress",
+    lambda: prepared_workflows.guard_requirements("story-start"),
+)
+TASKS_PUBLISH = Gate(
+    "tasks-publish",
+    "Creating the Story's Tasks",
+    lambda: prepared_workflows.guard_requirements("tasks-publish"),
+)
+GATES = {
+    gate.name: gate for gate in (CODE_CHANGE, COMPLETION, STORY_START, TASKS_PUBLISH)
+}
 
 
 @dataclass(frozen=True)
@@ -94,6 +108,9 @@ class _Unreachable(Exception):
     """The tracker gave no answer."""
 
 
+UnreachableTracker = _Unreachable
+
+
 class _Wrong(Exception):
     """A requirement does not hold; the message says what was found."""
 
@@ -122,21 +139,28 @@ def _evaluate(
     work_item: str | None,
 ) -> Report:
     session = _active(repo, session_id)
-    key = session.work_item if session is not None else ""
     entries = {entry["id"]: entry for entry in required}
     found: dict[
         str, str | None
     ] = {}  # requirement id -> None when met, else what is wrong
     unreachable = ""
-    match _unlinked(session, work_item):
-        case str() as wrong:
-            found[LINK] = wrong
-        case None:
+    if LINK in entries:
+        # The action is the linked item's own (code changes, marking it done).
+        key = session.work_item if session is not None else ""
+        wrong = _unlinked(session, work_item)
+    else:
+        # The action is about an item before any session links it (its Tasks, its start).
+        key = work_item or ""
+        wrong = None if key else "the action names no work item"
+    if wrong is not None:
+        found[LINK if LINK in entries else next(iter(entries))] = wrong
+    else:
+        if LINK in entries:
             found[LINK] = None
-            try:
-                found.update(_Context(repo, session, key).check(tuple(entries)))
-            except _Unreachable as exc:
-                unreachable = str(exc)
+        try:
+            found.update(_Context(repo, session, key).check(tuple(entries)))
+        except _Unreachable as exc:
+            unreachable = str(exc)
     return Report(
         gate=gate,
         work_session=session.id if session is not None else None,
@@ -208,7 +232,7 @@ class _Context:
     """What one evaluation reads, each part read at most once."""
 
     repo: Path
-    session: work_sessions.Session
+    session: work_sessions.Session | None
     key: str
     _found: dict[str, Any] = field(default_factory=dict)
 
@@ -307,6 +331,16 @@ class _Context:
         return self._once("changed", read)
 
 
+def context(
+    repo: Path, session: work_sessions.Session, key: str, ops: TrackerOps | None = None
+) -> _Context:
+    """A reader for one work item's requirements; `ops` reuses an open tracker connection."""
+    found = _Context(repo, session, key)
+    if ops is not None:
+        found._found["ops"] = ops
+    return found
+
+
 def _answer(result: Result[Any]) -> Any:
     match result:
         case Ok(value):
@@ -367,6 +401,56 @@ def _approved_plan_note(repo: Path, key: str) -> bool:
     return any(
         artifact_kind(kind) == "implementation_plan"
         for kind in local_artifacts.approved_kinds_for(repo, key)
+    )
+
+
+def _refined(context: _Context) -> str | None:
+    match refined.check(context.item):
+        case Err(failure):
+            return failure.message
+        case _:
+            return None
+
+
+def _approved_note(kind: str, label: str) -> Callable[[_Context], str | None]:
+    def read(context: _Context) -> str | None:
+        kinds = {
+            artifact_kind(found)
+            for found in local_artifacts.approved_kinds_for(context.repo, context.key)
+        }
+        return (
+            None
+            if artifact_kind(kind) in kinds
+            else f"no {label} naming {context.key} was approved as it reads now"
+        )
+
+    return read
+
+
+def _manifest(context: _Context) -> str | None:
+    match documents.document_path(
+        context.repo, context.ops, context.key, "reading-manifest"
+    ):
+        case Ok(path) if path.is_file():
+            return None
+        case Ok(path):
+            return f"the reading manifest {path} does not exist yet"
+        case Err(failure):
+            return failure.message
+
+
+def _code_changed(context: _Context) -> str | None:
+    return (
+        None if context.changed else f"no code changed since {context.key} was linked"
+    )
+
+
+def _done(context: _Context) -> str | None:
+    state_now = context.item.state
+    return (
+        None
+        if state_now == LogicalState.DONE
+        else f"{context.key} is {state_now.value}"
     )
 
 
@@ -449,6 +533,14 @@ class _Check:
 
 
 CHECKS: dict[str, _Check] = {
+    "story_refined": _Check(_refined, lasting=True),
+    "risk_approved": _Check(_approved_note("risk-assessment", "risk document")),
+    "verification_planned": _Check(
+        _approved_note("verification-plan", "verification document")
+    ),
+    "manifest_built": _Check(_manifest, lasting=True),
+    "code_changed": _Check(_code_changed),
+    "story_done": _Check(_done),
     "tasks_parented": _Check(_tasks, lasting=True),
     "plan_approved": _Check(_plan, lasting=True),
     "work_item_started": _Check(_started, lasting=True),
@@ -465,7 +557,9 @@ CHECKED = frozenset({LINK, *CHECKS})  # every requirement id this module knows
 # --- remembered tracker facts --------------------------------------------------------------------
 
 
-def _known_facts(session: work_sessions.Session, key: str) -> set[str]:
+def _known_facts(session: work_sessions.Session | None, key: str) -> set[str]:
+    if session is None:
+        return set()
     match state.read_json(session.folder / TRACKER_FACTS):
         case {"work_item": str() as linked, "met": list() as met} if linked == key:
             return {str(rid) for rid in met if rid in CHECKS and CHECKS[rid].lasting}
@@ -473,8 +567,10 @@ def _known_facts(session: work_sessions.Session, key: str) -> set[str]:
             return set()
 
 
-def _remember(session: work_sessions.Session, key: str, met: set[str]) -> None:
+def _remember(session: work_sessions.Session | None, key: str, met: set[str]) -> None:
     # The facts are only a shortcut; if they cannot be saved, the next check asks the tracker.
+    if session is None:
+        return
     with contextlib.suppress(OSError):
         state.write_json(
             session.folder / TRACKER_FACTS, {"work_item": key, "met": sorted(met)}
@@ -496,10 +592,9 @@ def refusal(report: Report) -> str:
         )
     first, *rest = report.missing
     lines = [
-        f"[harness] {gate.action} waits for what the workflow catalog "
-        "(config/prepared-workflows.json) requires. This refusal is for you, not for the user: "
-        "continue the workflow from the step below. Ask the user only where that step itself "
-        "asks for a decision.",
+        f"[harness] {gate.action} waits for what the workflow route requires before it. This "
+        "refusal is for you, not for the user: run `harness next` and do the step it gives. "
+        "Ask the user only where that step itself asks for a decision.",
         f"Next: {first.how} (`{first.skill}` skill, {first.stage} stage). "
         f"{first.description} Found: {first.detail}.",
     ]

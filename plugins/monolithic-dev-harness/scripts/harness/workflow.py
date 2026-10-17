@@ -40,7 +40,6 @@ class Point:
     artifacts: tuple[tuple[str, str], ...] = ()
     decisions: tuple[tuple[str, str], ...] = ()
     pending: str = ""
-    next_action: str = ""
     completed_writes: tuple[str, ...] = ()
 
 
@@ -122,14 +121,7 @@ def start(request: str, language: str = "") -> Result[Workflow]:
                     "active",
                     request.strip(),
                     language,
-                    (
-                        Point(
-                            1,
-                            "First request",
-                            "discovery",
-                            next_action="Continue original request",
-                        ),
-                    ),
+                    (Point(1, "First request", "discovery"),),
                     0,
                 )
             )
@@ -207,7 +199,6 @@ def add_point(
     artifacts: tuple[tuple[str, str], ...] = (),
     decisions: tuple[tuple[str, str], ...] = (),
     pending: str = "",
-    next_action: str = "",
     completed_writes: tuple[str, ...] = (),
 ) -> Result[Workflow]:
     match workflow.status, label.strip(), stage:
@@ -222,7 +213,6 @@ def add_point(
                 artifacts,
                 decisions,
                 pending,
-                next_action,
                 tuple(
                     dict.fromkeys(
                         (
@@ -341,7 +331,6 @@ def _point(raw: Any) -> Result[Point]:
             "artifacts": list() as artifacts,
             "decisions": list() as decisions,
             "pending": str() as pending,
-            "next_action": str() as next_action,
             "completed_writes": list() as writes,
         } if (
             point_id > 0
@@ -363,7 +352,6 @@ def _point(raw: Any) -> Result[Point]:
                     tuple(tuple(pair) for pair in artifacts),
                     tuple(tuple(pair) for pair in decisions),
                     pending,
-                    next_action,
                     tuple(writes),
                 )
             )

@@ -35,6 +35,7 @@ from integrations.contracts import ArtifactDraft, LogicalState, WorkItemKind
 from scripts import hook_runtime
 from scripts.hook_runtime import select_adapter
 from scripts.policy import CanonicalToolEvent
+from tests import route_fixture
 from tests.settings_fixture import write_settings
 
 
@@ -111,9 +112,8 @@ class TrackedRepo(unittest.TestCase):
         git(self.root, "checkout", "-q", "-b", "userstory/STORY-0001-example")
         self.configure("Vault")
         self.ops = registry.open_selected(self.root, settings.load(self.root)).value
-        story = self.ops.create_work_item(
-            WorkItemKind.USER_STORY, "Example", "", ""
-        ).value
+        story = self.ops.get_work_item(route_fixture.refined_story(self.ops)).value
+        route_fixture.prepared(self.root, self.ops, story.key, self.vault)
         self.ops.transition_work_item(story.key, LogicalState.IN_PROGRESS)
         self.ops.create_work_item(WorkItemKind.TASK, "Do it", "", story.key)
         self.session = work_sessions.start(self.root, "Build the example").value.id

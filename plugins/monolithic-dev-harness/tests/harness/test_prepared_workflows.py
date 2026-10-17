@@ -373,14 +373,23 @@ class PreparedWorkflowTests(unittest.TestCase):
         (plugin / "config" / "prepared-workflows.json").write_text(
             json.dumps(catalog), encoding="utf-8"
         )
+        (plugin / "config" / "gates.toml").write_text(
+            (PLUGIN_ROOT / "config" / "gates.toml").read_text(encoding="utf-8"),
+            encoding="utf-8",
+        )
         return plugin
 
     def _fixture_catalog(self) -> dict[str, object]:
         return {
             "version": 1,
-            "routes": {"sample-route": ["sample-stage"]},
+            "facts": {
+                "seen": {"kind": "check", "description": "Seen.", "how": "look"},
+            },
+            "route": [
+                {"id": "look", "stage": "discovery", "scope": "work", "done": ["seen"]},
+            ],
             "stages": {
-                "sample-stage": {
+                "discovery": {
                     "title": "Sample",
                     "knowledge": ["references/known.md"],
                     "operations": ["harness.doctor"],
@@ -394,35 +403,35 @@ class PreparedWorkflowTests(unittest.TestCase):
 
     def test_missing_recommended_skill_blocks_preparation(self) -> None:
         catalog = self._fixture_catalog()
-        catalog["stages"]["sample-stage"]["skills"][0]["name"] = "missing"  # type: ignore[index]
+        catalog["stages"]["discovery"]["skills"][0]["name"] = "missing"  # type: ignore[index]
         plugin = self._fixture_plugin(catalog)
         with self.assertRaisesRegex(PreparedFailed, "recommended skill is missing"):
-            prepare(self.project, "sample-route", "sample-stage", plugin_root=plugin)
+            prepare(self.project, "onboarding", "discovery", plugin_root=plugin)
 
     def test_missing_knowledge_blocks_preparation(self) -> None:
         catalog = self._fixture_catalog()
-        catalog["stages"]["sample-stage"]["knowledge"] = ["references/missing.md"]  # type: ignore[index]
+        catalog["stages"]["discovery"]["knowledge"] = ["references/missing.md"]  # type: ignore[index]
         plugin = self._fixture_plugin(catalog)
         with self.assertRaisesRegex(PreparedFailed, "knowledge is missing"):
-            prepare(self.project, "sample-route", "sample-stage", plugin_root=plugin)
+            prepare(self.project, "onboarding", "discovery", plugin_root=plugin)
 
     def test_escaping_knowledge_reference_is_rejected(self) -> None:
         catalog = self._fixture_catalog()
-        catalog["stages"]["sample-stage"]["knowledge"] = ["../../outside.md"]  # type: ignore[index]
+        catalog["stages"]["discovery"]["knowledge"] = ["../../outside.md"]  # type: ignore[index]
         plugin = self._fixture_plugin(catalog)
         with self.assertRaisesRegex(PreparedFailed, "escapes"):
-            prepare(self.project, "sample-route", "sample-stage", plugin_root=plugin)
+            prepare(self.project, "onboarding", "discovery", plugin_root=plugin)
 
     def test_unknown_operation_blocks_preparation(self) -> None:
         catalog = self._fixture_catalog()
-        catalog["stages"]["sample-stage"]["operations"] = ["made_up_tool"]  # type: ignore[index]
+        catalog["stages"]["discovery"]["operations"] = ["made_up_tool"]  # type: ignore[index]
         plugin = self._fixture_plugin(catalog)
         with self.assertRaisesRegex(PreparedFailed, "unknown operation"):
-            prepare(self.project, "sample-route", "sample-stage", plugin_root=plugin)
+            prepare(self.project, "onboarding", "discovery", plugin_root=plugin)
 
     def test_bad_route_stage_mapping_is_reported(self) -> None:
         catalog = self._fixture_catalog()
-        catalog["routes"]["sample-route"] = ["missing"]  # type: ignore[index]
+        catalog["route"][0]["stage"] = "missing"  # type: ignore[index]
         plugin = self._fixture_plugin(catalog)
         with self.assertRaisesRegex(PreparedFailed, "unknown stage"):
             routes(plugin)

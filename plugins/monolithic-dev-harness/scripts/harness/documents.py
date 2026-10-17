@@ -186,6 +186,18 @@ def _reserved(root: Path, active: registry.Active, artifacts: Path) -> dict[str,
     return found
 
 
+def document_path(
+    repo: Path, ops: TrackerOps, key: str, document_type: str
+) -> Result[Path]:
+    """Where an existing item's document of `document_type` lives."""
+    return bind(
+        _artifacts(repo),
+        lambda artifacts: fmap(
+            lineage(ops, key), lambda chain: item_path(artifacts, chain, document_type)
+        ),
+    )
+
+
 def _artifacts(repo: Path) -> Result[Path]:
     match local_artifacts.artifacts_dir(repo):
         case None:
