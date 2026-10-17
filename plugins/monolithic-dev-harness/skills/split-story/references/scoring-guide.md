@@ -101,7 +101,7 @@ story's description and the specific unknown that caused `Incerteza=5`.
 ## Discrepancy Handling
 
 A discrepancy occurs when the story has a declared story-point value (from frontmatter
-`story_points` or Azure `Microsoft.VSTS.Scheduling.StoryPoints`) that differs from
+`story_points` or the tracker item's points) that differs from
 `calculated_points`.
 
 ### Protocol
@@ -113,7 +113,7 @@ A discrepancy occurs when the story has a declared story-point value (from front
 ```text
 Story points discrepancy detected.
 
-Declared:   <X> pts  (from <source: frontmatter | Azure>)
+Declared:   <X> pts  (from <source: frontmatter | tracker>)
 Calculated: <Y> pts  (MAX driver: <driver>=<score> — <reason>)
 
 Driver breakdown:

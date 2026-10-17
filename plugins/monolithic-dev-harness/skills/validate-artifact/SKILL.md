@@ -1,7 +1,7 @@
 ---
 name: validate-artifact
 description: >
-  Validate a single agile artifact (Epic, Feature, User Story, or Task) against the toolkit rule set. Use when the user asks to "validate this story/feature/epic", "check this ticket", "is this artifact ready?", or provides a local draft path or provider item and wants a quality report. Accepts a local draft, Azure DevOps work item, or Linear issue. Runs all checks non-blocking and emits a terminal report + persisted report. One artifact per invocation.
+  Validate a single agile artifact (Epic, Feature, User Story, or Task) against the toolkit rule set. Use when the user asks to "validate this story/feature/epic", "check this ticket", "is this artifact ready?", or provides a local draft path or provider item and wants a quality report. Accepts a local draft or a tracker work item. Runs all checks non-blocking and emits a terminal report + persisted report. One artifact per invocation.
 license: MIT
 ---
 
@@ -12,7 +12,6 @@ Quality gate for a single agile artifact. Load reference files as each phase nee
 References (shared, in `../../references/`):
 - `decomposition-rules.md` — hierarchy, DoR, sizing, story-point heuristic.
 - `ticket-structure.md` — body sections, frontmatter constraints, content hygiene.
-- `azure-mechanics.md` — MCP calls, linking mechanics, rendering rules.
 - `audit-checklist.md` — fidelity, coverage, DoR check definitions.
 
 References (skill-specific, in `./references/`):
@@ -34,11 +33,11 @@ Determine source from the argument:
    `provider_id`, `story_points`. Parse body: identify sections by emoji + label headings.
 2. Derive artifact type from `work_item_type` frontmatter value.
 
-**If Azure ID (numeric argument):**
-1. Call `tracker_get_work_item(ref=<id>) through `workflow-integrations``.
-2. Extract: `System.WorkItemType`, `System.Title`, `System.Description`,
-   `Microsoft.VSTS.Scheduling.StoryPoints`, `System.Parent`.
-3. Artifact type = `System.WorkItemType`.
+**If a tracker id or link:**
+1. Call `tracker_get_work_item(ref=<id>)`.
+2. Extract: `kind`, `title`, `description`, the Story's points (the estimate field
+   `tracker_describe` names), `parent_id`.
+3. Artifact type = `kind`.
 
 Normalize into a unified artifact record:
 
@@ -49,16 +48,16 @@ Normalize into a unified artifact record:
   body:         string  (full description / body text)
   story_points: number | null
   parent_id:    string | null
-  source:       "artifacts path" | "azure-devops" | "linear"
+  source:       "artifacts path" | "tracker"
   filename:     string | null   (artifacts path only — basename without path)
-  provider:      "local" | "azure-devops" | "linear"
+  provider:      the selected tracker's name
   provider_id:   string | null
   raw:          original parsed content
 }
 ```
 
 If artifact type cannot be determined: STOP and report —
-`"Cannot detect artifact type — check work_item_type frontmatter (artifacts path) or System.WorkItemType (Azure)."`
+`"Cannot detect artifact type — check work_item_type frontmatter (artifacts path) or the tracker item's kind."`
 
 If given multiple IDs or paths: process only the first and warn —
 `"validate-artifact processes one artifact per invocation."`
@@ -90,7 +89,7 @@ No check halts sibling or subsequent checks on failure. Collect all findings.
 - `frontmatter-type-present` — FAIL if `type:` key absent from frontmatter.
 - `frontmatter-status-absent` — FAIL if `status:` key present in frontmatter.
 - `filename-regex` — FAIL if filename does not match `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+`.
-  If source is Azure (no filename): emit SKIP.
+  If source is the tracker (no filename): emit SKIP.
 
 **All sources:**
 - If User Story: check each of the 7 required sections present in body.
@@ -104,19 +103,19 @@ A Feature or a User Story with no parent is valid: its parent check passes with 
 
 **User Story:**
 1. If `parent_id` is set: `tracker_get_work_item(ref=artifact.parent_id)`. Assert
-   `System.WorkItemType == "Feature"`.
+   its kind is `feature`.
 2. Check `hierarchy-story-parent-is-feature` — FAIL if the parent is not a Feature (for example an
    Epic). PASS when there is no parent.
 
 **Feature:**
 1. If `parent_id` is set: `tracker_get_work_item(ref=artifact.parent_id)`. Assert
-   `System.WorkItemType == "Epic"`.
+   its kind is `epic`.
 2. Check `hierarchy-feature-parent-is-epic` — FAIL if the parent is not an Epic. PASS when there is
    no parent.
 
 **Epic:**
-1. Fetch children via `search_workitem` or relations from the ingested item.
-   Assert no child has `System.WorkItemType == "User Story"`.
+1. Fetch children with `tracker_list_children`.
+   Assert no child has kind `user_story`.
 2. Check `hierarchy-epic-no-direct-stories` — FAIL if direct Story children found.
 
 **Task:** assert its immediate parent is a User Story. A Task is the only type that must have a

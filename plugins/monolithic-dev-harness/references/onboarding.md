@@ -103,8 +103,8 @@ are optional delivery choices; never create or require them as a prerequisite to
 locally. Code changes start when `harness workflow requirements` reports `ready` for the work
 session: it is linked to the Story or Bug (`harness work-session link --work-item <key>`), the
 tracker holds that item in progress with its Tasks parented to it, and its implementation plan was
-approved and has not changed since. The requirements come from `config/prepared-workflows.json`; a missing one
-names the stage and skill that produce it. Preserve pre-existing files, isolate effects and
+approved and has not changed since. The requirements are what the route does for the Story before its implementation
+step; a missing one names the stage and skill that produce it. Preserve pre-existing files, isolate effects and
 verify the edge-case matrix against tests actually run. Use Thermos for code review and BMAD
 verification/claims checks where relevant. External delivery and merging remain separate,
 context-bound actions.

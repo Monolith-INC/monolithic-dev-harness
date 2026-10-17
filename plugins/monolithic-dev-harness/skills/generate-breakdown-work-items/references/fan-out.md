@@ -47,9 +47,10 @@ narrower scope. Show that scope with the final review batch; ask only if the int
 For each selected User Story, **in order**:
 
 1. Run PHASE 1 ingest for that Story (Feature body + Story body + verbatim ACs).
-2. Run PHASE 2 — save Implementation Plan (must succeed before Tasks).
-3. Draft Tasks and add them to the combined review batch, using the same selected tracker and
-   language. Publish after preflight and approval; do not re-prompt per Story.
+2. Run PHASE 2 — save the Implementation Plan and have it approved (`implementation-confirm`)
+   before any of its Tasks are drafted.
+3. Draft the Story's Tasks, show them, and ask `publish-items` for that Story's Tasks; publish
+   after preflight and approval, using the same selected tracker and language.
 4. Record a per-Story result: `success` | `failed` + error message + `plan_path` / Task ids.
 
 ### Failure isolation

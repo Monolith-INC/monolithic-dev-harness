@@ -12,7 +12,7 @@ user's effective harness language. The active tracker defines where Tasks live. 
 Implementation Plan is always saved, and approved, before Tasks are proposed.
 
 References in this skill: `references/plan-generation.md`, `references/atomic-tasks.md`, and
-`references/fan-out.md`. Use `../../references/azure-mechanics.md` only for an Azure-backed Story.
+`references/fan-out.md`.
 
 ## 1. Resolve and inspect
 
@@ -40,28 +40,23 @@ Breakdown is last and completed. Derive hours with the `estimate-breakdown` comm
 selected tracker supplies the needed planning replies, and explain any capacity block before
 anything is written.
 
-Use the selected tracker for IDs, parent relationships, states, and field names. For Linear, Task
-issues are child issues labelled `Task`; for Azure DevOps, Task work items under the User Story. If
-a provider cannot represent Tasks, explain that they would remain local and obtain that choice
+Use the selected tracker, through the gateway, for IDs, parent relationships, states, and field
+names (`tracker_describe`); Tasks are created as children of the Story. If the tracker cannot
+represent Tasks, explain that they would remain local and obtain that choice
 before any creation.
 
 Present the Task batch, with each Task's hours and where it will appear, through the host's best
 available review surface; a path or short summary alone is insufficient. Run `harness tracker
-preflight` immediately before writing. For Linear, missing `Story`/`Task` labels or team readiness
-block the first issue creation; include needed label creation in the reviewed batch. Ask the
+preflight` immediately before writing; anything it reports missing goes into the reviewed batch. Ask the
 `publish-items` approval gate with the Task drafts as `--artifact`s (see the harness skill's
-approval protocol). Create each Task with `tracker_create_work_item`, then set its hours, assignee
-and sprint with `tracker_update_work_item`, and read it back.
+approval protocol). Create each Task with `tracker_create_work_item` under the Story: the gateway
+gives it the Story's sprint and assignee, as the toolkit does. Set its hours with
+`tracker_update_work_item`, and read it back.
 
-The publication review includes one `planning_completion` receipt on the Breakdown task and its
-Done transition after verification. The receipt has JSON content:
-`{"purpose":"breakdown","item_id":"<Breakdown id>","parent_id":"<Story id>","children":["<each other published child id>"]}`.
-Show this intended bookkeeping in the batch review; it authorizes no implementation. After readback,
-publish the receipt with `tracker_publish_artifact` (one stable title and a positive integer
-revision, starting at `1` and increasing for corrections), then transition
-only the Breakdown task to Done. The policy verifies its Task kind, Breakdown title, Story parent
-and complete child set. It needs no checkout branch/session or implementation artifacts.
-Ordinary Task and Story completion keeps its implementation evidence requirements.
+After the Tasks are created and read back, set the Breakdown Task Done with
+`tracker_transition_work_item`: it marks that the Story is broken down, needs no work session, and
+is accepted once the Story holds its other Tasks. Ordinary Task and Story completion keeps its
+implementation evidence requirements.
 
 Publish through the active tracker adapter and read back each Task to verify its Story parent,
 state, and estimate fields where supported. After an uncertain response, search for the intended

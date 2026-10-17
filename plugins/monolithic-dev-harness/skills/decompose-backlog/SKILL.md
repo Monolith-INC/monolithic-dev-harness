@@ -1,7 +1,7 @@
 ---
 name: decompose-backlog
 description: >
-  Decompose a parent work item into correctly-parented, audited children. A Feature parent yields Stories; an Epic parent yields Features and, under each, Stories — in one linear run. Use when the user asks to "break down this Feature/Epic", "decompose Epic/Feature N", "create the features and user stories for <epic>", "groom this backlog item", or provides a Feature/Epic id and wants the tree drafted and created in Azure DevOps. Drives 7 phases: ingest the parent, split into right-sized Features (Epic only) and Stories (1 Story = 1 sprint = 1 PR), draft them in the artifacts path, enrich to the team format, create them top-down in Azure DevOps (Features under the Epic, Stories under their FEATURE), verify the hierarchy, and audit that every parent requirement has a home. Self-contained rules; two approval gates before any write. For plain-language scope lines and story narrative, delegates sub-passes to generate-plain-language-documentation in DRAFT and ENRICH phases.
+  Decompose a parent work item into correctly-parented, audited children. A Feature parent yields Stories; an Epic parent yields Features and, under each, Stories — in one linear run. Use when the user asks to "break down this Feature/Epic", "decompose Epic/Feature N", "create the features and user stories for <epic>", "groom this backlog item", or provides a Feature/Epic id and wants the tree drafted and created in the selected tracker. Drives 7 phases: ingest the parent, split into right-sized Features (Epic only) and Stories (1 Story = 1 sprint = 1 PR), draft them in the artifacts path, enrich to the team format, create them top-down in the tracker (Features under the Epic, Stories under their FEATURE), verify the hierarchy, and audit that every parent requirement has a home. Self-contained rules; two approval gates before any write. For plain-language scope lines and story narrative, delegates sub-passes to generate-plain-language-documentation in DRAFT and ENRICH phases.
 license: MIT
 ---
 
@@ -18,7 +18,6 @@ In `../../references/`:
 
 - `decomposition-rules.md` — hierarchy, Feature sizing (Epic → Feature), Story sizing (1 Story = 1 sprint = 1 PR), story-point heuristic, DoR, parent-type branch.
 - `ticket-structure.md` — draft format + draft file constraints (frontmatter, filename regex).
-- `azure-mechanics.md` — Azure DevOps rules (linking gotchas, rendering) when Azure is the tracker.
 - `audit-checklist.md` — fidelity / coverage / DoR postflight.
 
 Shape contracts and sub-pass notes:
@@ -103,7 +102,7 @@ is pt-BR).
 ### 4. ENRICH
 
 Tighten each draft to the team format: WHAT not HOW, ASCII diagrams, de-dup (each fact once),
-story-point justification with the per-driver MAX. The enriched body IS the exact Azure description.
+story-point justification with the per-driver MAX. The enriched body IS the exact tracker description.
 
 **Plain-language sub-pass:** Read
 `../generate-plain-language-documentation/references/integration-notes.md` § decompose-backlog; polish
@@ -116,7 +115,7 @@ unchanged; say so when you ask.
 
 ### 5. CREATE
 
-Per `../../common/providers.md` and `../../references/azure-mechanics.md`, create **top-down**:
+Per `../../common/providers.md`, create **top-down** through the gateway:
 
 1. *Tree mode:* each new Feature with `tracker_create_work_item` (`kind: "feature"`, Markdown
    description, `parentRef` the Epic). Read it back, then rewrite every
@@ -126,7 +125,7 @@ Per `../../common/providers.md` and `../../references/azure-mechanics.md`, creat
    `parentRef` its **Feature**), then `tracker_update_work_item` with `storyPoints` from the
    draft's `story_points`.
 
-Azure DevOps uses native work-item types; Linear uses the `agile:user-story` label. If a Feature
+The tracker's adapter maps the harness kinds to its own types and labels. If a Feature
 create fails, stop before creating any Story under it.
 
 ### 6. VERIFY (structural)
@@ -138,7 +137,7 @@ assertion STOPS the run.
 
 ### 7. AUDIT (content + coverage)
 
-Run `audit-checklist.md`: retrieve each item FRESH from Azure; check fidelity, build the
+Run `audit-checklist.md`: retrieve each item FRESH from the tracker; check fidelity, build the
 parent-requirement → Story coverage map (in tree mode, Epic slice → Feature → Story; flag orphans
 and scope creep at both levels), confirm DoR. Emit the coverage
 report. Any gap STOPS and reports — no silent patching.
@@ -149,5 +148,5 @@ report. Any gap STOPS and reports — no silent patching.
   ENRICH. Never write to the tracker without the matching approval; the harness approval hook
   enforces it.
 - Tree mode is one run: no stop between the Feature level and the Story level.
-- Every Azure-mutating step is followed by a read-back assertion.
+- Every tracker-mutating step is followed by a read-back assertion.
 - If the host repo keeps a session artifacts path, write a checkpoint after CREATE and after AUDIT.

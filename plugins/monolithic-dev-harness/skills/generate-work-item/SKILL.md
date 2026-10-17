@@ -1,7 +1,7 @@
 ---
 name: generate-work-item
 description: >
-  Generates a raw Epic, Feature, User Story, or Task work item from a title and description: requirement bullets, acceptance criteria, Context7 research, a spec in the item's folder, and a Tickets/Ready draft; creates the selected local, Azure DevOps, or Linear item after approval. Use when the user runs /generate-work-item, says "start ticket", "create a ticket", "create an issue", "create a user story", "create a feature", "create an epic", "generate a work item", or provides a work-item type plus a problem to turn into backlog work. For team-format enrichment (emoji sections, story-point drivers), use enrich-work-item instead. For plain-language requirement and acceptance-criteria prose, this skill delegates a sub-pass to generate-plain-language-documentation in PHASE 4.
+  Generates a raw Epic, Feature, User Story, or Task work item from a title and description: requirement bullets, acceptance criteria, Context7 research, a spec in the item's folder, and a Tickets/Ready draft; creates the item in the selected tracker after approval. Use when the user runs /generate-work-item, says "start ticket", "create a ticket", "create an issue", "create a user story", "create a feature", "create an epic", "generate a work item", or provides a work-item type plus a problem to turn into backlog work. For team-format enrichment (emoji sections, story-point drivers), use enrich-work-item instead. For plain-language requirement and acceptance-criteria prose, this skill delegates a sub-pass to generate-plain-language-documentation in PHASE 4.
 license: MIT
 ---
 
@@ -48,7 +48,7 @@ Gather inputs **one at a time** via the host UI. Each step: brief purpose, requi
 | `title` | yes | Short work-item title |
 | `description` | yes | Problem statement or scope in the author's words |
 | `work_item_type` | yes | `epic` \| `feature` \| `user-story` \| `task` |
-| `parent` | only for a Task | Parent id or Azure URL (Epic→Feature, Feature→Story, Story→Task) |
+| `parent` | only for a Task | Parent id or tracker link (Epic→Feature, Feature→Story, Story→Task) |
 | `attachment` | no | Supporting doc URL or artifacts path |
 | `language` | no | `en` \| `pt-br`, default **pt-BR**. When omitted, follow the existing Locale rule (match
   `description`'s language) instead of forcing the default. |
@@ -68,9 +68,9 @@ A Feature or a User Story may stand alone. Do not ask for a parent the user did 
 not invent one. Only a Task needs a parent: if it is missing, STOP and ask once. If a given parent
 has the wrong type: STOP and report (see `decomposition-rules.md`).
 
-Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which reads
-`artifacts_path` from `.harness/settings.json`. See
-`../../references/project-config.md`.
+Ask `harness document path` for every document's path; it reads `artifacts_path` from
+`.harness/settings.json` and places the document in its work item's folder
+(`../../references/document-layout.md`).
 
 ---
 
@@ -158,21 +158,17 @@ Silence is not approval.
 
 Then ask **where to persist** (if the user has not already chosen):
 
-1. **Azure DevOps** — create a native work item and parent relation.
-2. **Linear** — create an issue with `parentId` and its managed `agile:*` type label.
-3. **Local artifacts** — keep the neutral spec and draft only.
-4. **Chat only** — formatted markdown ready to copy.
+1. **The selected tracker** — create the item and its parent relation through the gateway.
+2. **Chat only** — formatted markdown ready to copy.
 
-If the user named no destination and wants chat-only output, skip local/Azure unless they approve
-artifacts path persistence.
+If the user named no destination and wants chat-only output, write nothing unless they approve it.
 
 ---
 
 ## PHASE 6 — CREATE (selected provider)
 
-Translate through `../../common/providers.md`. Azure uses native work item types and parent relations.
-Linear uses issues, immediate `parentId`, and exactly one managed Agile type label. Local persistence
-keeps the common frontmatter unchanged.
+Translate through `../../common/providers.md`: `tracker_create_work_item` with the harness kind and
+`parentRef`; the tracker's adapter maps the kind, the parent relation and any labels.
 
 ---
 
@@ -221,4 +217,4 @@ Append checkpoint to open `Agent_Sessions/` record when the host keeps a session
 
 > Generate an epic for platform security — just show me the markdown
 
-→ Run through PHASE 4, present body in chat; skip local/Azure unless user approves artifacts path save.
+→ Run through PHASE 4, present body in chat; write nothing unless the user approves it.

@@ -6,7 +6,7 @@
     "properties": {
       "file_path": { "type": "string", "description": "Path to a draft markdown file" },
       "persist": { "type": "boolean", "description": "Write the report to .harness/backlog/reports/" },
-      "hierarchy_parent_is_feature": { "type": "boolean", "description": "Azure hierarchy result for a Story that has a parent: true if the parent is a Feature, false if not. Omit when the Story has no parent." }
+      "hierarchy_parent_is_feature": { "type": "boolean", "description": "Tracker hierarchy result for a Story that has a parent: true if the parent is a Feature, false if not. Omit when the Story has no parent." }
     },
     "required": ["file_path"]
   },

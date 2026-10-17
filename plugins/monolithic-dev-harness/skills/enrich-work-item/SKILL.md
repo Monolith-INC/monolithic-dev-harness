@@ -13,7 +13,6 @@ as each phase needs them.
 References (start at `../../common/workflows/enrich-work-item.md`):
 
 - `../../common/workflows/enrich-work-item.md` — type map, enricher routing, artifacts paths.
-- `./references/azure-ingest.md` — Azure URL/id ingest: work item, attachments, description refs.
 - `../../common/templates/output-formats.md` — per-type output contracts.
 - `../../common/templates/` — **read-only shape contracts**. Validate enriched
   output against the matching template before presenting.
@@ -45,35 +44,34 @@ Gather inputs **one at a time** via the host UI. Each step: brief purpose, requi
 | --- | --- | --- |
 | `source` | yes | `url` \| local `path` \| pasted `text` — the material to enrich |
 | `work_item_type` | yes | `epic` \| `feature` \| `user-story` \| `task` |
-| `parent` | only for a Task | Parent id or Azure URL for hierarchy context; Features and Stories may have none |
+| `parent` | only for a Task | Parent id or tracker link for hierarchy context; Features and Stories may have none |
 | `attachment` | no | Extra doc URL or path |
 
 Accept `/enrich-work-item` flags or conversational inference (see Examples).
 
-Normalize type → enricher + Azure `workItemType` per `pipeline.md`.
+Normalize type → enricher + the tracker kind (`tracker_describe` `kinds`) per `pipeline.md`.
 
-Resolve the artifacts path with `bin/agile-backlog-toolkit config --show`, which reads
-`artifacts_path` from `.harness/settings.json`. See
-`../../references/project-config.md`.
+Ask `harness document path` for every document's path; it reads `artifacts_path` from
+`.harness/settings.json` and places the document in its work item's folder
+(`../../references/document-layout.md`).
 
 ---
 
 ## PHASE 1 — INGEST
 
-Read `./references/azure-ingest.md` when `source` is an Azure DevOps URL or numeric id.
 
 1. Load `source`:
-   - **Azure URL or id** — per `azure-ingest.md`: parse id, `tracker_get_work_item(ref=<id>)`,
+   - **Tracker link or id** — the id per `tracker_describe` `ids`, then `tracker_get_work_item(ref=<id>)`,
      enumerate `AttachedFile` relations, parse description for linked docs/URLs/paths, fetch attachment
      and referenced content into `supplementary_context`. Set **Descrição Original** from
-     `System.Description` verbatim.
+     its `description` verbatim.
    - **path** — read local markdown; capture body verbatim.
-   - **url** (non-Azure) — fetch external doc; capture description verbatim.
+   - **url** (not a tracker link) — fetch external doc; capture description verbatim.
    - **text** — treat pasted content as the description to enrich.
 2. If `parent` provided: read it with `tracker_get_work_item(ref=<parent>)` through
    `workflow-integrations` and capture the parent chain for context and filename prefix.
-   When `source` is Azure and `parent` omitted, use `System.Parent` from the fetched item.
-3. If `attachment` provided: read or fetch; fold into enricher context (dedupe against Azure
+   When `source` is a tracker item and `parent` omitted, use its `parent_id`.
+3. If `attachment` provided: read or fetch; fold into enricher context (dedupe against tracker
    attachments already ingested).
 4. Preserve **Descrição Original** text exactly for the enricher output section.
 
@@ -137,13 +135,10 @@ is created with `tracker_create_work_item`. Read the item back after the write.
 
 Then ask **where to persist** (if not already chosen):
 
-1. **Azure DevOps** — create or update a native work item.
-2. **Linear** — create or update an issue with `parentId` and its managed Agile label.
-3. **Local artifacts** — write or update the neutral draft.
-4. **Chat only** — formatted markdown ready to copy.
+1. **The selected tracker** — create or update the item through the gateway.
+2. **Chat only** — formatted markdown ready to copy.
 
-If no destination was named and the user wants chat-only, skip local/Azure unless they approve artifacts path
-save.
+If no destination was named and the user wants chat-only, write nothing unless they approve it.
 
 ---
 
@@ -189,9 +184,9 @@ Append checkpoint to open `Agent_Sessions/` record when the host keeps a session
 
 → Infer `work_item_type: user-story`, `source: text`, run enricher pipeline.
 
-**Azure source:**
+**Tracker source:**
 
 > Format issue 6871 in the team template
 
-→ `source: url` (Azure), resolve per `azure-ingest.md` (work item + attachments + description refs),
+→ `source: url` (tracker link), read with `tracker_get_work_item` (work item + attachments + description refs),
 enrich, present for approval.

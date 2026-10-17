@@ -9,7 +9,7 @@ Validating <type> — "<title>" [<source: artifacts path|azure>]
 STRUCTURAL
   [PASS]  frontmatter-type-present
   [FAIL]  frontmatter-status-absent — `status: active` found in frontmatter
-  [SKIP]  filename-regex — source is Azure, not a local draft
+  [SKIP]  filename-regex — source is the tracker, not a local draft
 
 HIERARCHY
   [PASS]  hierarchy-story-parent-is-feature — parent #6868 is Feature "Payment Flow"

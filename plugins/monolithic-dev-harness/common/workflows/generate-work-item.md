@@ -56,4 +56,4 @@ source: [context7, <urls>]
 
 - `../../references/decomposition-rules.md` — hierarchy, sizing heuristic
 - `../../references/ticket-structure.md` — draft file constraints
-- `../providers.md` — local, Azure DevOps, and Linear persistence
+- `../providers.md` — writing to the selected tracker

@@ -1,7 +1,7 @@
 ---
 name: amend-workitems
 description: >
-  Analyze user instructions and safely amend an entire Azure DevOps or local artifacts work-item tree. Use when a user supplies corrections or adjustments for an Epic or Feature and expects the Epic, Features, User Stories, and child Tasks to be scanned, placed, reviewed, and updated consistently. This skill gathers and presents a change set before any write, creates a recoverable tree backup, and never changes work items without explicit approval.
+  Analyze user instructions and safely amend an entire work-item tree in the selected tracker. Use when a user supplies corrections or adjustments for an Epic or Feature and expects the Epic, Features, User Stories, and child Tasks to be scanned, placed, reviewed, and updated consistently. This skill gathers and presents a change set before any write, creates a recoverable tree backup, and never changes work items without explicit approval.
 license: MIT
 ---
 
@@ -17,7 +17,6 @@ References:
 - `./references/backup-and-ledger.md` — backup, revision, Obsidian, and recovery rules.
 - `./references/approval-and-persistence.md` — change-set approval and delegated writers.
 - `../../references/ticket-structure.md` — artifacts path structure and section order.
-- `../../references/azure-mechanics.md` — Azure reads, links, updates, and read-back.
 - `../enrich-work-item/references/` — canonical sections and examples for Epic, Feature, and Story.
 - `../generate-breakdown-work-items/references/` — Implementation Plans and Task child rules.
 
@@ -28,7 +27,7 @@ References:
 Ask one question at a time through the host UI:
 
 1. Collect the amendment instructions verbatim. Do not paraphrase away corrections.
-2. Collect the reference Epic or Feature (Azure id/URL, Artifacts path, or filesystem path).
+2. Collect the reference Epic or Feature (tracker id or link, artifacts path, or filesystem path).
 3. Confirm scope as the complete descendant tree and the non-destructive, content-only policy.
 
 Do not read or write the tree before the reference is supplied. If the reference is ambiguous,
@@ -99,7 +98,7 @@ Re-check the total against the assignee's remaining capacity in the active sprin
 fits, STOP and ask before writing. Full rules in
 `../generate-breakdown-work-items/references/atomic-tasks.md`.
 Update related Artifacts Implementation Plans when the amendment changes scope, acceptance coverage,
-or task sequencing. Read back every changed Azure item and Artifacts file, verify parent links and
+or task sequencing. Read back every changed tracker item and artifacts file, verify parent links and
 revisions, and run the applicable `validate-artifact` checks. Stop on the first failed write or
 read-back; leave the backup intact and report the exact recovery target.
 
@@ -116,4 +115,4 @@ that no state or hierarchy changes were made when that is true.
 - Never overwrite a newer revision; refresh and re-propose instead.
 - Never delete, relink, or change state without a separate explicit approval.
 - Preserve original instruction text and all unmatched items in the report.
-- If Azure and Artifacts disagree, stop and present the conflict; do not guess which copy wins.
+- If the tracker and the artifacts disagree, stop and present the conflict; do not guess which copy wins.

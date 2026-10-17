@@ -22,8 +22,8 @@ Use the harness kinds and states with the gateway (`tracker_create_work_item`,
 `tracker_update_work_item` changes only the fields it names (title, description, story points, a
 Task's hours, assignee, sprint) and reads the item back; a tracker that keeps no hours refuses a
 change of hours. Show people the provider's own names
-from `kinds` and `states`. Azure-specific instructions apply only when the active tracker is
-`azure-devops`; otherwise use the gateway operations.
+from `kinds` and `states`. Nothing about a particular tracker is part of the workflow: what one
+tracker needs beyond this contract lives in its adapter.
 
 When `mentions_link` is true, never write a protected item's id in a form listed in `mention`:
 name it in plain words instead, for example "Idea 4007".

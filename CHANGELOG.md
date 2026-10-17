@@ -6,6 +6,38 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0-rc.2] - 2026-10-16
+
+### Added
+
+- The workflow route: the order of every step, as data (`facts` and `route` in
+  `config/prepared-workflows.json`). `harness next` gives the one next step of the current work
+  session (skill, question or command), computed from the work items, the answers and the
+  documents; `harness begin` returns it too. The main-flow diagram is generated from the route.
+- Guards built from the route: a Story's Tasks need its approved plan; moving it to in progress
+  needs its Tasks and its preparation documents; code changes and completion need everything the
+  route does before them. Every refusal points to `harness next`.
+- A test walks every state reachable from six starting points and every answer, and replays the
+  2026-10-16 live run; another keeps tracker names out of agent-facing files.
+- A Task created under a Story gets the Story's sprint and assignee (Azure DevOps).
+- Setup proposes the branch naming the project already uses.
+
+### Changed
+
+- A reply in the user's own words closes a waiting question; it approves nothing. `harness next`
+  runs while a question waits.
+- A request that names no work item gets the `starting-point` question; the refined-item question
+  moved from `bmad-build` into the route.
+- The Breakdown Task closes once its Story holds its other Tasks, without a receipt.
+- Agent-facing skills work from the tracker gateway contract only; Azure DevOps notes moved to
+  `trackers/azure-devops/notes/`.
+
+### Removed
+
+- `harness workflow checkpoint --next-action`; the checkpoint's stage comes from the route.
+- The `azure-devops` skill, the planning-completion receipt, and the catalog's separate
+  `routes`, `requirements` and `completion` lists.
+
 ## [0.7.0-rc.1] - 2026-10-16
 
 ### Added

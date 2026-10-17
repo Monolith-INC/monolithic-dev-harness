@@ -1,7 +1,7 @@
 ---
 name: split-story
 description: >
-  Lateral story-sizing skill. Takes a single User Story and determines if it should be split, how many sub-stories to create, and what split pattern to use — then drafts sub-stories and hands them off. Use when the user asks "split this story", "is this story too big?", "analyze this story for sizing", or provides a artifacts path / Azure ID / file path / raw text and wants a split recommendation. One story per invocation.
+  Lateral story-sizing skill. Takes a single User Story and determines if it should be split, how many sub-stories to create, and what split pattern to use — then drafts sub-stories and hands them off. Use when the user asks "split this story", "is this story too big?", "analyze this story for sizing", or provides an artifacts path / tracker id / file path / raw text and wants a split recommendation. One story per invocation.
 license: MIT
 ---
 
@@ -12,7 +12,6 @@ Lateral story-sizing skill. Load reference files as each phase needs them.
 References (shared, in `../../references/`):
 - `decomposition-rules.md` — 6-driver MAX heuristic, story-point ceiling, DoR, hierarchy rules.
 - `ticket-structure.md` — body sections, frontmatter constraints, content hygiene.
-- `azure-mechanics.md` — MCP calls, linking gotchas, rendering rules.
 
 References (skill-specific, in `./references/`):
 - `split-patterns.md` — split pattern catalog with detection signals and auto-selection rules.
@@ -27,7 +26,7 @@ References (skill-specific, in `./references/`):
 
 ## PHASE 1 — INGEST
 
-**Input:** one of — local draft path, Azure work item ID, arbitrary file system path, or raw
+**Input:** one of — local draft path, tracker id or link, arbitrary file system path, or raw
 text pasted inline.
 
 Determine source from the argument:
@@ -37,10 +36,10 @@ extension inside the artifacts tree):
 1. Read the markdown file. Parse frontmatter: extract `work_item_type`, `story_points`,
    `parent_id`, `provider_id`. Parse body: identify sections by emoji + label headings.
 
-**If Azure ID** (numeric argument):
-1. Call `tracker_get_work_item(ref=<id>) through `workflow-integrations``.
-2. Extract: `System.Title`, `System.Description`,
-   `Microsoft.VSTS.Scheduling.StoryPoints`, `System.Parent`.
+**If a tracker id or link:**
+1. Call `tracker_get_work_item(ref=<id>)`.
+2. Extract: `title`, `description`, the Story's points (the estimate field `tracker_describe`
+   names), `parent_id`.
 
 **If file system path** (non-artifacts path to a `.md` or `.txt` file):
 1. Read the file from disk. Parse as markdown. Extract any frontmatter if present; treat body
@@ -60,15 +59,15 @@ Normalize into a unified artifact record:
   acceptance_criteria:  string[]        (each AC line from the ✅ Critérios de Aceite section;
                                          empty array if the section is absent)
   parent_id:             string | null
-  provider:              "local" | "azure-devops" | "linear"
+  provider:              the selected tracker's name
   provider_id:           string | null
-  source:                "artifacts path" | "azure-devops" | "linear" | "filesystem" | "raw"
+  source:                "artifacts path" | "tracker" | "filesystem" | "raw"
 }
 ```
 
 Extract `acceptance_criteria` by reading the `✅ Critérios de Aceite` section and splitting on
-checkbox lines (`- [ ]` or `- [x]`). For Azure source, parse the same section from
-`System.Description` markdown. For raw text or filesystem source, parse from the body if the
+checkbox lines (`- [ ]` or `- [x]`). For a tracker source, parse the same section from the
+item's `description`. For raw text or filesystem source, parse from the body if the
 section heading is present; otherwise `acceptance_criteria = []`.
 
 If artifact cannot be parsed (empty content, unreadable file, MCP error): STOP and report the
@@ -233,14 +232,12 @@ For each sub-story draft (in order):
 1. Create each approved child using `tracker_create_work_item`, with its harness kind, title,
    description, and parent reference, then set its points with `tracker_update_work_item`
    (`storyPoints`).
-2. Assert response contains `System.Id`. If absent: STOP and report failure with the item
+2. Assert the response carries the new item's `key`. If absent: STOP and report failure with the item
    title and the raw error.
 3. Supply `parentRef` at creation when the story has a parent. Do not parent a Story directly to
    an Epic; sub-stories of a standalone Story stay standalone.
 4. Read back: `tracker_get_work_item(ref=<new_id>)`.
-   Assert `System.Parent == parent_id`, or that there is no parent when the original had none.
-   Assert that the relations array contains no `System.LinkTypes.Related` links
-   (no stray Related links from prior failed runs).
+   Assert its `parent_id == parent_id`, or that there is no parent when the original had none.
    If either assertion fails: STOP and report
    `LINK ASSERTION FAILED for <title>: expected parent <parent_id>, got <actual>`
    or `STRAY RELATED LINKS for <title>: <links found>`.

@@ -23,10 +23,10 @@ References (start at `./references/pipeline.md`):
 
 Glossary path: `./references/assets/tech-glossary-en-pt-br.json` (bundled with the skill).
 
-Resolve the artifacts path with `bin/agile-backlog-toolkit config --show` when persisting output. If it is
-unset, ask the user where to write — never assume a location. Not needed for loading skill assets.
+When persisting output, ask `harness document path` for the document's path
+(`../../references/document-layout.md`); never assume a location. Not needed for loading skill assets.
 
-**Not in scope:** creating Azure work items, enricher emoji layouts, or backlog hierarchy — use the
+**Not in scope:** creating tracker work items, enricher emoji layouts, or backlog hierarchy — use the
 sibling skills for those; call this skill for the **prose** inside their outputs.
 
 ---

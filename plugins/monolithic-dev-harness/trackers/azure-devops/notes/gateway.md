@@ -1,9 +1,9 @@
----
-name: azure-devops
-description: Use when a harness workflow needs Azure DevOps work items, pull requests, branches, or review threads. All agent operations go through the provider-neutral workflow-integrations tools; the native Azure MCP is an internal gateway dependency and must not be called directly.
----
+# Azure DevOps through the gateway (maintainer notes)
 
-# Azure DevOps through the harness
+The agent never reads this: it works through the gateway contract (`tracker_describe` and the
+`tracker_*` tools). These notes are for maintainers of the Azure DevOps adapter.
+
+
 
 The harness exposes one agent-facing integration: `workflow-integrations`. Use its provider-neutral
 `tracker_*` and `scm_*` tools for every tracker and Azure Repos operation. The gateway routes these
@@ -50,5 +50,5 @@ spawn another Azure process. A stale gateway/provider process should be handled 
 host or using the harness's documented recovery procedure; never terminate a process based only on
 its name or count. Never log or store tokens, cookies, or credentials.
 
-See [the gateway tool map](references/tool-map.md) for supported capabilities and
-[the transport notes](references/oauth.md) for maintainers.
+See [the gateway tool map](tool-map.md) for supported capabilities and
+[the transport notes](oauth.md) for maintainers.

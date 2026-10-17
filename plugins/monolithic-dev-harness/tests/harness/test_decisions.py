@@ -147,6 +147,8 @@ def test_only_a_plain_status_query_or_show_passes_the_pending_gate(
         )
 
     assert "deny" not in shell(f"{CLI} decision status --repo {tmp_path}")
+    # The next step reports the waiting question; it may always be asked for.
+    assert "deny" not in shell(f"{CLI} next --repo {tmp_path}")
     # Showing the files a question is about only reads them, so it may run while it waits.
     assert "deny" not in shell(
         f"{CLI} workflow show --repo {tmp_path} --artifact docs/plan.md --artifact b.md"
@@ -345,11 +347,7 @@ def test_async_delivery_waits_for_matching_actual_reply(tmp_path: Path) -> None:
     )
     native(tmp_path, "prompt", {"prompt": changed_question})
     assert decisions.waiting(tmp_path)
-    for message in (
-        "the buttons disappeared",
-        "I did not click",
-        reply("call-1", "I can reopen it"),
-    ):
+    for message in ("the buttons disappeared", "I did not click"):
         native(tmp_path, "prompt", {"prompt": message})
         assert decisions.waiting(tmp_path)
     native(
@@ -489,3 +487,25 @@ def test_async_adapter_owns_button_format_and_live_wait() -> None:
         ]
         == "chat"
     )
+
+
+def test_a_reply_in_the_users_own_words_closes_the_question_and_approves_nothing(
+    tmp_path: Path,
+) -> None:
+    """Live run 2026-10-16: "i see no corrections" left the question pending and blocked everything."""
+    decisions.begin(
+        tmp_path,
+        "d1",
+        "Apply the six fixes?",
+        ("Approve", "Not now"),
+        "chat",
+        approval=True,
+    )
+    found = decisions.resolve(tmp_path, "d1", "i see no corrections", "chat").value
+    assert (found["status"], found["answer"], found["own_words"]) == (
+        "answered",
+        "i see no corrections",
+        True,
+    )
+    assert not decisions.waiting(tmp_path)
+    assert not state.open_approvals(tmp_path, None)

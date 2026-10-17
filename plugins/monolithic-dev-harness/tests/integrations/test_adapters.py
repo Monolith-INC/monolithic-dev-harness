@@ -101,6 +101,33 @@ class AzureTest(unittest.TestCase):
             ("add_child", 10, "User Story"),
         )
 
+    def test_a_task_gets_its_storys_sprint_and_assignee(self) -> None:
+        story = ado_item(20, "User Story", "Active")
+        story["fields"]["System.IterationPath"] = "proj\\Sprint 65"
+        story["fields"]["System.AssignedTo"] = {"uniqueName": "ana@example.com"}
+        call = FakeTransport(
+            {
+                "wit_work_item": lambda args: (
+                    story
+                    if args["id"] == 20
+                    else ado_item(args["id"], "Task", "New", parent=20)
+                ),
+                "wit_work_item_write": {"id": 30, "fields": {}},
+            }
+        )
+        ops("azure-devops", AZURE, call).create_work_item(
+            WorkItemKind.TASK, "Do it", "body", "20"
+        )
+        update = call.sent("wit_work_item_write")[-1]
+        self.assertEqual((update["action"], update["id"]), ("update", 30))
+        self.assertEqual(
+            {u["path"]: u["value"] for u in update["updates"]},
+            {
+                "/fields/System.AssignedTo": "ana@example.com",
+                "/fields/System.IterationPath": "proj\\Sprint 65",
+            },
+        )
+
     def test_transition_writes_the_provider_state(self) -> None:
         self.tracker.transition_work_item("10", LogicalState.IN_PROGRESS)
         self.assertEqual(

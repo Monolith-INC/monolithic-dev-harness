@@ -333,3 +333,30 @@ class SetupTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_the_branch_template_follows_the_projects_own_branches(tmp_path) -> None:
+    """Live run 2026-10-16: the project names Story branches `userstory/<id>-<slug>`."""
+    import subprocess as run
+
+    from scripts.harness import setup as chosen
+
+    def git(*args: str) -> None:
+        run.run(["git", "-C", str(tmp_path), *args], check=True, capture_output=True)
+
+    git("init", "-q", "-b", "develop")
+    git(
+        "-c",
+        "user.email=a@b",
+        "-c",
+        "user.name=a",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "i",
+    )
+    assert chosen._branch_template(tmp_path) == "feature/{key}-{slug}"
+    for name in ("userstory/7824-train", "userstory/7927-photo", "feature/7822-tuning"):
+        git("branch", name)
+    assert chosen._branch_template(tmp_path) == "userstory/{key}-{slug}"

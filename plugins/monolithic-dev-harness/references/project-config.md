@@ -37,37 +37,21 @@ unavailable and the correct behaviour is to **ask**, never to invent a path.
 
 - `artifacts_path`: relative to the project root or absolute; `~` expands. No default.
 - `tracker.values`: the values the selected tracker's `tracker.json` declares under `settings`,
-  each with what it is for and whether it is required. `config --show` lists them.
+  each with what it is for and whether it is required. `harness bootstrap --inspect` lists them.
 
 No secrets live here: authentication comes from the provider's MCP server and its sign-in.
 Commit the file so the team shares one configuration.
 
 ## Reading it
 
-```bash
-bin/agile-backlog-toolkit config --show
-```
-
-Prints the artifacts path (and whether that directory exists yet), the file it came from, the
-selected tracker, and each value its `tracker.json` declares. Exits non-zero when the tracker
-cannot be used, a required value missing for example, so it works as a precondition check.
+`harness bootstrap --inspect` prints the settings, the artifacts path, the selected tracker, and
+what is missing; `harness doctor` says whether the tracker can be used.
 
 ## Filling in a missing value
 
-The agent never writes the settings file. When a value is missing:
-
-**For `artifacts_path`: ask the user** where their work should go, and ask them to add it to
-`.harness/settings.json`.
-
-**For Azure values: discover, then propose.** These are lookups, so nobody should type a slug:
-
-| Missing | Discover with |
-|---|---|
-| project | Azure DevOps project selection in the harness bootstrap/onboarding flow |
-| team | harness tracker onboarding flow |
-| process | `tracker_describe` when returned by the selected adapter; otherwise onboarding must report the available choices |
-
-Present the options, let the user pick, and give them the exact `tracker.values` entry to add.
+The agent never writes the settings file. When a value is missing, run the bootstrap skill: it
+asks only for what is missing, discovers the tracker's values through its onboarding where it can,
+and applies the settings the user reviewed.
 
 ## Setting it up
 
@@ -78,4 +62,3 @@ repository once. It does not create the artifacts directory; it only records whe
 
 - `runtime/orchestrator_core/project_config.py`: the backlog view of the settings
 - `scripts/harness/settings.py`: the loader, and the defaults for omitted sections
-- `azure-mechanics.md`: which field each process actually has

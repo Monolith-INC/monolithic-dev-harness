@@ -294,6 +294,7 @@ def _held(
             pass
     if decisions.blocking(repo, current) and not (
         decisions.status_command(call.command, Path(call.cwd or repo))
+        or decisions.next_command(call.command, Path(call.cwd or repo))
         or decisions.show_command(call.command, Path(call.cwd or repo))
         or decisions.fallback_command(call.command, Path(call.cwd or repo))
         or work_session_context.recovery_allowed(repo, current, request)
@@ -1153,7 +1154,13 @@ def _answer_decision(
             return [f"[harness] decision not recorded: {failure.message}"]
         case Ok(found):
             pass
-    notes = [f"[harness] human decision recorded: {found['answer']}"]
+    notes = [
+        f"[harness] the user answered in their own words, choosing none of the options: "
+        f"{found['answer']}. This approves nothing. Act on what they said, then run "
+        "`harness next`; ask again only if their words do not settle the question."
+        if found.get("own_words")
+        else f"[harness] human decision recorded: {found['answer']}"
+    ]
     match decision_exchange(pending, answer):
         case tool_input, response:
             match _apply_marker(

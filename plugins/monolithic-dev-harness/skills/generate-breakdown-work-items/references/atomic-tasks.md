@@ -45,22 +45,21 @@ proper names, or host-preferred equivalents — stay consistent within a run). D
 ### Breakdown rules
 
 - Title: `Breakdown` (or localized equivalent; keep recognizable)
-- **Assignee** = User Story assignee (`System.AssignedTo` on Azure; frontmatter metadata if present).
+- **Assignee** = User Story assignee (the gateway copies it when the Task is created).
   If the Story has no assignee → leave unassigned and note in the run summary; still set Done.
-- **State** = Done (Azure: set `System.State` to the project's Done/Closed equivalent for Task;
-  artifacts path: mark status Done in the draft body/frontmatter convention used for Tasks)
+- **State** = Done, set with `tracker_transition_work_item` after the Tasks are read back
 - Always the **last** Task in the list
 
 ### Task review
 
-Create the full proposed Task list locally, then show it with the Implementation Plan at one
-material review point before tracker publication. Ask about a specific Task only when its scope is
-unclear. Do not create a separate multi-select confirmation for the routine complete list.
+The Implementation Plan is approved on its own first (`implementation-confirm`). Then create the
+full proposed Task list locally, show it, and ask `publish-items` for it before tracker
+publication. Ask about a specific Task only when its scope is unclear.
 
 ### Effort hours per Task
 
 For trackers with task-hour fields, a Task with no remaining work contributes nothing to the
-capacity bar or burndown chart. Linear does not provide those hour fields; report that limit and
+capacity bar or burndown chart. A tracker without those hour fields (see `tracker_describe`) keeps none; report that limit and
 retain the Task hierarchy without inventing hours.
 
 Once the Task list is settled, **compute the estimates — do not reason them out.** The arithmetic
@@ -149,33 +148,22 @@ When the user chose local Task drafts, or the workflow also keeps local copies:
 4. Body: title heading + short description (WHAT for this atomic unit) + link/ref to `plan_path`
    and parent Story.
 
-### Linear
+### Selected tracker
 
-Before the first issue is created, run `harness tracker preflight` and verify the team and required
-kind labels. Missing labels are prerequisites in the same reviewed publication batch; create them
-before dependent issues. Use the selected tracker adapter's `create_work_item(Task, ..., parent)`
-operation, where `parent` is the Story id. Read back each created Task and assert its parent is the
-Story. Read back the completed Breakdown Task's state. Linear has points but no native remaining
-hours; report that difference plainly.
+Publish through the gateway only (`tracker_*` tools); `tracker_describe` says what the tracker can
+hold:
 
-### Azure Task board (only when Azure DevOps is selected)
+1. Run `harness tracker preflight` before the first write; anything it reports missing (a label,
+   a team setting) is part of the same reviewed publication batch.
+2. Create each approved Task with `tracker_create_work_item` (`kind: "task"`, `parentRef` the
+   Story, title, description). The gateway gives it the Story's sprint and assignee.
+3. Set each Task's hours with `tracker_update_work_item` (`hours`, with `firstEstimate: true` on
+   its first figure) where `tracker_describe` lists hour fields; otherwise report that the tracker
+   keeps no hours.
+4. Read each created Task back with `tracker_get_work_item` and verify its parent is the Story.
+5. Set the Breakdown Task to Done with `tracker_transition_work_item`.
 
-When Azure DevOps is the selected Task destination, use `workflow-integrations` only:
-
-1. Parent must be the **User Story** reference (never Feature/Epic).
-2. Create approved Tasks individually with `tracker_create_work_item`, using `kind: "task"`,
-   `parentRef`, title, and description.
-3. Set each Task's hours (`hours`, with `firstEstimate: true` on its first figure), assignee and
-   sprint with `tracker_update_work_item`; the adapter writes Remaining Work, and Original
-   Estimate where the project's process has it. Set the Breakdown Task to Done with
-   `tracker_transition_work_item`. Do not call native Azure MCP tools, Azure CLI, or direct APIs.
-4. Read each created Task back with `tracker_get_work_item` and verify its parent reference.
-
-### Shared Azure notes (Azure only)
-
-Use only `workflow-integrations`. Parent of a Task is the **User Story**, not the Feature. Description
-format is Markdown. If the gateway cannot represent a required Azure field or operation, stop and
-report the capability gap.
+If the gateway cannot represent a required field or operation, stop and report the gap.
 
 ---
 

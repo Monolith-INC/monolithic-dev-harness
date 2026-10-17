@@ -31,7 +31,7 @@ from integrations.contracts import (
     WorkItem,
     WorkItemKind,
 )
-from policy import CanonicalToolEvent, PolicyDecision
+from policy import CanonicalToolEvent, PolicyDecision, breakdown
 from policy.commands import escapes_checkout, git_commands, is_code, writes_code
 from policy.git_branch_guard import evaluate_git_branch_guard
 
@@ -338,9 +338,9 @@ def _evaluate_completion(
 ) -> PolicyDecision:
     """A work item is done only when the workflow catalog's completion requirements hold.
 
-    A Breakdown task closes on its planning receipt; another Task closes inside the work session
-    that implements its Story or Bug; a Feature or Epic closes once its children are; a Story or
-    Bug needs the catalog's `completion` list.
+    A Breakdown Task closes once its Story holds its other Tasks; another Task closes inside the
+    work session that implements its Story or Bug; a Feature or Epic closes once its children
+    are; a Story or Bug needs what the route requires before it is done.
     """
     root = Path(event.workspace_root or ".")
     if not _enforced(root):
@@ -359,13 +359,8 @@ def _evaluate_completion(
             return PolicyDecision.deny(failure.message)
         case Ok((ops, item, artifacts)):
             pass
-    receipts = tuple(
-        a
-        for a in artifacts
-        if workflow_requirements.artifact_kind(a.kind) == "planning_completion"
-    )
-    if receipts:
-        return _decision(fmap(_receipt_route(ops, item, receipts), lambda _: None))
+    if breakdown.is_breakdown(item):
+        return _decision(breakdown.closes(ops, item))
     if item.kind is WorkItemKind.TASK:
         return _task_completion(root, ops, item)
     if item.kind in (WorkItemKind.FEATURE, WorkItemKind.EPIC):
@@ -422,13 +417,6 @@ def _buildable(root: Path, ref: str) -> Result[str | None]:
             lambda item: item.key if item.kind in BUILDABLE_KINDS else None,
         ),
     )
-
-
-def _receipt_route(ops: TrackerOps, item: WorkItem, receipts: tuple) -> Result[object]:
-    """A Breakdown task closes on its newest planning receipt; no work session is involved."""
-    from policy.planning_completion import current, verify
-
-    return bind(current(receipts), lambda receipt: verify(ops, item, receipt))
 
 
 def _links(root: Path, work_session_id: str | None, item: WorkItem) -> bool:

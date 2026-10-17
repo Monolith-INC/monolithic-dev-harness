@@ -54,7 +54,7 @@ Failures are logged and validation continues to the next check.
 | Check | Condition | Result |
 |---|---|---|
 | `content-complexidade-breakdown` | Complexity section (`📊 Complexidade` / `📊 Complexity` per declared language) contains per-driver scores — keywords: Escopo/Scope, Incerteza/Uncertainty, Integrações/Integrations, Dados/Data, QA, Rollout | FAIL if absent |
-| `content-story-points-set` | Story points field > 0 (frontmatter `story_points` or Azure `Microsoft.VSTS.Scheduling.StoryPoints`) | FAIL if unset or 0 |
+| `content-story-points-set` | Story points field > 0 (frontmatter `story_points` or the tracker item's points) | FAIL if unset or 0 |
 | `content-effort-hours-plausible` | Declared `effort_hours` sits inside the reference band for its story points | SKIP if unestimated; WARN if outside the band or ≤ 0; never FAIL |
 | `content-descricao-original-present` | Original-description section (`📄 Descrição Original` / `📄 Original Description` per declared language) is non-empty | FAIL if empty |
 

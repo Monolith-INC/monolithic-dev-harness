@@ -1,32 +1,16 @@
 # Harness
 
-The authoritative sequence is [onboarding](onboarding.md): Discovery → Planning →
-Hardening → Refinement → Preparation → Execution → Verify. Use the planning-depth choice after
-discovery and before drafting. Versioning is detected only at execution entry and never required
-for preparation.
-
-Follow [the workflow storyboard](workflow-storyboard.md) for stage entry and exit,
-review surfaces, and Back/Pause/Resume/Cancel/Complete behavior. This skill supplies the
-stage-specific details. Each stage consumes the previous stage's output; none re-invents it. Hooks
-enforce the rules that must never depend on the model remembering them.
+The order of the stages and of every step inside them is the route in
+`config/prepared-workflows.json`. `harness next` gives the current step; the guards read their
+requirements from the same route. This guide supplies the stage-specific details. Each stage
+consumes the previous stage's output; none re-invents it. Hooks enforce the rules that must never
+depend on the model remembering them.
 
 Refinement, right after Hardening, runs the agile-backlog-toolkit skills against the selected
 tracker: items are written in their type's template, created and read back, and each Story's
 implementation plan is shown and approved on its own (`implementation-confirm`) before its Tasks are
 proposed and approved. Nothing is approved in bulk. Git, branches and commits are optional
 execution and delivery tools; they never gate local work.
-
-```text
-Request / ticket / idea
-  └─ Discovery: knowledge catalog/find/fetch, request analysis, focused source investigation
-      └─ Planning: select depth and methods; compare approaches; record decisions
-          └─ Hardening: selected reviewers; reconcile requirements; triage findings
-              └─ Refinement: items in the tracker, each approved; per Story: plan approved, then Tasks
-                  └─ Preparation: risk and verification documents, each approved; reading manifest
-                      └─ Execution: per Story, local implementation; Git, branches and commits optional
-                          └─ Verify: review, resolution, Feature close; push, PR and merge only
-                             when the user asks for them
-```
 
 A change of direction at any stage (a new constraint, a failed assumption, a rescoped goal) goes
 through `bmad-correct-course`: it assesses impact on the plan, spec, and work items, proposes the
@@ -159,25 +143,16 @@ covers only story-level details needed for implementation. Do not repeat discove
 change its accepted decisions; a change reaches the work items first. Finishing discovery never
 implies permission to create or publish tracker items.
 
-### Offer the starting point
+### The starting point
 
-When the request names an existing task or ticket, follow the storyboard directly; do not ask whether
-to investigate or draft new work items. When the request is a feature idea with no clear starting
-point, ask the `starting-point` gate: `harness decision present --gate starting-point`. The existing `plain-questions` hook validates the question before
-display. Use the available native control. If delivery fails, quietly run `harness decision fallback`
-and re-ask the same question by the next method, including ordinary chat when needed. Preserve
-the choices and progress and continue this same run after the reply; do not abandon it or expose
-internal question-tool errors. The shared human-decisions contract applies to every later question too.
-
-The choice is routing, not approval: it never opens an approval window. `Investigate first` invokes
-`bmad-build`; `Draft work items` enters Refinement; `Explore the idea` invokes `plan-initiative`,
-which ends with `idea-continue`: continue into technical discovery, or stop with the brief or spec.
-
-When the request names an Epic, Feature or Story whose text is already refined (it passes
-`validate-artifact`), discovery asks `refined-start`: rework it with discovery, planning and
-hardening, or use it as it is and go to Refinement. Tasks play no part in that check.
-Continue directly when the user already chose a starting point, named an existing task, directly
-invoked a planning skill, or explicitly asked to create or modify a work item.
+The route asks where work starts; the agent never decides it. A request that names a work item is
+tracked (`harness work-session track`); one that names none gets the `starting-point` question
+(`Investigate first`, `Draft work items`, `Explore the idea`). An Epic, Feature or Story whose text
+is already refined (it passes `validate-artifact`) gets `refined-start`: rework it with discovery,
+planning and hardening, or use it as it is and go to Refinement. Tasks play no part in that check.
+The idea route (`plan-initiative`) ends with `idea-continue`: continue into technical discovery, or
+stop with the brief or spec. These choices are routing, not approval: they never open an approval
+window.
 
 ## Execution from an approved plan
 

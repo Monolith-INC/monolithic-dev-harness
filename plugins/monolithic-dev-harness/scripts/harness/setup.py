@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
+from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -161,6 +163,36 @@ def _values(raw: Mapping[str, Any]) -> dict[str, str]:
         if isinstance(values, dict)
         else {}
     )
+
+
+_WORK_BRANCH = re.compile(r"^(?P<prefix>[a-z][a-z0-9_-]*)/[A-Za-z]*-?\d+-[a-z0-9-]+$")
+
+
+def _branch_template(repo: Path) -> str:
+    """The branch naming the project already uses for work items (`userstory/8082-…` gives
+    `userstory/{key}-{slug}`); `feature/{key}-{slug}` when no branch shows one."""
+    try:
+        listed = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo),
+                "for-each-ref",
+                "--format=%(refname:short)",
+                "refs/heads",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        ).stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        listed = []
+    prefixes = Counter(
+        found.group("prefix") for name in listed if (found := _WORK_BRANCH.match(name))
+    )
+    prefix = prefixes.most_common(1)[0][0] if prefixes else "feature"
+    return f"{prefix}/{{key}}-{{slug}}"
 
 
 def _git_settings(raw: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -334,7 +366,7 @@ def propose(
                 old_tracker, chosen_tracker, tracker_values or {}
             ),
             "scm": _merged_selection(old_scm, chosen_scm, scm_values or {}),
-            "branch_template": raw.get("branch_template", "feature/{key}-{slug}"),
+            "branch_template": raw.get("branch_template") or _branch_template(repo),
             "artifacts_path": artifacts_path or raw.get("artifacts_path", ""),
             "git": {
                 **_git_settings(raw),

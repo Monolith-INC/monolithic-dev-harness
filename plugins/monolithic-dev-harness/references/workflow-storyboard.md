@@ -11,15 +11,9 @@ and its gates are drawn in the project documentation
 
 The current contract is [onboarding](onboarding.md).
 
-| Stage | Work | Exit |
-| --- | --- | --- |
-| Discovery | Request/ticket analysis, relevant code, constraints, evidence and Code Map | Enough evidence to recommend planning depth |
-| Planning | Light/Standard/Hardcore choice before drafting; contextual methods, full catalog or recommendations | Drafted approach and recorded choices |
-| Hardening | Selected reviewers, requirement reconciliation, findings triage | Consequential blockers settled; remaining risks explicit |
-| Refinement | Items written in their type's template, created and read back; per Story: plan shown and approved, then Tasks approved and created | Every Story in scope has an approved plan and Tasks |
-| Preparation | Risk and verification documents, each approved; reading manifest | Documents approved and saved |
-| Execution | Per Story: start it, write missing technical specs, implement Task by Task with tests and checks | Changed code with passing checks |
-| Verify | Review, resolution report, Feature close; push and pull request only when the user asks for them | Story done; Feature closed when its Stories are |
+The order of the stages and of every step inside them is the route in
+`config/prepared-workflows.json`; `harness next` gives the current step, and the stage details are in
+[onboarding](onboarding.md).
 
 Save evidence during every stage. Preparation assembles it rather than delaying persistence.
 No repository versioning rule applies before execution. No language preference stops work.
@@ -29,18 +23,12 @@ Pause/reset/drop controls preserve evidence; suspension disables every harness v
 
 Onboarding is the optional discovery-through-verify workflow. The user may skip, dismiss or restart it,
 or use `harness mode free` for skills and guidance without a session. Language uses a captured
-choice or saved preference, else English; no confirmation is required. These controls preserve
+choice or saved preference, else English; outside setup, no confirmation is required. These controls preserve
 structured work and strict action governance. The routing below applies when guided work is wanted.
 
-When a request needs routing, present a menu with up to three routes that fit it:
-
-- Continue the named task or request.
-- Prepare or organize work items.
-- Explore an idea.
-
-When no request was supplied, label the first route **Start feature work**. Do not add a literal
-`Other` choice; the Codex control already provides a free-text field. Route the click or Other-field
-answer and continue without asking the user to invoke the harness again.
+Routing is a step of the route: `harness next` names the `starting-point` question when the request
+names no work item, and `refined-start` when the item is already refined. Route the click or the
+Other-field answer and continue without asking the user to invoke the harness again.
 
 ## Ready reference: information and tools
 
@@ -63,7 +51,7 @@ Use this map instead of searching plugin files to rediscover workflow capabiliti
 | Existing requirements/spec/review artifacts | `tracker_list_artifacts` |
 | Active or saved workflow state | `harness workflow status` / `harness workflow list` |
 | What code changes still need, and which step produces it | `harness workflow requirements` |
-| Settings and artifact folder for backlog work | `bin/agile-backlog-toolkit config --show` |
+| Settings and artifact folder for backlog work | `harness bootstrap --inspect`; a document's path: `harness document path` |
 | Technical discovery | `bmad-build` (BMad Build's clarify and plan steps) |
 | Ideation and product shaping | `plan-initiative` and its listed optional routes |
 
@@ -112,11 +100,12 @@ routing choice, Back, Pause, Resume, Cancel, or Complete never opens a write win
 
 ## Language and setup
 
-Ask for English or Português (Brasil) once for each project, even when another project has a saved
-user-level preference. Store the preference outside the repository and a project confirmation under
+Setup (the bootstrap skill) asks for English or Português (Brasil) once for each project, even when
+another project has a saved user-level preference; outside setup, a missing choice uses the saved
+preference, else English, and never stops work. Store the preference outside the repository and a project confirmation under
 `.harness/state/`; record the effective language in the workflow checkpoint. Repository settings
 hold tracker and project choices. Default source control to local and do not expose provider setup
-as a routine choice. Preserve unrelated user-owned settings. Do not silently select the bundled
-Azure example. Check the selected tracker's required values and capabilities before any publication
+as a routine choice. Preserve unrelated user-owned settings. Do not silently select a tracker
+from the example settings. Check the selected tracker's required values and capabilities before any publication
 batch. Check current commit state afresh on each run; a saved checkpoint can describe an earlier
 state. Git metadata, an initial commit, branches, and hosted code are optional for setup and planning.

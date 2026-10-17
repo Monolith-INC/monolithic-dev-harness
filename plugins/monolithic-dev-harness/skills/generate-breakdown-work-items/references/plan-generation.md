@@ -100,10 +100,6 @@ Do not create tracker or local Task work items in this phase.
 
 ### Artifacts path and frontmatter
 
-Resolve the artifacts root with `bin/agile-backlog-toolkit config --show`. If unset, enter guided
-bootstrap to ask where plans should go and apply the reviewed setting. Never instruct manual JSON
-editing or invent a directory.
-
 **Path:** `harness document path --type implementation-plan --item <story key>`, in the Story's
 folder (`../../../references/document-layout.md`). One plan per Story: when the file exists, revise
 it rather than writing a second one.

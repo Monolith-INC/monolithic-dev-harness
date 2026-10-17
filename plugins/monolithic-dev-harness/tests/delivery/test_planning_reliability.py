@@ -1,6 +1,5 @@
 """Planning exceptions are narrow; ordinary implementation remains governed."""
 
-import json
 from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
@@ -8,8 +7,8 @@ from unittest.mock import Mock, patch
 import pytest
 
 from core.result import Err, Ok
-from integrations.contracts import ArtifactRef, LogicalState, WorkItem, WorkItemKind
-from policy.planning_completion import verify
+from integrations.contracts import LogicalState, WorkItem, WorkItemKind
+from policy import breakdown
 from scripts import hook_runtime
 from scripts.policy.commands import is_code, writes_code
 
@@ -73,7 +72,7 @@ def test_shell_planning_write_and_source_write_are_distinct(tmp_path):
     assert writes_code("echo x > lib/source.dart", tmp_path, None, "docs/planning")
 
 
-def receipt_fixture():
+def breakdown_fixture(*others: WorkItem):
     parent = WorkItem(
         "S1", "S1", "Story", WorkItemKind.USER_STORY, LogicalState.BACKLOG
     )
@@ -85,100 +84,47 @@ def receipt_fixture():
         LogicalState.BACKLOG,
         parent_id="S1",
     )
-    coding = WorkItem(
-        "T1", "T1", "Build it", WorkItemKind.TASK, LogicalState.BACKLOG, parent_id="S1"
-    )
-    artifact = ArtifactRef(
-        "A1",
-        "planning_completion",
-        "Published breakdown",
-        "1",
-        content=json.dumps(
-            {
-                "purpose": "breakdown",
-                "item_id": "T2",
-                "parent_id": "S1",
-                "children": ["T1"],
-            }
-        ),
-    )
     ops = SimpleNamespace(
-        get_work_item=lambda _: Ok(parent), list_children=lambda _: Ok((coding, marker))
+        get_work_item=lambda _: Ok(parent),
+        list_children=lambda _: Ok((*others, marker)),
     )
-    return ops, marker, artifact
+    return ops, marker
 
 
-def test_planning_completion_needs_no_work_session(tmp_path):
-    ops, marker, artifact = receipt_fixture()
+CODING = WorkItem(
+    "T1", "T1", "Build it", WorkItemKind.TASK, LogicalState.BACKLOG, parent_id="S1"
+)
+
+
+def test_the_breakdown_task_closes_once_its_story_has_its_tasks():
+    """The toolkit sets it Done during breakdown: no work session, no receipt."""
+    ops, marker = breakdown_fixture(CODING)
     with patch.object(
         hook_runtime.workflow_requirements,
         "linked_session",
         side_effect=AssertionError("work session requested"),
     ):
-        assert isinstance(hook_runtime._receipt_route(ops, marker, (artifact,)), Ok)
+        assert isinstance(breakdown.closes(ops, marker), Ok)
 
 
-@pytest.mark.parametrize(
-    "content",
-    [
-        "{}",
-        "bad-json",
-        json.dumps(
-            {
-                "purpose": "breakdown",
-                "item_id": "other",
-                "parent_id": "S1",
-                "children": ["T1"],
-            }
-        ),
-        json.dumps(
-            {"purpose": "breakdown", "item_id": "T2", "parent_id": "S1", "children": []}
-        ),
-        json.dumps(
-            {
-                "purpose": "breakdown",
-                "item_id": "T2",
-                "parent_id": "S1",
-                "children": ["missing"],
-            }
-        ),
-        json.dumps(
-            {
-                "purpose": "breakdown",
-                "item_id": "T2",
-                "parent_id": "S1",
-                "children": ["T1", "T1"],
-            }
-        ),
-    ],
-)
-def test_incomplete_or_mismatched_completion_receipts_are_denied(content):
-    ops, marker, artifact = receipt_fixture()
-    assert isinstance(verify(ops, marker, replace(artifact, content=content)), Err)
-
-
-def test_coding_task_cannot_use_planning_receipt():
-    ops, marker, artifact = receipt_fixture()
-    refused = verify(ops, replace(marker, title="Implement count"), artifact)
-    assert (
-        isinstance(refused, Err)
-        and "title starts with `Breakdown`" in refused.failure.message
-    )
+def test_a_breakdown_task_alone_under_its_story_stays_open():
+    ops, marker = breakdown_fixture()
+    assert isinstance(breakdown.closes(ops, marker), Err)
 
 
 def test_the_breakdown_task_is_titled_as_the_skill_names_it():
     """`atomic-tasks.md` titles it `Breakdown`; a longer title that starts so is accepted too."""
-    ops, marker, artifact = receipt_fixture()
     for title in ("Breakdown", "Breakdown — Plan", "breakdown: counts"):
-        assert isinstance(verify(ops, replace(marker, title=title), artifact), Ok)
+        assert breakdown.is_breakdown(replace(CODING, title=title))
+    assert not breakdown.is_breakdown(CODING)
 
 
-def test_a_task_without_a_receipt_still_requires_its_storys_session(tmp_path):
-    ops, marker, _ = receipt_fixture()
+def test_a_coding_task_still_requires_its_storys_session(tmp_path):
+    ops, _ = breakdown_fixture(CODING)
     with patch.object(
         hook_runtime.workflow_requirements, "linked_session", return_value=None
     ):
-        assert hook_runtime._task_completion(tmp_path, ops, marker).is_denied()
+        assert hook_runtime._task_completion(tmp_path, ops, CODING).is_denied()
 
 
 def test_both_workflow_validator_tools_use_the_critic(tmp_path):
@@ -313,19 +259,6 @@ def test_task_completion_follows_its_storys_work_session(tmp_path, linked, denie
         )
     opened.assert_called_once()
     ops.list_artifacts.assert_called_once_with(item.id)
-
-
-def test_corrected_receipt_supersedes_prior_revision(tmp_path):
-    ops, marker, receipt = receipt_fixture()
-    old = replace(receipt, content="bad", revision="1")
-    corrected = replace(receipt, id="A2", revision="2")
-    assert isinstance(hook_runtime._receipt_route(ops, marker, (old, corrected)), Ok)
-    assert isinstance(
-        hook_runtime._receipt_route(
-            ops, marker, (old, replace(corrected, revision="1"))
-        ),
-        Err,
-    )
 
 
 @pytest.mark.parametrize(

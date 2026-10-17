@@ -12,7 +12,7 @@ plan_file: '' # set at runtime before leaving this step
 
 ## Harness tracker input
 
-When the harness starts this workflow for an Azure DevOps, Linear, or repository-local tracker
+When the harness starts this workflow for a tracker
 item, it supplies the item and its parent context after a read-only `tracker_get_work_item` call.
 Use that supplied record as the intent. Do not pass an external tracker id to BMad's local
 `tickets.py` store. Do not call `start-ticket`, change tracker state, create a branch, or publish an

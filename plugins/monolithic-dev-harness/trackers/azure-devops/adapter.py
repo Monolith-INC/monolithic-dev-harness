@@ -175,8 +175,13 @@ def adapter(context: AdapterContext) -> TrackerOps:
     return TrackerOps(
         get_work_item=read,
         search_work_items=lambda query, cursor: _search(context, call, query),
-        create_work_item=lambda kind, title, description, parent: _create(
-            context, call, read, kind, title, description, parent
+        create_work_item=lambda kind, title, description, parent: bind(
+            _create(context, call, read, kind, title, description, parent),
+            lambda item: (
+                _inherit(call, read, item, parent, process)
+                if kind is WorkItemKind.TASK and parent
+                else Ok(item)
+            ),
         ),
         update_work_item=lambda ref, changes: _update(
             call, read, ref, changes, process
@@ -357,6 +362,29 @@ def _search(context: AdapterContext, call, query: str) -> Result[Page]:
             _batch(context, call, ids), lambda found: Page(found, "", len(ids) >= LIMIT)
         ),
     )
+
+
+def _inherit(call, read, task: WorkItem, parent: str, process: str) -> Result[WorkItem]:
+    """A Task lands in its Story's sprint, assigned as the Story is, as the agile-backlog-toolkit
+    creates it (`System.IterationPath` and `System.AssignedTo` copied from the parent)."""
+
+    def copy(parent: WorkItem) -> Result[WorkItem]:
+        fields = payloads.object_or_empty(parent.provider_data.get("fields"))
+        person = fields.get(ASSIGNED_TO)
+        assignee = (
+            payloads.text(person, "uniqueName", "displayName")
+            if isinstance(person, dict)
+            else str(person or "")
+        )
+        changes = WorkItemChanges(
+            assignee=assignee or None,
+            iteration=payloads.text(fields, ITERATION_PATH) or None,
+        )
+        if changes.assignee is None and changes.iteration is None:
+            return Ok(task)
+        return _update(call, read, task.key, changes, process)
+
+    return bind(read(parent), copy)
 
 
 def _create(

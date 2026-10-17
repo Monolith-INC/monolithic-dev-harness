@@ -1,7 +1,7 @@
 ---
 name: auto-fix-artifact
 description: >
-  Validates an agile artifact (Epic, Feature, or User Story) and automatically fixes any issues found. Accepts an Azure workitem ID, artifacts path document, filesystem reference, or pasted string. If validation passes, outputs the report. If validation fails, it shows the report, asks for permission to fix, systematically corrects each problem based on the quality gate rules, and offers to save the corrected version back to Azure or the artifacts path.
+  Validates an agile artifact (Epic, Feature, or User Story) and automatically fixes any issues found. Accepts a tracker work-item id or link, artifacts path document, filesystem reference, or pasted string. If validation passes, outputs the report. If validation fails, it shows the report, asks for permission to fix, systematically corrects each problem based on the quality gate rules, and offers to save the corrected version back to the tracker or the artifacts path.
 license: MIT
 ---
 
@@ -12,7 +12,6 @@ Validates a single agile artifact and offers an auto-fix workflow if issues are 
 References (shared, in `../../references/`):
 - `decomposition-rules.md` — hierarchy, DoR, sizing, story-point heuristic.
 - `ticket-structure.md` — body sections, frontmatter constraints, content hygiene.
-- `azure-mechanics.md` — MCP calls, linking mechanics, rendering rules.
 - `audit-checklist.md` — fidelity, coverage, DoR check definitions.
 
 References (from `validate-artifact` skill, in `../validate-artifact/references/`):
@@ -25,11 +24,11 @@ References (from `validate-artifact` skill, in `../validate-artifact/references/
 
 ## PHASE 1 — INGEST AND VALIDATE
 
-**Input:** Azure work item ID, artifacts path document path, filesystem reference, or pasted string.
+**Input:** tracker work-item id or link, artifacts path document path, filesystem reference, or pasted string.
 
 1. **Ingest:** 
-   - Parse the input to determine its source (local file, azure, or raw text).
-   - If Azure ID: fetch via `tracker_get_work_item(ref=<id>) through `workflow-integrations``.
+   - Parse the input to determine its source (local file, tracker item, or raw text).
+   - If a tracker id or link: fetch it with `tracker_get_work_item(ref=<id>)`.
    - If file path: read the markdown file.
    - If pasted string: parse as raw text.
 2. **Validate:** Run the orchestrator critic (do not self-judge):
@@ -73,8 +72,8 @@ Systematically address each FAIL and WARN result:
 
 ### b) HIERARCHY Fixes
 - A missing parent is not a defect for an Epic, Feature, or User Story; leave it alone. Only a Task needs a parent.
-- If a parent has the wrong type (for example a Story under an Epic), or a Task has none, ask the user for a valid parent ID or search Azure DevOps for one.
-- Create parent links in Azure only for the parent the user confirms.
+- If a parent has the wrong type (for example a Story under an Epic), or a Task has none, ask the user for a valid parent ID or find one with `tracker_search_work_items`.
+- Create parent links in the tracker only for the parent the user confirms.
 
 ### c) CONTENT Fixes
 - **Complexidade:** Add the `📊 Complexidade` section with default/inferred values for Escopo, Incerteza, etc.
@@ -104,4 +103,4 @@ Systematically address each FAIL and WARN result:
 
 ## Guardrails
 - **User Consent:** Never overwrite a tracker item or a local file without its approval in Phase 4.
-- **Traceability:** When updating Azure, ensure a comment is added noting that the artifacts path applied automated quality fixes.
+- **Traceability:** When updating a tracker item, ensure a comment is added noting that the artifacts path applied automated quality fixes.

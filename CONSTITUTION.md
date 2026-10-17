@@ -39,7 +39,7 @@ is, when an item is ready, how changes reach existing items, how Stories are bro
 reason from a skill's name: read the skill before describing, placing or changing it.
 
 Source copies: agile-backlog-toolkit at `/home/monolith/projects/agile-backlog-toolkit`;
-codex-workflows-plugin at `/mnt/DATA/Projects/Personal/codex-workflows-plugin`.
+codex-workflows-plugin at `/home/monolith/projects/codex-workflows-plugin` (owner, 2026-10-16).
 
 ## Article 3 — What refinement is
 

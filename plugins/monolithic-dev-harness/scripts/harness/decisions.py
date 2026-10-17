@@ -553,10 +553,13 @@ def _resolve(
     if current.get("status") != "pending" or current.get("id") != key:
         raise ValueError("this answer does not belong to the pending decision")
     answer = questions.match_option(answer, tuple(current.get("options", ()))) or answer
-    if answer not in current.get("options", ()) and not _free_text_allowed(
+    # A reply in the user's own words closes the question too: it chose none of the options, so
+    # it approves nothing, and the agent acts on what it says. A question never stays stuck.
+    own_words = answer not in current.get("options", ()) and not _free_text_allowed(
         current, answer
-    ):
-        raise ValueError("the human reply does not select an offered option")
+    )
+    if own_words and not answer.strip():
+        raise ValueError("the human reply is empty")
     if source != current.get("transport"):
         raise ValueError("the answer arrived through a different interaction")
     if questions.choice_label(
@@ -567,7 +570,12 @@ def _resolve(
         raise ValueError(
             "the reviewed artifact changed; return to its review before approving"
         )
-    updated = {**current, "status": "answered", "answer": answer}
+    updated = {
+        **current,
+        "status": "answered",
+        "answer": answer,
+        **({"own_words": True} if own_words else {}),
+    }
     state.write_json(path, updated)
     history = path.with_name(HISTORY)
     earlier = (state.read_json(history) or {}).get("answers", [])
@@ -715,6 +723,18 @@ def status_command(command: str, cwd: Path) -> bool:
     """
     match commands.harness_args(command, cwd):
         case ("decision" | "suspension", "status", *options):
+            return len(options) % 2 == 0 and all(
+                flag in ("--repo", "--session-id") for flag in options[::2]
+            )
+        case _:
+            return False
+
+
+def next_command(command: str, cwd: Path) -> bool:
+    """Whether a shell command only asks for the next step (`harness next`), which reports a
+    waiting question instead of advancing past it."""
+    match commands.harness_args(command, cwd):
+        case ("next", *options):
             return len(options) % 2 == 0 and all(
                 flag in ("--repo", "--session-id") for flag in options[::2]
             )

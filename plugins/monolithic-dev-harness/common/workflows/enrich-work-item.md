@@ -9,7 +9,7 @@ COLLECT → INGEST → ROUTE ENRICHER → [WRITE SPEC] → ENRICH → GATE → P
          │        enrichers/*.prompt.md         exact enricher output
          └─ source url | path | text
               │
-              ├─ Azure URL/id → azure-ingest.md (work item + attachments + refs)
+              ├─ tracker id/link → tracker_get_work_item (work item + attachments + refs)
               ├─ artifacts path/filesystem path → Read verbatim
               └─ pasted text → use as description
 ```
@@ -35,7 +35,7 @@ Enricher prompts are bundled under `./enrichers/` — authoritative; no local ov
 
 - `../../references/decomposition-rules.md` — hierarchy, story-point heuristic
 - `../../references/ticket-structure.md` — draft file constraints
-- `../providers.md` — local, Azure DevOps, and Linear persistence
+- `../providers.md` — writing to the selected tracker
 
 ## Relationship to generate-work-item
 
@@ -44,7 +44,7 @@ Enricher prompts are bundled under `./enrichers/` — authoritative; no local ov
 | `generate-work-item` | title + description | Raw `# Title` + `## Requisitos` + `## Critérios de Aceite` |
 | `enrich-work-item` | existing source text | Enricher emoji-section format per type |
 
-Typical flow: generate raw draft → plain-language prose pass → enrich to team format → create in Azure.
+Typical flow: generate raw draft → plain-language prose pass → enrich to team format → create in the tracker.
 
 | Skill | Prose role |
 | --- | --- |

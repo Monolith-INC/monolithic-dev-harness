@@ -63,7 +63,7 @@ harness document path --type ticket --new user-story --title "<title>" --parent 
   is written, and creating the item gives it that number. The draft and every document carry their
   final names from the start; nothing is renamed after the item is created. Ask again with the same
   title to get the same number.
-- Azure DevOps and Linear assign an item's id only when they create it, so `--new` is refused
+- A remote tracker assigns an item's id only when it creates it, so `--new` is refused
   there: write the item's documents once it exists, with `--item`.
 
 ## Before any item exists

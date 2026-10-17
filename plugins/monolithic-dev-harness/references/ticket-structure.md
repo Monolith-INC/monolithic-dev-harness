@@ -25,7 +25,7 @@ provider_id: "<provider identifier; omit before provider creation>"
 parent_id: "<immediate parent identifier; omit when the item has no parent>"
 story_points: <number>  # REQUIRED for User Story — the validator fails a draft without it
 effort_hours: <number>  # optional — estimated duration; omit when nobody has estimated it
-activity: Development   # optional — capacity activity bucket (Azure `Microsoft.VSTS.Common.Activity`)
+activity: Development   # optional — capacity activity bucket (the tracker's activity field, where it has one)
 iteration: <sprint-ref> # optional — used by capacity planning to scope a sprint
 language: pt-BR         # optional — en | pt-BR, default pt-BR; selects which section-label set
                          # the validator checks the body against (see Body sections below)
@@ -66,7 +66,7 @@ columns in one draft.
 |---|---|---|---|
 | 1 | 🎯 O quê | 🎯 What | What, as descriptive sentences, one idea per line. |
 | 2 | 💡 Por quê | 💡 Why | Why this Story exists. |
-| 3 | 📋 Comportamento esperado | 📋 Expected Behavior | Expected behavior; ASCII diagrams here (see azure-mechanics.md). |
+| 3 | 📋 Comportamento esperado | 📋 Expected Behavior | Expected behavior; ASCII diagrams here. |
 | 4 | ✅ Critérios de Aceite | ✅ Acceptance Criteria | Acceptance criteria as checkboxes. |
 | 5 | 🔧 Notas Técnicas | 🔧 Technical Notes | Technical notes; areas/modules, not invented implementation. |
 | 6 | 📊 Complexidade | 📊 Complexity | Story points + the per-driver MAX justification (decomposition-rules.md). |
