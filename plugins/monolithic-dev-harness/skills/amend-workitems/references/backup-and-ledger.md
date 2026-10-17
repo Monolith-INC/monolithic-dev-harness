@@ -2,9 +2,9 @@
 
 Before analysis, create a timestamped backup outside the mutation path. Use
 `<artifacts>/_backups/amend-workitems/<UTC timestamp>/` for a Artifacts-backed run, or
-`.harness/state/backups/amend-workitems/<UTC timestamp>/` for a tracker-only run. Prefer an artifacts
-snapshot when the source is a tracker: save raw work-item JSON, revisions, relations,
-attachments, and all descendant bodies. Also copy the local tree and related
+`.harness/state/backups/amend-workitems/<UTC timestamp>/` for a tracker-only run. Prefer an
+artifacts snapshot when the source is a tracker: save raw work-item JSON, revisions, relations,
+attachments, and all descendant bodies. Also copy the local tree and the related
 documents in the items' folders when available. If only a filesystem/Artifacts source exists, copy
 the complete source tree and record SHA-256 checksums. Never treat a directory listing as a backup.
 
@@ -13,7 +13,8 @@ When a local local artifacts is present:
 1. take the artifacts path from `harness bootstrap --inspect` (`handoff.paths.artifacts`);
 2. use the Obsidian CLI `search` command for ids, titles, and keywords when the binary is usable;
 3. fall back to `rg` if Obsidian is unavailable and record that limitation;
-4. include the items' folder documents (plans, specs) in the snapshot and scan.
+4. include the matching implementation plans (`harness document path --type implementation-plan
+   --item <key>`) in the snapshot and scan.
 
 Record source revisions at scan time and compare them again immediately before approval. A changed
 revision invalidates the affected proposal; refresh that node, re-run contextual search, and show a

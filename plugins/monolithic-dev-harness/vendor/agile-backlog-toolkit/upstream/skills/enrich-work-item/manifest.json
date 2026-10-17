@@ -1,0 +1,30 @@
+{
+  "name": "enrich-work-item",
+  "description": "Apply type-specific enricher prompts to produce team-format Epic, Feature, User Story, or Task documentation; persist on approval. When source is an Azure DevOps URL or id, ingests work-item fields, attachments, and description-referenced documents before enrichment.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "work_item_type": {
+        "type": "string",
+        "enum": ["epic", "feature", "user-story", "task"],
+        "description": "Vendor-neutral work item type to enrich"
+      },
+      "source": {
+        "type": "string",
+        "description": "URL (Azure DevOps work-item URL or external doc), local path, or inline text to enrich. Azure sources trigger attachment and description-reference resolution per references/azure-ingest.md."
+      },
+      "parent": {
+        "type": "string",
+        "description": "Parent work item id or URL for hierarchy context. Optional when source is Azure — defaults to System.Parent from the fetched item."
+      },
+      "attachment": {
+        "type": "string",
+        "description": "Additional documentation URL or path, merged with any attachments discovered on an Azure source work item"
+      }
+    },
+    "required": ["work_item_type", "source"]
+  },
+  "output_signature": {
+    "required": ["work_item_type", "title", "enriched_body"]
+  }
+}

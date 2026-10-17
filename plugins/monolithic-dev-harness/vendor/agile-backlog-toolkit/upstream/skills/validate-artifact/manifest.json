@@ -1,0 +1,16 @@
+{
+  "name": "validate-artifact",
+  "description": "Rule-based quality gate for a single agile artifact (local draft). Returns terminal report and optional persistence path.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "file_path": { "type": "string", "description": "Path to a draft markdown file" },
+      "persist": { "type": "boolean", "description": "Write report to Agent_Reports/" },
+      "hierarchy_parent_is_feature": { "type": "boolean", "description": "Azure hierarchy assertion override" }
+    },
+    "required": ["file_path"]
+  },
+  "output_signature": {
+    "required": ["ok", "outcome", "report", "critiques"]
+  }
+}

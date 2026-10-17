@@ -12,6 +12,7 @@ Quality gate for a single agile artifact. Load reference files as each phase nee
 References (shared, in `../../references/`):
 - `decomposition-rules.md` — hierarchy, DoR, sizing, story-point heuristic.
 - `ticket-structure.md` — body sections, frontmatter constraints, content hygiene.
+- `tracker-contract.md` — the tracker gateway: every read goes through its `tracker_*` tools.
 - `audit-checklist.md` — fidelity, coverage, DoR check definitions.
 
 References (skill-specific, in `./references/`):
@@ -75,7 +76,7 @@ bin/agile-backlog-toolkit evaluate --skill validate-artifact --file <path>
 ```
 
 The Python critic implements every check in `./references/validation-checks.md`. On failure,
-`evaluate` writes `.harness/state/prompts/validate-artifact.error.log` for `correcao` resume.
+`evaluate` writes `.agentic/workflow_prompts/validate-artifact.error.log` for `correcao` resume.
 
 Read `./references/validation-checks.md` for the complete check definitions, conditions, and
 FAIL/WARN thresholds before running checks manually.
@@ -88,7 +89,7 @@ No check halts sibling or subsequent checks on failure. Collect all findings.
 **Local draft only:**
 - `frontmatter-type-present` — FAIL if `type:` key absent from frontmatter.
 - `frontmatter-status-absent` — FAIL if `status:` key present in frontmatter.
-- `filename-regex` — FAIL if filename does not match `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+`.
+- `filename-regex` — FAIL if filename does not match `^(\d+|tech-debt|bug|task|spike)-[a-z0-9-]+`.
   If source is the tracker (no filename): emit SKIP.
 
 **All sources:**
@@ -98,30 +99,25 @@ No check halts sibling or subsequent checks on failure. Collect all findings.
 
 ### b) HIERARCHY
 
-A Feature or a User Story with no parent is valid: its parent check passes with `no parent`. Pass
-`hierarchy_parent_is_feature: false` only when the Story **has** a parent and it is not a Feature.
+If `parent_id` is null where a parent is required: emit `WARN hierarchy-skipped-no-parent-id` and skip
+this entire category.
 
 **User Story:**
-1. If `parent_id` is set: `tracker_get_work_item(ref=artifact.parent_id)`. Assert
-   its kind is `feature`.
-2. Check `hierarchy-story-parent-is-feature` — FAIL if the parent is not a Feature (for example an
-   Epic). PASS when there is no parent.
+1. `tracker_get_work_item(ref=artifact.parent_id)`. Assert its kind is `feature`.
+2. Check `hierarchy-story-parent-is-feature` — FAIL if parent is Epic or missing.
 
 **Feature:**
-1. If `parent_id` is set: `tracker_get_work_item(ref=artifact.parent_id)`. Assert
-   its kind is `epic`.
-2. Check `hierarchy-feature-parent-is-epic` — FAIL if the parent is not an Epic. PASS when there is
-   no parent.
+1. `tracker_get_work_item(ref=artifact.parent_id)`. Assert its kind is `epic`.
+2. Check `hierarchy-feature-parent-is-epic` — FAIL if missing or wrong type.
 
 **Epic:**
 1. Fetch children with `tracker_list_children`.
    Assert no child has kind `user_story`.
 2. Check `hierarchy-epic-no-direct-stories` — FAIL if direct Story children found.
 
-**Task:** assert its immediate parent is a User Story. A Task is the only type that must have a
-parent.
+**Task:** assert its immediate parent is a User Story.
 
-If an MCP call fails (network / permission): emit `SKIP <check> — MCP unavailable: <error>` and
+If a tracker call fails (network / permission): emit `SKIP <check> — tracker unavailable: <error>` and
 continue. Do not abort the run.
 
 ### c) CONTENT
@@ -144,6 +140,8 @@ continue. Do not abort the run.
 - `dor-title-clear` — assert title non-empty and word count > 5. FAIL if not met.
 - `dor-description-present` — assert body / description non-empty. FAIL if not met.
 - `dor-story-points-set` *(User Story only)* — assert `story_points > 0`. FAIL if not met.
+- `dor-linked-to-feature` *(User Story only)* — reuse result of `hierarchy-story-parent-is-feature`;
+  no extra MCP call. FAIL if that check failed or was skipped.
 
 ---
 
@@ -177,9 +175,9 @@ Frontmatter:
 ---
 date: <YYYY-MM-DD>
 type: report
-artifact: <azure-id or artifacts path-filename>
+artifact: <tracker key or draft filename>
 artifact_type: <Epic|Feature|User Story|Task>
-source: <artifacts path|azure-devops|linear>
+source: <artifacts path|tracker>
 outcome: <pass|fail>
 ---
 ```
@@ -196,7 +194,3 @@ Do NOT include `status:` in frontmatter.
 - **Non-blocking.** Every check runs regardless of prior failures in the same category.
 - **SKIP over ERROR.** If a provider connector fails, log SKIP with reason and continue.
 - **One artifact per run.** Process only the first argument if multiple are given.
-
-## Draft-review recovery
-
-FAIL is a completed validation report. Revise the draft and evaluate it again without implementation authorization. CLI `resume` compiles a correction prompt; it does not resume an implementation task. Publication and saving retain their own approvals.

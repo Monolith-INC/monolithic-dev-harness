@@ -1,0 +1,6 @@
+interface:
+  display_name: "Amend Work Items"
+  short_description: "Safely amend an entire work-item tree"
+  default_prompt: "Use $amend-workitems to analyze and apply approved corrections across a work-item tree."
+policy:
+  allow_implicit_invocation: true

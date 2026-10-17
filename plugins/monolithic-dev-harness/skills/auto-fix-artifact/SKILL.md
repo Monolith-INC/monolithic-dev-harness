@@ -12,13 +12,15 @@ Validates a single agile artifact and offers an auto-fix workflow if issues are 
 References (shared, in `../../references/`):
 - `decomposition-rules.md` — hierarchy, DoR, sizing, story-point heuristic.
 - `ticket-structure.md` — body sections, frontmatter constraints, content hygiene.
+- `tracker-contract.md` — the tracker gateway: every read and write goes through its `tracker_*`
+  tools, never a tracker's own tools.
 - `audit-checklist.md` — fidelity, coverage, DoR check definitions.
 
 References (from `validate-artifact` skill, in `../validate-artifact/references/`):
 - `validation-checks.md` — full check catalog per artifact type + category.
 - `report-format.md` — terminal output template + report template.
-- `../../common/contracts/validate-artifact/canonical-validation-report.md`: **read-only shape
-  contract** for validation reports (shared with `validate-artifact`). Do not edit; conform output to this template.
+- `../../common/contracts/validate-artifact/canonical-validation-report.md` — **read-only shape contract** for validation reports
+  (shared with `validate-artifact`). Do not edit; conform output to this template.
 
 ---
 
@@ -40,7 +42,7 @@ bin/agile-backlog-toolkit evaluate --skill auto-fix-artifact --file <path>
 
 For reflection retries, resubmit revised `draft_content` via MCP or re-run `evaluate` after saving.
 Circuit breaker trips after 3 attempts or identical critiques → `blocked_requires_review`.
-Each call evaluates the supplied draft once and returns its findings. FAIL is a completed review, not a tool failure. The actor revises and resubmits the draft. If reflection stalls or exhausts its budget, review the findings and start a fresh draft-review cycle with `attempt=0`; pass returned `reflection.last_critiques` on continuing cycles. This does not authorize implementation, publication or saving. General implementation approval rules are unchanged.
+Resume only after human types `IMPLEMENTATION APPROVED` (or `ORCHESTRATOR_INTERACTIVE=1` CLI).
 3. **Report:** Display the validation report to the user on the screen.
 
 ---
@@ -54,7 +56,7 @@ Each call evaluates the supplied draft once and returns its findings. FAIL is a 
 
 **If any checks FAIL or WARN:**
 - Show the report to the user.
-- Ask the user through `harness decision present` (see the harness skill's human-decisions contract): *"Validation found issues. Would you like me to automatically fix these problems?"*
+- Ask the user (using `ask_question` or standard prompt): *"Validation found issues. Would you like me to automatically fix these problems?"*
 - Wait for user confirmation.
 - If the user declines, save the report to the artifacts path and stop.
 - If the user approves, proceed to Phase 3.
@@ -67,13 +69,17 @@ Systematically address each FAIL and WARN result:
 
 ### a) STRUCTURAL Fixes
 - **Frontmatter:** Add missing `type:` keys, remove invalid `status:` keys.
-- **Filename:** Suggest/apply filename renames to match `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+`.
-- **Body Sections:** Add the missing sections of the item type's template (`../../common/templates/canonical-*.md`, in the draft's language) with content derived from the item, keeping its original text in Original Description.
+- **Filename:** Suggest/apply filename renames to match `^(\d+|tech-debt|bug|task|spike)-[a-z0-9-]+`.
+- **Body Sections:** Add the missing sections of the item type's template
+  (`../../common/templates/canonical-*.md`, in the draft's language) with content derived from the
+  item, keeping its original text in Original Description.
 
 ### b) HIERARCHY Fixes
-- A missing parent is not a defect for an Epic, Feature, or User Story; leave it alone. Only a Task needs a parent.
-- If a parent has the wrong type (for example a Story under an Epic), or a Task has none, ask the user for a valid parent ID or find one with `tracker_search_work_items`.
-- Create parent links in the tracker only for the parent the user confirms.
+- A missing parent is not a defect for an Epic, Feature, or User Story; leave it alone. Only a Task
+  needs a parent.
+- If a parent has the wrong type (for example a Story under an Epic), or a Task has none, ask the
+  user for a valid parent id or find one with `tracker_search_work_items`.
+- Set parent links in the tracker only for the parent the user confirms.
 
 ### c) CONTENT Fixes
 - **Complexidade:** Add the `📊 Complexidade` section with default/inferred values for Escopo, Incerteza, etc.
@@ -90,13 +96,10 @@ Systematically address each FAIL and WARN result:
 ## PHASE 4 — OUTPUT & PERSIST
 
 1. **Review:** Output the corrected version of the artifact (or a diff) to the screen.
-2. **Save with approval:** save the corrected version as a draft file and show it. Depending on the
-   source:
-   - A tracker item: ask the `publish-items` approval gate with the draft as `--artifact`, then
-     write it with `tracker_update_work_item` (`description`, and `title` when it changed) and read
-     it back.
-   - A local file: ask the `approve-document` gate with the draft as `--artifact`, then save it.
-   - Otherwise discard it.
+2. **Approve the save:** for a tracker item, write the corrected body as a draft, show it with
+   `harness workflow show --artifact <draft>`, and ask `harness decision present --gate
+   publish-items` with the draft as `--artifact`; on approval, write it with
+   `tracker_update_work_item` and read it back. For a local file, ask before overwriting it.
 3. **Persist Report:** Save the final validation report with `bin/agile-backlog-toolkit validate --file <path> --persist`, which writes to `.harness/backlog/reports/`.
 
 ---

@@ -14,9 +14,11 @@ remain unchanged. Read the references below before making placement or persisten
 References:
 
 - `./references/placement.md` — keyword ranking and type/section placement.
-- `./references/backup-and-ledger.md` — backup, revision, Obsidian, and recovery rules.
+- `./references/backup-and-artifacts path.md` — backup, revision, Obsidian, and recovery rules.
 - `./references/approval-and-persistence.md` — change-set approval and delegated writers.
 - `../../references/ticket-structure.md` — artifacts path structure and section order.
+- `../../references/tracker-contract.md` — the tracker gateway: every read and write goes through
+  its `tracker_*` tools, never a tracker's own tools.
 - `../enrich-work-item/references/` — canonical sections and examples for Epic, Feature, and Story.
 - `../generate-breakdown-work-items/references/` — Implementation Plans and Task child rules.
 
@@ -35,9 +37,9 @@ stop and ask for a resolvable id, URL, or path.
 
 ### 2. Resolve, snapshot, and scan
 
-Read `references/backup-and-ledger.md` before resolving the source. Create a backup of the entire tree before
+Read `./references/backup-and-ledger.md` before resolving the source. Create a backup of the entire tree before
 semantic analysis. The snapshot must include every Epic, Feature, Story, and Task body; ids,
-revisions, parent links, child links, attachments, and related documents in the items' folders (`../../references/document-layout.md`). Verify
+revisions, parent links, child links, attachments, and the related implementation plans in the items' folders. Verify
 that the backup is readable and complete. A failed or partial backup is a hard stop.
 
 Resolve the reference and enumerate descendants from Epic → Feature → User Story → Task before
@@ -69,8 +71,9 @@ Produce a consolidated preview containing, for every selected placement:
 - backup location and source revisions.
 
 Re-read current revisions immediately before the approval prompt. If any revision changed since
-the scan, refresh that node and rebuild the affected proposal. Request approval with the `publish-items` approval gate with the drafts as `--artifact`s (see the harness skill's approval protocol), passing the
-consolidated change set. Cancellation or rejection ends the run without writes.
+the scan, refresh that node and rebuild the affected proposal. Write the change set as the reviewed drafts, show them with `harness workflow show
+--artifact <draft>`, and ask `harness decision present --gate publish-items` with them as
+`--artifact`s. Cancellation or rejection ends the run without writes.
 
 ### 5. Apply using existing Agile Backlog Toolkit skills
 
@@ -81,13 +84,11 @@ parallel format:
   references and approval gate.
 - Human-facing wording → `$generate-plain-language-documentation`.
 - An existing Story's plan-backed Task changes → `$generate-breakdown-work-items` rules; update
-  the saved Implementation Plan first, have it approved again with `implementation-confirm` as
-  that skill describes, then reconcile its Tasks.
+  the saved Implementation Plan before reconciling its Tasks.
 - A missing required Task explicitly approved by the user → `$generate-work-item` and then link it
   as a child of the Story.
 
-Write each changed item with `tracker_update_work_item` (only the fields that change), never the
-tracker's own tools. Apply approved content top-down. Never mutate hierarchy, state, ownership, area, iteration, tags,
+Apply approved content top-down. Never mutate hierarchy, state, ownership, area, iteration, tags,
 or unrelated sections. Reconcile the Task child list without deleting existing Tasks: update only
 affected Task content, add approved missing Tasks, and report stale/unmatched Tasks for review.
 

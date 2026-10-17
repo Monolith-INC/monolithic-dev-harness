@@ -33,5 +33,9 @@
       }
     }
   },
-  "tools": []
+  "tools": [],
+  "stage": {
+    "name": "reconcile-feature-stack",
+    "workflow": "skills/reconcile-feature-stack/references/stage-workflow.md"
+  }
 }

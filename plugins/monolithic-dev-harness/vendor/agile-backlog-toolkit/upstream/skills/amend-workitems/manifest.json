@@ -1,0 +1,26 @@
+{
+  "name": "amend-workitems",
+  "description": "Analyze approved instructions and safely amend an Epic or Feature tree, including Features, User Stories, child Tasks, and related Implementation Plans.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "instructions": {
+        "type": "string",
+        "description": "Verbatim user corrections or adjustments to apply"
+      },
+      "reference": {
+        "type": "string",
+        "description": "Epic or Feature Azure id/URL, or filesystem path"
+      },
+      "scope": {
+        "type": "string",
+        "enum": ["tree"],
+        "default": "tree"
+      }
+    },
+    "required": ["instructions", "reference"]
+  },
+  "output_signature": {
+    "required": ["backup", "placements", "changes", "validation", "unresolved"]
+  }
+}

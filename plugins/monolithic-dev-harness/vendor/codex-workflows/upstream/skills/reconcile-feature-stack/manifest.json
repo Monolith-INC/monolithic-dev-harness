@@ -1,0 +1,35 @@
+{
+  "name": "reconcile-feature-stack",
+  "version": "1.0.0",
+  "description": "Propagate ancestor Feature/Story commits through descendant Story branches in stack order.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "feature_id": {
+        "type": "string",
+        "description": "Feature work-item identifier or name."
+      },
+      "feature_branch": {
+        "type": "string",
+        "description": "Optional Feature branch name if already known."
+      }
+    },
+    "required": []
+  },
+  "output_signature": {
+    "type": "object",
+    "properties": {
+      "feature_branch": { "type": "string" },
+      "reconciled_branches": { "type": "array", "items": { "type": "string" } },
+      "conflicts_resolved": { "type": "boolean" }
+    }
+  },
+  "tools": [],
+  "stage": {
+    "name": "reconcile-feature-stack",
+    "workflow": "skills/codex_workflows/resources/workflows-reconcile-feature-stack.md",
+    "rules": "skills/codex_workflows/rules/rules-reconcile-feature-stack.ts",
+    "installed_workflow": ".agent/workflows/workflows-reconcile-feature-stack.md",
+    "installed_rules": ".agent/rules/rules-reconcile-feature-stack.ts"
+  }
+}

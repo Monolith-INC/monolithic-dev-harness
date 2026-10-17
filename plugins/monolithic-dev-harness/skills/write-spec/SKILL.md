@@ -5,54 +5,26 @@ description: Generate tracker-backed specification artifacts with Actor-Critic r
 
 # Write specification
 
-Before publishing to the tracker, call `workflow_tracking_status`. If tracking is paused, report
-that this skill is unavailable until `/resume-tracker`.
+Before publishing tracker artifacts, call `workflow_tracking_status`. If tracking
+is paused, report that this skill is unavailable until `/resume-tracker`.
 
-`write-spec` writes the technical specs a Story still lacks: RFC, ADR, design doc, technical
-specification, SRS, bugfix specification or API contract. It never writes an implementation plan:
-the Story's plan comes from `generate-breakdown-work-items` and was approved with
-`implementation-confirm`. Ask the tracker which spec artifacts the Story already has and write only
-the missing kinds; an approved, unchanged spec is never regenerated or approved again. Draft each
-from its template and run the shared Actor-Critic critic.
+Use the work-item description, requirements, and implementation context supplied by the tracker adapter. Select logical artifact kinds (RFC, ADR, design doc, technical specification, bugfix specification, or API contract), draft them, and run the shared Actor-Critic critic. The Story's implementation plan is not a spec kind here: it comes from `generate-breakdown-work-items` and was approved with `implementation-confirm`.
 
 Pass prior critic history explicitly between attempts. The orchestrator keeps retry/reflection state in memory for the invocation; the accepted artifact is published through the tracker adapter with an idempotency revision. Local tracker persists that accepted artifact in its managed tracker records; no separate bypass file is required.
 
 The result identifies artifact scope, required and missing kinds, source hints, the template, critiques, and the next action.
 
-## Inputs
+## In the harness
 
-Refinement has already produced the *what*: the Story in its template (acceptance criteria and
-points included), its approved implementation plan, and its Tasks. Read them as the spec's input.
-Also resolve any `product-spec` referenced by the Story and read every file listed under its
-`companions:` field. Trace the Story to its covered `CAP-N` values. Do not restate or re-decide
-that intent, and do not restate the plan: link it.
+Write only the kinds the Story still lacks (ask the tracker with `tracker_list_artifacts`); an
+approved, unchanged spec is never regenerated or approved again. Refinement already produced the
+*what* (the refined Story, its approved plan, its Tasks): read them as input and link the plan,
+never restate it. When the proposed *how* would change the Story's scope, stop: the work items are
+updated first (`enrich-work-item`, or `amend-workitems` for a tree), then the plan is approved
+again.
 
-The spec decides the Story-local *how*: affected modules (from the repository's `AGENTS.md`
-routing), data and contract changes, test strategy per Task, implementation-level UI details, and
-risks. Upstream `AD-N` rules and UX contracts are binding inputs.
-
-When the proposed *how* would change the Story's scope (a capability, acceptance criterion, Task,
-UX contract, or architecture invariant), stop. Work items come first: refinement updates the Story
-(`enrich-work-item`, or `amend-workitems` for a tree), then its plan is approved again, then its
-Tasks change. Never change them silently from here.
-
-The accepted technical spec includes a compact traceability section:
-
-- `CAP-N` → Story acceptance criteria;
-- acceptance criteria → Tasks and verification;
-- applicable `AD-N` / UX decisions → affected modules.
-
-## Approval
-
-Present the exact accepted spec revision to the user through the best surface the host actually
-provides: interactive canvas/document/editor, native rendered preview, an opened file with
-structured summary, then faithful inline review. A bare path, unopened file link, or short summary
-does not count. Record the content digest and surface used in the workflow checkpoint. Once the
-material needed to decide is visible, ask the `approve-spec` gate with the spec as `--artifact`;
-pane controls do not record harness approval. That approval covers publishing this spec while it is
-unchanged. An edited digest requires a new review. `implement-story` starts only after it.
-
-When the spec lives only in the artifacts path, write it where `harness document path --type <kind>
---item <story key>` says (`tech-spec`, `design-doc`, `adr` or `api-contract`), with `status: draft` and set `active`
-after the user approves. The approval pins its content (the `status` line aside); any other edit to
-the note needs a new approval.
+Write each spec where `harness document path --type <kind> --item <story key>` says (`tech-spec`,
+`design-doc`, `adr` or `api-contract`) with `status: draft`. Show it with `harness workflow show
+--artifact <spec>` and ask `harness decision present --gate approve-spec --artifact <spec>`; set
+`active` once approved. The approval pins its content (the `status` line aside); any other edit
+needs a new approval.

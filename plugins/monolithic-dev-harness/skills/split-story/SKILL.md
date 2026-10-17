@@ -12,6 +12,8 @@ Lateral story-sizing skill. Load reference files as each phase needs them.
 References (shared, in `../../references/`):
 - `decomposition-rules.md` — 6-driver MAX heuristic, story-point ceiling, DoR, hierarchy rules.
 - `ticket-structure.md` — body sections, frontmatter constraints, content hygiene.
+- `tracker-contract.md` — the tracker gateway: every read and write goes through its `tracker_*`
+  tools, never a tracker's own tools.
 
 References (skill-specific, in `./references/`):
 - `split-patterns.md` — split pattern catalog with detection signals and auto-selection rules.
@@ -138,10 +140,9 @@ Show:
 - For each sub-story: proposed title + one-line scope + estimated points
 - Which original ACs map to each sub-story
 
-Save the split plan as a file in the artifacts path, show it, then ask
-`harness decision present --gate refinement-split --artifact <split plan>`. Do not enter DRAFT until
-it is approved. If the user revises the plan (different pattern, different count, adjusted titles):
-incorporate revisions, show the updated plan, and ask again.
+Ask `harness decision present --gate refinement-split` before entering DRAFT.
+If the user revises the plan (different pattern, different count, adjusted titles): incorporate
+revisions and re-show the updated plan. Do not proceed until the plan is approved.
 
 ---
 
@@ -152,9 +153,8 @@ before writing any files.
 
 **Spike mode** (Branch B confirmed):
 
-1. Draft one local file at:
-   `Tickets/Ready/<parent_id>-spike-<slug>.md`, or
-   `Tickets/Ready/draft-spike-<slug>.md` when the story has no parent
+1. Draft one local file at the path `harness document path --type ticket --new user-story
+   --title "<spike title>" --parent <parent_id>` prints (in `Tickets/Ready/`).
 2. Fill all 7 body sections using the Spike stub format from `./references/scoring-guide.md`.
 3. Fill each `[placeholder]` with content derived from the original story.
 
@@ -162,9 +162,9 @@ before writing any files.
 
 For each approved sub-story:
 
-1. Filename: `<parent_id>-<n>-<kebab-slug>.md` — e.g., `6868-1-register-flow.md`. When the
-   story has no parent, use `draft-<n>-<kebab-slug>.md`: a filename never contains `None`.
-2. Path: `Tickets/Ready/<filename>`.
+1. Path: the one `harness document path --type ticket --new user-story --title "<title>"
+   --parent <parent_id>` prints (in `Tickets/Ready/`).
+2. The draft keeps that name; nothing is renamed after the item is created.
 3. Frontmatter (hook-valid — no `status:` and no `provider_id` before provider creation):
 
 ```yaml
@@ -172,7 +172,7 @@ For each approved sub-story:
 date: <YYYY-MM-DD>
 type: ticket
 work_item_type: User Story
-parent_id: <parent_id>   # omit the key entirely when the story has no parent
+parent_id: <parent_id>
 provider: local
 story_points: <estimated-points>
 ---
@@ -214,7 +214,7 @@ Show options:
 Sub-stories drafted. What would you like to do?
 
 1. Keep as local drafts — done; continue manually or via decompose-backlog.
-2. Create in the configured provider, under the original Story's parent Feature when it has one.
+2. Create them in the selected tracker under the parent Feature.
 3. Discard drafts — delete files and stop.
 ```
 
@@ -224,25 +224,20 @@ Wait for user choice.
 Report file paths and stop. No further action.
 
 **Option 2 — Provider:**
-Read `../../common/providers.md`. Ask the `publish-items` approval gate with the sub-story drafts
-as `--artifact`s, then write through `workflow-integrations` only.
+Read `../../common/providers.md`. Show the drafts with `harness workflow show --artifact <draft>`
+and ask `harness decision present --gate publish-items` with every draft as `--artifact`.
 
 For each sub-story draft (in order):
 
-1. Create each approved child using `tracker_create_work_item`, with its harness kind, title,
-   description, and parent reference, then set its points with `tracker_update_work_item`
-   (`storyPoints`).
-2. Assert the response carries the new item's `key`. If absent: STOP and report failure with the item
-   title and the raw error.
-3. Supply `parentRef` at creation when the story has a parent. Do not parent a Story directly to
-   an Epic; sub-stories of a standalone Story stay standalone.
-4. Read back: `tracker_get_work_item(ref=<new_id>)`.
-   Assert its `parent_id == parent_id`, or that there is no parent when the original had none.
-   If either assertion fails: STOP and report
-   `LINK ASSERTION FAILED for <title>: expected parent <parent_id>, got <actual>`
-   or `STRAY RELATED LINKS for <title>: <links found>`.
-5. Update local draft frontmatter: set `provider_id: <new_id>`. Rename file to
-   `<new_id>-<slug>.md`.
+1. `tracker_create_work_item` (`kind: "user_story"`, Markdown description = full body from the
+   draft, `parentRef` = `parent_id`), then `tracker_update_work_item` with `storyPoints`.
+2. Assert the response carries the new item's `key`. If absent: STOP and report failure with the
+   item title and the raw error.
+3. Read back: `tracker_get_work_item(ref=<new key>)`. Assert its `parent_id == parent_id`.
+   If the assertion fails: STOP and report
+   `LINK ASSERTION FAILED for <title>: expected parent <parent_id>, got <actual>`.
+4. Update local draft frontmatter: set `provider_id: <new key>` (with the local tracker, creating
+   the item already did this). The file keeps its name.
 
 After all items: report each title, provider identifier, and parent link status.
 
@@ -255,8 +250,8 @@ Delete each local draft file written in PHASE 4. Report `Drafts discarded.` and 
 
 - **One story per run.** Process only the first argument if multiple are given.
 - **No silent patching.** Coverage gaps and duplicates surface to the user — never auto-resolved.
-- **No provider writes without user consent.** Tracker writes happen only after HANDOFF option 2
-  and its `publish-items` approval.
+- **No provider writes without user consent.** Connector calls execute only if the user selects
+  HANDOFF option 2.
 - **Gate before draft.** DRAFT phase does not execute until GATE 1 is explicitly approved.
 - **Spike ≠ split.** When Incerteza is the sole dominant driver, recommend a Spike; do not
   force a scope split.

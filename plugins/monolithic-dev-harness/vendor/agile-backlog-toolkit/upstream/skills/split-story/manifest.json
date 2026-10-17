@@ -1,0 +1,31 @@
+{
+  "name": "split-story",
+  "description": "Decide whether/how to split an oversized Story and draft sub-stories.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "story": {
+        "type": "string",
+        "description": "Story id, URL, path, or raw text"
+      },
+      "language": {
+        "type": "string",
+        "enum": [
+          "en",
+          "pt-br"
+        ],
+        "description": "Output language"
+      }
+    },
+    "required": [
+      "story"
+    ]
+  },
+  "output_signature": {
+    "required": [
+      "should_split",
+      "pattern",
+      "sub_stories"
+    ]
+  }
+}

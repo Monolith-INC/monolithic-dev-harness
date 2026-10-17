@@ -31,6 +31,10 @@ All notable changes to this project are documented here. The format follows
 - The Breakdown Task closes once its Story holds its other Tasks, without a receipt.
 - Agent-facing skills work from the tracker gateway contract only; Azure DevOps notes moved to
   `trackers/azure-devops/notes/`.
+- The agile-backlog-toolkit (0.12.1) and codex-workflows (0.5.26) skills are copied from their
+  sources and aligned only where they conflict with the harness contract; the untouched sources
+  are vendored under `vendor/agile-backlog-toolkit/` and `vendor/codex-workflows/`, each with a
+  `SOURCE-MANIFEST.md` listing the alignments.
 
 ### Removed
 

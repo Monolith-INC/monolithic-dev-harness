@@ -1,0 +1,14 @@
+{
+  "name": "commit-prep",
+  "version": "1.0.0",
+  "description": "Prepare atomic commits for the current work.",
+  "input_schema": {
+    "type": "object",
+    "properties": {}
+  },
+  "output_signature": {
+    "type": "object",
+    "properties": {}
+  },
+  "tools": []
+}
