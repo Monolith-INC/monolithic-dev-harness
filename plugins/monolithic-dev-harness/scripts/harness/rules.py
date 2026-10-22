@@ -24,7 +24,7 @@ import hashlib
 import os
 import posixpath
 import re
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from fnmatch import fnmatch
 from pathlib import Path
@@ -349,6 +349,17 @@ def _names_harness(word: str) -> bool:
     )
 
 
+def _inside(relative: str) -> bool:
+    """Whether a path from `_relative` may be in the repository; `~/…` may be, so it stays."""
+    return not relative.startswith("/") and relative.split("/", 1)[0] != ".."
+
+
+def _words_naming_harness(repo: Path, words: tuple[str, ...]) -> Iterator[str]:
+    """Words of code the scanner cannot follow that could name `.harness` in the repository."""
+    relatives = (_relative(repo, word) for word in words)
+    return (r for r in relatives if _inside(r) and _names_harness(r))
+
+
 def shell_human_owned_write(call: ToolCall, repo: Path) -> str | None:
     """The human-owned path a shell command could write, if any."""
     writes = shellscan.scan(call.command, _shell_start(call, repo), repo)
@@ -358,7 +369,8 @@ def shell_human_owned_write(call: ToolCall, repo: Path) -> str | None:
     for path in writes.trees:
         if is_human_owned(_relative(repo, path), tree=True):
             return _relative(repo, path) or "the repository root"
-    return next((word for word in writes.unresolved if _names_harness(word)), None)
+    named = list(_words_naming_harness(repo, writes.unresolved))
+    return next(filter(is_human_owned, named), named[0] if named else None)
 
 
 def shell_writes_human_owned(command: str, repo: Path | None = None) -> bool:
@@ -378,7 +390,7 @@ def shell_writes_matching(
     writes = shellscan.scan(call.command, _shell_start(call, repo), repo)
     for path in (*writes.targets, *writes.unresolved):
         relative = _relative(repo, path)
-        if relative and globs.matches(relative, patterns):
+        if relative and _inside(relative) and globs.matches(relative, patterns):
             return relative
     return None
 

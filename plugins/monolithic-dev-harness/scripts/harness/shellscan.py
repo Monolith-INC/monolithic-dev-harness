@@ -690,7 +690,8 @@ def _classify(
         # A name inside inline code or a script's arguments is relative to where it runs.
         for text in texts:
             for word in words_in(text):
-                writes.unresolved.append(word)
+                if not (cwd and invocation.cwd_certain):
+                    writes.unresolved.append(word)
                 if cwd:
                     writes.unresolved.append(_resolve(word, cwd))
 

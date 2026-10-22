@@ -172,3 +172,70 @@ def test_a_variable_assigned_in_the_same_command_is_followed(
 ) -> None:
     assert shell_writes_human_owned("S=.harness/state; cp a $S/approvals/x", repo)
     assert not shell_writes_human_owned(f"S={scratch}; cp a $S/approvals/x", repo)
+
+
+OUTSIDE_THE_REPOSITORY = (
+    "cd <scratch> && python3 -c \"open('.harness/settings.json', 'w')\"",
+    "cd <scratch> && sh run.sh .harness/settings.json",
+    "python3 <scratch>/build.py <scratch>/.harness/settings.json",
+    "S=<scratch>; python3 build.py $S/.harness/state",
+)
+
+INSIDE_THE_REPOSITORY = (
+    "cd <repo> && python3 -c \"open('.harness/settings.json', 'w')\"",
+    "cd <repo>/lib && python3 -c \"open('../.harness/settings.json', 'w')\"",
+    "cd <repo>/.harness/state && python3 -c \"open('decision.json', 'w')\"",
+    "cd <scratch>; python3 -c \"open('.harness/settings.json', 'w')\"",
+    "python3 build.py <repo>/.harness/settings.json",
+    "python3 build.py ~/.harness/settings.json",
+)
+
+
+@pytest.mark.parametrize("command", OUTSIDE_THE_REPOSITORY)
+def test_code_that_runs_outside_the_repository_is_not_refused(
+    command: str, repo: Path, scratch: Path
+) -> None:
+    assert human_owned_write(command, repo, scratch) is None
+
+
+@pytest.mark.parametrize("command", INSIDE_THE_REPOSITORY)
+def test_code_that_could_write_inside_the_repository_is_refused(
+    command: str, repo: Path, scratch: Path
+) -> None:
+    assert human_owned_write(command, repo, scratch) is not None
+
+
+def test_the_refusal_names_a_human_owned_file_not_a_word_of_the_code(
+    repo: Path, scratch: Path
+) -> None:
+    command = "cd <repo>/.harness/state && python3 -c \"open('decision.json', 'w')\""
+    assert human_owned_write(command, repo, scratch) == ".harness/state/decision.json"
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "cd <scratch> && echo x > lib/a.g.dart",
+        "cd <scratch> && sh gen.sh lib/a.g.dart",
+        "sh gen.sh <scratch>/lib/a.g.dart",
+    ),
+)
+def test_generated_files_outside_the_repository_are_not_protected(
+    command: str, repo: Path, scratch: Path
+) -> None:
+    assert generated_write(command, repo, scratch) is None
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        "cd <repo> && echo x > lib/a.g.dart",
+        "cd <repo>/lib && sh gen.sh a.g.dart",
+        "sh gen.sh <repo>/lib/a.g.dart",
+        "cd <scratch>; sh gen.sh lib/a.g.dart",
+    ),
+)
+def test_generated_files_in_the_repository_stay_protected(
+    command: str, repo: Path, scratch: Path
+) -> None:
+    assert generated_write(command, repo, scratch) is not None
