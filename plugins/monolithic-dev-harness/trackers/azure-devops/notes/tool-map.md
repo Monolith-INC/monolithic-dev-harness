@@ -17,6 +17,7 @@ these provider-neutral operations into native Azure MCP calls internally.
 | Read a pull request | `scm_get_pull_request` | Supply a provider-neutral PR `ref`. |
 | Create a pull request | `scm_create_pull_request` | Harness policy requires a draft and workflow approval. |
 | Read or reply to review threads | `scm_list_review_threads`, `scm_reply_to_thread` | Replies are subject to harness posting policy. |
+| Open a thread on a file and line range, edit its first comment, or set its status | `scm_create_review_thread`, `scm_update_thread_comment`, `scm_set_thread_status` | Subject to the same posting policy as replies. |
 | Link a PR to a work item | `scm_link_work_item` | Supply both provider-neutral references. |
 
 Use the tool schemas returned by the gateway for exact input shapes. Native Azure MCP tool names,

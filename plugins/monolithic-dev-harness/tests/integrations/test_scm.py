@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 from types import MappingProxyType
 
-from core.result import Ok
+from core.result import Err, Ok
 from harness.settings import Selection
 from integrations import scm
 from integrations.contracts import PullRequestDraft
@@ -95,6 +95,58 @@ class AzureReposTest(unittest.TestCase):
             ("repo-guid", "project-guid", 42),
         )
 
+    def test_review_threads_are_opened_edited_and_given_a_status(self) -> None:
+        self.assertEqual(
+            self.ops.create_review_thread("7", "/a.dart", 3, 5, 41, "Name this.").value,
+            {"id": 1},
+        )
+        self.ops.update_thread_comment("7", "5", "Reworded.")
+        self.ops.set_thread_status("7", "5", "Fixed")
+        created, updated, closed = self.call.sent("repo_pull_request_thread_write")
+        self.assertEqual(
+            created,
+            {
+                "action": "create",
+                "project": "proj",
+                "repositoryId": "repo",
+                "pullRequestId": 7,
+                "filePath": "/a.dart",
+                "rightFileStartLine": 3,
+                "rightFileStartOffset": 1,
+                "rightFileEndLine": 5,
+                "rightFileEndOffset": 41,
+                "content": "Name this.",
+            },
+        )
+        self.assertEqual(
+            (
+                updated["action"],
+                updated["pullRequestId"],
+                updated["threadId"],
+                updated["commentId"],
+                updated["content"],
+            ),
+            ("update", 7, 5, 1, "Reworded."),
+        )
+        self.assertEqual(
+            (
+                closed["action"],
+                closed["pullRequestId"],
+                closed["threadId"],
+                closed["status"],
+            ),
+            ("update_status", 7, 5, "Fixed"),
+        )
+
+    def test_a_reference_that_is_not_a_number_is_refused_before_any_call(self) -> None:
+        for result in (
+            self.ops.create_review_thread("PR-7", "/a.dart", 1, 1, 9, "x"),
+            self.ops.update_thread_comment("7", "first", "x"),
+            self.ops.set_thread_status("PR-7", "5", "Fixed"),
+        ):
+            self.assertIsInstance(result, Err)
+        self.assertEqual(self.call.sent("repo_pull_request_thread_write"), [])
+
 
 class GitHubTest(unittest.TestCase):
     def setUp(self) -> None:
@@ -156,6 +208,17 @@ class GitHubTest(unittest.TestCase):
         self.ops.link_work_item("12", "ENG-1")
         self.assertEqual(self.body.count("Work item: ENG-1"), 1)
         self.assertEqual(sum(1 for args in self.ran if args[:2] == ("pr", "edit")), 1)
+
+    def test_hosts_without_review_thread_writes_refuse_them(self) -> None:
+        for ops in (self.ops, scm.local()):
+            for refused in (
+                ops.create_review_thread("12", "a.py", 1, 1, 9, "x"),
+                ops.update_thread_comment("12", "3", "x"),
+                ops.set_thread_status("12", "3", "Fixed"),
+            ):
+                self.assertEqual(refused.failure.code, "unsupported_capability")
+                self.assertIn("code host", refused.failure.message)
+        self.assertEqual(self.ran, [])
 
 
 class BuildTest(unittest.TestCase):

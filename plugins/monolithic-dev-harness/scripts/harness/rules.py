@@ -56,6 +56,9 @@ GATEWAY_WRITES = frozenset(
         "tracker_link_development_artifact",
         "scm_create_pull_request",
         "scm_reply_to_thread",
+        "scm_create_review_thread",
+        "scm_update_thread_comment",
+        "scm_set_thread_status",
         "scm_link_work_item",
         "workflow_skip_tracker",  # pausing enforcement is a human decision
     }
@@ -762,7 +765,15 @@ def rule_feature_branch(call: ToolCall, repo: Path) -> Decision:
 # one, or ("general", "").
 Target = tuple[str, str]
 _BRANCH_WRITES = frozenset({"scm_create_pull_request"})
-_PR_WRITES = frozenset({"scm_reply_to_thread", "scm_link_work_item"})
+_PR_WRITES = frozenset(
+    {
+        "scm_reply_to_thread",
+        "scm_create_review_thread",
+        "scm_update_thread_comment",
+        "scm_set_thread_status",
+        "scm_link_work_item",
+    }
+)
 # Pausing enforcement is a general permission: only a short general window covers it.
 _GENERAL_WRITES = frozenset({"workflow_skip_tracker"})
 # Fields whose change rewrites what an item says; only an approval of the reviewed text covers it.

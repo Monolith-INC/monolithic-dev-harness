@@ -31,6 +31,7 @@ machine environment.
 | Link a work item to a branch or pull request | `tracker_link_development_artifact` |
 | Read or create a pull request | `scm_get_pull_request`, `scm_create_pull_request` |
 | Read or reply to review threads | `scm_list_review_threads`, `scm_reply_to_thread` |
+| Open a thread on a file and line range, edit its first comment, or set its status | `scm_create_review_thread`, `scm_update_thread_comment`, `scm_set_thread_status` |
 | Link a work item to a pull request | `scm_link_work_item` |
 
 Use the tool schemas as the source of argument names. Work item references are provider-neutral

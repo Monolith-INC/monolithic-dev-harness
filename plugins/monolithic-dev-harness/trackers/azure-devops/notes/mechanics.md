@@ -13,7 +13,8 @@ and payloads internal.
 - Artifact and development links: `tracker_list_artifacts`, `tracker_publish_artifact`,
   `tracker_link_development_artifact`.
 - Pull requests and review threads: `scm_get_pull_request`, `scm_create_pull_request`,
-  `scm_list_review_threads`, `scm_reply_to_thread`, `scm_link_work_item`.
+  `scm_list_review_threads`, `scm_reply_to_thread`, `scm_create_review_thread`,
+  `scm_update_thread_comment`, `scm_set_thread_status`, `scm_link_work_item`.
 
 Use the gateway tool schema for exact argument and result shapes. Work-item references are strings;
 the adapter translates them into provider identifiers. A work item's parent should be supplied as

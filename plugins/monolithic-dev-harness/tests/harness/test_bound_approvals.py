@@ -271,3 +271,51 @@ def test_a_work_item_is_written_as_the_draft_the_user_approved(tmp_path: Path) -
     assert "deny" not in create("## 🎯 What\n\nOther.")
     (ready / "draft-two.md").write_text("---\ntype: ticket\n---\n\nChanged.\n")
     assert "approval-required" in create("Changed.")
+
+
+THREAD_WRITES = {
+    "scm_create_review_thread": {
+        "filePath": "/lib/a.dart",
+        "startLine": 3,
+        "endLine": 3,
+        "endOffset": 20,
+        "content": "Name this.",
+    },
+    "scm_update_thread_comment": {"threadRef": "5", "content": "Reworded."},
+    "scm_set_thread_status": {"threadRef": "5", "status": "Fixed"},
+}
+
+
+def test_a_reply_approval_covers_review_thread_writes_on_that_pull_request_only(
+    tmp_path: Path,
+) -> None:
+    first, _ = project(tmp_path)
+    (tmp_path / "replies.md").write_text("Fixed in the next commit.")
+    approve(
+        tmp_path,
+        first,
+        "native-a",
+        "reply-pr",
+        "--value",
+        "pr=12",
+        "--artifact",
+        "replies.md",
+    )
+
+    def thread_write(tool: str, pull_request: str) -> str:
+        return native(
+            tmp_path,
+            "pre-tool",
+            {
+                "tool_name": GATEWAY + tool,
+                "tool_input": {
+                    "pullRequestRef": pull_request,
+                    **THREAD_WRITES[tool],
+                },
+                "session_id": "native-a",
+            },
+        )
+
+    for tool in THREAD_WRITES:
+        assert "deny" not in thread_write(tool, "12"), tool
+        assert "approval-required" in thread_write(tool, "13"), tool

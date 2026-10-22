@@ -299,6 +299,13 @@ class TrackerOps:
     records_hours: bool
 
 
+def _unsupported(operation: str) -> Callable[..., Result[Mapping[str, Any]]]:
+    """An operation a code host leaves out: every call is refused, naming what is missing."""
+    return lambda *_: err(
+        "unsupported_capability", f"{operation} is not supported by this code host"
+    )
+
+
 @dataclass(frozen=True)
 class ScmOps:
     get_pull_request: Callable[[str], Result[PullRequest]]
@@ -306,3 +313,12 @@ class ScmOps:
     list_review_threads: Callable[[str], Result[tuple[ReviewThread, ...]]]
     reply_to_thread: Callable[[str, str, str], Result[Mapping[str, Any]]]
     link_work_item: Callable[[str, str], Result[Mapping[str, Any]]]
+    create_review_thread: Callable[
+        [str, str, int, int, int, str], Result[Mapping[str, Any]]
+    ] = _unsupported("inline review threads")
+    update_thread_comment: Callable[[str, str, str], Result[Mapping[str, Any]]] = (
+        _unsupported("editing review comments")
+    )
+    set_thread_status: Callable[[str, str, str], Result[Mapping[str, Any]]] = (
+        _unsupported("changing a review thread's status")
+    )

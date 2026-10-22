@@ -163,6 +163,41 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
             {"pullRequestRef": STRING, "threadRef": STRING, "content": STRING},
         ),
         (
+            "scm_create_review_thread",
+            "Open a review thread anchored to a file and line range of a pull request.",
+            (
+                "pullRequestRef",
+                "filePath",
+                "startLine",
+                "endLine",
+                "endOffset",
+                "content",
+            ),
+            {
+                "pullRequestRef": STRING,
+                "filePath": STRING,
+                "startLine": {"type": "integer"},
+                "endLine": {"type": "integer"},
+                "endOffset": {
+                    "type": "integer",
+                    "description": "Character offset just past the end of the last line (its length + 1).",
+                },
+                "content": STRING,
+            },
+        ),
+        (
+            "scm_update_thread_comment",
+            "Replace the text of the first comment of a review thread.",
+            ("pullRequestRef", "threadRef", "content"),
+            {"pullRequestRef": STRING, "threadRef": STRING, "content": STRING},
+        ),
+        (
+            "scm_set_thread_status",
+            "Set a review thread's status (Active, Fixed, WontFix, Closed, ByDesign, Pending).",
+            ("pullRequestRef", "threadRef", "status"),
+            {"pullRequestRef": STRING, "threadRef": STRING, "status": STRING},
+        ),
+        (
             "scm_link_work_item",
             "Link a work item to a pull request.",
             ("pullRequestRef", "workItemRef"),
@@ -395,6 +430,20 @@ def _scm_call(name: str, args: Mapping[str, Any], ops: ScmOps) -> Result[Any]:
         "scm_list_review_threads": lambda: ops.list_review_threads(args["ref"]),
         "scm_reply_to_thread": lambda: ops.reply_to_thread(
             args["pullRequestRef"], args["threadRef"], args["content"]
+        ),
+        "scm_create_review_thread": lambda: ops.create_review_thread(
+            args["pullRequestRef"],
+            args["filePath"],
+            args["startLine"],
+            args["endLine"],
+            args["endOffset"],
+            args["content"],
+        ),
+        "scm_update_thread_comment": lambda: ops.update_thread_comment(
+            args["pullRequestRef"], args["threadRef"], args["content"]
+        ),
+        "scm_set_thread_status": lambda: ops.set_thread_status(
+            args["pullRequestRef"], args["threadRef"], args["status"]
         ),
         "scm_link_work_item": lambda: ops.link_work_item(
             args["pullRequestRef"], args["workItemRef"]
