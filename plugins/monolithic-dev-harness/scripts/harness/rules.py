@@ -858,28 +858,13 @@ def _covers(record: dict[str, Any], target: Target) -> bool:
             return kind in ("tracker", "item", "content")
 
 
-def _session_ended(repo: Path, work_session_id: str | None) -> bool:
-    """Approvals end with their work session: a stopped or completed one covers nothing."""
-    if work_session_id is None:
-        return False
-
-    match work_sessions.select(repo, work_session_id):
-        case Ok(session):
-            return session.status in (
-                work_sessions.Status.STOPPED,
-                work_sessions.Status.COMPLETE,
-            )
-        case _:
-            return True
-
-
 def covering_approval(
     call: ToolCall, repo: Path, work_session_id: str | None
 ) -> tuple[tuple[Path, dict[str, Any]] | None, bool]:
     """The open approval whose context covers every target of this write, and whether an
     approval for the same target exists but its reviewed content has since changed."""
     targets = write_targets(call, repo) or (("tracker", ""),)
-    if _session_ended(repo, work_session_id):
+    if work_sessions.ended(repo, work_session_id):
         return None, False
     stale = False
     for path, record in state.open_approvals(repo, work_session_id):
@@ -904,7 +889,7 @@ def _written_body(call: ToolCall) -> str | None:
 def _approved_body(repo: Path, work_session_id: str | None, body: str) -> bool:
     """Whether an open approval, its reviewed files unchanged, holds a draft with this body."""
     digest = hashlib.sha256(body.strip().encode("utf-8")).hexdigest()
-    return not _session_ended(repo, work_session_id) and any(
+    return not work_sessions.ended(repo, work_session_id) and any(
         digest in (record.get("binds") or {}).get("bodies", ())
         and _context_unchanged(repo, record.get("binds") or {})
         for _, record in state.open_approvals(repo, work_session_id)

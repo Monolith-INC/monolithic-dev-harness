@@ -633,8 +633,10 @@ def reusable(
 
 def _window_open(repo: Path, entry: dict[str, Any], scope: str | None) -> bool:
     """Whether the approval this answer opened still holds (not revoked, expired, or ended)."""
+    from harness import work_sessions
+
     wanted = questions.approval_id(str(entry.get("id", "")))
-    return any(
+    return not work_sessions.ended(repo, scope) and any(
         record.get("id") == wanted for _, record in state.open_approvals(repo, scope)
     )
 

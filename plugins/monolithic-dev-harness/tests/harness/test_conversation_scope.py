@@ -135,3 +135,14 @@ def test_a_conversation_in_another_session_is_not_covered_and_the_gate_asks_agai
     assert "deny" not in named
     assert present(tmp_path, "--session-id", other)["state"] == "waiting_for_human"
     assert state.active_approval(tmp_path, current) is not None
+
+
+def test_an_answer_given_in_a_session_that_has_ended_is_not_reused(
+    tmp_path: Path,
+) -> None:
+    current, _ = project(tmp_path)
+    approve(tmp_path, "native-a")
+    assert "already_answered" in ask(tmp_path, "--session-id", current).stdout
+    work_sessions.transition(tmp_path, current, "stop")
+    assert "deny" in push(tmp_path, "native-a")
+    assert "already_answered" not in ask(tmp_path, "--session-id", current).stdout

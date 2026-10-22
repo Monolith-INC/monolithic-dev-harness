@@ -261,6 +261,17 @@ def acting(project: Path, linked: str | None) -> str | None:
     return linked or current(project)
 
 
+def ended(project: Path, identifier: str | None) -> bool:
+    """A stopped, completed, or unreadable session: the approvals given in it cover nothing."""
+    if identifier is None:
+        return False
+    match select(project, identifier):
+        case Ok(session):
+            return session.status in (Status.STOPPED, Status.COMPLETE)
+        case _:
+            return True
+
+
 def _current_active(active: tuple[str, ...], remembered: object) -> str | None:
     match active:
         case _ if remembered in active:

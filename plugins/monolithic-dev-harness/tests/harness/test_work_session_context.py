@@ -109,6 +109,15 @@ def test_a_conversation_with_no_link_acts_in_the_projects_current_session(
     assert work_sessions.acting(tmp_path, first.id) == first.id
 
 
+def test_a_stopped_or_unreadable_session_has_ended(tmp_path: Path) -> None:
+    session = work_sessions.start(tmp_path, "DAY-001").value
+    assert not work_sessions.ended(tmp_path, None)
+    assert not work_sessions.ended(tmp_path, session.id)
+    work_sessions.transition(tmp_path, session.id, "stop")
+    assert work_sessions.ended(tmp_path, session.id)
+    assert work_sessions.ended(tmp_path, "WS-missing")
+
+
 def test_a_command_without_a_session_asks_for_the_current_one(tmp_path: Path) -> None:
     session = work_sessions.start(tmp_path, "DAY-001").value
     unnamed = f"{HARNESS} decision present --repo {tmp_path} --gate publish-branch"
