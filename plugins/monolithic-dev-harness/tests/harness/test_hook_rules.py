@@ -336,6 +336,25 @@ class TestHumanOwned(HookTestCase):
                     self.claude("Bash", {"command": command}), "human-owned"
                 )
 
+    def test_inspecting_harness_state_is_not_refused(self) -> None:
+        state = self.repo / ".harness" / "state"
+        for command in (
+            f"cd {state} && ls host_sessions work_sessions; grep -l decision work_sessions/*; "
+            "python3 -c \"import json; print(json.load(open('decision-history.json')))\"",
+            f"S={state}; cat $S/work_sessions/current.json; "
+            "for d in $S/work_sessions/WS-*; do ls $d; head -c 400 $d/*.json; done",
+            'S=/tmp/scratch; find "$S"/skills -type f',
+            "cd /tmp/scratch && git sparse-checkout set skills/cloud/x",
+        ):
+            with self.subTest(command=command):
+                self.assertAllowed(self.claude("Bash", {"command": command}))
+
+    def test_a_command_the_scan_cannot_follow_is_decided_not_a_crash(self) -> None:
+        self.assertDenied(
+            self.claude("Bash", {"command": "for f in a b; do git apply $f; done"}),
+            "human-owned",
+        )
+
     def test_other_state_and_files_are_writable(self) -> None:
         self.assertAllowed(
             self.claude("Write", {"file_path": str(self.repo / "lib/a.dart")})

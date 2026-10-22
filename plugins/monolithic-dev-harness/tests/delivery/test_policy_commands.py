@@ -56,6 +56,7 @@ class SpecBeforeCodeCoversCodeOnlyTests(unittest.TestCase):
                 "echo x > AI_Codex/Checkpoints/build.md",
                 "echo '{}' > .harness/review/sources.json",
                 "python3 scripts/tool.py --out notes.md",
+                "python3 -c 'print(open(\"projects/app/lib/a.dart\").read())'",
                 f"echo x > {tmp}/README.md",
             ):
                 with self.subTest(command=command):
@@ -69,7 +70,7 @@ class SpecBeforeCodeCoversCodeOnlyTests(unittest.TestCase):
                 "cd projects/app && echo x > lib/main.dart",
                 "rm -rf projects/app",
                 "git checkout -- projects",
-                "python3 -c 'open(\"x\")' projects/app/lib/a.dart",
+                'python3 -c \'open("x", "w")\' projects/app/lib/a.dart',
                 f"echo x > {tmp}/projects/app/lib/b.dart",
             ):
                 with self.subTest(command=command):

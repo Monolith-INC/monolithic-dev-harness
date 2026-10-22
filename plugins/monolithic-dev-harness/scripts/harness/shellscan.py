@@ -11,9 +11,9 @@ Unlike regex-only scanning, this distinguishes `2>/dev/null` from writes and fol
 - `targets`: paths a command writes or removes.
 - `trees`: directories whose whole contents a command may write or remove (`rm -r`, `git clean`,
   `find -delete`, extracting an archive).
-- `unresolved`: words from commands whose writes cannot be followed (inline interpreter code, a
-  script, `xargs` fed from a pipe, a path held in a variable). A caller treats a protected path
-  among them as written: this fails closed, never open.
+- `unresolved`: words from commands whose writes cannot be followed (inline interpreter code that
+  is not provably read-only, a script, `xargs` fed from a pipe, a path held in a variable). A
+  caller treats a protected path among them as written: this fails closed, never open.
 
 Unknown commands are writers of their named paths. Add verified readers to `NON_WRITERS`;
 never exempt an unknown command merely because it names a protected file.
@@ -33,6 +33,7 @@ from itertools import islice
 from pathlib import Path
 
 from core.result import attempt, value_or
+from harness.inline_python import reads_only
 from harness.shell_literals import expansion_source
 from harness.shell_parse_cache import parse
 
@@ -721,6 +722,8 @@ def _classify(
         return
     if INTERPRETERS.match(name):
         if args[:1] == ("-m",) and len(args) > 1 and args[1] in READER_MODULES:
+            return
+        if reads_only(name, args, invocation.stdin_text):
             return
         unresolved(" ".join(args), invocation.stdin_text)
         return

@@ -11,7 +11,7 @@ from pathlib import Path
 
 import pytest
 
-from scripts.harness import shellscan
+from scripts.harness import inline_python, shellscan
 from scripts.harness.rules import (
     make_call,
     shell_human_owned_write,
@@ -239,3 +239,137 @@ def test_generated_files_in_the_repository_stay_protected(
     command: str, repo: Path, scratch: Path
 ) -> None:
     assert generated_write(command, repo, scratch) is not None
+
+
+READ_ONLY_PYTHON = (
+    "import json; print(json.load(open('decision-history.json')))",
+    "import json, sys; print(json.load(sys.stdin))",
+    "import glob, os; print(sorted(os.listdir('.')), glob.glob('*/*.json'))",
+    "from pathlib import Path; print(Path('x.json').read_text())",
+    "import sys; print(open(sys.argv[1], 'rb').read())",
+    "with open('x', mode='r', encoding='utf-8') as f: print(f.read())",
+    "import re; print([m for m in re.findall(r'WS-\\d+', open('x').read())])",
+)
+
+WRITING_PYTHON = (
+    "open('x', 'w')",
+    "open('x', 'a')",
+    "open('x', mode='w')",
+    "open('x', 'r+')",
+    "open('x', mode)",
+    "open(*args)",
+    "open('x', **options)",
+    "import os; os.remove('x')",
+    "import os; os.system('rm x')",
+    "import os; os.popen('rm x')",
+    "import subprocess",
+    "import shutil",
+    "from os import system as run",
+    "from os import *",
+    "from . import sibling",
+    "__import__('os').system('rm x')",
+    "eval('1')",
+    "exec('1')",
+    "import os; getattr(os, 'sys' + 'tem')('rm x')",
+    "from pathlib import Path; Path('x').write_text('y')",
+    "from pathlib import Path; Path('x').touch()",
+    "import sys; sys.stdout.write('x')",
+    "import numpy",
+    "import operator",
+    "import typing",
+    "import functools",
+    "import os; os.posix_spawn('/bin/rm', ['rm', 'x'], {})",
+    "import os; os.setxattr('x', 'user.a', b'b')",
+    "print(",
+    "print('$HOME')",
+    "print('`id`')",
+)
+
+PROGRAM_SOURCES = (
+    (("-c", "print(1)"), "", True),
+    (("-u", "-c", "print(1)", "a", "b"), "", True),
+    (("-",), "print(1)", True),
+    ((), "print(1)", True),
+    (("-c",), "", False),
+    (("-",), "", False),
+    (("tool.py", "-c", "print(1)"), "", False),
+    (("-Ic", "print(1)"), "", False),
+    (("-m", "pytest"), "print(1)", False),
+    (("-W", "ignore", "-c", "print(1)"), "", False),
+)
+
+
+@pytest.mark.parametrize("code", READ_ONLY_PYTHON)
+def test_python_that_only_reads_is_read_only(code: str) -> None:
+    assert inline_python.reads_only("python3", ("-c", code), "")
+
+
+@pytest.mark.parametrize("code", WRITING_PYTHON)
+def test_python_that_could_write_is_not_read_only(code: str) -> None:
+    assert not inline_python.reads_only("python3", ("-c", code), "")
+
+
+@pytest.mark.parametrize(("args", "stdin", "expected"), PROGRAM_SOURCES)
+def test_only_a_program_given_up_front_is_read(
+    args: tuple[str, ...], stdin: str, expected: bool
+) -> None:
+    assert inline_python.reads_only("python3", args, stdin) is expected
+
+
+@pytest.mark.parametrize(
+    ("name", "expected"),
+    (("python", True), ("python3", True), ("python3.12", True), ("node", False)),
+)
+def test_only_python_is_read(name: str, expected: bool) -> None:
+    assert inline_python.reads_only(name, ("-c", "print(1)"), "") is expected
+
+
+PYTHON_READS = (
+    "cd <repo>/.harness/state && ls host_sessions work_sessions; "
+    "grep -l decision work_sessions/*; "
+    "python3 -c \"import json; print(json.load(open('decision-history.json')))\"",
+    "python3 -c \"import json; print(json.load(open('<repo>/.harness/state/decision-history.json')))\"",
+    "cd <repo>/.harness/state && python3 - <<'EOF'\n"
+    "import json\nprint(json.load(open('decision-history.json')))\nEOF",
+    "cat <repo>/.harness/settings.json | python3 -c 'import json,sys; print(json.load(sys.stdin))'",
+    'python3 -c "import sys; print(open(sys.argv[1]).read())" .harness/settings.json',
+    "timeout 5 python3.12 -c \"print(open('.harness/settings.json', 'rb').read())\"",
+)
+
+PYTHON_WRITES = (
+    "cd <repo>/.harness/state && python3 -c \"open('decision.json', 'w').write('{}')\"",
+    "python3 -c \"import os; os.remove('.harness/settings.json')\"",
+    "python3 -c \"from pathlib import Path; Path('.harness/settings.json').write_text('{}')\"",
+    "python3 -c \"import shutil; shutil.copy('x', '.harness/settings.json')\"",
+    "python3 -c \"exec(open('.harness/settings.json').read())\"",
+    "python3 - <<'EOF'\nopen('.harness/settings.json', 'w')\nEOF",
+    'python3 -c "$CODE" .harness/settings.json',
+    "python3 tool.py .harness/settings.json",
+    'python3 tool.py -c "print(1)" .harness/settings.json',
+    "python3 -Ic \"open('.harness/settings.json', 'w')\"",
+    "node -e \"require('fs').writeFileSync('.harness/settings.json', '{}')\"",
+    'python3 -c "print(1)" > .harness/settings.json',
+)
+
+
+@pytest.mark.parametrize("command", PYTHON_READS)
+def test_python_that_only_reads_is_not_a_write(
+    command: str, repo: Path, scratch: Path
+) -> None:
+    assert human_owned_write(command, repo, scratch) is None
+
+
+@pytest.mark.parametrize("command", PYTHON_WRITES)
+def test_python_that_could_write_a_human_owned_file_is_refused(
+    command: str, repo: Path, scratch: Path
+) -> None:
+    assert human_owned_write(command, repo, scratch) is not None
+
+
+def test_generated_files_are_read_and_written_by_python_alike(
+    repo: Path, scratch: Path
+) -> None:
+    read = "python3 -c \"print(open('lib/a.g.dart').read())\""
+    write = "python3 -c \"open('lib/a.g.dart', 'w')\""
+    assert generated_write(read, repo, scratch) is None
+    assert generated_write(write, repo, scratch) == "lib/a.g.dart"
