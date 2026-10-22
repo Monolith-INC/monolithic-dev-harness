@@ -183,7 +183,7 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
         return 0
     context = work_session_context.for_payload(repo, host, payload)
     request = (
-        work_session_context.requested(call.command, Path(call.cwd or repo))
+        work_session_context.requested(call.command, Path(call.cwd or repo), repo)
         if call.kind == "shell"
         else None
     )

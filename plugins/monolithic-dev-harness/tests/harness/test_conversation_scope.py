@@ -115,3 +115,23 @@ def test_a_typed_approval_from_a_conversation_with_no_link_is_the_current_sessio
     assert "deny" not in native(
         tmp_path, "pre-tool", {**WRITE, "session_id": "native-resumed"}
     )
+
+
+def test_a_conversation_in_another_session_is_not_covered_and_the_gate_asks_again(
+    tmp_path: Path,
+) -> None:
+    current, other = project(tmp_path)
+    approve(tmp_path, "native-a")
+    unnamed = (
+        f"{CLI} decision present --repo {tmp_path} --gate publish-branch "
+        f"--value branch={BRANCH}"
+    )
+    assert "approval-required" in push(tmp_path, "native-c")
+    refused = command(tmp_path, "native-c", unnamed)
+    assert "work-session-mismatch" in refused and f"--session-id {other}" in refused
+    assert "deny" not in command(tmp_path, "native-a", unnamed)
+    assert "deny" not in command(tmp_path, "native-resumed", unnamed)
+    named = command(tmp_path, "native-c", f"{unnamed} --session-id {other}")
+    assert "deny" not in named
+    assert present(tmp_path, "--session-id", other)["state"] == "waiting_for_human"
+    assert state.active_approval(tmp_path, current) is not None

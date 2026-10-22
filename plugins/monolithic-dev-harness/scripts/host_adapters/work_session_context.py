@@ -2,6 +2,9 @@
 
 A conversation is bound once, by the first session-scoped harness command it runs, and switches
 through an exact `harness work-session select|resume <id>` or a successfully completed `begin`.
+Until it is bound it acts in the project's current work session, as a command without
+`--session-id` does (`work_sessions.acting`); a bound one that runs such a command in another
+session is refused, so a command and the hooks always read the same session's records.
 The startup adapter pairs trusted pre/post events and protected completion evidence before binding.
 The pending-decision guard runs first, so a pending question cannot be escaped by switching work.
 """
@@ -174,11 +177,12 @@ def _bindable(
     )
 
 
-def requested(command: str, cwd: Path) -> tuple[str, str] | None:
+def requested(command: str, cwd: Path, project: Path) -> tuple[str, str] | None:
     """(work session, how) a shell command asks this conversation to work in, if any.
 
     `how` is `select` or `resume` for an explicit switch, `named` when a session-scoped
-    `workflow` or `decision` command names its session.
+    `workflow` or `decision` command names its session, `implied` when it names none and so
+    uses the project's current one.
     """
     match commands.harness_args(command, cwd):
         case ("begin", *rest) if "--new" not in rest:
@@ -190,8 +194,24 @@ def requested(command: str, cwd: Path) -> tuple[str, str] | None:
         case ("work-session", "select" | "resume" as how, identifier, *_):
             return identifier, how
         case ("workflow" | "decision", *rest):
-            named = commands.option(tuple(rest), "--session-id")
-            return (named, "named") if named else None
+            return _scoped(tuple(rest), cwd, project)
+        case _:
+            return None
+
+
+def _scoped(
+    options: tuple[str, ...], cwd: Path, project: Path
+) -> tuple[str, str] | None:
+    named = commands.option(options, "--session-id")
+    acts_here = (cwd / (commands.option(options, "--repo") or ".")).resolve() == (
+        project.resolve()
+    )
+    match named, acts_here:
+        case str(), _ if named:
+            return named, "named"
+        case _, True:
+            implied = work_sessions.current(project)
+            return (implied, "implied") if implied else None
         case _:
             return None
 
@@ -217,6 +237,14 @@ def mismatch(current: str | None, request: tuple[str, str] | None) -> Failure | 
                 "work_session_mismatch",
                 f"this conversation works on {current}; switch with "
                 f"`harness work-session select {named}` before working on {named}",
+            )
+        case (implied, "implied") if current is not None and implied != current:
+            return Failure(
+                "work_session_mismatch",
+                f"this conversation works on {current}, but a command without `--session-id` "
+                f"uses the project's current work session, {implied}. Run it with "
+                f"`--session-id {current}`, or switch with "
+                f"`harness work-session select {implied}` to work on {implied}",
             )
         case _:
             return None
