@@ -11,6 +11,7 @@ import tarfile
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from scripts.harness import shellscan
 from scripts.harness.rules import (
@@ -217,6 +218,55 @@ class HumanOwnedTests(ShellscanTestCase):
         self.assertEqual(
             shell_human_owned_write(call, self.repo), ".harness/settings.json"
         )
+
+
+# Each of these used to end the scan with an exception: a variable operand, or a NUL, reached the
+# lookup of a patch on disk. A patch that cannot be read could write anything in the repository,
+# unless it is applied in a directory that is not the repository.
+UNREADABLE_PATCHES = (
+    ("git apply $P", True),
+    ("for f in a b; do git apply $f; done", True),
+    ("cat > /tmp/x <<'EOF'\nhello\nEOF\nfor f in a b; do git apply $f; done", True),
+    ("S=/x; for d in $S/*; do git apply $d; done", True),
+    ("git apply 'p\x00.patch'", True),
+    ("git -C $d apply p.patch", False),
+    ("cd /tmp && for f in a b; do git apply $f; done", False),
+)
+
+
+def nested(inner: str, levels: int) -> str:
+    return "echo " + "$(echo " * levels + inner + ")" * levels
+
+
+class UnreadableCommandTests(ShellscanTestCase):
+    def test_a_patch_that_cannot_be_read_is_a_decision_not_a_crash(self) -> None:
+        for command, denied in UNREADABLE_PATCHES:
+            with self.subTest(command=command):
+                self.assertIs(shell_writes_human_owned(command, self.repo), denied)
+
+    def test_nesting_past_the_limit_counts_as_the_words_it_names(self) -> None:
+        levels = shellscan.MAX_DEPTH + 2
+        self.assertTrue(
+            shell_writes_human_owned(
+                nested("cp x .harness/settings.json", levels), self.repo
+            )
+        )
+        self.assertFalse(shell_writes_human_owned(nested("ls lib", levels), self.repo))
+
+    def test_any_failure_inside_the_scan_counts_as_the_words_it_names(self) -> None:
+        with mock.patch.object(shellscan, "_classify", side_effect=RuntimeError("x")):
+            self.assertIn(
+                ".harness/settings.json",
+                shellscan.scan("cp x .harness/settings.json").unresolved,
+            )
+            self.assertTrue(
+                shell_writes_human_owned("cp x .harness/settings.json", self.repo)
+            )
+            self.assertFalse(shell_writes_human_owned("cp x lib/a.dart", self.repo))
+            call = make_call("shell", {}, kind="shell", command="cp x lib/a.g.dart")
+            self.assertEqual(
+                shell_writes_matching(call, self.repo, ["**/*.g.dart"]), "lib/a.g.dart"
+            )
 
 
 NO_TRACKERS = TrackerPolicy((), (), (), frozenset(), "")

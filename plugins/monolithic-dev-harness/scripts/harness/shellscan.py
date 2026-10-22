@@ -32,6 +32,7 @@ from dataclasses import dataclass, field
 from itertools import islice
 from pathlib import Path
 
+from core.result import attempt, value_or
 from harness.shell_literals import expansion_source
 from harness.shell_parse_cache import parse
 
@@ -595,7 +596,7 @@ def _regular_file(
     )
     try:
         info = candidate.stat()
-    except OSError:
+    except (OSError, ValueError):
         return None
     return candidate if stat.S_ISREG(info.st_mode) and info.st_size <= limit else None
 
@@ -1027,7 +1028,23 @@ def scan(
     `unknown_writes=False` drops the fail-closed default for commands this module does not know
     (`flutter test`, `harness doctor`): they count as writing nothing. The protection rules keep the
     default; a check that only asks "is this plainly a write?" turns it off.
+
+    Never raises: a command that cannot be read counts as naming every word it contains, so a caller
+    refuses it only when a protected path is among them.
     """
+    return value_or(
+        attempt(
+            lambda: _scan(command, cwd, base, unknown_writes),
+            "shell_unreadable",
+            "reading the shell command",
+        ),
+        ShellWrites((), (), tuple(dict.fromkeys(words_in(command)))),
+    )
+
+
+def _scan(
+    command: str, cwd: str | None, base: Path | None, unknown_writes: bool
+) -> ShellWrites:
     writes = _Writes()
     command = expand_plain_variables(command)
     for invocation in invocations(command, cwd):
