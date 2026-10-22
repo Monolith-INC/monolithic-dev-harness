@@ -54,14 +54,25 @@ def test_an_approval_covers_only_its_own_session(tmp_path: Path) -> None:
 
 def test_a_project_wide_approval_does_not_cover_a_session(tmp_path: Path) -> None:
     project(tmp_path)
-    native(tmp_path, "prompt", {"prompt": "approve HB-TEST1"})
-    assert "deny" not in write(tmp_path, None)
+    state.open_approval(tmp_path, "HB-TEST1", 20)
+    assert "approval-required" in write(tmp_path, None)
     assert "approval-required" in write(tmp_path, "native-a")
+
+
+def test_a_project_wide_approval_covers_a_project_with_no_work_session(
+    tmp_path: Path,
+) -> None:
+    write_settings(tmp_path, tracker=SETTINGS["tracker"], scm=SETTINGS["scm"])
+    state.set_tracking_mode(tmp_path, "skipped")
+    assert "approval-required" in write(tmp_path, None)
+    native(tmp_path, "prompt", {"prompt": "approve HB-TEST1"})
+    assert state.active_approval(tmp_path) is not None
+    assert "deny" not in write(tmp_path, None)
 
 
 def test_writes_are_logged_against_the_session_window(tmp_path: Path) -> None:
     first, _ = project(tmp_path)
-    native(tmp_path, "prompt", {"prompt": "approve HB-PROJ1"})
+    state.open_approval(tmp_path, "HB-PROJ1", 20)
     native(tmp_path, "prompt", {"session_id": "native-a", "prompt": "approve HB-SESS1"})
     write(tmp_path, "native-a")
     approvals = tmp_path / ".harness" / "state" / "approvals"

@@ -332,7 +332,7 @@ def pending(repo: Path, work_session_id: str | None = None) -> Pending | None:
     """
     from harness import work_sessions
 
-    first = work_session_id or work_sessions.current(repo)
+    first = work_sessions.acting(repo, work_session_id)
     for scope in (first, None) if first else (None,):
         value = record(repo, scope)
         if value and value.get("status") == "pending":

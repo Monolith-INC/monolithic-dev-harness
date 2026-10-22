@@ -116,8 +116,8 @@ def _work_session(
 
     root = Path(project_root)
     match work_session_context.for_payload(root, client, payload):
-        case Ok(str() as bound):
-            return bound
+        case Ok(bound):
+            return work_sessions.acting(root, bound)
         case _:
             return work_sessions.current(root)
 

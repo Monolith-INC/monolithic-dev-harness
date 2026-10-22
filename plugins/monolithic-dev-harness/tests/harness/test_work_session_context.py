@@ -92,3 +92,13 @@ def test_corrupt_host_session_link_fails_closed(tmp_path: Path) -> None:
         work_session_context.resolve_session(tmp_path, "codex", "native-session-2"),
         Err,
     )
+
+
+def test_a_conversation_with_no_link_acts_in_the_projects_current_session(
+    tmp_path: Path,
+) -> None:
+    assert work_sessions.acting(tmp_path, None) is None
+    first = work_sessions.start(tmp_path, "DAY-001").value
+    second = work_sessions.start(tmp_path, "DAY-002").value
+    assert work_sessions.acting(tmp_path, None) == second.id
+    assert work_sessions.acting(tmp_path, first.id) == first.id

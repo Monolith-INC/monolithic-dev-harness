@@ -309,8 +309,7 @@ def _current_as_json(project: Path, session: work_sessions.Session) -> dict:
 
 def _with_current_session(args: argparse.Namespace) -> argparse.Namespace:
     """Nobody has to name the work session: an unnamed one is the project's current session."""
-    if args.session_id is None:
-        args.session_id = work_sessions.current(Path(args.repo).resolve())
+    args.session_id = work_sessions.acting(Path(args.repo).resolve(), args.session_id)
     return args
 
 

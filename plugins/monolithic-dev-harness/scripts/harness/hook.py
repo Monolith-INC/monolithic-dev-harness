@@ -239,7 +239,11 @@ def _governed_pre_tool(
             return _fail(host, call, f"the settings cannot be used: {failure.message}")
         case Ok(chosen):
             decision = rules.evaluate(
-                call, repo, chosen, tracker_policy.build(repo, loaded), work_session_id
+                call,
+                repo,
+                chosen,
+                tracker_policy.build(repo, loaded),
+                work_sessions.acting(repo, work_session_id),
             )
     match decision.allowed:
         case True:
@@ -639,7 +643,12 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
             f"[harness] revoked {state.revoke_approvals(repo)} open approval window(s)."
         )
     for approval_id in dict.fromkeys(m.upper() for m in APPROVE_RE.findall(prompt)):
-        state.open_approval(repo, approval_id, window, work_session_id=work_session_id)
+        state.open_approval(
+            repo,
+            approval_id,
+            window,
+            work_session_id=work_sessions.acting(repo, work_session_id),
+        )
         notes.append(
             f"[harness] approval {approval_id} recorded; tracker/SCM writes are open for {window} minutes."
             + _pin_reviewed_notes(repo, approval_id, None)
@@ -1194,7 +1203,8 @@ def _open_approval(
     scope: str | None,
     binds: dict[str, Any] | None = None,
 ) -> str:
-    """Open an approval for the conversation that approved; it covers only that work session.
+    """Open an approval for the conversation that approved; it covers only the work session that
+    conversation acts in: its own, else the project's current one.
 
     A gate's approval is tied to what the human reviewed and lasts until it changes; a general one
     is a short window.
@@ -1205,7 +1215,7 @@ def _open_approval(
         approval_id,
         window,
         question,
-        work_session_id=scope,
+        work_session_id=work_sessions.acting(repo, scope),
         binds=_with_bodies(repo, binds),
     )
     lasts = (

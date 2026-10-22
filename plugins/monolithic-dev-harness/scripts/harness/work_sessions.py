@@ -256,6 +256,11 @@ def current(project: Path) -> str | None:
             return None
 
 
+def acting(project: Path, linked: str | None) -> str | None:
+    """The work session something belongs to: the one it names or is linked to, else the current."""
+    return linked or current(project)
+
+
 def _current_active(active: tuple[str, ...], remembered: object) -> str | None:
     match active:
         case _ if remembered in active:
