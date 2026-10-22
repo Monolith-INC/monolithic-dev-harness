@@ -42,6 +42,7 @@ from . import (
     state,
     tracker_policy,
     work_sessions,
+    workflow,
 )
 from .settings import Settings
 from .tracker_policy import TrackerPolicy
@@ -825,11 +826,7 @@ def _context_unchanged(repo: Path, binds: dict[str, Any]) -> bool:
         path = repo / str(name)
         if not path.exists() and path.resolve().is_relative_to(tickets):
             continue
-        try:
-            current = hashlib.sha256(path.read_bytes()).hexdigest()
-        except OSError:
-            return False
-        if current != digest:
+        if workflow.file_digest(path) != Ok(digest):
             return False
     return True
 

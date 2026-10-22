@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import secrets
 from dataclasses import dataclass
@@ -10,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
-from harness import commands, gates, questions, setup_reviews, state
+from harness import commands, gates, questions, setup_reviews, state, workflow
 
 RELATIVE_PATH = Path(".harness/state/decision.json")
 HISTORY = "decision-history.json"
@@ -565,7 +564,8 @@ def _resolve(
     if questions.choice_label(
         answer
     ).casefold() not in questions.DECLINE_LABELS and any(
-        _digest(repo / name) != digest for name, digest in current.get("artifacts", ())
+        workflow.file_digest(repo / name) != Ok(digest)
+        for name, digest in current.get("artifacts", ())
     ):
         raise ValueError(
             "the reviewed artifact changed; return to its review before approving"
@@ -705,10 +705,6 @@ def _fallback_record(current: dict[str, Any], transport: str) -> Result[dict[str
                 "decision_invalid",
                 "fallback requires a pending question and a simpler transport",
             )
-
-
-def _digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def status(repo: Path, work_session_id: str | None = None) -> str:

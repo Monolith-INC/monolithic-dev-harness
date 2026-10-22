@@ -74,6 +74,24 @@ def test_stale_review_cannot_be_approved_but_can_be_revised(tmp_path: Path) -> N
     assert not decisions.waiting(tmp_path)
 
 
+def test_marking_a_reviewed_document_active_keeps_its_approval(tmp_path: Path) -> None:
+    spec = tmp_path / "spec.md"
+    spec.write_text("---\nstatus: draft\n---\n\nThe spec.\n", encoding="utf-8")
+    decisions.begin(
+        tmp_path,
+        "d1",
+        "Approve?",
+        ("Approve", "Revise"),
+        "chat",
+        (("spec.md", workflow.file_digest(spec).value),),
+        True,
+    )
+    spec.write_text("---\nstatus: active\n---\n\nThe spec.\n", encoding="utf-8")
+    native(tmp_path, "prompt", {"prompt": "Approve"})
+    assert not decisions.waiting(tmp_path)
+    assert (decisions.record(tmp_path) or {})["answer"] == "Approve"
+
+
 def test_pending_gate_blocks_workflow_and_gateway_before_configuration(
     tmp_path: Path,
 ) -> None:

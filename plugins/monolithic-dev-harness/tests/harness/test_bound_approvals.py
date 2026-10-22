@@ -93,6 +93,31 @@ def test_a_publish_approval_holds_until_the_drafts_change(tmp_path: Path) -> Non
     assert "approval-required" in denied and "changed" in denied
 
 
+def test_marking_a_reviewed_draft_active_keeps_the_publish_approval(
+    tmp_path: Path,
+) -> None:
+    first, _ = project(tmp_path)
+    drafts = tmp_path / "drafts.md"
+    drafts.write_text("---\nstatus: draft\n---\n\nthree stories\n")
+    approve(
+        tmp_path,
+        first,
+        "native-a",
+        "publish-items",
+        "--value",
+        "count=3",
+        "--value",
+        "tracker=Azure Boards",
+        "--artifact",
+        "drafts.md",
+    )
+    assert "deny" not in tracker_write(tmp_path, "native-a")
+    drafts.write_text("---\nstatus: active\n---\n\nthree stories\n")
+    assert "deny" not in tracker_write(tmp_path, "native-a")
+    drafts.write_text("---\nstatus: active\n---\n\nfour stories\n")
+    assert "approval-required" in tracker_write(tmp_path, "native-a")
+
+
 def test_a_branch_approval_covers_only_that_branch(tmp_path: Path) -> None:
     first, _ = project(tmp_path)
     subprocess.run(["git", "init", "-q", "-b", "feat/x", str(tmp_path)], check=True)
