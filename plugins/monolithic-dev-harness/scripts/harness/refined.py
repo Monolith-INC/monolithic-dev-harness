@@ -8,6 +8,7 @@ when it passes in either.
 
 from __future__ import annotations
 
+import html
 import sys
 from collections.abc import Mapping
 from pathlib import Path
@@ -40,11 +41,14 @@ _POINTS = ("story_points", "Microsoft.VSTS.Scheduling.StoryPoints", "estimate")
 
 
 def _points(data: Mapping[str, Any]) -> float | None:
+    fields = data.get("fields")
+    sources = (data, fields) if isinstance(fields, Mapping) else (data,)
     return next(
         (
             points
+            for source in sources
             for name in _POINTS
-            if (points := as_float(data.get(name))) is not None
+            if (points := as_float(source.get(name))) is not None
         ),
         None,
     )
@@ -54,7 +58,7 @@ def _failures(item: WorkItem, language: str) -> list[str]:
     record = ArtifactRecord(
         type=_TYPES[item.kind],
         title=item.title,
-        body=item.description,
+        body=html.unescape(item.description),
         story_points=_points(item.provider_data),
         parent_id=item.parent_id or None,
         provider="tracker",

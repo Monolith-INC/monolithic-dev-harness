@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 import tempfile
 import unittest
@@ -661,6 +662,21 @@ class LocalTest(unittest.TestCase):
             (2, "en", ["ticket", "user-story"]),
         )
         self.assertNotIn("status", kept)
+
+
+class EnvelopeTest(unittest.TestCase):
+    def test_a_comment_the_tracker_stored_html_escaped_is_still_an_artifact(
+        self,
+    ) -> None:
+        draft = ArtifactDraft("spec", "Spec", 'body with "quotes" & <tags>', "1")
+        stored = html.escape(artifacts.encode(draft))
+        self.assertIn("&quot;kind&quot;", stored)
+        self.assertEqual(artifacts.decode(stored), Ok(draft))
+
+    def test_an_ordinary_comment_is_not_an_artifact(self) -> None:
+        self.assertEqual(
+            artifacts.decode("&quot;thanks&quot;").failure.code, "not_an_artifact"
+        )
 
 
 class PublishTest(unittest.TestCase):

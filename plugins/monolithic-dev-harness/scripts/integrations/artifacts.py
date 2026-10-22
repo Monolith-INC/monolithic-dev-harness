@@ -7,6 +7,7 @@ is published once however often the workflow retries.
 
 from __future__ import annotations
 
+import html
 import json
 import time
 from collections.abc import Callable, Mapping
@@ -39,10 +40,11 @@ def encode(draft: ArtifactDraft) -> str:
 
 def decode(stored: str) -> Result[ArtifactDraft]:
     """The artifact a text carries, or `Err` when the text is an ordinary comment."""
-    header_line, _, body = stored.removeprefix(PREFIX).lstrip().partition("\n")
+    plain = html.unescape(stored)
+    header_line, _, body = plain.removeprefix(PREFIX).lstrip().partition("\n")
     return bind(
         Ok(None)
-        if stored.startswith(PREFIX)
+        if plain.startswith(PREFIX)
         else err("not_an_artifact", "the text has no artifact envelope"),
         lambda _: bind(
             attempt(
