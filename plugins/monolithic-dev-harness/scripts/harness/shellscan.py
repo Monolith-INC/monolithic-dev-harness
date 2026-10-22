@@ -86,7 +86,7 @@ NON_WRITERS = frozenset(
             "tree",
             "true",
         ),
-        *("wc", "which", "[", "type"),
+        *("wc", "which", "[", "[[", "type"),
         *("b2sum", "cksum", "md5sum", "sha1sum", "sha224sum", "sha256sum", "sha384sum"),
         *("sha512sum", "shasum"),
     }
@@ -159,8 +159,11 @@ _REDIRECT_OUT = frozenset({">", ">>", ">|", "&>", "&>>", ">&", "<>"})
 _CONTROL = frozenset({"&&", "||", ";", ";;", "&", "|", "|&", "(", ")"})
 # Words that start or end a compound command; skipped where a command name would be.
 _KEYWORDS = frozenset(
-    {"if", "then", "else", "elif", "fi", "do", "done", "while", "until", "!", "{", "}"}
+    {"if", "then", "else", "elif", "fi", "do", "done", "while", "until", "esac"}
+    | {"!", "{", "}"}
 )
+# Words that open a loop or a `case`; their line lists words to go through, it runs nothing.
+_HEADERS = frozenset({"for", "select", "case"})
 # `2>/dev/null`, `1>&2`, `3<>file`: the number names a file descriptor, not an argument.
 _FD_PREFIX = re.compile(r"(^|[\s;&|(])\d+(?=[<>])")
 # A heredoc delimiter is a word; `$((1<<2))` is arithmetic, not a heredoc.
@@ -448,6 +451,8 @@ def _invocations(
         words = _unwrap(segment.words)
         name = posixpath.basename(words[0]) if words else ""
         args = tuple(words[1:])
+        if name in _HEADERS:
+            continue
         if name in {"cd", "pushd"}:
             destination = next((a for a in args if not a.startswith("-")), "")
             if not destination or destination == "-":
@@ -991,7 +996,7 @@ def _writes_operands(invocation: Invocation) -> bool:
 
 
 # A statement that only assigns a plain value: `F=docs/a.md`, `D="Tickets/Ready"`.
-_ASSIGNMENT = re.compile(
+_PLAIN_ASSIGNMENT = re.compile(
     r"(?:^|(?<=[;&|\n(]))\s*([A-Za-z_][A-Za-z0-9_]*)="
     r"(?:'([^'$`]*)'|\"([^\"$`]*)\"|([^\s;&|$`'\"()<>{}]*))"
     r"(?=\s*(?:$|[;&|\n)]))"
@@ -1005,7 +1010,7 @@ def expand_plain_variables(command: str) -> str:
     as it is, so the scanner still treats it as naming anything.
     """
     values: dict[str, str] = {}
-    for match in _ASSIGNMENT.finditer(command):
+    for match in _PLAIN_ASSIGNMENT.finditer(command):
         name = match.group(1)
         value = next(group for group in match.groups()[1:] if group is not None)
         bindings = re.findall(
