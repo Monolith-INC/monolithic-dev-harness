@@ -6,6 +6,32 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0-rc.3] - 2026-10-22
+
+### Added
+
+- Pull request review threads through the gateway: `scm_create_review_thread`,
+  `scm_update_thread_comment` and `scm_set_thread_status` (Azure Repos; other code hosts refuse
+  them). The `reply-pr` approval for a pull request covers all four review-thread writes on it
+  (ADR-0012).
+
+### Fixed
+
+- A conversation not linked to a work session acts in the project's current one, so a write the
+  user approved there is no longer denied while the gate reports the approval as given. The gate
+  reuses an answer only when the write check would accept it, never from an ended session, and a
+  command that would act in another conversation's session is refused with how to name it.
+- An approved document stays approved when its `status:` line changes: the answer check and the
+  publish check compare the same digest as the review step.
+- Azure DevOps descriptions and artifact markers stored HTML-escaped are read as written, and story
+  points kept under `fields` count, so refined items are recognized.
+- The shell scan behind `human-owned`, `generated-files` and `hook-entry`: it never raises (a
+  variable operand of `git apply` crashed the hook); loop and `case` headers, `[[ … ]]` tests and
+  assignment prefixes are shell syntax; inline Python that only reads is followed to no writes;
+  words after `cd … &&` are judged from the new directory, and a `.harness` outside the repository
+  is not the project's. `hook-entry` fires only when a command would run the hook, so staging,
+  committing or copying its source is allowed.
+
 ## [0.7.0-rc.2] - 2026-10-16
 
 ### Added
@@ -788,7 +814,9 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.1...HEAD
+[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.3...HEAD
+[0.7.0-rc.3]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.2...v0.7.0-rc.3
+[0.7.0-rc.2]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.1...v0.7.0-rc.2
 [0.7.0-rc.1]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.2...v0.7.0-rc.1
 [0.6.2]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.6.1
