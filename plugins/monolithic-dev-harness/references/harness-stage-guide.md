@@ -40,8 +40,11 @@ may still require their own dependencies.
 
 You never need to carry the work-session ID. Starting, resuming, or selecting a work session makes it
 the project's current session, and every `workflow` and `decision` command without `--session-id`
-uses it (else the only active session, else the project as a whole). Session checkpoints are
-stored with that session.
+uses it (else the only active session, else the project as a whole). A conversation not yet linked
+to a session, such as a resumed chat, acts in that same current session: its commands and the
+approvals that cover its writes read the same records. A conversation linked to another session
+passes its own `--session-id`; the hooks refuse a `workflow` or `decision` command that would use
+the current session instead. Session checkpoints are stored with that session.
 Project settings such as tracker and planning folder remain shared. Onboarding establishes the
 tracker and runtime before session creation. A project work session does not require Git, a project
 contract, or starting the checkout-bound implementation session.

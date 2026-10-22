@@ -228,9 +228,12 @@ Brazilian Portuguese; the agent names the gate and the harness shows the project
 (ADR-0011). A menu uses the best native control the host offers and falls back silently to the same
 numbered menu in chat. Replies are matched loosely on every transport (`2`, `the second`, the label,
 a unique part of it), but a loose reply never selects an approving option unless it says "approve".
-An answer about unchanged content is reused rather than asked again. No command needs a work-session id:
-the harness uses the current session (last started, resumed, or selected), and questions work even
-with no session. In Claude and Codex, a stop guard sends the agent back once when
+An answer about unchanged content is reused rather than asked again, and only while the write
+hook would accept the approval it opened for the same conversation. No command needs a work-session
+id: the harness uses the current session (last started, resumed, or selected), and questions work
+even with no session. A conversation not yet linked to a session acts in that current session, for
+its commands and for the approvals that cover its writes; a linked one that runs a command which
+would use another session is refused until it passes its own `--session-id`. In Claude and Codex, a stop guard sends the agent back once when
 a turn would end mid-workflow with no question and no pending menu, with the saved next action. The full contract is
 `plugins/monolithic-dev-harness/references/human-decisions.md`.
 
