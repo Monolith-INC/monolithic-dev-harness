@@ -123,6 +123,8 @@ KNOWN_WRITERS = frozenset(
 # Commands that remove what they are given, recursively when asked to.
 REMOVERS = frozenset({"rm", "rmdir", "shred", "unlink"})
 SHELLS = frozenset({"sh", "bash", "dash", "zsh", "ksh", "fish"})
+# Commands that run lines of their own, which the words of the line that holds them do not show.
+_SCRIPT_RUNNERS = SHELLS | {"eval", "xargs", ".", "source"}
 INTERPRETERS = re.compile(
     r"^(python[0-9.]*|node|nodejs|deno|bun|perl|ruby|php|osascript|lua)$"
 )
@@ -189,6 +191,8 @@ class Invocation:
     parsed: bool = (
         True  # False when the line could not be tokenized and was split on whitespace
     )
+    # The command's words before its assignments and wrappers were taken off.
+    raw: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -462,6 +466,7 @@ def _invocations(
             stdin_text=segment.stdin_text,
             piped_from=tuple(pipeline),
             parsed=parsed,
+            raw=tuple(segment.words),
         )
         found.append(invocation)
         found.extend(_dispatched(invocation, depth))
@@ -470,9 +475,9 @@ def _invocations(
 
 
 def plain_git_context(command: str) -> bool:
-    """Staging exemptions require Git-only calls with no environment-changing wrappers."""
-    return all(
-        invocation.name == "git" for invocation in invocations(command)
+    """Git exemptions require that nothing on the line sets Git's environment or runs a script."""
+    return not any(
+        invocation.name in _SCRIPT_RUNNERS for invocation in invocations(command)
     ) and not any(
         _ASSIGNMENT.match(word)
         or posixpath.basename(word)

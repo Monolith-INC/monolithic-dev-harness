@@ -102,6 +102,68 @@ def test_git_staging_cannot_execute_hooks_through_an_editor(mode: str) -> None:
     )
 
 
+RELATIVE_HOOK = "scripts/harness/hook.py"
+COMMIT_MESSAGE = "git commit -m \"$(cat <<'EOF'\nfix: x\nEOF\n)\""
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        f"cd /repo && git add {RELATIVE_HOOK}",
+        f"git add {RELATIVE_HOOK} && {COMMIT_MESSAGE}",
+        f"ruff check {RELATIVE_HOOK} && git add {RELATIVE_HOOK}",
+        f"cd {HOOK.parent} && git add hook.py",
+        f"git commit -m 'fix {RELATIVE_HOOK} and harness.hook'",
+        f"git log --oneline -- {HOOK}",
+        f"git -C /tmp blame {HOOK}",
+        f"git ls-files {RELATIVE_HOOK}",
+        f"git rm --cached {RELATIVE_HOOK}",
+        f"git mv {RELATIVE_HOOK} scripts/harness/hook_old.py",
+        f"git restore {RELATIVE_HOOK}",
+        f"cp {HOOK} /tmp/h.py",
+        f"cp {RELATIVE_HOOK} /tmp/scratch/",
+        f"cd /repo && cp {RELATIVE_HOOK} /tmp/scratch/",
+        f"mv {HOOK} /tmp/h.py",
+        f"ln -s {HOOK} /tmp/h.py",
+        f"install -m 0644 {HOOK} /tmp/h.py",
+    ),
+)
+def test_naming_the_hook_source_is_not_running_it(command: str) -> None:
+    assert not rules.runs_harness_hook(command)
+
+
+@pytest.mark.parametrize(
+    "command",
+    (
+        f"python3 {HOOK} --event prompt",
+        f"cp {HOOK} /tmp/h.py && python3 {HOOK} --event prompt",
+        f"git add {RELATIVE_HOOK}; python3 {RELATIVE_HOOK} --event prompt",
+        f"cp {HOOK} /tmp/h.py $(python3 {HOOK} --event prompt)",
+        "git commit -m x && python3 -c 'import hook_runtime'",
+        f"cd {HOOK.parent} && python3 hook.py --event prompt",
+        f"FOO=1 git add -- {HOOK}",
+        f"bash -c true; git add -- {HOOK}",
+        f"GIT_EDITOR='python3 {HOOK} #' git commit -m x",
+        f"GIT_EXTERNAL_DIFF='python3 {HOOK}' git diff -- notes.txt",
+        f"git -c core.hooksPath=/tmp commit -m x -- {HOOK}",
+        f"git commit -m x && {HOOK} --event prompt",
+    ),
+)
+def test_running_the_hook_is_still_refused_next_to_staging_and_copying(
+    command: str,
+) -> None:
+    assert rules.runs_harness_hook(command)
+
+
+def test_staging_and_copying_the_hook_source_reach_the_other_rules(project) -> None:
+    repo, _, _ = project
+    for command in (
+        f"cd {repo} && git add {RELATIVE_HOOK}",
+        f"cp {HOOK} /tmp/h.py",
+    ):
+        assert "hook-entry" not in bash(repo, command, session="native-x"), command
+
+
 @pytest.mark.parametrize(
     "command",
     (
@@ -212,7 +274,6 @@ def test_running_the_hooks_directly_is_refused(project) -> None:
         f'echo "{payload}" | python3 {HOOK} --host codex --event prompt',
         f"python3 {HOOK} --host codex --event prompt < reply.json",
         f"cd {HOOK.parent} && python3 hook.py --host codex --event prompt",
-        f"cp {HOOK} /tmp/h.py",
         "python3 -c 'import hook_runtime'",
         "python3 -c 'from harness import hook'",
     ):

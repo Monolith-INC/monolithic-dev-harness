@@ -391,26 +391,47 @@ _HOOK_MODULE = re.compile(
 
 
 def runs_harness_hook(command: str) -> bool:
-    """Whether a shell command runs (or copies) the harness's own hook entry points.
+    """Whether a shell command runs the harness's own hook entry points.
 
     The prompt and answer hooks record the user's answers and approvals from what they read on
-    stdin, so an agent that pipes a payload into them could answer for the user.
+    stdin, so an agent that pipes a payload into them could answer for the user. Reading, staging,
+    committing or placing the source is not running it.
     """
+    plain = shellscan.plain_git_context(command)
     return any(
-        _invocation_mentions_hook(
-            invocation, allow_staging=shellscan.plain_git_context(command)
-        )
+        _invocation_mentions_hook(invocation, plain=plain)
         for invocation in shellscan.invocations(command)
     )
 
 
-def _stages_hook_source(args: tuple[str, ...]) -> bool:
-    """Allow index staging with directory/filemode options, never executable Git configuration."""
+# Git calls that read, stage or record a file without running it.
+_INERT_GIT = frozenset(
+    {
+        "blame",
+        "commit",
+        "diff",
+        "log",
+        "ls-files",
+        "mv",
+        "restore",
+        "rm",
+        "show",
+        "status",
+    }
+)
+# Commands that put a file somewhere else without running it.
+_PLACERS = frozenset({"cp", "install", "ln", "mv"})
+
+
+def _git_inert(args: tuple[str, ...]) -> bool:
+    """Directory and filemode options are fine; an editor, external diff or other configuration is not."""
     match args:
+        case ("-C", _, *rest) | ("-c", "core.filemode=false", *rest):
+            return _git_inert(tuple(rest))
         case ("add", *rest):
             return _noninteractive_staging(tuple(rest))
-        case ("-C", _, *rest) | ("-c", "core.filemode=false", *rest):
-            return _stages_hook_source(tuple(rest))
+        case (subcommand, *rest) if subcommand in _INERT_GIT:
+            return "--ext-diff" not in rest
         case _:
             return False
 
@@ -440,53 +461,29 @@ def _noninteractive_staging(args: tuple[str, ...]) -> bool:
             return False
 
 
-def _invocation_mentions_hook(
-    invocation: shellscan.Invocation, *, allow_staging: bool
-) -> bool:
-    """Readers may inspect hooks; execution and copying remain protected."""
+def _leaves_hook_alone(invocation: shellscan.Invocation, *, plain: bool) -> bool:
+    name, args = invocation.name, invocation.args
     return (
-        invocation.name not in shellscan.NON_WRITERS
-        and not (
-            invocation.name == "ruff"
-            and invocation.args[:1] in (("check",), ("format",))
+        name in shellscan.NON_WRITERS
+        or name in _PLACERS
+        or (name == "ruff" and args[:1] in (("check",), ("format",)))
+        or (name == "git" and plain and _git_inert(args))
+        or (
+            name in shellscan.IN_PLACE_FLAGS
+            and not any(shellscan.IN_PLACE_FLAGS[name].match(arg) for arg in args)
         )
-        and not (
-            invocation.name == "git"
-            and (
-                (allow_staging and _stages_hook_source(invocation.args))
-                or (
-                    invocation.args[:1] in (("diff",), ("show",), ("status",))
-                    and "--ext-diff" not in invocation.args
-                )
-            )
-        )
-        and (
-            invocation.name not in shellscan.IN_PLACE_FLAGS
-            or any(
-                shellscan.IN_PLACE_FLAGS[invocation.name].match(argument)
-                for argument in invocation.args
-            )
-        )
-        and (
-            any(_HOOK_MODULE.search(argument) for argument in invocation.args)
-            or (
-                any(
-                    _HOOK_SCRIPT.search(argument)
-                    for argument in (
-                        invocation.name,
-                        *invocation.args,
-                        invocation.cwd or "",
-                    )
-                )
-                and any(
-                    "harness" in argument
-                    for argument in (
-                        invocation.name,
-                        *invocation.args,
-                        invocation.cwd or "",
-                    )
-                )
-            )
+    )
+
+
+def _invocation_mentions_hook(invocation: shellscan.Invocation, *, plain: bool) -> bool:
+    """Whether a command names the hook where it could run it, assignments and wrappers included."""
+    words = invocation.raw or (invocation.name, *invocation.args)
+    where = (*words, invocation.cwd or "")
+    return not _leaves_hook_alone(invocation, plain=plain) and (
+        any(_HOOK_MODULE.search(word) for word in words)
+        or (
+            any(_HOOK_SCRIPT.search(word) for word in where)
+            and any("harness" in word for word in where)
         )
     )
 
