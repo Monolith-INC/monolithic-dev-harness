@@ -1,0 +1,206 @@
+{
+  "classification": "actual_native_events_sanitized_paths",
+  "events": [
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a16a56-fed3-70c2-8851-390b68ee6a0e",
+        "turnId": "01a16a56-fedd-7d43-9621-7483859bfb7e",
+        "run": {
+          "id": "subagent-start:5:/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.4/hooks/codex.hooks.json",
+          "eventName": "subagentStart",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "thread",
+          "sourcePath": "/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.4/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 5,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1792785450,
+          "completedAt": 1792785450,
+          "durationMs": 245,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1792785450344
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a16a56-fed3-70c2-8851-390b68ee6a0e",
+        "turnId": "01a16a56-fedd-7d43-9621-7483859bfb7e",
+        "run": {
+          "id": "post-tool-use:3:/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.4/hooks/codex.hooks.json:exec-bbd0182f-6282-4b16-bd09-fa48ab30076b",
+          "eventName": "postToolUse",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.4/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 3,
+          "status": "failed",
+          "statusMessage": null,
+          "startedAt": 1792785452,
+          "completedAt": 1792785452,
+          "durationMs": 195,
+          "entries": [
+            {
+              "kind": "error",
+              "text": "hook returned invalid post-tool-use JSON output"
+            }
+          ]
+        }
+      },
+      "emittedAtMs": 1792785452667
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a16a56-fed3-70c2-8851-390b68ee6a0e",
+        "turnId": "01a16a56-fedd-7d43-9621-7483859bfb7e",
+        "run": {
+          "id": "post-tool-use:3:/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.4/hooks/codex.hooks.json:exec-63037704-330b-48b2-994a-729f08c30fd5",
+          "eventName": "postToolUse",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.4/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 3,
+          "status": "failed",
+          "statusMessage": null,
+          "startedAt": 1792785457,
+          "completedAt": 1792785457,
+          "durationMs": 195,
+          "entries": [
+            {
+              "kind": "error",
+              "text": "hook returned invalid post-tool-use JSON output"
+            }
+          ]
+        }
+      },
+      "emittedAtMs": 1792785457750
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a16a56-fed3-70c2-8851-390b68ee6a0e",
+        "turnId": "01a16a56-fedd-7d43-9621-7483859bfb7e",
+        "run": {
+          "id": "subagent-stop:6:/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.4/hooks/codex.hooks.json",
+          "eventName": "subagentStop",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.4/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 6,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1792785459,
+          "completedAt": 1792785459,
+          "durationMs": 199,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1792785459297
+    },
+    {
+      "method": "turn/completed",
+      "params": {
+        "threadId": "01a16a56-fed3-70c2-8851-390b68ee6a0e",
+        "turn": {
+          "id": "01a16a56-fedd-7d43-9621-7483859bfb7e",
+          "rootTurnId": "01a16a56-e2fe-7b81-adb4-8da1d898a9b8",
+          "items": [
+            {
+              "type": "agentMessage",
+              "id": "msg_0c8b4ca744fa0221016adbbc32858081918d03299043d2fb91",
+              "text": "Attempted the first task, but the harness denied it.\n\n- `exec_command` failed before execution: `app-server socket directory must be a user-owned directory with mode 0700`.\n- `apply_patch` failed twice when creating `docs/planning/trial-note.md`: `Failed to write file /fixture/installed/project2/docs/planning/trial-note.md`.\n- No file was created or modified.",
+              "phase": "final_answer",
+              "memoryCitation": null,
+              "delivery": null,
+              "questions": null
+            }
+          ],
+          "itemsView": "summary",
+          "status": "completed",
+          "error": null,
+          "startedAt": 1792785448,
+          "completedAt": 1792785459,
+          "durationMs": 10620
+        }
+      },
+      "emittedAtMs": 1792785459297
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a16a56-fed3-70c2-8851-390b68ee6a0e",
+        "turnId": "01a16a57-389f-7263-aa81-b9221ca35322",
+        "run": {
+          "id": "subagent-stop:6:/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.4/hooks/codex.hooks.json",
+          "eventName": "subagentStop",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.4/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 6,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1792785466,
+          "completedAt": 1792785467,
+          "durationMs": 200,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1792785467166
+    },
+    {
+      "method": "turn/completed",
+      "params": {
+        "threadId": "01a16a56-fed3-70c2-8851-390b68ee6a0e",
+        "turn": {
+          "id": "01a16a57-389f-7263-aa81-b9221ca35322",
+          "rootTurnId": "01a16a56-e2fe-7b81-adb4-8da1d898a9b8",
+          "items": [
+            {
+              "type": "agentMessage",
+              "id": "msg_0c8b4ca744fa0221016adbbc3a844881918c24838480c5e18e",
+              "text": "The follow-up append could not be applied.\n\n`apply_patch` reported:\n\n`Failed to read file to update /fixture/installed/project2/docs/planning/trial-note.md: No such file or directory (os error 2)`\n\nNo files were modified.",
+              "phase": "final_answer",
+              "memoryCitation": null,
+              "delivery": null,
+              "questions": null
+            }
+          ],
+          "itemsView": "summary",
+          "status": "completed",
+          "error": null,
+          "startedAt": 1792785463,
+          "completedAt": 1792785467,
+          "durationMs": 3637
+        }
+      },
+      "emittedAtMs": 1792785467166
+    }
+  ],
+  "binding": {
+    "child_native_session": "01a16a56-fed3-70c2-8851-390b68ee6a0e",
+    "completed_turns": [
+      "01a16a56-fedd-7d43-9621-7483859bfb7e",
+      "01a16a57-389f-7263-aa81-b9221ca35322"
+    ],
+    "parent_native_session": "01a16a56-e267-70c1-a477-be00ea2ee1b6",
+    "project": "/fixture/installed/project2",
+    "status": "stopped",
+    "turn_id": "01a16a57-389f-7263-aa81-b9221ca35322",
+    "version": 2,
+    "work_session_id": "WS-dfa63d48082f"
+  },
+  "log_sha256": "25f2ebce798fb9858d3b90df24c61787d3cb79643bd8e7a4dff533c33deb1338",
+  "limit": "Nested agent sandbox caused execution failure. Driver recursion failed during root completion; retained events and persisted binding prove two child turns, not successful writes."
+}

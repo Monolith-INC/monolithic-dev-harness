@@ -7,7 +7,10 @@
     {
       "path": "codex-rs/core/src/tools/handlers/request_user_input_async.rs",
       "sha256": "88d412979e5b5be773f3552044f0dd1f6babd692482e45371a97d976e70bac20",
-      "excerpt_lines": [131, 147]
+      "excerpt_lines": [
+        131,
+        147
+      ]
     },
     {
       "path": "codex-rs/hooks/src/schema.rs",
@@ -63,6 +66,14 @@
       "excerpt_lines": [
         59,
         77
+      ]
+    },
+    {
+      "path": "codex-rs/hooks/src/engine/output_parser.rs",
+      "sha256": "ae4b2a80569025e97d3ca39d5f4b7383c1c836ca29fe3980f18029ac4e00336f",
+      "excerpt_lines": [
+        409,
+        449
       ]
     }
   ]

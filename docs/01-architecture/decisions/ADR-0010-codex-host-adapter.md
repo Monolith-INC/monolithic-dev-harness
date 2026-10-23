@@ -2,7 +2,7 @@
 title: ADR-0010 Codex host adapter
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-30
+last_reviewed: 2026-10-23
 ---
 
 # ADR-0010: Support Codex as a host
@@ -15,12 +15,17 @@ registers the marketplace through the Codex CLI and creates a separate plugin co
 MCP paths. It installs two read-only Codex custom-agent TOMLs in the Codex agents directory.
 Codex must trust the installed hooks before they enforce policy.
 
-The Codex `PreToolUse` hook is registered for Bash, `apply_patch`, `request_user_input`, and MCP
-calls, with a `PostToolUse` hook for `request_user_input`. The host adapter parses `apply_patch`
-file headers and passes every target as a generic file path; neither the harness rules nor workflow
-policy parses Codex syntax or emits Codex JSON. Codex question requests use the native
-`request_user_input` picker when enabled, and the answer hook records only the matching user answer.
-`UserPromptSubmit` remains the typed-approval fallback (`approve HB-…`).
+The Codex hooks cover observed shell, patch, native question, collaboration and MCP names,
+including observed concatenated aliases. Lifecycle hooks bind native children and revoke their
+completed turns. The host adapter parses `apply_patch` file headers and passes every target as a
+generic file path; host-specific parsing and JSON stay outside the shared policy rules.
+
+Question transport depends on observed root capabilities and permitted decision class. Default
+synchronous `request_user_input` is optional-only and cannot request permission or escalation.
+The separately qualified async domain-review route binds the actual question to the pending
+decision, then captures its later answer; immediate delivery acknowledgement never answers it.
+`UserPromptSubmit` remains a conversation-bound typed recovery path. Neither typed recovery nor
+protocol delivery qualifies visible structured controls in Desktop.
 
 ## Consequences
 

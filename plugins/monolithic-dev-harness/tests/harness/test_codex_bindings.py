@@ -12,6 +12,8 @@ import pytest
 from core.result import Err, Ok
 from harness import hook, rules, state, work_sessions
 from host_adapters import codex_bindings, hook_bridge, work_session_context
+from host_adapters.codex_adapter import format_codex_decision
+from policy.events import PolicyDecision
 from tests.settings_fixture import write_settings
 
 
@@ -337,7 +339,74 @@ def test_child_cannot_record_human_authority(
         "sys.stdin", io.StringIO(json.dumps(payload(repo, prompt="approve HB-ABCD")))
     )
     assert hook.main(["--host", "codex", "--event", event]) == 0
-    assert "codex-child-authority" in capsys.readouterr().out
+    assert "children return human decision" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "event,hook_event_name",
+    (
+        ("prompt", "UserPromptSubmit"),
+        ("answer", "PostToolUse"),
+        ("startup", "PostToolUse"),
+    ),
+)
+def test_child_non_pretool_dispatch_uses_native_output_contract(
+    scoped: tuple[Path, str],
+    event: str,
+    hook_event_name: str,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, _ = scoped
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload(repo))))
+    assert hook.main(["--host", "codex", "--event", event]) == 0
+    output = capsys.readouterr().out.strip()
+    parsed = json.loads(output) if hook_event_name == "PostToolUse" else output
+    match hook_event_name:
+        case "PostToolUse":
+            assert parsed["hookSpecificOutput"]["hookEventName"] == hook_event_name
+        case "UserPromptSubmit":
+            assert "children return human decision" in parsed
+
+
+def test_child_ask_dispatch_remains_pretool_denial(
+    scoped: tuple[Path, str],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, _ = scoped
+    monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload(repo))))
+    assert hook.main(["--host", "codex", "--event", "ask"]) == 0
+    assert (
+        json.loads(capsys.readouterr().out)["hookSpecificOutput"]["permissionDecision"]
+        == "deny"
+    )
+
+
+def test_codex_allow_output_is_neutral_and_deny_preserves_pretool_contract() -> None:
+    assert format_codex_decision(PolicyDecision.allow()) == {}
+    assert format_codex_decision(PolicyDecision.deny("blocked")) == {
+        "hookSpecificOutput": {
+            "hookEventName": "PreToolUse",
+            "permissionDecision": "deny",
+            "permissionDecisionReason": "blocked",
+        }
+    }
+
+
+def test_root_dispatch_is_not_child_authority_blocked(
+    scoped: tuple[Path, str],
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    repo, _ = scoped
+    monkeypatch.setattr(
+        "sys.stdin",
+        io.StringIO(json.dumps({"cwd": str(repo), "session_id": "parent-native"})),
+    )
+    monkeypatch.setattr(hook, "handle_startup", Mock(return_value=0))
+    assert hook.main(["--host", "codex", "--event", "startup"]) == 0
+    assert "codex-child-authority" not in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(

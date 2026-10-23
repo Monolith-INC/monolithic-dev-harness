@@ -215,3 +215,25 @@ frozen scope. Interrupted/conflicted records stay terminal; same/missing/replaye
 turns and stale stop events cannot reactivate them. Focused hook integration
 checks exercise the normal governed path and preserve the suspension bypass.
 This correction still requires the updated archive's installed-host trial.
+
+## Published RC4 trial findings
+
+The actual installed RC4 plugin initialized all three MCP servers, and an async
+question plus later native operator response recorded an answered harness decision.
+The worker binding recorded two distinct completed turns. See
+[decision proof](rc4-installed-decision.json) and [worker events](rc4-installed-worker.json).
+The worker's wording attributing all execution failures to harness policy is
+inaccurate: policy pre-tool callbacks completed, then native execution failed.
+The nested agent sandbox masks `/tmp/codex-daemon-1004` as mode `000`; a read
+through the approved host execution facility found the same host directory owned
+by UID 1004 with mode `0700`. No socket permissions were modified.
+
+RC4 also exposed a genuine adapter error: its child startup post-tool guard emitted
+PreToolUse JSON. The native callback rejected that event shape. The correction
+emits PostToolUse context for child answer/startup and UserPromptSubmit context
+for child prompts, retaining pre-tool denial for child questions. Context7's exact
+output-contract query also identified the current official parser's rejection of
+neutral `permissionDecision:allow` without updated input. The pinned
+[parser](https://github.com/openai/codex/blob/398500106707f0a3217c7cf83edc2bf226cc342f/codex-rs/hooks/src/engine/output_parser.rs#L409-L449)
+confirms this: neutral checks now return an empty object; denials keep their reason.
+These fixes require the next published candidate, RC5. RC4 is not full acceptance.

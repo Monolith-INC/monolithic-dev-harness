@@ -6,6 +6,22 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0-rc.5] - 2026-10-23
+
+### Fixed
+
+- Codex child post-tool and prompt hooks emit the output schema for their actual event.
+  Child startup and delivery observations still cannot record human authority.
+- Neutral Codex pre-tool checks emit no permission override, matching the current official
+  parser contract; denied effects retain the explicit denial and reason.
+
+### Qualification
+
+- RC4 installed discovery initialized all three harness MCP servers. Its native async
+  question and later authorized operator response completed a session-bound harness decision.
+  Same-child follow-up binding recorded two completed turns. These are CLI protocol results;
+  full Desktop controls and complete workflow parity remain release gates.
+
 ## [0.7.0-rc.4] - 2026-10-23
 
 ### Added
@@ -861,4 +877,5 @@ First release.
 [0.1.1]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.0
 
+[0.7.0-rc.5]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.4...v0.7.0-rc.5
 [0.7.0-rc.4]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.7.0-rc.4

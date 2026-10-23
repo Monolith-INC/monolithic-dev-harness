@@ -36,17 +36,21 @@ def native_operation(tool_name: str) -> str | None:
 
 
 def format_codex_decision(decision: PolicyDecision) -> dict[str, Any]:
-    return {
-        "hookSpecificOutput": {
-            "hookEventName": "PreToolUse",
-            "permissionDecision": "deny" if decision.is_denied() else "allow",
-            **(
-                {"permissionDecisionReason": decision.reason}
-                if decision.is_denied() and decision.reason
-                else {}
-            ),
-        }
-    }
+    match decision.is_denied():
+        case False:
+            return {}
+        case True:
+            return {
+                "hookSpecificOutput": {
+                    "hookEventName": "PreToolUse",
+                    "permissionDecision": "deny",
+                    **(
+                        {"permissionDecisionReason": decision.reason}
+                        if decision.reason
+                        else {}
+                    ),
+                }
+            }
 
 
 def subagents() -> SubagentOps:

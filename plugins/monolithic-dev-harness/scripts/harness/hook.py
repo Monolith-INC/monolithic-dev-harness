@@ -1538,9 +1538,22 @@ def main(argv: list[str] | None = None) -> int:
     match args.host, args.event:
         case "codex", "subagent-start" | "subagent-stop" | "interrupt":
             return handle_codex_lifecycle(args.event, payload)
-        case "codex", "prompt" | "ask" | "answer" | "startup" if (
-            codex_bindings.is_child(payload)
-        ):
+        case "codex", "prompt" if codex_bindings.is_child(payload):
+            _print_prompt(
+                "codex",
+                [
+                    "[harness] children return human decision and conversation-binding needs to their root; no human authority was recorded"
+                ],
+            )
+            return 0
+        case "codex", "answer" | "startup" if codex_bindings.is_child(payload):
+            print(
+                hook_bridge.format_answer_context(
+                    "[harness] children return human decision and conversation-binding needs to their root; no human authority was recorded"
+                )
+            )
+            return 0
+        case "codex", "ask" if codex_bindings.is_child(payload):
             _emit_decision(
                 "codex",
                 rules.Decision.deny(
