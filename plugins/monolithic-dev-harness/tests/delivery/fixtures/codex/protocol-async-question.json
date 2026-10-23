@@ -1,0 +1,26 @@
+{
+  "method": "item/completed",
+  "params": {
+    "item": {
+      "type": "agentMessage",
+      "id": "call_c9da51c27a194cdd9b68022f94bc3bde",
+      "text": "Approve the fixture document?\n- Approve\n- Revise",
+      "phase": "final_answer",
+      "memoryCitation": null,
+      "delivery": "async",
+      "questions": [
+        {
+          "title": "Approve the fixture document?",
+          "options": [
+            "Approve",
+            "Revise"
+          ]
+        }
+      ]
+    },
+    "threadId": "01a169a1-4b88-74a3-b1ed-804353d242a7",
+    "turnId": "01a169a1-4be2-7390-a908-de1716ec883c",
+    "completedAtMs": 1792773545395
+  },
+  "emittedAtMs": 1792773545395
+}

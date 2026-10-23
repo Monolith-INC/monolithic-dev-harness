@@ -1,7 +1,7 @@
 # monolithic-dev-harness
 
 [![CI](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.7.0--rc.3-orange.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
+[![Version](https://img.shields.io/badge/version-0.7.0--rc.4-orange.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![Cursor](https://img.shields.io/badge/Cursor-supported-black.svg)](https://cursor.com)
@@ -181,9 +181,10 @@ has been shown and you approve the write. Native choice controls are used when t
 them; numbered text choices preserve the same options otherwise. Back, Pause, Resume, Cancel, and
 Complete control the wider workflow.
 
-When the reviewed setup is applied, bootstrap adds the repository-level Codex question-picker
-default automatically; no manual configuration editing is required. Codex still requires the user
-to trust the repository before loading `.codex/config.toml`.
+Installation and bootstrap preserve Codex question feature preferences. The adapter discovers
+actual native question delivery at the host boundary; feature flags alone do not prove a permitted
+approval interface. See the [Codex qualification evidence](docs/06-delivery/acceptance/codex-adapter/evidence.md)
+and [trial report](docs/06-delivery/acceptance/codex-adapter/trial.md) for the candidate's verified behavior and remaining release requirements.
 
 ## How it works
 

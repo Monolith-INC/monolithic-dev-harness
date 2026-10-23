@@ -41,6 +41,9 @@ for required in .claude-plugin/marketplace.json .cursor-plugin/marketplace.json 
     plugins/monolithic-dev-harness/hooks/hooks.json plugins/monolithic-dev-harness/hooks/cursor.hooks.json \
     plugins/monolithic-dev-harness/hooks/codex.hooks.json \
     plugins/monolithic-dev-harness/scripts/host_adapters/hook_bridge.py \
+    plugins/monolithic-dev-harness/scripts/host_adapters/codex_runtime.py \
+    plugins/monolithic-dev-harness/scripts/host_adapters/codex_bindings.py \
+    plugins/monolithic-dev-harness/references/codex-runtime.md \
     plugins/monolithic-dev-harness/bin/harness; do
   grep -qx "${NAME}/${required}" <<<"$contents" || { echo "archive is missing ${required}" >&2; exit 1; }
 done

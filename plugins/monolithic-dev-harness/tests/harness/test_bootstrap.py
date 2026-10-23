@@ -61,10 +61,7 @@ class BootstrapTest(unittest.TestCase):
         self.assertEqual((self.repo / ".gitignore").read_text(), "node_modules/\n")
         self.assertTrue((self.repo / ".harness" / "knowledge").is_dir())
         codex_config = self.repo / ".codex" / "config.toml"
-        self.assertIn("[features]", codex_config.read_text())
-        self.assertIn(
-            "default_mode_request_user_input = true", codex_config.read_text()
-        )
+        self.assertFalse(codex_config.exists())
         again = self.bootstrap(self.candidate(MINIMAL))
         self.assertIn("kept existing", again.stdout)
         self.assertEqual(
@@ -72,7 +69,7 @@ class BootstrapTest(unittest.TestCase):
         )
         self.assertEqual((self.repo / ".git" / "info" / "exclude").read_text(), exclude)
 
-    def test_existing_codex_config_is_extended_without_losing_other_settings(
+    def test_existing_codex_config_is_preserved_without_enabling_native_flags(
         self,
     ) -> None:
         config = self.repo / ".codex" / "config.toml"
@@ -84,11 +81,10 @@ class BootstrapTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         content = config.read_text()
         self.assertIn("other_feature = true", content)
-        self.assertIn("default_mode_request_user_input = true", content)
+        self.assertNotIn("default_mode_request_user_input", content)
         self.assertIn("[projects]\nname = 'app'", content)
-        self.assertLess(
-            content.index("default_mode_request_user_input"),
-            content.index("[projects]"),
+        self.assertEqual(
+            content, "[features]\nother_feature = true\n\n[projects]\nname = 'app'\n"
         )
 
     def test_other_hosts_get_no_codex_config(self) -> None:
@@ -103,9 +99,7 @@ class BootstrapTest(unittest.TestCase):
         config.write_text(original)
         done = self.bootstrap(EXAMPLE)
         self.assertEqual(done.returncode, 0, done.stderr)
-        self.assertIn(
-            "explicitly disables default_mode_request_user_input", done.stderr
-        )
+        self.assertNotIn("explicitly disables", done.stderr)
         self.assertEqual(config.read_text(), original)
 
     def test_an_existing_state_ignore_is_kept(self) -> None:

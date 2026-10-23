@@ -1,0 +1,22 @@
+{
+  "session_id": "01a169a2-b548-7d13-ab40-e9611ad55c7f",
+  "turn_id": "01a169a2-b59f-75b0-aba2-ea5095dcc1a0",
+  "transcript_path": null,
+  "cwd": "/fixture/codex-proof/project",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-6.1-sol",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "request_user_input_async",
+  "tool_input": {
+    "questions": [
+      {
+        "title": "Approve the fixture document?",
+        "options": [
+          "Approve",
+          "Revise"
+        ]
+      }
+    ]
+  },
+  "tool_use_id": "call_68bf3eb925a44ec7b5a9be56293ce992"
+}

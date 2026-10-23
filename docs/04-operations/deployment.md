@@ -49,10 +49,12 @@ After installing, restart Claude Code or Codex (review and trust Codex plugin ho
 Codex skips untrusted hooks, and some specialized tools do not invoke hooks at all; do not treat
 the hook policy as a complete security boundary.
 
-`harness bootstrap` adds the native `request_user_input` picker default to the repository's
-`.codex/config.toml`, preserving unrelated project settings. Trust the repository in Codex and
-restart the session so the project layer loads. If the project explicitly disables the picker,
-bootstrap reports the conflict and the harness keeps the typed `approve HB-…` fallback.
+Installation and `harness bootstrap` preserve Codex feature preferences, including an explicit
+`default_mode_request_user_input = false`. Native async availability is discovered from actual
+root tool events; this feature flag does not disable the separately observed async transport.
+A prepared native candidate does not count as delivered or answered. Typed recovery preserves the
+same pending decision when no permitted native control is available. See the
+[qualification evidence](../06-delivery/acceptance/codex-adapter/evidence.md).
 
 ## Health Checks
 

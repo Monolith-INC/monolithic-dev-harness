@@ -1,0 +1,68 @@
+{
+  "classification": "authentic_cli_hook_stdin_sanitized",
+  "host_version": "0.162.1",
+  "capture_date": "2026-10-23",
+  "raw_capture_directory": "/tmp/mdh-codex-proof/captures",
+  "sanitization": [
+    "Replace disposable path prefix /tmp/mdh-codex-proof with /fixture/codex-proof",
+    "Redact encrypted native spawn brief message string",
+    "Preserve native IDs and field types",
+    "Pretty print JSON"
+  ],
+  "captures": [
+    {
+      "fixture": "subagent-start.json",
+      "raw_capture_file": "714d058a-492d-4ed0-8fe0-04464ffc9f94.json",
+      "raw_sha256": "3a2db08b1628201966d569e5b0b071c545deabc18a108be5c2ba4af13347b30c",
+      "sanitized_sha256": "76b2b39d55c8b2da45771edd91932e978efbef996deadad7e7ce9cadf8c07682"
+    },
+    {
+      "fixture": "subagent-stop.json",
+      "raw_capture_file": "7ffe84bf-4b68-48a4-875c-10cc557c7517.json",
+      "raw_sha256": "64d873b39f333c4c8156ebbfd1231988dccb562a5d0213b1dfb91e70afc1804f",
+      "sanitized_sha256": "53ba935e242693cbd6c5dc4b6ecad0f83ffd5a19ed212c1c90cd47f4afbcbed6"
+    },
+    {
+      "fixture": "pre-tool.json",
+      "raw_capture_file": "e07d74d3-3757-4150-ba01-b2f2841cdb1d.json",
+      "raw_sha256": "8de6de7feabccb3da52657217365fc8ef4061502894b722838b821dcd992e38a",
+      "sanitized_sha256": "a337d29d025b26845523811b332390224bfc348cc4156b8882e3092f29670133"
+    },
+    {
+      "fixture": "pre-tool-shell.json",
+      "raw_capture_file": "d808afc0-08a4-4654-8ef8-d4613a363f42.json",
+      "raw_sha256": "47307dac329279f43ed65a4ee27a1cce3a93533352ff26890130c445d8cc0cf7",
+      "sanitized_sha256": "233d7945e58f12c0570dcfdb1b0dd7197a8f620899ae22c3abc22aaae214d9b5"
+    },
+    {
+      "fixture": "post-tool-shell-failure.json",
+      "raw_capture_file": "cd3ff2cd-b8e8-4323-95ae-e6a2777d5555.json",
+      "raw_sha256": "3cf74b37bb1a9f9d1a5bcc280be899db58ccaf052e6fa461bf0d858899475ecb",
+      "sanitized_sha256": "ed164914fd2fa6f841437967c121911be560afbd9a5eba1ec2210fe6e622e427"
+    },
+    {
+      "fixture": "pre-tool-spawn.json",
+      "raw_capture_file": "a6b26441-978f-4718-b522-9bdc2e11e1bf.json",
+      "raw_sha256": "e2ba2e3d495e319a4a0260ed23fa65f42e49d448fa2237584e914b534aae01de",
+      "sanitized_sha256": "7fe81a536d1198e67d84e85ba729e9f02b4525343dcb7d8b5c6bfbc603ce1468"
+    },
+    {
+      "fixture": "post-tool-spawn.json",
+      "raw_capture_file": "f885550e-284d-4910-bb76-c2cdfdb6f3c0.json",
+      "raw_sha256": "04139b3cb3619a0eccec871f4bb80e0332fe0d4fc562f5917a8f006fcc2c0dfb",
+      "sanitized_sha256": "26675be6e64cec580e77e421daccc19eb6db499940cac4165a0524230a285f9b"
+    },
+    {
+      "fixture": "pre-tool-wait.json",
+      "raw_capture_file": "9b89cedc-0528-4293-b98d-ccb7eeb70d0d.json",
+      "raw_sha256": "a9c7c0773e7d27320b1a9702022e508e60c529600674109886d4d0120e979394",
+      "sanitized_sha256": "28e9f2ae5c66ec8c69ddca1630ace1e25ddc8f0a803f8ff07c1b545a6b6df002"
+    },
+    {
+      "fixture": "post-tool-wait.json",
+      "raw_capture_file": "8746ab29-3f4f-42bd-bc3c-8affa45e281b.json",
+      "raw_sha256": "335422934fd93c55ccdb2735fb50bd8e2fefd6ca9e2d7419a537502c72c6b67f",
+      "sanitized_sha256": "3845a54534abd2050c3dc3a84362ee340faf78437c45960db5785bb7cab413d1"
+    }
+  ]
+}

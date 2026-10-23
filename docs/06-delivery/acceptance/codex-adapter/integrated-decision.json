@@ -1,0 +1,77 @@
+{
+  "provenance": {
+    "kind": "actual app-server native events plus resulting disposable harness decision record",
+    "runtime": "Codex CLI0.162.1",
+    "operator_authorized": true,
+    "human_UI_click_claimed": false,
+    "source_log_sha256": "b094147fdae4bd19b2eab630cabf1ce6b43219f54ab69ab28307d895cf3f0361",
+    "limit": "source test; not archive, Desktop render or external write"
+  },
+  "prepared": {
+    "host": "codex",
+    "transport": "chat",
+    "question": "Confirm?",
+    "options": [
+      {
+        "label": "Yes",
+        "description": ""
+      },
+      {
+        "label": "No",
+        "description": ""
+      }
+    ],
+    "menu": "**Confirm?**\n\n1. **Yes**\n2. **No**\n\nResponda com um n\u00famero ou o nome de uma op\u00e7\u00e3o.",
+    "instruction": "Keep this decision pending. Use native_candidate only if the root's actual advertised tool and instructions permit it; otherwise run harness decision fallback. Preparation is not delivery or an answer.",
+    "transport_error": {
+      "code": "unsupported_decision_transport",
+      "message": "The observed Codex mode has no permitted, qualified structured transport for this required decision. Keep it pending; typed recovery does not qualify the structured control. Use harness decision fallback for the same typed menu. If the root actually advertises and permits native async input, invoke that control with this pending decision's exact question and options; delivery still is not an answer. Plan decisions do not permit implementation until the host actually switches mode.",
+      "retryable": false
+    },
+    "structured_qualified": false,
+    "native_candidate": {
+      "tool": "request_user_input_async",
+      "questions": [
+        {
+          "title": "Confirm?",
+          "options": [
+            "Yes",
+            "No"
+          ]
+        }
+      ],
+      "availability": "unverified",
+      "instruction": "Only the root may attempt this candidate when the actual native tool is advertised and permitted. It is prepared, not delivered. Do not show transport diagnostics to the human. Preserve the exact review and question; use typed fallback if unavailable. No dependent work is authorized."
+    },
+    "decision_id": "HD-b0ed5cb1869417dd",
+    "state": "waiting_for_human"
+  },
+  "native_messages": [
+    {
+      "type": "agentMessage",
+      "id": "call_520e0e9d52474223b3d5c76064ffcad0",
+      "text": "Confirm?\n- Yes\n- No",
+      "phase": "final_answer",
+      "memoryCitation": null,
+      "delivery": "async",
+      "questions": [
+        {
+          "title": "Confirm?",
+          "options": [
+            "Yes",
+            "No"
+          ]
+        }
+      ]
+    },
+    {
+      "type": "agentMessage",
+      "id": "msg_0f8afa9b4d63cb6f016adbb4d4e7948191ba4814644dc2fef1",
+      "text": "Yes",
+      "phase": "final_answer",
+      "memoryCitation": null,
+      "delivery": null,
+      "questions": null
+    }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "method": "item/completed",
+  "params": {
+    "item": {
+      "type": "agentMessage",
+      "id": "msg_0b767b5b65362167016adb8cf2a09c81918e1d5b6ca78ca32d",
+      "text": "Selected color: Blue.",
+      "phase": "final_answer",
+      "memoryCitation": null,
+      "delivery": null,
+      "questions": null
+    },
+    "threadId": "01a1699e-77fc-71c1-80e9-cd904cfef62d",
+    "turnId": "01a1699e-785b-7bd0-ae37-b912fdbd1912",
+    "completedAtMs": 1792773362702
+  },
+  "emittedAtMs": 1792773362702
+}

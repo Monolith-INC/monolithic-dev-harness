@@ -6,6 +6,25 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0-rc.4] - 2026-10-23
+
+### Added
+
+- Native Codex child identity and parent work-session checks from real lifecycle and tool hooks.
+  Stopped or interrupted children cannot reuse the saved scope, record human answers, or switch
+  the root's work session. Existing opt-out and suspension behavior is preserved.
+- Codex question discovery from authentic root events, with native async candidates for initial
+  questions, exact pending-question adoption, and conversation-bound answer capture. Delivery
+  acknowledgement never grants approval.
+- Pinned official-source evidence and sanitized live protocol/hook trials. This candidate does
+  not claim full Desktop, assignment-level role/path enforcement or complete Claude parity.
+
+### Fixed
+
+- Codex installation and bootstrap preserve native question feature preferences instead of
+  enabling a Default-mode feature or rejecting an explicitly disabled setting.
+- Child test runners remain usable; harness controls and hook spoofing remain guarded.
+
 ## [0.7.0-rc.3] - 2026-10-22
 
 ### Added
@@ -840,3 +859,5 @@ First release.
 [0.1.2]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.0
+
+[0.7.0-rc.4]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.7.0-rc.4

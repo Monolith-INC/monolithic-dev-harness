@@ -27,6 +27,7 @@ def begin(
     details: tuple[str, ...] = (),
     gate: str = "",
     binds: dict | None = None,
+    native_session_id: str = "",
 ) -> Result[dict]:
     return bind(
         _checkpoint(repo, work_session_id, question, artifacts),
@@ -45,6 +46,7 @@ def begin(
                 details=details,
                 gate=gate,
                 binds=binds,
+                native_session_id=native_session_id,
             ),
             lambda value: fmap(
                 recover(repo, work_session_id),

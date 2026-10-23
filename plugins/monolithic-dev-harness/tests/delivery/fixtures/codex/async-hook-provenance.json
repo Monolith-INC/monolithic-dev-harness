@@ -1,0 +1,106 @@
+{
+  "classification": "authentic_cli_async_pre_post_tool_stdin_with_exact_disposable_capture_hook_trust",
+  "host_version": "0.162.1",
+  "mode": "default",
+  "capture_date": "2026-10-23",
+  "captures": [
+    {
+      "fixture": "ask-async.json",
+      "raw_capture_file": "0ee9da7f-d838-48e2-b642-fa783e0c0fdf.json",
+      "raw_sha256": "1e523d5b1ea736c1f9dd1357c66bd2f6c225ce6b305f68f0c08fb0e93bb144ea",
+      "sanitized_sha256": "ce48c0723f6a55db6cbcddcb850ad24102cb7274a1747186041b56d26a52c1e2"
+    },
+    {
+      "fixture": "answer-async-delivery.json",
+      "raw_capture_file": "09fe7bf9-e6e7-4892-9466-3e6fc0ee290f.json",
+      "raw_sha256": "e3486423f5783f42dee6bbe207a8231e428f0e212a69002d9d8a7bfb641b0eeb",
+      "sanitized_sha256": "53d16f7ea446c6e705c339501cd5a864561fe0b03a660e7922957fca2e1cea7f"
+    }
+  ],
+  "raw_server_event_log": "/tmp/mdh-codex-proof/async-trusted-events.jsonl",
+  "raw_server_event_log_sha256": "3a418f4e64322489b002289a33d3cfbda07c25590d7050ea4a858fd2a1711da5",
+  "capture_script_sha256": "c1f0ea5e550803c38e128f9010f7b3c39b340b80eba5130264ade40a9fc62476",
+  "reviewed_capture_command": "python3 /fixture/codex-proof/capture.py",
+  "hook_trust": [
+    {
+      "key": "/fixture/codex-proof/home/config.toml:pre_tool_use:0:0",
+      "currentHash": "sha256:e2eb2cf07bf2486812fe3d4f0c6b3c3d1f84c8b564d8e6b308101d62198d3c35",
+      "initialTrustStatus": "untrusted",
+      "configuredTrustedHash": "sha256:e2eb2cf07bf2486812fe3d4f0c6b3c3d1f84c8b564d8e6b308101d62198d3c35"
+    },
+    {
+      "key": "/fixture/codex-proof/home/config.toml:post_tool_use:0:0",
+      "currentHash": "sha256:528bda2bb2d1e3194b3c0439dc8f23f446f2b3d0e643638c6f95af73270f6334",
+      "initialTrustStatus": "untrusted",
+      "configuredTrustedHash": "sha256:528bda2bb2d1e3194b3c0439dc8f23f446f2b3d0e643638c6f95af73270f6334"
+    },
+    {
+      "key": "/fixture/codex-proof/home/config.toml:subagent_start:0:0",
+      "currentHash": "sha256:b716ef6e677c9f94ea54ade49c3e0f74cef641a431ff7c42ae4b8521a8663571",
+      "initialTrustStatus": "untrusted",
+      "configuredTrustedHash": "sha256:b716ef6e677c9f94ea54ade49c3e0f74cef641a431ff7c42ae4b8521a8663571"
+    },
+    {
+      "key": "/fixture/codex-proof/home/config.toml:subagent_stop:0:0",
+      "currentHash": "sha256:896af1e3deb09a6743a23837892238db36b552f09db3f3264eea83e54f27dcc1",
+      "initialTrustStatus": "untrusted",
+      "configuredTrustedHash": "sha256:896af1e3deb09a6743a23837892238db36b552f09db3f3264eea83e54f27dcc1"
+    }
+  ],
+  "completed_hook_callbacks": [
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a169a2-b548-7d13-ab40-e9611ad55c7f",
+        "turnId": "01a169a2-b59f-75b0-aba2-ea5095dcc1a0",
+        "run": {
+          "id": "pre-tool-use:0:/fixture/codex-proof/home/config.toml:call_68bf3eb925a44ec7b5a9be56293ce992",
+          "eventName": "preToolUse",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/codex-proof/home/config.toml",
+          "source": "user",
+          "displayOrder": 0,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1792773637,
+          "completedAt": 1792773637,
+          "durationMs": 42,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1792773637695
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a169a2-b548-7d13-ab40-e9611ad55c7f",
+        "turnId": "01a169a2-b59f-75b0-aba2-ea5095dcc1a0",
+        "run": {
+          "id": "post-tool-use:1:/fixture/codex-proof/home/config.toml:call_68bf3eb925a44ec7b5a9be56293ce992",
+          "eventName": "postToolUse",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/codex-proof/home/config.toml",
+          "source": "user",
+          "displayOrder": 1,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1792773637,
+          "completedAt": 1792773637,
+          "durationMs": 42,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1792773637737
+    }
+  ],
+  "sanitization": "Replace disposable path prefix only; preserve native IDs and fields; retain actual completed callback events only",
+  "limits": [
+    "Exact own temporary capture hook hashes were trusted; installed plugin trust not qualified",
+    "PostToolUse accepted true acknowledges delivery, not human or operator choice",
+    "No harness approval authority or answer recovery proved"
+  ]
+}

@@ -33,6 +33,11 @@ from harness import (
     workflow_requirements,
 )
 from harness.cli_common import pairs, print_result, resolve_repo
+from host_adapters.codex_runtime import (
+    CodexRuntimeProfile,
+    DecisionContext,
+    load_profile,
+)
 from host_adapters.interactions import present
 from integrations import registry
 
@@ -464,6 +469,12 @@ def decision_command(args: argparse.Namespace) -> int:
                 args.async_available,
                 free_text=spec.free_text,
                 language=_language(repo),
+                codex_profile=_codex_profile(repo, args.host),
+                decision=DecisionContext(
+                    kind=spec.kind,
+                    approval=spec.approval,
+                    structured_required=not args.native_unavailable,
+                ),
             )
             binds = (
                 {"bound": spec.bound, "target": list(spec.target or ())}
@@ -472,6 +483,11 @@ def decision_command(args: argparse.Namespace) -> int:
             )
             match spec.gate:
                 case "harness-controls":
+                    match shown.get("transport_error"):
+                        case dict():
+                            return print_result(_presentation_result(shown, key))
+                        case _:
+                            pass
                     match repo.resolve() == resolve_repo(".").resolve():
                         case False:
                             return print_result(
@@ -522,7 +538,7 @@ def decision_command(args: argparse.Namespace) -> int:
                                 target=spec.target,
                             )
                         )
-                        or fmap(
+                        or bind(
                             review_decisions.begin(
                                 repo,
                                 key,
@@ -536,14 +552,11 @@ def decision_command(args: argparse.Namespace) -> int:
                                 details=spec.details,
                                 gate=spec.gate,
                                 binds=binds,
+                                native_session_id=os.environ.get("CODEX_THREAD_ID", "")
+                                if args.host == "codex"
+                                else "",
                             ),
-                            lambda _: json.dumps(
-                                {
-                                    **shown,
-                                    "decision_id": key,
-                                    "state": "waiting_for_human",
-                                }
-                            ),
+                            lambda _: _presentation_result(shown, key),
                         )
                     ),
                 )
@@ -701,8 +714,38 @@ def _fallback_decision(repo: Path, args: argparse.Namespace) -> int:
                     args.async_available and pending.transport == "blocking",
                     free_text=pending.allow_free_text,
                     language=_language(repo),
+                    codex_profile=_fallback_profile(repo, args.host, pending.transport),
+                    decision=DecisionContext(
+                        kind=pending.kind,
+                        approval=pending.approval,
+                        structured_required=False,
+                    ),
                 ),
             )
+
+
+def _codex_profile(repo: Path, host: str) -> CodexRuntimeProfile | None:
+    match host:
+        case "codex":
+            return load_profile(repo, os.environ.get("CODEX_THREAD_ID", ""))
+        case _:
+            return None
+
+
+def _presentation_result(shown: dict, key: str) -> Result[str]:
+    return Ok(json.dumps({**shown, "decision_id": key, "state": "waiting_for_human"}))
+
+
+def _fallback_profile(
+    repo: Path, host: str, transport: str
+) -> CodexRuntimeProfile | None:
+    match host, transport:
+        case "codex", "blocking":
+            return _codex_profile(repo, host)
+        case "codex", _:
+            return CodexRuntimeProfile()
+        case _:
+            return None
 
 
 def _show_fallback(

@@ -380,6 +380,7 @@ def begin(
     binds: dict[str, Any] | None = None,
     review_checkpoint: dict | None = None,
     kind: str | None = None,
+    native_session_id: str = "",
 ) -> Result[dict[str, Any]]:
     from harness import review_decisions
 
@@ -403,6 +404,7 @@ def begin(
                     binds,
                     review_checkpoint,
                     kind,
+                    native_session_id,
                 ),
                 lambda value: fmap(
                     _save_prepared(path, value),
@@ -428,6 +430,7 @@ def _prepared(
     binds: dict | None,
     checkpoint: dict | None,
     kind: str | None,
+    native_session_id: str,
 ) -> Result[dict]:
     return bind(
         require(
@@ -462,6 +465,7 @@ def _prepared(
                 "approval": approval,
                 "status": "pending",
                 "answer": "",
+                "native_session_id": native_session_id,
                 "allow_free_text": free_text,
                 "details": details,
                 **{
@@ -502,6 +506,69 @@ def resolve(
                 ValueError,
             ),
         ),
+    )
+
+
+def adopt_native_async(
+    repo: Path,
+    key: str,
+    question: str,
+    options: tuple[str, ...],
+    native_session_id: str,
+    *,
+    work_session_id: str | None = None,
+) -> Result[dict[str, Any]]:
+    """Hook-only discovery upgrades exact prepared delivery, never human authority."""
+    return bind(
+        _path(repo, work_session_id),
+        lambda path: bind(
+            _async_adoption(
+                repo,
+                state.read_json(path) or {},
+                key,
+                question,
+                options,
+                native_session_id,
+            ),
+            lambda updated: fmap(
+                attempt(
+                    lambda: state.write_json(path, updated),
+                    "decision_invalid",
+                    "native async discovery",
+                    OSError,
+                ),
+                lambda _: updated,
+            ),
+        ),
+    )
+
+
+def _async_adoption(
+    repo: Path,
+    current: dict[str, Any],
+    key: str,
+    question: str,
+    options: tuple[str, ...],
+    native_session_id: str,
+) -> Result[dict[str, Any]]:
+    return fmap(
+        require(
+            current.get("status") == "pending"
+            and current.get("transport") == "chat"
+            and current.get("id") == key
+            and current.get("question") == question
+            and tuple(current.get("options", ())) == options
+            and not current.get("presentation_id")
+            and bool(native_session_id)
+            and current.get("native_session_id") == native_session_id
+            and all(
+                workflow.file_digest(repo / name) == Ok(digest)
+                for name, digest in current.get("artifacts", ())
+            ),
+            "decision_invalid",
+            "Native discovery does not match the prepared decision and session.",
+        ),
+        lambda _: {**current, "transport": "async"},
     )
 
 

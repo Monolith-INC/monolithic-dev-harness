@@ -1,0 +1,19 @@
+{
+  "session_id": "01a1699b-cf45-7ef1-9285-2ff031a16c13",
+  "turn_id": "01a1699b-d2fd-7611-9ca8-46d6887d058a",
+  "transcript_path": "/fixture/codex-proof/home/sessions/2026/10/23/rollout-2026-10-23T13-33-01-01a1699b-cf45-7ef1-9285-2ff031a16c13.jsonl",
+  "cwd": "/fixture/codex-proof/project",
+  "hook_event_name": "PostToolUse",
+  "model": "gpt-6.1-sol",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "collaborationspawn_agent",
+  "tool_input": {
+    "task_name": "child_proof",
+    "fork_turns": "none",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "high",
+    "message": "[redacted encrypted native child brief]"
+  },
+  "tool_response": "{\"task_name\":\"/root/child_proof\"}",
+  "tool_use_id": "call_b12467c22d124878b4c0b4057fd933d3"
+}

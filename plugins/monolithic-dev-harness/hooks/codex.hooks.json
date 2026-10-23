@@ -3,7 +3,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*|exec_command|functions\\.exec_command",
+        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*|exec_command|functions\\.exec_command|functionsexec_command|functions\\.?apply_patch|collaboration.*",
         "hooks": [
           {
             "type": "command",
@@ -63,6 +63,39 @@
           {
             "type": "command",
             "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event stop",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event subagent-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event subagent-stop",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Interrupt": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event interrupt",
             "timeout": 10
           }
         ]

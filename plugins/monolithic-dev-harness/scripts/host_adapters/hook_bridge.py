@@ -22,6 +22,7 @@ _SHELL_NAMES = frozenset(
         "run_shell_command",
         "exec_command",
         "functions.exec_command",
+        "functionsexec_command",
     }
 )
 _EDIT_NAMES = frozenset(
@@ -37,6 +38,8 @@ _EDIT_NAMES = frozenset(
         "delete_file",
         "search_replace",
         "apply_patch",
+        "functionsapply_patch",
+        "functions.apply_patch",
         "write_to_file",
         "replace_file_content",
         "multi_replace_file_content",
@@ -198,7 +201,7 @@ def _paths(raw_name: str, arguments: dict[str, Any], cwd: str) -> tuple[str, ...
             str(Path(cwd) / path) if cwd and not Path(path).is_absolute() else path
             for path in _patch_targets(str(arguments.get("command") or ""))
         )
-        if raw_name == "apply_patch"
+        if raw_name in {"apply_patch", "functions.apply_patch", "functionsapply_patch"}
         else ()
     )
     return (*named, *patch)

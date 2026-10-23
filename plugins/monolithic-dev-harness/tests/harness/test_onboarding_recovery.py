@@ -303,7 +303,10 @@ def test_codex_host_is_detected_without_an_agent_capability_ceremony(
         )
         == 0
     )
-    assert json.loads(capsys.readouterr().out)["transport"] == "blocking"
+    assert (
+        json.loads(capsys.readouterr().out)["native_candidate"]["tool"]
+        == "request_user_input_async"
+    )
 
 
 def test_native_suspend_and_resume_work_with_an_unanswered_decision(

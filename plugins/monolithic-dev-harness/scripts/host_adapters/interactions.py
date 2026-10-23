@@ -6,6 +6,15 @@ import json
 import re
 from typing import TYPE_CHECKING, Any
 
+from core.result import Err, Ok
+from host_adapters.codex_runtime import (
+    CodexRuntimeProfile,
+    DecisionContext,
+    select_question_transport,
+)
+
+_DEFAULT_DECISION = DecisionContext()
+
 if TYPE_CHECKING:
     from harness.decisions import Pending
 
@@ -68,7 +77,14 @@ def present(
     *,
     free_text: bool = False,
     language: str = "en",
+    codex_profile: CodexRuntimeProfile | None = None,
+    decision: DecisionContext = _DEFAULT_DECISION,
 ) -> dict[str, Any]:
+    match host, codex_profile:
+        case "codex", CodexRuntimeProfile():
+            return _present_codex(choice, codex_profile, decision, free_text, language)
+        case _:
+            pass
     match host, blocking_available:
         case "codex", True:
             return {
@@ -112,6 +128,117 @@ def present(
                 "menu": chat_menu(choice, free_text, language),
                 "instruction": chat_instruction(host),
             }
+
+
+def _present_codex(
+    choice: dict[str, Any],
+    profile: CodexRuntimeProfile,
+    decision: DecisionContext,
+    free_text: bool,
+    language: str,
+) -> dict[str, Any]:
+    match select_question_transport(profile, decision):
+        case Err(failure):
+            return {
+                **present(
+                    choice, "codex", False, free_text=free_text, language=language
+                ),
+                "transport_error": failure.to_dict(),
+                "structured_qualified": False,
+                **_native_candidate(choice, profile, decision, "chat"),
+                "instruction": "Keep this decision pending. Use native_candidate only if "
+                "the root's actual advertised tool and instructions permit it; otherwise run "
+                "harness decision fallback. Preparation is not delivery or an answer.",
+            }
+        case Ok(transport):
+            return (
+                {
+                    **present(
+                        choice,
+                        "codex",
+                        transport == "blocking",
+                        transport == "async",
+                        free_text=free_text,
+                        language=language,
+                    ),
+                    "isBlocking": transport == "blocking" and profile.mode == "plan",
+                    "structured_qualified": transport in profile.qualified_transports,
+                    "instruction": _codex_instruction(profile, decision, transport),
+                }
+                | _async_wait(profile, transport)
+                | _native_candidate(choice, profile, decision, transport)
+            )
+
+
+def _native_candidate(
+    choice: dict[str, Any],
+    profile: CodexRuntimeProfile,
+    decision: DecisionContext,
+    transport: str,
+) -> dict[str, Any]:
+    match transport, decision, profile:
+        case _, _, CodexRuntimeProfile(root=False, evidence=(_, *_)):
+            return {}
+        case "chat", DecisionContext(purpose="domain", structured_required=True), _:
+            return {
+                "native_candidate": {
+                    "tool": "request_user_input_async",
+                    "questions": [
+                        {
+                            "title": choice["question"],
+                            "options": [
+                                option["label"] for option in choice["options"]
+                            ],
+                        }
+                    ],
+                    "availability": "unverified",
+                    "instruction": "Only the root may attempt this candidate when the actual "
+                    "native tool is advertised and permitted. It is prepared, not delivered. "
+                    "Do not show transport diagnostics to the human. Preserve the exact review "
+                    "and question; use typed fallback if unavailable. No dependent work is authorized.",
+                },
+            }
+        case _:
+            return {}
+
+
+def _async_wait(profile: CodexRuntimeProfile, transport: str) -> dict[str, Any]:
+    match transport, "clock.sleep" in profile.tools:
+        case "async", False:
+            return {"wait": None}
+        case _:
+            return {}
+
+
+def _codex_instruction(
+    profile: CodexRuntimeProfile, decision: DecisionContext, transport: str
+) -> str:
+    match transport, decision.optional, profile.mode:
+        case "chat", _, _:
+            return chat_instruction("codex")
+        case _, True, _:
+            return (
+                "Show the review and ask this optional question. Delivery and silence are "
+                "not answers. An unanswered preference may use its safe default."
+            )
+        case "async", _, _ if "clock.sleep" not in profile.tools:
+            return (
+                "Show the full review and deliver the exact native async question. No "
+                "interruptible wait is advertised: end the turn with this decision pending. "
+                "Do no dependent work. Delivery, timeout and dismissal are not answers."
+            )
+        case _, _, "plan":
+            return (
+                "Show the full review and use the exact native question. Keep the decision "
+                "pending until the actual answer is captured. Plan mode permits this decision; "
+                "implementation still requires an actual host mode switch and fresh observation."
+            )
+        case _:
+            return (
+                "Show the full review and use the exact native question. Wait interruptibly "
+                "in bounded intervals for the matching actual answer. Delivery, timeout, "
+                "dismissal and unrelated replies are not answers."
+            )
 
 
 def canonical_question_name(tool_name: str) -> str:

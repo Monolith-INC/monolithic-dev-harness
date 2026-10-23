@@ -10,10 +10,46 @@ from pathlib import Path
 
 from core.result import Err, Ok
 from harness import decisions, state
-from tests.harness.test_bootstrap_confirmation import present
+from host_adapters.codex_runtime import CodexRuntimeProfile, DecisionContext
+from host_adapters.interactions import present as host_present
 from tests.harness.test_codex_answer_capture import answer, ask, question
 from tests.harness.test_decisions import CLI, HOOK, native
 from tests.settings_fixture import write_settings
+
+
+def present(repo: Path, *_available: str) -> dict:
+    """Synthetic prepared decision for capture tests; not evidence of CLI availability."""
+    assert isinstance(
+        decisions.begin(
+            repo, "synthetic-review", "Confirm?", ("Yes", "No"), "blocking"
+        ),
+        Ok,
+    )
+    return {
+        **host_present(
+            {
+                "id": "synthetic-review",
+                "header": "Review",
+                "question": "Confirm?",
+                "options": [
+                    {"label": "Yes", "description": ""},
+                    {"label": "No", "description": ""},
+                ],
+            },
+            "codex",
+            True,
+            codex_profile=CodexRuntimeProfile(
+                surface="desktop",
+                mode="plan",
+                root=True,
+                tools=frozenset({"request_user_input"}),
+                evidence=("synthetic-test-fixture",),
+                qualified_transports=frozenset({"blocking"}),
+            ),
+            decision=DecisionContext(),
+        ),
+        "decision_id": "synthetic-review",
+    }
 
 
 def fallback(repo: Path, *available: str) -> subprocess.CompletedProcess[str]:
@@ -35,15 +71,18 @@ def fallback(repo: Path, *available: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def test_failed_blocking_control_falls_back_to_async_then_chat(tmp_path: Path) -> None:
+def test_failed_blocking_control_uses_chat_when_async_is_unqualified(
+    tmp_path: Path,
+) -> None:
     present(tmp_path, "--blocking-available")
     assert not (tmp_path / ".harness/settings.json").exists()
     match fallback(tmp_path, "--async-available"):
         case subprocess.CompletedProcess(returncode=0, stdout=shown):
-            assert json.loads(shown)["tool"] == "request_user_input_async"
+            assert json.loads(shown)["transport"] == "chat"
+            assert json.loads(shown)["structured_qualified"] is False
         case result:
             assert result.returncode == 0, result.stderr
-    assert decisions.record(tmp_path)["transport"] == "async"
+    assert decisions.record(tmp_path)["transport"] == "chat"
     assert decisions.waiting(tmp_path)
     match fallback(tmp_path, "--async-available"):
         case subprocess.CompletedProcess(returncode=0, stdout=shown):
@@ -317,7 +356,9 @@ def test_alternative_buttons_capture_and_consume_the_new_call_only(
 ) -> None:
     write_settings(tmp_path)
     ask(tmp_path, True)
-    match json.loads(fallback(tmp_path, "--async-available").stdout):
+    # Synthetic qualified async delivery exercises capture independently of CLI discovery.
+    assert isinstance(decisions.fallback(tmp_path, "async"), Ok)
+    match host_present(question(True)["questions"][0], "codex", False, True):
         case {"questions": [offered]}:
             native(
                 tmp_path,

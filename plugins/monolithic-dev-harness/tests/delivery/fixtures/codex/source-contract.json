@@ -1,0 +1,69 @@
+{
+  "upstream_repository": "https://github.com/openai/codex",
+  "upstream_revision": "398500106707f0a3217c7cf83edc2bf226cc342f",
+  "retrieved_date": "2026-10-23",
+  "classification": "documented_upstream_not_installed_build_provenance",
+  "sources": [
+    {
+      "path": "codex-rs/core/src/tools/handlers/request_user_input_async.rs",
+      "sha256": "88d412979e5b5be773f3552044f0dd1f6babd692482e45371a97d976e70bac20",
+      "excerpt_lines": [131, 147]
+    },
+    {
+      "path": "codex-rs/hooks/src/schema.rs",
+      "sha256": "fe45c68cd552fb32e155de09ed492856f7c0baaa5c9a9ac535f24b7a480a2209",
+      "excerpt_lines": [
+        276,
+        298
+      ]
+    },
+    {
+      "path": "codex-rs/core/src/hook_runtime.rs",
+      "sha256": "d0544d1f180a1f33e59af86aadcb89e207031276d9644a1f6e9a3711cf0797c7",
+      "excerpt_lines": [
+        1065,
+        1085
+      ]
+    },
+    {
+      "path": "codex-rs/hooks/src/events/pre_tool_use.rs",
+      "sha256": "a65a5303590ac362d7824519ab6282ba1d8ecbf1ba2fbc9010d6da252d66744f",
+      "excerpt_lines": [
+        169,
+        191
+      ]
+    },
+    {
+      "path": "codex-rs/hooks/src/events/session_start.rs",
+      "sha256": "4c3bfe8f9ca2229a9958c17d4459ed050b7ac712e03a3b0d95ee433b84a3c843",
+      "excerpt_lines": [
+        218,
+        224
+      ]
+    },
+    {
+      "path": "codex-rs/core/src/tools/handlers/request_user_input.rs",
+      "sha256": "f4975978234d0ff7c143e6a5616d5523b9bddac044a6e39f8a0a32dcf0f56a38",
+      "excerpt_lines": [
+        67,
+        85
+      ]
+    },
+    {
+      "path": "codex-rs/collaboration-mode-templates/templates/default.md",
+      "sha256": "1042cc643eb0147ca1039b19287c7462ceb297502f7f310d9664ac323a12feca",
+      "excerpt_lines": [
+        11,
+        23
+      ]
+    },
+    {
+      "path": "codex-rs/collaboration-mode-templates/templates/plan.md",
+      "sha256": "d6d46c2d460a9d91ada2167605a8dfc56efde6b2ab61e101444c736c6fd6960a",
+      "excerpt_lines": [
+        59,
+        77
+      ]
+    }
+  ]
+}

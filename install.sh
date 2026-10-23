@@ -382,18 +382,7 @@ PY
 }
 
 configure_codex_choices() {
-  case "$(codex_choice_setting)" in
-    true) return 0 ;;
-    false) die "Codex explicitly disables clickable questions in ${CODEX_CONFIG}; the harness cannot offer its required choices" ;;
-    unset)
-      codex features enable default_mode_request_user_input >/dev/null \
-        || die "Codex could not enable clickable questions; the harness cannot run its choice-driven workflow"
-      [[ "$(codex_choice_setting)" == true ]] \
-        || die "Codex did not save the clickable-question setting"
-      mkdir -p "$HARNESS_HOME"
-      : > "$CODEX_CHOICES_MARKER"
-      ;;
-  esac
+  say "Codex: preserving question feature preferences; native tools are discovered at runtime"
 }
 
 restore_codex_choices() {
@@ -802,9 +791,6 @@ main() {
   fi
   preflight
   select_hosts
-  if [[ $INSTALL_CODEX -eq 1 && "$(codex_choice_setting)" == false ]]; then
-    die "Codex explicitly disables clickable questions in ${CODEX_CONFIG}; the harness cannot offer its required choices"
-  fi
   stage_payload
   local targets=()
   [[ $INSTALL_CLAUDE -eq 1 ]] && targets+=("Claude Code")

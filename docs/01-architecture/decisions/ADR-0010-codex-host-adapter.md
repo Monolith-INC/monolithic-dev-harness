@@ -30,3 +30,20 @@ skipped by Codex.
 Some specialized tools do not invoke hooks; Codex hooks are not a complete security boundary.
 
 This decision supersedes [ADR-0005](ADR-0005-claude-code-and-cursor-only.md).
+
+## Current qualification work (2026-10-23)
+
+The Codex adapter now distinguishes native child `agent_id` from the shared parent `session_id`,
+using observed lifecycle events to freeze child work-session scope. Child observations do not
+confer approval authority. The Python subprocess subagent contract remains unsupported; this
+does not describe Codex's native model-facing delegation capability.
+
+Question availability, collaboration mode, permitted decision class and actual delivery are
+separate facts. `permission_mode` does not establish collaboration mode. In the confirmed
+async wire contract, post-tool `accepted:true` acknowledges delivery; the later operator input
+is a separate event. No timeout or delivery acknowledgement authorizes an effect.
+
+See the [current evidence and official source anchors](../../06-delivery/acceptance/codex-adapter/evidence.md)
+and [development trial](../../06-delivery/acceptance/codex-adapter/trial.md) for precise supported
+boundaries and remaining release requirements. Native protocol observations do not yet qualify
+a fully functional installed Desktop release.

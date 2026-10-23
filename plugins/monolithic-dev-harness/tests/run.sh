@@ -12,3 +12,5 @@ PYTHONPATH=.:scripts "$PY" -m pytest tests/core tests/integrations tests/deliver
 bash tests/test_installer_confirmation.sh
 bash tests/test_installer_kimi.sh
 bash tests/test_installer_claude.sh
+
+bash tests/test_installer_codex.sh

@@ -67,12 +67,14 @@ def test_namespaced_same_workspace_capture(tmp_path, name):
 @pytest.mark.parametrize(
     "flags,transport",
     [
-        ((), "blocking"),
+        ((), "chat"),
         (("--native-unavailable",), "chat"),
-        (("--async-available",), "async"),
+        (("--async-available",), "chat"),
     ],
 )
-def test_codex_presentation_attempts_native_before_chat(tmp_path, flags, transport):
+def test_codex_unobserved_presentation_does_not_infer_mode_from_flags(
+    tmp_path, flags, transport
+):
     result = subprocess.run(
         [
             str(CLI),
@@ -96,3 +98,4 @@ def test_codex_presentation_attempts_native_before_chat(tmp_path, flags, transpo
     )
     assert result.returncode == 0, result.stderr
     assert json.loads(result.stdout)["transport"] == transport
+    assert not json.loads(result.stdout)["structured_qualified"]

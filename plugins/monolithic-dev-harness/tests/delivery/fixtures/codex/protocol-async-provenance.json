@@ -1,0 +1,29 @@
+{
+  "classification": "native_cli_app_server_default_async_required_domain_review_protocol_with_operator_automation",
+  "host_version": "0.162.1",
+  "mode": "default",
+  "question_class": "required_domain_fixture_review",
+  "transport": "request_user_input_async",
+  "observed_delivery": "async",
+  "question_capture": "protocol-async-question.json",
+  "operator_answer_capture": "protocol-async-operator-answer.json",
+  "result_capture": "protocol-async-result.json",
+  "raw_server_event_log": "/tmp/mdh-codex-proof/async-events.jsonl",
+  "raw_server_event_log_sha256": "71260dc6e9e9a41be1fe89a824b9997353d4a74258c4bc54bd5c275fcbeda3eb",
+  "operator_driver": "/tmp/mdh-codex-proof/async-probe.py",
+  "operator_driver_sha256": "776326372e0c9ba70b067bb3fb2a9ef0591429668ec5f5cdcd7ab1bab06a6613",
+  "operator_response_transport": "Actual turn/steer sent against the observed native threadId and expectedTurnId; server emitted an actual userMessage Approve before the final result",
+  "accepted_true_semantics": "Pinned official handler immediate delivery acknowledgment; not an answer or approval",
+  "upstream_handler_path": "codex-rs/core/src/tools/handlers/request_user_input_async.rs",
+  "upstream_revision": "398500106707f0a3217c7cf83edc2bf226cc342f",
+  "upstream_handler_sha256": "88d412979e5b5be773f3552044f0dd1f6babd692482e45371a97d976e70bac20",
+  "authority": "User delegated autonomous operator execution of trial to root; this is not a human UI selection",
+  "sanitization": "Select actual server item/completed events only; preserve original identities and fields; exclude account and unrelated settings events",
+  "limitations": [
+    "No Desktop rendering observed",
+    "No ask or answer hook capture",
+    "No harness approval binding or digest verification",
+    "No external write",
+    "Not a universal Default question exemption"
+  ]
+}

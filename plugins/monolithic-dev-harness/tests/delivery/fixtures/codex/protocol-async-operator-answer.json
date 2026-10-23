@@ -1,0 +1,21 @@
+{
+  "method": "item/completed",
+  "params": {
+    "item": {
+      "type": "userMessage",
+      "id": "01a169a1-5dfb-7393-a1d9-6112786b4a79",
+      "clientId": null,
+      "content": [
+        {
+          "type": "text",
+          "text": "Approve",
+          "text_elements": []
+        }
+      ]
+    },
+    "threadId": "01a169a1-4b88-74a3-b1ed-804353d242a7",
+    "turnId": "01a169a1-4be2-7390-a908-de1716ec883c",
+    "completedAtMs": 1792773545467
+  },
+  "emittedAtMs": 1792773545467
+}

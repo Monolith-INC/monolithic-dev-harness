@@ -57,7 +57,11 @@ from harness import (  # noqa: E402
     work_sessions,
     workflow,
 )
-from host_adapters import hook_bridge, work_session_context  # noqa: E402
+from host_adapters import (  # noqa: E402
+    codex_bindings,
+    hook_bridge,
+    work_session_context,
+)
 from host_adapters.answer_recovery import recorded_answer  # noqa: E402
 from host_adapters.interactions import (  # noqa: E402
     decision_exchange,
@@ -161,6 +165,16 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
         case "suspended":
             _emit_decision(host, rules.Decision.allow())
             return 0
+        case _:
+            pass
+    match host:
+        case "codex" if settings.governed(repo):
+            match codex_bindings.guard(repo, payload, _tool_call(host, event, payload)):
+                case rules.Decision() as denied:
+                    _emit_decision(host, denied)
+                    return 0
+                case _:
+                    pass
         case _:
             pass
     call = _tool_call(host, event, payload)
@@ -401,6 +415,11 @@ def _bind(
     request: tuple[str, str] | None,
 ) -> Result[object]:
     """Bind the conversation to the session an allowed command chose; a failure binds nothing."""
+    match host, codex_bindings.is_child(payload):
+        case "codex", True:
+            return Ok(current)
+        case _:
+            pass
     match _onboarding_control(_tool_call(host, "pre-tool", payload), repo):
         case True:
             return Ok(None)
@@ -671,6 +690,10 @@ def _recover_prompt_answer(
     scope: str | None,
 ) -> tuple[list[str], decisions.Pending | None]:
     match decisions.pending(repo, scope):
+        case decisions.Pending() if not _native_decision_origin(
+            repo, host, payload, scope
+        ):
+            return [], None
         case decisions.Pending() as pending:
             match recorded_answer(host, payload, pending):
                 case tuple() as captured:
@@ -682,6 +705,17 @@ def _recover_prompt_answer(
                     return [], pending
         case None:
             return [], None
+
+
+def _native_decision_origin(
+    repo: Path, host: str, payload: dict[str, Any], scope: str | None
+) -> bool:
+    """A native decision remains owned by the conversation that prepared it."""
+    match host, decisions.record(repo, scope):
+        case "codex", {"native_session_id": str() as expected} if expected:
+            return payload.get("session_id") == expected
+        case _:
+            return True
 
 
 def _governed(payload: dict[str, Any], host: str = "claude") -> Path | None:
@@ -819,10 +853,12 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
         )
         return 0
     work_session_id = context.value
-    pending = decisions.pending(repo, work_session_id)
     transport = question_transport(host, str(payload.get("tool_name", "")))
     tool_input = normalize_question(host, hook_bridge.question_input(payload))
     first = (tool_input.get("questions") or [{}])[0]
+    pending = _native_async_pending(
+        repo, host, payload, decisions.pending(repo, work_session_id), first, transport
+    )
     preparing = pending is not None and pending.matches_presentation(first, transport)
     if decisions.blocking(repo, work_session_id) and not preparing:
         _emit_decision(
@@ -938,6 +974,47 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             pass
     state.mark_asked(repo, questions.marker_name(tool_use_id), detail, decision_scope)
     return 0
+
+
+def _native_async_pending(
+    repo: Path,
+    host: str,
+    payload: dict[str, Any],
+    pending: decisions.Pending | None,
+    question: dict[str, Any],
+    transport: str,
+) -> decisions.Pending | None:
+    """Discover delivery from an actual root ask without granting answer authority."""
+    from host_adapters import codex_runtime
+
+    match host, transport, pending:
+        case "codex", "async", decisions.Pending(transport="chat"):
+            match codex_runtime.observed_profile(payload):
+                case Ok(
+                    codex_runtime.CodexRuntimeProfile(
+                        root=True, async_required_permitted=True
+                    )
+                ):
+                    match decisions.adopt_native_async(
+                        repo,
+                        pending.id,
+                        str(question.get("question", "")),
+                        tuple(
+                            str(option.get("label", ""))
+                            for option in question.get("options", ())
+                            if isinstance(option, dict)
+                        ),
+                        str(payload.get("session_id", "")),
+                        work_session_id=pending.scope,
+                    ):
+                        case Ok(record):
+                            return decisions.Pending.from_record(record, pending.scope)
+                        case _:
+                            return pending
+                case _:
+                    return pending
+        case _:
+            return pending
 
 
 def _unseen_artifacts(
@@ -1092,6 +1169,11 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
     work_session_id = context.value
     pending = decisions.pending(repo, work_session_id)
     decision_scope = pending.scope if pending is not None else work_session_id
+    match _native_decision_origin(repo, host, payload, decision_scope):
+        case False:
+            return 0
+        case _:
+            pass
     tool_input = normalize_question(host, hook_bridge.question_input(payload))
     if pending is not None and pending.transport == "async":
         return 0  # tool completion is delivery; the reply arrives later as a prompt
@@ -1394,6 +1476,31 @@ def _save_captured_language(repo: Path, answer: str) -> str | None:
             return None
 
 
+def handle_codex_lifecycle(event: str, payload: dict[str, Any]) -> int:
+    """Lifecycle notification is evidence, never an enforceable spawn/cancel decision."""
+    match settings.governed(_workspace(payload, "codex")):
+        case False:
+            return 0
+        case _:
+            pass
+    match event:
+        case "interrupt":
+            observed = codex_bindings.interrupt(_workspace(payload, "codex"), payload)
+        case _:
+            observed = codex_bindings.observe_lifecycle(
+                _workspace(payload, "codex"), payload
+            )
+    match observed:
+        case Err(failure):
+            print(
+                f"[harness codex-child-lineage] {failure.message}; child effects remain blocked.",
+                file=sys.stderr,
+            )
+        case _:
+            pass
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1410,6 +1517,9 @@ def main(argv: list[str] | None = None) -> int:
             "answer",
             "stop",
             "startup",
+            "subagent-start",
+            "subagent-stop",
+            "interrupt",
         ),
         required=True,
     )
@@ -1420,6 +1530,46 @@ def main(argv: list[str] | None = None) -> int:
         payload = {}
     if not isinstance(payload, dict):
         payload = {}
+    match args.host, args.event:
+        case "codex", "subagent-start" | "subagent-stop" | "interrupt":
+            return handle_codex_lifecycle(args.event, payload)
+        case "codex", "prompt" | "ask" | "answer" | "startup" if (
+            codex_bindings.is_child(payload)
+        ):
+            _emit_decision(
+                "codex",
+                rules.Decision.deny(
+                    "codex-child-authority",
+                    "children return human decision and conversation-binding needs to their root; no human authority was recorded",
+                ),
+            )
+            return 0
+        case _:
+            pass
+    match args.host, args.event, codex_bindings.is_child(payload):
+        case "codex", "pre-tool" | "ask" | "prompt", False if payload.get(
+            "session_id"
+        ) and (
+            settings.governed(_workspace(payload, "codex"))
+            or decisions.record(_workspace(payload, "codex")) is not None
+        ):
+            from host_adapters import codex_runtime
+
+            match codex_runtime.persist_observation(
+                _workspace(payload, "codex"), payload
+            ):
+                case Err(failure):
+                    _emit_decision(
+                        "codex",
+                        rules.Decision.deny(
+                            "codex-runtime-observation", failure.message
+                        ),
+                    )
+                    return 0
+                case _:
+                    pass
+        case _:
+            pass
     match args.event:
         case "startup":
             match attempt(

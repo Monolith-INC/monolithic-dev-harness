@@ -23,6 +23,18 @@ def codex_session_id(payload: dict[str, Any]) -> str:
     return value.strip() if isinstance(value, str) else ""
 
 
+def native_operation(tool_name: str) -> str | None:
+    """Native names in the pinned runtime contract; mapping is not execution evidence."""
+    return {
+        "collaborationspawn_agent": "start",
+        "collaborationfollowup_task": "follow-up",
+        "collaborationlist_agents": "status",
+        "collaborationwait_agent": "wait",
+        "collaborationinterrupt_agent": "interrupt",
+        "collaborationsend_message": "message",
+    }.get(tool_name)
+
+
 def format_codex_decision(decision: PolicyDecision) -> dict[str, Any]:
     return {
         "hookSpecificOutput": {
@@ -38,5 +50,5 @@ def format_codex_decision(decision: PolicyDecision) -> dict[str, Any]:
 
 
 def subagents() -> SubagentOps:
-    """Nothing verified yet (see `hosts/codex.json`), so every operation is unsupported."""
+    """The subprocess contract is unsupported; native workflows use the host tool boundary."""
     return unsupported_ops("codex")
