@@ -1,0 +1,254 @@
+{
+  "classification": "actual_installed_native_operator_trial",
+  "release": "v0.7.0-rc.6",
+  "tagged_commit": "bcab959744f7b9bc8126d39894200a5a2e122b82",
+  "archive_sha256": "3034c56cc60dfdfaf12995a0185f2f5272ec3d079cbfcc5cb3564ff3b103bf1f",
+  "decision": {
+    "allow_free_text": false,
+    "answer": "Yes",
+    "approval": false,
+    "artifacts": [],
+    "details": [],
+    "id": "call_da50ff3891dc4f9a8fa304ae5c3fb5ee",
+    "kind": "required",
+    "native_session_id": "01a16a70-1a52-7843-94a6-fea8fb28d431",
+    "options": [
+      "Yes",
+      "No"
+    ],
+    "presentation_id": "HD-9335c52673e5dd89",
+    "question": "Confirm?",
+    "status": "answered",
+    "transport": "async",
+    "work_session_id": "WS-14b814ea7826"
+  },
+  "events": [
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a16a70-1a52-7843-94a6-fea8fb28d431",
+        "turnId": "01a16a70-1c47-74f0-bd06-baf5240f5d07",
+        "run": {
+          "id": "user-prompt-submit:4:/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.6/hooks/codex.hooks.json",
+          "eventName": "userPromptSubmit",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.6/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 4,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1792787095,
+          "completedAt": 1792787096,
+          "durationMs": 362,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1792787096247
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "userMessage",
+          "id": "01a16a70-22b6-7e13-9950-3f46b2544d00",
+          "clientId": null,
+          "content": [
+            {
+              "type": "text",
+              "text": "This is an operator-authorized disposable harness decision trial. The exact pending decision is already prepared. Call native request_user_input_async exactly once with title Confirm? and options Yes and No exactly as written. This is a domain decision, not sandbox permission or escalation. Do not use any other tools or change files. Wait for actual operator response, then report its exact selection and stop. Delivery accepted is not an answer.",
+              "text_elements": []
+            }
+          ]
+        },
+        "threadId": "01a16a70-1a52-7843-94a6-fea8fb28d431",
+        "turnId": "01a16a70-1c47-74f0-bd06-baf5240f5d07",
+        "completedAtMs": 1792787096246
+      },
+      "emittedAtMs": 1792787096247
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a16a70-1a52-7843-94a6-fea8fb28d431",
+        "turnId": "01a16a70-1c47-74f0-bd06-baf5240f5d07",
+        "run": {
+          "id": "pre-tool-use:1:/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.6/hooks/codex.hooks.json:call_da50ff3891dc4f9a8fa304ae5c3fb5ee",
+          "eventName": "preToolUse",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.6/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 1,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1792787098,
+          "completedAt": 1792787098,
+          "durationMs": 224,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1792787098358
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "agentMessage",
+          "id": "call_da50ff3891dc4f9a8fa304ae5c3fb5ee",
+          "text": "Confirm?\n- Yes\n- No",
+          "phase": "final_answer",
+          "memoryCitation": null,
+          "delivery": "async",
+          "questions": [
+            {
+              "title": "Confirm?",
+              "options": [
+                "Yes",
+                "No"
+              ]
+            }
+          ]
+        },
+        "threadId": "01a16a70-1a52-7843-94a6-fea8fb28d431",
+        "turnId": "01a16a70-1c47-74f0-bd06-baf5240f5d07",
+        "completedAtMs": 1792787098357
+      },
+      "emittedAtMs": 1792787098358
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a16a70-1a52-7843-94a6-fea8fb28d431",
+        "turnId": "01a16a70-1c47-74f0-bd06-baf5240f5d07",
+        "run": {
+          "id": "post-tool-use:2:/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.6/hooks/codex.hooks.json:call_da50ff3891dc4f9a8fa304ae5c3fb5ee",
+          "eventName": "postToolUse",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.6/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 2,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1792787098,
+          "completedAt": 1792787098,
+          "durationMs": 210,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1792787098568
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a16a70-1a52-7843-94a6-fea8fb28d431",
+        "turnId": "01a16a70-1c47-74f0-bd06-baf5240f5d07",
+        "run": {
+          "id": "user-prompt-submit:4:/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.6/hooks/codex.hooks.json",
+          "eventName": "userPromptSubmit",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.6/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 4,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1792787098,
+          "completedAt": 1792787098,
+          "durationMs": 219,
+          "entries": [
+            {
+              "kind": "context",
+              "text": "[harness] human decision recorded: Yes"
+            }
+          ]
+        }
+      },
+      "emittedAtMs": 1792787098797
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "userMessage",
+          "id": "01a16a70-2ca4-7662-ab66-b1e1fd75bb09",
+          "clientId": null,
+          "content": [
+            {
+              "type": "text",
+              "text": "Yes",
+              "text_elements": []
+            }
+          ]
+        },
+        "threadId": "01a16a70-1a52-7843-94a6-fea8fb28d431",
+        "turnId": "01a16a70-1c47-74f0-bd06-baf5240f5d07",
+        "completedAtMs": 1792787098789
+      },
+      "emittedAtMs": 1792787098798
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a16a70-1a52-7843-94a6-fea8fb28d431",
+        "turnId": "01a16a70-1c47-74f0-bd06-baf5240f5d07",
+        "run": {
+          "id": "stop:7:/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.6/hooks/codex.hooks.json",
+          "eventName": "stop",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.6/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 7,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1792787100,
+          "completedAt": 1792787100,
+          "durationMs": 209,
+          "entries": []
+        }
+      },
+      "emittedAtMs": 1792787100245
+    }
+  ],
+  "driver_exit_code": 0,
+  "failed_hook_count": 0,
+  "prompt_callback_count": 2,
+  "mcp_initialized": [
+    {
+      "name": "backlog-orchestrator",
+      "tool_count": 22,
+      "serverCapabilities": {
+        "tools": {}
+      }
+    },
+    {
+      "name": "workflow-integrations",
+      "tool_count": 21,
+      "serverCapabilities": {
+        "tools": {}
+      }
+    },
+    {
+      "name": "workflow-orchestrator",
+      "tool_count": 22,
+      "serverCapabilities": {
+        "tools": {}
+      }
+    }
+  ],
+  "raw_log_sha256": "9127dfc9191b2a13c75c59091af9feea56d3714185bf5447990b0ad6e0de813c",
+  "driver_sha256": "dd9b6d8ddd71299ca98011d736f60f6c57ed9e3cae92d9ad45adf20609890a75",
+  "limits": [
+    "Operator protocol answer, not human Desktop button click.",
+    "General decision; no reviewed external-effect approval or external write.",
+    "Isolated CLI profile, not the active Desktop installation.",
+    "Child cancellation, assignment permissions and complete workflow parity remain unqualified."
+  ]
+}

@@ -255,3 +255,14 @@ UserPromptSubmit callback rejected plain diagnostic text beginning with `[harnes
 The corrected Codex formatter serializes the documented UserPromptSubmit JSON shape;
 four failing output-contract regressions became green in the 117-test focused slice.
 See [decision proof](rc5-installed-decision.json). RC6 is required for this correction.
+
+## Published RC6 correction verified
+
+The published RC6 archive was checksum-verified and installed into a fresh CLI profile.
+The loaded adapter modules matched the archive, and all nine actual hooks were reviewed/trusted
+there. Three harness MCP servers initialized. A real native async question and later operator
+answer recorded `Yes` in the preparing conversation and work session. Both prompt callbacks
+completed; no hook callback failed; the driver exited zero without its previous cleanup warning.
+[Actual RC6 evidence](rc6-installed-decision.json) records the source/archive identity, native
+events, decision, driver/log hashes and scope limits. This closes the prompt wire defect, not
+the cancellation, Desktop UI, assignment-permission or complete-parity qualification gaps.

@@ -7,8 +7,16 @@ last_reviewed: 2026-10-23
 
 # Codex adapter development trial
 
-Date: 2026-10-23. Status: RC5 published and installed; RC6 prompt correction in progress.
-Final qualification remains pending.
+Date: 2026-10-23. Status: RC6 published, installed and its corrected native question trial passed.
+Final qualification is blocked by the unresolved requirements below.
+
+Latest candidate: [v0.7.0-rc.6](https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.7.0-rc.6),
+tagged commit `bcab959744f7b9bc8126d39894200a5a2e122b82`.
+Archive SHA-256: `3034c56cc60dfdfaf12995a0185f2f5272ec3d079cbfcc5cb3564ff3b103bf1f`.
+All four CI jobs and the release workflow passed on that source. Downloaded assets passed
+`SHA256SUMS`; loaded adapter modules matched the archive byte for byte. The actual installer
+registered the candidate in a fresh private CLI profile. Active Desktop configuration was not
+upgraded by these isolated installations.
 
 Published candidate: [v0.7.0-rc.4](https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.7.0-rc.4),
 tagged commit `0ed24a2018463125ea56109df7731d90c44bd12d`.
@@ -39,6 +47,8 @@ The user explicitly authorized the root to operate the trial on their behalf. Re
 | RC5 worker hooks | PASS: no failed hook callbacks across worker/follow-up; post-tool context accepted | Actual installed archive, fresh profile, reviewed trust hashes; no general Desktop qualification |
 | RC5 cancellation | Native activity reported interrupted, but adapter revocation FAILS qualification: saved binding remained active and no Interrupt callback appeared | No OS-process cancellation claim; mismatching fresh turns still fail lineage checks |
 | RC5 native answer | Answer persisted in correct conversation/work session, but UserPromptSubmit callback FAIL: diagnostic text looked like invalid JSON | [Actual decision and failed callback](rc5-installed-decision.json); corrected with explicit Codex prompt JSON for RC6 |
+| RC6 installed question and answer | PASS: real async question, later operator `Yes`, answered record in the same native conversation/work session; both prompt callbacks completed; no failed hook callbacks; driver exited zero | [Actual events and decision](rc6-installed-decision.json); native protocol, not rendered Desktop buttons or external-effect approval |
+| RC6 package discovery | PASS: nine actual hooks; reviewed hashes trusted in the private profile; all three harness MCP servers initialized | Installed hook, bridge, runtime and child-binding modules match the verified release archive |
 
 The socket failure was traced with official source to a host daemon directory that the enclosing
 agent sandbox deliberately masks as mode `000`. An approved read outside that sandbox confirmed
@@ -58,6 +68,14 @@ The source documentation and sanitized protocol/hook fixtures are linked from [e
 
 A protocol pass or a green unit test does not clear these requirements. Preserve pending gates and report concrete blockers rather than describing a partial adapter as fully functional.
 
+The next qualification checkpoint needs actual Desktop rendering/capture and an authenticated
+way to associate native interruption with adapter revocation. Model-facing status text or a
+model-written lifecycle receipt cannot supply that authority. The observed interrupted child
+retained its old turn binding; a fresh mismatching turn remains denied, but this is not proof
+that the interrupted turn's authority or underlying process was revoked. Assignment permissions,
+the remaining workflow families and a dedicated external-write/recovery fixture also need their
+stated evidence. These are release blockers, not permission to bypass existing harness laws.
+
 ## Verification to date
 
 One combined core/integration/delivery/harness run produced 1,582 passes, one skip and six
@@ -69,3 +87,8 @@ version and Markdown checks. All four mandatory CI jobs passed on the tagged com
 the full Python 3.12 and 3.13 suites and archive installation. The release workflow independently
 passed its required tests and published the three verified assets. No final full-parity release
 is claimed.
+
+The final prompt correction reproduced four failed output-contract regressions, then passed the
+117-test Codex slice. RC6 CI and release checks passed, and the changed boundary passed its real
+archive-installed question trial. The unchanged worker/follow-up boundary retains RC5's authentic
+successful effect evidence; it was not rerun for the prompt-only correction.
