@@ -11,8 +11,9 @@ All notable changes to this project are documented here. The format follows
 ### Added
 
 - Native Codex child identity and parent work-session checks from real lifecycle and tool hooks.
-  Stopped or interrupted children cannot reuse the saved scope, record human answers, or switch
-  the root's work session. Existing opt-out and suspension behavior is preserved.
+  Completed child turns cannot replay their saved authority; authentic fresh follow-up turns
+  retain the same scope. Interrupted children remain revoked. Children cannot record human
+  answers or switch the root's work session. Existing opt-out and suspension behavior is preserved.
 - Codex question discovery from authentic root events, with native async candidates for initial
   questions, exact pending-question adoption, and conversation-bound answer capture. Delivery
   acknowledgement never grants approval.

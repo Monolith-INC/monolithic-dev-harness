@@ -7,7 +7,9 @@ last_reviewed: 2026-10-23
 
 # Codex adapter contract evidence
 
-Captured 2026-10-23. This is feasibility evidence, not completed candidate acceptance.
+Captured 2026-10-23. The initial probes below are historical feasibility evidence,
+not completed candidate acceptance. Current implementation and trial outcomes are
+recorded in [trial.md](trial.md).
 The governing design and plan are
 [design](../../../superpowers/specs/2026-10-23-codex-adapter-design.md) and
 [plan](../../../superpowers/plans/2026-10-23-codex-adapter-release.md).
@@ -195,3 +197,21 @@ successful effect execution from observed pre-tool identity, then qualify denial
 bindings, wrapper coverage and Desktop behavior. Keep absent evidence explicitly
 unknown. No broad suites, product changes, installation or release was performed
 by this evidence worker.
+
+## Follow-up turn contract and correction
+
+Context7 was queried specifically for follow-up lifecycle semantics. Its returned
+`followup_task` specification confirms reuse of an idle existing child. The pinned
+[hook runtime](https://github.com/openai/codex/blob/398500106707f0a3217c7cf83edc2bf226cc342f/codex-rs/core/src/hook_runtime.rs#L129-L150)
+dispatches `SubagentStart` on Startup/Fork; stop hooks close individual turns.
+Context7 also returned a generalized summary claiming that start hooks can block:
+that summary conflicts with the quoted parser implementation and is not used.
+
+The first archive-installed worker probe correctly denied an unlinked code edit
+under the existing Story/Bug prerequisite, then exposed an adapter defect: its
+follow-up turn was also denied because the previous turn had stopped. The adapter
+now records completed turn IDs and renews only authentic fresh turns in the same
+frozen scope. Interrupted/conflicted records stay terminal; same/missing/replayed
+turns and stale stop events cannot reactivate them. Focused hook integration
+checks exercise the normal governed path and preserve the suspension bypass.
+This correction still requires the updated archive's installed-host trial.

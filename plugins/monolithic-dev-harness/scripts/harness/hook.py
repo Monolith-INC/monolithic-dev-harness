@@ -169,6 +169,11 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
             pass
     match host:
         case "codex" if settings.governed(repo):
+            match codex_bindings.is_child(payload), payload.get("hook_event_name"):
+                case True, "PreToolUse":
+                    codex_bindings.observe_child_turn(repo, payload)
+                case _:
+                    pass
             match codex_bindings.guard(repo, payload, _tool_call(host, event, payload)):
                 case rules.Decision() as denied:
                     _emit_decision(host, denied)

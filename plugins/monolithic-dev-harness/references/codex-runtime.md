@@ -17,8 +17,8 @@ binding for the observed child in the protected
 that registers a child or grants authority.
 
 Each governed child effect must match the saved child, parent, project and active
-work-session scope. Missing, contradictory, unreadable or ended lineage blocks the
-effect. Changing the root's work session does not move an existing child. Existing
+work-session scope. Missing, contradictory or unreadable lineage blocks the effect. A completed
+turn cannot spend its former turn identity. Changing the root's work session does not move an existing child. Existing
 harness rules and workflow prerequisites then evaluate the effect under that same
 parent scope; a binding supplies no approval of its own.
 
@@ -37,12 +37,14 @@ collaboration controls. The `harness-python` runtime runner remains available fo
 ordinary test execution and diagnostics, including `-m pytest`; the existing host
 hook execution prohibition still applies.
 
-`SubagentStop` revokes the child's ability to spend its saved scope, including when
-the parent is paused. `Interrupt` revokes observed matching children without
-claiming that cancellation succeeded. A duplicate start cannot revive an ended
-binding. Continued work after an ended child requires a newly established valid
-child context; follow-up and cancellation qualification remain separate evidence
-requirements. Start notifications are not advertised as an enforceable spawn veto.
+`SubagentStop` closes the observed child turn, including when the parent is paused.
+Codex sends `SubagentStart` on child startup/fork, rather than every follow-up turn.
+An authentic child `PreToolUse` can renew a completed child only with a different,
+nonempty, never-completed turn ID and the same parent, project and active frozen
+work-session scope. Legacy records without turn identity cannot renew this way.
+`Interrupt` revokes observed matching children without claiming that cancellation
+succeeded; a late stop or fresh turn cannot undo that revocation. A duplicate start
+cannot revive an ended binding. Start notifications are not an enforceable spawn veto.
 
 ## Current limits
 

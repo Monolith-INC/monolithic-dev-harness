@@ -178,6 +178,128 @@ def test_stop_is_idempotent_and_start_cannot_revive_child(
     assert isinstance(codex_bindings.resolve_child_scope(repo, payload(repo)), Err)
 
 
+def test_fresh_pre_tool_turn_revives_stopped_child(scoped: tuple[Path, str]) -> None:
+    repo, scope = scoped
+    codex_bindings.observe_lifecycle(repo, payload(repo, turn_id="turn-1"))
+    codex_bindings.observe_lifecycle(
+        repo, payload(repo, "SubagentStop", turn_id="turn-1")
+    )
+    renewed = codex_bindings.observe_child_turn(
+        repo, payload(repo, "PreToolUse", turn_id="turn-2")
+    )
+    assert renewed == Ok(
+        codex_bindings.CodexChildBinding(
+            "parent-native",
+            "child-native",
+            str(repo.resolve()),
+            scope,
+            turn_id="turn-2",
+            completed_turns=("turn-1",),
+        )
+    )
+    assert codex_bindings.resolve_child_scope(
+        repo, payload(repo, "PreToolUse", turn_id="turn-2")
+    ) == Ok(scope)
+
+
+@pytest.mark.parametrize("turn_id", ("turn-1", ""))
+def test_old_or_missing_pre_tool_turn_cannot_revive_child(
+    scoped: tuple[Path, str], turn_id: str
+) -> None:
+    repo, _ = scoped
+    codex_bindings.observe_lifecycle(repo, payload(repo, turn_id="turn-1"))
+    codex_bindings.observe_lifecycle(
+        repo, payload(repo, "SubagentStop", turn_id="turn-1")
+    )
+    assert isinstance(
+        codex_bindings.observe_child_turn(
+            repo, payload(repo, "PreToolUse", turn_id=turn_id)
+        ),
+        Err,
+    )
+
+
+def test_legacy_binding_without_original_turn_cannot_be_renewed(
+    scoped: tuple[Path, str],
+) -> None:
+    repo, _ = scoped
+    codex_bindings.observe_lifecycle(repo, payload(repo))
+    codex_bindings.observe_lifecycle(repo, payload(repo, "SubagentStop"))
+    assert isinstance(
+        codex_bindings.observe_child_turn(
+            repo, payload(repo, "PreToolUse", turn_id="turn-2")
+        ),
+        Err,
+    )
+
+
+@pytest.mark.parametrize("field", ("turn_id", "completed_turns"))
+@pytest.mark.parametrize("value", (None, 7, {}))
+def test_malformed_turn_history_is_rejected(field: str, value: object) -> None:
+    record = {
+        "version": 2,
+        "parent_native_session": "parent",
+        "child_native_session": "child",
+        "project": "/repo",
+        "work_session_id": "WS-1",
+        "status": "active",
+        "turn_id": "turn-1",
+        "completed_turns": [],
+        field: value,
+    }
+    assert isinstance(codex_bindings._decode(record), Err)
+
+
+def test_interrupted_child_cannot_be_revived(scoped: tuple[Path, str]) -> None:
+    repo, _ = scoped
+    codex_bindings.observe_lifecycle(repo, payload(repo, turn_id="turn-1"))
+    codex_bindings.interrupt(repo, {"session_id": "parent-native", "cwd": str(repo)})
+    assert isinstance(
+        codex_bindings.observe_child_turn(
+            repo, payload(repo, "PreToolUse", turn_id="turn-2")
+        ),
+        Err,
+    )
+
+
+def test_interrupt_then_late_stop_cannot_revive_child(scoped: tuple[Path, str]) -> None:
+    repo, _ = scoped
+    codex_bindings.observe_lifecycle(repo, payload(repo, turn_id="turn-1"))
+    codex_bindings.interrupt(repo, {"session_id": "parent-native", "cwd": str(repo)})
+    assert isinstance(
+        codex_bindings.observe_lifecycle(
+            repo, payload(repo, "SubagentStop", turn_id="turn-1")
+        ),
+        Ok,
+    )
+    assert isinstance(
+        codex_bindings.observe_child_turn(
+            repo, payload(repo, "PreToolUse", turn_id="turn-2")
+        ),
+        Err,
+    )
+
+
+def test_stale_stop_does_not_revoke_new_active_turn(scoped: tuple[Path, str]) -> None:
+    repo, scope = scoped
+    codex_bindings.observe_lifecycle(repo, payload(repo, turn_id="turn-1"))
+    codex_bindings.observe_lifecycle(
+        repo, payload(repo, "SubagentStop", turn_id="turn-1")
+    )
+    codex_bindings.observe_child_turn(
+        repo, payload(repo, "PreToolUse", turn_id="turn-2")
+    )
+    assert isinstance(
+        codex_bindings.observe_lifecycle(
+            repo, payload(repo, "SubagentStop", turn_id="turn-1")
+        ),
+        Err,
+    )
+    assert codex_bindings.resolve_child_scope(
+        repo, payload(repo, "PreToolUse", turn_id="turn-2")
+    ) == Ok(scope)
+
+
 def test_interrupt_revokes_children_without_claiming_cancel(
     scoped: tuple[Path, str],
 ) -> None:
@@ -525,3 +647,76 @@ def test_suspended_repository_releases_invalid_lineage_and_controls(
         ),
     )
     assert emit.call_args.args == ("codex", rules.Decision.allow())
+
+
+def test_governed_fresh_child_turn_reaches_protected_write_law(
+    scoped: tuple[Path, str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, _ = scoped
+    codex_bindings.observe_lifecycle(repo, payload(repo, turn_id="turn-1"))
+    codex_bindings.observe_lifecycle(
+        repo, payload(repo, "SubagentStop", turn_id="turn-1")
+    )
+    hook.handle_pre_tool(
+        "codex",
+        "pre-tool",
+        payload(
+            repo,
+            "PreToolUse",
+            turn_id="turn-2",
+            tool_name="Bash",
+            tool_input={
+                "command": "printf forged > .harness/state/host_sessions/codex/children/fake.json"
+            },
+        ),
+    )
+    output = capsys.readouterr().out
+    assert "human-owned" in output
+    assert "codex-child-lineage" not in output
+
+
+def test_governed_completed_child_turn_is_denied(
+    scoped: tuple[Path, str], capsys: pytest.CaptureFixture[str]
+) -> None:
+    repo, _ = scoped
+    codex_bindings.observe_lifecycle(repo, payload(repo, turn_id="turn-1"))
+    codex_bindings.observe_lifecycle(
+        repo, payload(repo, "SubagentStop", turn_id="turn-1")
+    )
+    hook.handle_pre_tool(
+        "codex",
+        "pre-tool",
+        payload(
+            repo,
+            "PreToolUse",
+            turn_id="turn-1",
+            tool_name="Bash",
+            tool_input={"command": "printf forged > output.txt"},
+        ),
+    )
+    assert "codex-child-lineage" in capsys.readouterr().out
+
+
+def test_suspended_child_turn_does_not_renew_binding(
+    scoped: tuple[Path, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    repo, _ = scoped
+    codex_bindings.observe_lifecycle(repo, payload(repo, turn_id="turn-1"))
+    codex_bindings.observe_lifecycle(
+        repo, payload(repo, "SubagentStop", turn_id="turn-1")
+    )
+    state.set_harness_mode(repo, "suspended")
+    save = Mock(wraps=codex_bindings._save)
+    monkeypatch.setattr(codex_bindings, "_save", save)
+    hook.handle_pre_tool(
+        "codex",
+        "pre-tool",
+        payload(
+            repo,
+            "PreToolUse",
+            turn_id="turn-2",
+            tool_name="Bash",
+            tool_input={"command": "pwd"},
+        ),
+    )
+    assert not save.called

@@ -28,7 +28,9 @@ class CodexChildBinding:
     project: str
     work_session_id: str
     status: str = "active"
-    version: int = 1
+    version: int = 2
+    turn_id: str = ""
+    completed_turns: tuple[str, ...] = ()
 
 
 def _identity(payload: dict[str, Any], key: str) -> str:
@@ -69,16 +71,48 @@ def _load(repo: Path, child: str) -> Result[CodexChildBinding | None]:
 def _decode(record: Any) -> Result[CodexChildBinding]:
     match record:
         case {
-            "version": 1,
+            "version": 1 | 2 as version,
             "parent_native_session": str() as parent,
             "child_native_session": str() as child,
             "project": str() as project,
             "work_session_id": str() as scope,
             "status": "active" | "stopped" | "interrupted" | "conflicted" as status,
         } if all((parent, child, project, scope)):
-            return Ok(CodexChildBinding(parent, child, project, scope, status))
+            return fmap(
+                _decode_turns(record, version),
+                lambda turns: CodexChildBinding(
+                    parent,
+                    child,
+                    project,
+                    scope,
+                    status=status,
+                    turn_id=turns[0],
+                    completed_turns=turns[1],
+                ),
+            )
         case _:
             return err("codex_child_invalid", "native child binding is invalid")
+
+
+def _decode_turns(
+    record: dict[str, Any], version: int
+) -> Result[tuple[str, tuple[str, ...]]]:
+    match version, record.get("turn_id", ""), record.get("completed_turns", ()):
+        case 1, str() as turn_id, completed if isinstance(
+            completed, (list, tuple)
+        ) and all(isinstance(turn, str) for turn in completed):
+            return Ok((turn_id, tuple(completed)))
+        case 1, _, ():
+            return Ok(("", ()))
+        case 2, str() as turn_id, completed if (
+            "turn_id" in record
+            and "completed_turns" in record
+            and isinstance(completed, (list, tuple))
+            and all(isinstance(turn, str) for turn in completed)
+        ):
+            return Ok((turn_id, tuple(completed)))
+        case _:
+            return err("codex_child_invalid", "native child turn history is invalid")
 
 
 def _save(repo: Path, record: CodexChildBinding) -> Result[CodexChildBinding]:
@@ -164,6 +198,16 @@ def _stop(
     repo: Path, payload: dict[str, Any], record: CodexChildBinding | None
 ) -> Result[CodexChildBinding]:
     match record:
+        case CodexChildBinding(status="interrupted" | "conflicted"):
+            return Ok(record)
+        case CodexChildBinding() if (
+            record.turn_id
+            and _identity(payload, "turn_id")
+            and record.turn_id != _identity(payload, "turn_id")
+        ):
+            return err(
+                "codex_child_lineage", "native stop belongs to an older child turn"
+            )
         case CodexChildBinding() if (
             record.parent_native_session == _identity(payload, "session_id")
             and record.child_native_session == _identity(payload, "agent_id")
@@ -171,7 +215,18 @@ def _stop(
             and bool(_identity(payload, "cwd"))
             and project_paths.root(Path(_identity(payload, "cwd"))) == repo.resolve()
         ):
-            return _save(repo, replace(record, status="stopped"))
+            return _save(
+                repo,
+                replace(
+                    record,
+                    status="stopped",
+                    completed_turns=tuple(
+                        dict.fromkeys((*record.completed_turns, record.turn_id))
+                    )
+                    if record.turn_id
+                    else record.completed_turns,
+                ),
+            )
         case _:
             return err(
                 "codex_child_lineage", "native stop has no matching child lineage"
@@ -186,6 +241,7 @@ def _observe(
         _identity(payload, "agent_id"),
         str(repo.resolve()),
         scope,
+        turn_id=_identity(payload, "turn_id"),
     )
     match payload.get("hook_event_name"), previous:
         case "SubagentStart", None:
@@ -209,6 +265,58 @@ def _observe(
             )
 
 
+def observe_child_turn(
+    repo: Path, payload: dict[str, Any]
+) -> Result[CodexChildBinding]:
+    """Observe an authentic fresh child turn before governed effect checks."""
+    match payload.get("hook_event_name"), _identity(payload, "turn_id"):
+        case "PreToolUse", str() as turn_id if turn_id:
+            return bind(
+                _parent_scope(repo, payload),
+                lambda scope: bind(
+                    _load(repo, _identity(payload, "agent_id")),
+                    lambda record: _renew_child_turn(
+                        repo, payload, scope, turn_id, record
+                    ),
+                ),
+            )
+        case _:
+            return err(
+                "codex_child_lineage", "native child turn is missing or unauthentic"
+            )
+
+
+def _renew_child_turn(
+    repo: Path,
+    payload: dict[str, Any],
+    scope: str,
+    turn_id: str,
+    record: CodexChildBinding | None,
+) -> Result[CodexChildBinding]:
+    match record:
+        case CodexChildBinding(
+            parent_native_session=parent,
+            child_native_session=child,
+            project=project,
+            work_session_id=bound_scope,
+            status="stopped",
+            completed_turns=completed,
+        ) if (
+            parent == _identity(payload, "session_id")
+            and child == _identity(payload, "agent_id")
+            and project == str(repo.resolve())
+            and bound_scope == scope
+            and bool(record.turn_id)
+            and turn_id not in completed
+            and turn_id != record.turn_id
+        ):
+            return _save(repo, replace(record, status="active", turn_id=turn_id))
+        case _:
+            return err(
+                "codex_child_lineage", "native child turn cannot revive this lineage"
+            )
+
+
 def resolve_child_scope(repo: Path, payload: dict[str, Any]) -> Result[str]:
     return bind(
         _parent_scope(repo, payload),
@@ -216,12 +324,15 @@ def resolve_child_scope(repo: Path, payload: dict[str, Any]) -> Result[str]:
             _load(repo, _identity(payload, "agent_id")),
             lambda record: fmap(
                 require(
-                    record
-                    == CodexChildBinding(
-                        _identity(payload, "session_id"),
-                        _identity(payload, "agent_id"),
-                        str(repo.resolve()),
-                        scope,
+                    isinstance(record, CodexChildBinding)
+                    and record.status == "active"
+                    and record.parent_native_session == _identity(payload, "session_id")
+                    and record.child_native_session == _identity(payload, "agent_id")
+                    and record.project == str(repo.resolve())
+                    and record.work_session_id == scope
+                    and (
+                        not record.turn_id
+                        or record.turn_id == _identity(payload, "turn_id")
                     ),
                     "codex_child_lineage",
                     "native child binding is missing, conflicting, stopped, or interrupted",
