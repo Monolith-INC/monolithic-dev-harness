@@ -6,6 +6,23 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0-rc.6] - 2026-10-23
+
+### Fixed
+
+- Codex prompt notes use explicit UserPromptSubmit JSON. Plain diagnostic prefixes such as
+  `[harness]` are not emitted as JSON-looking text that the native parser rejects.
+
+### Qualification
+
+- RC5's real installed worker created a planning document and appended to it on a second turn
+  of the same child, with no failed worker hook callbacks. Native async decision capture recorded
+  the actual operator response. The prompt-output defect is corrected in this candidate.
+- Native interruption reported the child interrupted but emitted no observed Interrupt hook;
+  the adapter binding stayed active. Persisted cancellation revocation, Desktop controls,
+  assignment-specific permissions and complete Claude workflow parity remain unqualified.
+  This candidate is not a final fully functional release.
+
 ## [0.7.0-rc.5] - 2026-10-23
 
 ### Fixed
@@ -877,5 +894,6 @@ First release.
 [0.1.1]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.0
 
+[0.7.0-rc.6]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.5...v0.7.0-rc.6
 [0.7.0-rc.5]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.4...v0.7.0-rc.5
 [0.7.0-rc.4]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.7.0-rc.4

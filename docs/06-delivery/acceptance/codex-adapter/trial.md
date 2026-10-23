@@ -7,13 +7,18 @@ last_reviewed: 2026-10-23
 
 # Codex adapter development trial
 
-Date: 2026-10-23. Status: RC4 published and installed; final qualification remains pending.
+Date: 2026-10-23. Status: RC5 published and installed; RC6 prompt correction in progress.
+Final qualification remains pending.
 
 Published candidate: [v0.7.0-rc.4](https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.7.0-rc.4),
 tagged commit `0ed24a2018463125ea56109df7731d90c44bd12d`.
 The downloaded archive and installer both passed the published `SHA256SUMS` checks.
 Archive SHA-256: `71d9123ff7a21599d016b814f741703fc22100c3ff99940249355cb468ac0e36`.
 The release is explicitly a prerelease; no final `0.7.0` tag was created.
+
+The subsequent RC5 archive, tagged at `2d59406b38f47867fefc03d111be59da8ab4f90e`, also
+passed its published checksum, installer, all four CI jobs and release workflow.
+Archive SHA-256: `44467e3e50c616a8c86d869df7563e6e82c0f750d7d0ddaeee87418b7b7504ff`.
 
 The user explicitly authorized the root to operate the trial on their behalf. Responses submitted by the operator through the actual Codex client protocol are operator actions; they are not represented as human button clicks. Temporary configuration, credentials symlinks and captures live under `/tmp/mdh-codex-proof`; credentials are never copied into evidence.
 
@@ -30,11 +35,15 @@ The user explicitly authorized the root to operate the trial on their behalf. Re
 | RC4 installed decision | PASS: actual native async presentation and later operator input recorded `Yes`, transport `async`, native conversation and work-session IDs | [Persisted decision](rc4-installed-decision.json); operator response, not Desktop click or external-effect approval |
 | RC4 installed follow-up | PASS for turn renewal: same child recorded two distinct completed turns; FAIL for successful mutation | [Actual events and binding](rc4-installed-worker.json); nested sandbox blocked host socket access, then missing file prevented append; driver recursion failed at root completion |
 | RC4 child post-tool wire | FAIL: child startup guard emitted PreToolUse output and Codex rejected it | Fixed for RC5; RC4 does not pass acceptance |
+| RC5 worker and follow-up | PASS: native `pwd` exited zero; two actual file-change events completed; file contains `text proof` and `followup`; same child UUID, two completed turns | [Actual worker evidence](rc5-installed-worker.json); `gpt-5.6-luna` / low observed in native activity; planning artifact only |
+| RC5 worker hooks | PASS: no failed hook callbacks across worker/follow-up; post-tool context accepted | Actual installed archive, fresh profile, reviewed trust hashes; no general Desktop qualification |
+| RC5 cancellation | Native activity reported interrupted, but adapter revocation FAILS qualification: saved binding remained active and no Interrupt callback appeared | No OS-process cancellation claim; mismatching fresh turns still fail lineage checks |
+| RC5 native answer | Answer persisted in correct conversation/work session, but UserPromptSubmit callback FAIL: diagnostic text looked like invalid JSON | [Actual decision and failed callback](rc5-installed-decision.json); corrected with explicit Codex prompt JSON for RC6 |
 
 The socket failure was traced with official source to a host daemon directory that the enclosing
 agent sandbox deliberately masks as mode `000`. An approved read outside that sandbox confirmed
 the host directory has the required owner and mode `0700`. No directory permissions were changed.
-The RC5 trial will use the approved host execution facility while preserving the trial Codex
+The RC5 trial used the approved host execution facility while preserving the trial Codex
 process's workspace sandbox and the harness hooks. The temporary RPC driver's recursion and
 64 KiB response-buffer limitations were also corrected; these are trial tooling defects.
 
@@ -43,7 +52,7 @@ The source documentation and sanitized protocol/hook fixtures are linked from [e
 ## Release requirements still to prove
 
 - Current Desktop surface and visible structured controls.
-- Successful legitimate worker effects, independent read-only reviewer enforcement, exact owned-file scope, same-child follow-up and cancellation.
+- Independent read-only reviewer enforcement, exact owned-file scope and persisted cancellation revocation.
 - Existing laws across every advertised Claude workflow family.
 - Genuine harness decision capture, reviewed content/scope binding, interruption/recovery and exactly-once scoped external write on a dedicated authorized fixture.
 

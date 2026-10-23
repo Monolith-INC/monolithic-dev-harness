@@ -237,3 +237,21 @@ neutral `permissionDecision:allow` without updated input. The pinned
 [parser](https://github.com/openai/codex/blob/398500106707f0a3217c7cf83edc2bf226cc342f/codex-rs/hooks/src/engine/output_parser.rs#L409-L449)
 confirms this: neutral checks now return an empty object; denials keep their reason.
 These fixes require the next published candidate, RC5. RC4 is not full acceptance.
+
+## Published RC5 trial findings
+
+The installed worker performed a successful shell read, created the planning note,
+and appended to it in a second turn of the same child. Its native activity records
+show `gpt-5.6-luna` with low effort. No worker hook callback failed. The authoritative
+events and saved scope are retained in [worker proof](rc5-installed-worker.json).
+
+The native interruption activity reported interrupted; no corresponding Interrupt
+hook callback arrived and the adapter binding remained active. This is a concrete
+cancellation qualification gap, not successful persisted revocation. No model-facing
+receipt or forged lifecycle event was used to alter that result.
+
+The installed question round trip recorded the operator's later answer, but its
+UserPromptSubmit callback rejected plain diagnostic text beginning with `[harness]`.
+The corrected Codex formatter serializes the documented UserPromptSubmit JSON shape;
+four failing output-contract regressions became green in the 117-test focused slice.
+See [decision proof](rc5-installed-decision.json). RC6 is required for this correction.

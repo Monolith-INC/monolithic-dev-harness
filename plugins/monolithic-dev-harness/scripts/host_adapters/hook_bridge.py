@@ -294,9 +294,20 @@ def format_stop(reason: str) -> str:
 
 
 def format_prompt(host: str, notes: list[str]) -> str | None:
-    return (
-        json.dumps({"continue": True}) if host == "cursor" else "\n".join(notes) or None
-    )
+    match host, "\n".join(notes):
+        case "cursor", _:
+            return json.dumps({"continue": True})
+        case "codex", str() as context if context:
+            return json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "UserPromptSubmit",
+                        "additionalContext": context,
+                    }
+                }
+            )
+        case _, context:
+            return context or None
 
 
 def delegates_workflow_policy(host: str, event: str) -> bool:

@@ -361,12 +361,37 @@ def test_child_non_pretool_dispatch_uses_native_output_contract(
     monkeypatch.setattr("sys.stdin", io.StringIO(json.dumps(payload(repo))))
     assert hook.main(["--host", "codex", "--event", event]) == 0
     output = capsys.readouterr().out.strip()
-    parsed = json.loads(output) if hook_event_name == "PostToolUse" else output
-    match hook_event_name:
-        case "PostToolUse":
-            assert parsed["hookSpecificOutput"]["hookEventName"] == hook_event_name
-        case "UserPromptSubmit":
-            assert "children return human decision" in parsed
+    parsed = json.loads(output)
+    assert parsed["hookSpecificOutput"]["hookEventName"] == hook_event_name
+    assert (
+        "children return human decision"
+        in parsed["hookSpecificOutput"]["additionalContext"]
+    )
+
+
+@pytest.mark.parametrize(
+    "notes",
+    (["[harness] recorded"], ["{diagnostic}"], ['quoted "reply"', "next\nline"]),
+)
+def test_codex_prompt_notes_use_native_json_contract(notes: list[str]) -> None:
+    assert json.loads(hook_bridge.format_prompt("codex", notes)) == {
+        "hookSpecificOutput": {
+            "hookEventName": "UserPromptSubmit",
+            "additionalContext": "\n".join(notes),
+        }
+    }
+
+
+def test_prompt_formatter_preserves_other_hosts_and_empty_output() -> None:
+    assert hook_bridge.format_prompt("codex", []) is None
+    assert hook_bridge.format_prompt("codex", [""]) is None
+    assert (
+        hook_bridge.format_prompt("claude", ["[harness] recorded"])
+        == "[harness] recorded"
+    )
+    assert json.loads(hook_bridge.format_prompt("cursor", ["[harness] recorded"])) == {
+        "continue": True
+    }
 
 
 def test_child_ask_dispatch_remains_pretool_denial(

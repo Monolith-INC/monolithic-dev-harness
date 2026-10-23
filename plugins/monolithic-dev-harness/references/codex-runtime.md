@@ -54,11 +54,15 @@ enforced as child-specific permissions**. The persisted binding contains identit
 project, parent work-session scope and lifecycle status only. Common project rules
 continue to govern paths and effects; they do not prove assignment-level ownership.
 
-The initial native child proof captured real lifecycle and attempted-effect
-payloads, but sandbox execution errors prevented a successful child mutation.
-Deterministic synthetic tests verify the adapter's checks; they do not establish
-successful installed-host execution, all native lifecycle operations, every Claude
-workflow family, or complete law parity. Unknown mutating wrappers and absent
+The RC5 installed CLI trial completed a legitimate planning-document write and
+a same-child follow-up write with no failed worker hook callbacks. Its native
+interruption reported the child interrupted but produced no observed Interrupt
+hook; the saved binding stayed active on that turn. Fresh mismatching turns still
+fail the lineage check, but persisted cancellation revocation and cancellation of
+an underlying process are not qualified.
+
+Deterministic tests verify additional adapter checks; they do not establish
+all native lifecycle operations, every Claude workflow family, or complete law parity. Unknown mutating wrappers and absent
 lineage coverage remain qualification blockers. Hooks are not a universal security
 sandbox.
 

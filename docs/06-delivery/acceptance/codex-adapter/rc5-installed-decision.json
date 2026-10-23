@@ -1,0 +1,55 @@
+{
+  "classification": "actual_persisted_native_operator_decision",
+  "decision": {
+    "allow_free_text": false,
+    "answer": "Yes",
+    "approval": false,
+    "artifacts": [],
+    "details": [],
+    "id": "call_af618be861c34bfc848c9a2d64c1c5a7",
+    "kind": "required",
+    "native_session_id": "01a16a63-4030-79a3-81bb-44df8f4a2e6d",
+    "options": [
+      "Yes",
+      "No"
+    ],
+    "presentation_id": "HD-73828df222791b91",
+    "question": "Confirm?",
+    "status": "answered",
+    "transport": "async",
+    "work_session_id": "WS-085a3b441319"
+  },
+  "failed_callbacks": [
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a16a63-4030-79a3-81bb-44df8f4a2e6d",
+        "turnId": "01a16a63-4261-7771-8a14-9401d70833a8",
+        "run": {
+          "id": "user-prompt-submit:4:/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.5/hooks/codex.hooks.json",
+          "eventName": "userPromptSubmit",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.5/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 4,
+          "status": "failed",
+          "statusMessage": null,
+          "startedAt": 1792786256,
+          "completedAt": 1792786256,
+          "durationMs": 207,
+          "entries": [
+            {
+              "kind": "error",
+              "text": "hook returned invalid user prompt submit JSON output"
+            }
+          ]
+        }
+      },
+      "emittedAtMs": 1792786256226
+    }
+  ],
+  "log_sha256": "69551c58725932193578356ef747c3bccb6e2d1a8e2e30c126f8c443d1450a6d",
+  "limit": "Operator protocol answer, not human Desktop click or external-effect approval. UserPromptSubmit output failed despite answer persistence; fixed in RC6."
+}

@@ -1,0 +1,236 @@
+{
+  "classification": "actual_native_events_sanitized_paths",
+  "events": [
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low",
+          "id": "call_6174fb9c57c24cbcbe312799a18ff0f5",
+          "kind": "started",
+          "agentThreadId": "01a16a62-47b9-7233-96fb-ec43163f1113",
+          "agentPath": "/root/trial_worker"
+        },
+        "threadId": "01a16a62-2931-7d73-bf5b-03e89d5ce99d",
+        "turnId": "01a16a62-29fb-7682-a717-1e71b69f4eb2",
+        "completedAtMs": 1792786188224
+      },
+      "emittedAtMs": 1792786188227
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-c472c534-6fb2-4bff-8005-0e74cb85e564",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/bin/bash -lc pwd",
+          "cwd": "/fixture/installed/project2",
+          "processId": "40819",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "pwd"
+            }
+          ],
+          "aggregatedOutput": "/fixture/installed/project2\n",
+          "exitCode": 0,
+          "durationMs": 0
+        },
+        "threadId": "01a16a62-47b9-7233-96fb-ec43163f1113",
+        "turnId": "01a16a62-47c0-7301-b17d-cb5026ad8b32",
+        "completedAtMs": 1792786192176
+      },
+      "emittedAtMs": 1792786192178
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a16a62-47b9-7233-96fb-ec43163f1113",
+        "turnId": "01a16a62-47c0-7301-b17d-cb5026ad8b32",
+        "run": {
+          "id": "post-tool-use:3:/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.5/hooks/codex.hooks.json:exec-c472c534-6fb2-4bff-8005-0e74cb85e564",
+          "eventName": "postToolUse",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/native-home/home/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.5/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 3,
+          "status": "completed",
+          "statusMessage": null,
+          "startedAt": 1792786192,
+          "completedAt": 1792786192,
+          "durationMs": 213,
+          "entries": [
+            {
+              "kind": "context",
+              "text": "[harness] children return human decision and conversation-binding needs to their root; no human authority was recorded"
+            }
+          ]
+        }
+      },
+      "emittedAtMs": 1792786192390
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "fileChange",
+          "id": "exec-9b5391fe-fc62-4a38-9e20-bbca00d84c63",
+          "changes": [
+            {
+              "path": "/fixture/installed/project2/docs/planning/trial-note.md",
+              "kind": {
+                "type": "add"
+              },
+              "diff": "text proof\n"
+            }
+          ],
+          "status": "completed"
+        },
+        "threadId": "01a16a62-47b9-7233-96fb-ec43163f1113",
+        "turnId": "01a16a62-47c0-7301-b17d-cb5026ad8b32",
+        "completedAtMs": 1792786193999
+      },
+      "emittedAtMs": 1792786193999
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "subagent-completed-01a16a62-47c0-7301-b17d-cb5026ad8b32",
+          "kind": "completed",
+          "agentThreadId": "01a16a62-47b9-7233-96fb-ec43163f1113",
+          "agentPath": "/root/trial_worker"
+        },
+        "threadId": "01a16a62-2931-7d73-bf5b-03e89d5ce99d",
+        "turnId": "01a16a62-29fb-7682-a717-1e71b69f4eb2",
+        "completedAtMs": 1792786195700
+      },
+      "emittedAtMs": 1792786195700
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "call_c318fe12db4747fa8f7e1244384b48b1",
+          "kind": "interacted",
+          "agentThreadId": "01a16a62-47b9-7233-96fb-ec43163f1113",
+          "agentPath": "/root/trial_worker"
+        },
+        "threadId": "01a16a62-2931-7d73-bf5b-03e89d5ce99d",
+        "turnId": "01a16a62-29fb-7682-a717-1e71b69f4eb2",
+        "completedAtMs": 1792786199778
+      },
+      "emittedAtMs": 1792786199778
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "fileChange",
+          "id": "exec-bfc58afc-a3cf-4406-b9c2-15ed89bf451e",
+          "changes": [
+            {
+              "path": "/fixture/installed/project2/docs/planning/trial-note.md",
+              "kind": {
+                "type": "update",
+                "move_path": null
+              },
+              "diff": "@@ -1 +1,2 @@\n text proof\n+followup\n"
+            }
+          ],
+          "status": "completed"
+        },
+        "threadId": "01a16a62-47b9-7233-96fb-ec43163f1113",
+        "turnId": "01a16a62-74e2-7691-800e-c3e85a7b7d20",
+        "completedAtMs": 1792786201625
+      },
+      "emittedAtMs": 1792786201626
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "subagent-completed-01a16a62-74e2-7691-800e-c3e85a7b7d20",
+          "kind": "completed",
+          "agentThreadId": "01a16a62-47b9-7233-96fb-ec43163f1113",
+          "agentPath": "/root/trial_worker"
+        },
+        "threadId": "01a16a62-2931-7d73-bf5b-03e89d5ce99d",
+        "turnId": "01a16a62-29fb-7682-a717-1e71b69f4eb2",
+        "completedAtMs": 1792786202880
+      },
+      "emittedAtMs": 1792786202880
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "call_805cc5f63c5d4acfb87949e0fd981966",
+          "kind": "interacted",
+          "agentThreadId": "01a16a62-47b9-7233-96fb-ec43163f1113",
+          "agentPath": "/root/trial_worker"
+        },
+        "threadId": "01a16a62-2931-7d73-bf5b-03e89d5ce99d",
+        "turnId": "01a16a62-29fb-7682-a717-1e71b69f4eb2",
+        "completedAtMs": 1792786205724
+      },
+      "emittedAtMs": 1792786205724
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "call_b7bcc29c80034bfc99f866e29372d772",
+          "kind": "interrupted",
+          "agentThreadId": "01a16a62-47b9-7233-96fb-ec43163f1113",
+          "agentPath": "/root/trial_worker"
+        },
+        "threadId": "01a16a62-2931-7d73-bf5b-03e89d5ce99d",
+        "turnId": "01a16a62-29fb-7682-a717-1e71b69f4eb2",
+        "completedAtMs": 1792786218392
+      },
+      "emittedAtMs": 1792786218392
+    }
+  ],
+  "binding_after_native_interrupt": {
+    "child_native_session": "01a16a62-47b9-7233-96fb-ec43163f1113",
+    "completed_turns": [
+      "01a16a62-47c0-7301-b17d-cb5026ad8b32",
+      "01a16a62-74e2-7691-800e-c3e85a7b7d20"
+    ],
+    "parent_native_session": "01a16a62-2931-7d73-bf5b-03e89d5ce99d",
+    "project": "/fixture/installed/project2",
+    "status": "active",
+    "turn_id": "01a16a62-8c1c-7333-ae5f-215b2238091d",
+    "version": 2,
+    "work_session_id": "WS-e85a70f4247b"
+  },
+  "file_content": "text proof\nfollowup\n",
+  "failed_hook_count": 0,
+  "log_sha256": "09c3308f643b0d7e08b60f54d27940abd119d688f5850cc0789b91503cb8a6ab",
+  "driver_exit_code": 0,
+  "limit": "Native agent interrupted; adapter binding remained active with the interrupted turn ID. No Interrupt callback observed. No claim of persisted revocation or OS process cancellation."
+}
