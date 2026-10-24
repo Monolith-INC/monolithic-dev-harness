@@ -1,5 +1,6 @@
 """Exercise manifest routing too, instead of bypassing it with direct hook calls."""
 
+import io
 import json
 import re
 import subprocess
@@ -7,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from harness import decisions
+from harness import decisions, hook
 from host_adapters.interactions import question_transport
 from tests.harness.test_codex_answer_capture import question
 from tests.harness.test_decisions import CLI, native
@@ -23,7 +24,7 @@ from tests.settings_fixture import write_settings
         "functions.request_user_input_async",
     ],
 )
-def test_manifest_routes_native_controls(name):
+def test_manifest_routes_native_controls(name, tmp_path, monkeypatch):
     manifest = json.loads(
         (Path(__file__).resolve().parents[2] / "hooks/codex.hooks.json").read_text()
     )
@@ -33,8 +34,19 @@ def test_manifest_routes_native_controls(name):
             and any("--event " + event in h["command"] for h in rule["hooks"])
             for rule in manifest["hooks"][phase]
         )
-        for phase, event in [("PreToolUse", "ask"), ("PostToolUse", "answer")]
+        for phase, event in [("PreToolUse", "pre-tool"), ("PostToolUse", "answer")]
     )
+    routed = []
+    monkeypatch.setattr(
+        "sys.stdin", io.StringIO(json.dumps({"cwd": str(tmp_path), "tool_name": name}))
+    )
+    monkeypatch.setattr(
+        hook,
+        "handle_ask",
+        lambda host, payload: routed.append((host, payload["tool_name"])) or 0,
+    )
+    assert hook.main(["--host", "codex", "--event", "pre-tool"]) == 0
+    assert routed == [("codex", name)]
     assert question_transport("codex", name) == (
         "async" if name.endswith("_async") else "blocking"
     )
@@ -48,7 +60,7 @@ def test_namespaced_same_workspace_capture(tmp_path, name):
         "tool_use_id": "actual-call",
         "tool_input": question(),
     }
-    native(tmp_path, "ask", payload)
+    native(tmp_path, "pre-tool", payload)
     native(
         tmp_path,
         "answer",
