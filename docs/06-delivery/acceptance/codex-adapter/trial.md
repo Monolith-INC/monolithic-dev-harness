@@ -104,21 +104,52 @@ one report from an old execution could carry over to a new execution. Its regres
 then passed after resetting the report when a new execution starts. Queries, updates and their
 success/error envelopes use the same central JSON-RPC catalog and bus interface.
 
-## Release requirements still to prove
+## RC7 installed assignment acceptance (2026-10-24)
+
+Published [v0.7.0-rc.7](https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.7.0-rc.7)
+comes from `276f8f2cdcb4f0cedc36359a553f09f00ee5ecce`. All four CI jobs and the
+release workflow passed. Downloaded archive SHA-256 is
+`7e44101de9dc6c962a2c0656553bd150819286f5e2a8f6b25ec6e32f1fb43fe3`.
+The archive and installer checksums matched. The actual installer ran in a private profile;
+all 12 inspected loaded modules matched the archive. Eight actual hooks were reviewed and
+trusted only in that profile. The active Desktop installation was unchanged.
+
+A bounded actual CLI trial used a `gpt-6.1-sol` main agent at medium effort, a
+`gpt-5.6-luna` worker at low effort and an independent-context `gpt-6-sol` reviewer at
+medium effort. Native activity confirmed both subagent selections. Each returned tool-free
+READY, received its immutable assignment through the authenticated standard command, then
+received its task on a fresh native follow-up execution.
+
+- The worker successfully created its exact owned planning file.
+- The worker had two calls blocked by the actual assignment-policy hook. The outside-scope
+  fixture file was absent at readback. The prompt requested one negative attempt; preserve
+  this deviation and do not infer exactly-once behavior from the agent's summary.
+- The reviewer read the proof successfully, then its actual edit attempt was blocked by the
+  assignment-policy hook. Final proof bytes matched the original successful native file change.
+- Both generic process records retained their assignments and reached completed status.
+- No hook callback failed; the protocol driver exited zero.
+
+[Sanitized authentic events, records and hashes](rc7-installed-assignments.json) preserve the
+observations and limits. This qualifies this candidate's CLI assignment boundary. The parent
+work session was operator-seeded; this does not qualify full onboarding, human Desktop controls,
+all workflow families or external-write recovery. Requested effort and this trial's observed
+effort are distinct from a general runtime effort-enforcement guarantee.
+
+## Remaining final release gates
 
 - Current Desktop surface and visible structured controls.
-- Independent read-only reviewer enforcement, exact owned-file scope and a release candidate containing the verified process-message correction.
+- General reasoning-effort policy enforcement and any assignment operations outside the qualified tool paths.
 - Existing laws across every advertised Claude workflow family.
 - Genuine harness decision capture, reviewed content/scope binding, interruption/recovery and exactly-once scoped external write on a dedicated authorized fixture.
 
 A protocol pass or a green unit test does not clear these requirements. Preserve pending gates and report concrete blockers rather than describing a partial adapter as fully functional.
 
-The next qualification checkpoint needs actual Desktop rendering/capture and a packaged candidate
-containing the standard process-message correction. Model-facing status text or a
+The next qualification checkpoint needs actual Desktop rendering/capture using RC7.
+Model-facing status text or a
 model-written lifecycle receipt cannot supply that authority. The shared message channel now
 withdraws permission independently of native interruption callbacks, as the same-execution
 trial demonstrates. Termination of already-running operating-system processes remains unqualified.
-Assignment permissions, the remaining workflow families and a dedicated external-write/recovery fixture also need their
+The remaining workflow families and a dedicated external-write/recovery fixture also need their
 stated evidence. These are release blockers, not permission to bypass existing harness laws.
 
 ## Verification to date

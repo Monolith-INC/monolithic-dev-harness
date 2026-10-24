@@ -100,8 +100,9 @@ or an upgrade of the active Desktop profile.
 The assignment channel now enforces declared roles, exact owned paths and observed model
 matching. Actual reasoning-effort ceilings, native cancellation of an in-flight OS command,
 Desktop behavior and all workflow families still require their own evidence. Hooks are not a
-universal security sandbox. Installed-candidate assignment acceptance remains pending until
-its actual trial is recorded.
+universal security sandbox. RC7's actual installed CLI trial passed the worker-owned file and
+reviewer read/write-denial boundaries; its evidence is recorded in the repository acceptance
+report. This does not qualify every workflow family or the active Desktop installation.
 
 The Python subprocess subagent contract remains unsupported. It is separate from the native
 model tools and this adapter's standard process message channel. Other adapters can use the same
