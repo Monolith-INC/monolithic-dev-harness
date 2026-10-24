@@ -45,6 +45,7 @@ for required in .claude-plugin/marketplace.json .cursor-plugin/marketplace.json 
     plugins/monolithic-dev-harness/scripts/host_adapters/codex_process.py \
     plugins/monolithic-dev-harness/scripts/host_adapters/process_channel.py \
     plugins/monolithic-dev-harness/scripts/harness/process_messages.py \
+    plugins/monolithic-dev-harness/scripts/harness/process_assignment.py \
     plugins/monolithic-dev-harness/scripts/harness/process_bus.py \
     plugins/monolithic-dev-harness/scripts/harness/process_store.py \
     plugins/monolithic-dev-harness/scripts/harness/process_commands.py \

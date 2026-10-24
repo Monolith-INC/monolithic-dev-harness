@@ -251,6 +251,14 @@ These are plan coverage statements, not evidence that implementation or acceptan
 
 ## Updated execution model limits
 
+Owner-approved continuation, 2026-10-24: first repair the CI-only process-command test environment,
+then implement generic immutable assignments and native model observations, qualify Desktop
+structured controls, prove each advertised workflow family and external-write recovery, and
+publish only the support level actually evidenced. The unified adapter contract is separately
+[proposed](../../01-architecture/proposals/2026-10-24-unified-model-adapter-contract.md) for later
+evaluation. Do not expand this release into that product-wide migration. Actual reasoning effort
+is not attested by the observed pre-tool hook and remains a separate acceptance obligation.
+
 The user subsequently required subagents one model tier below the root with medium reasoning
 by default, and builder/coder subagents on `gpt-5.6-luna` with low (light) reasoning. Higher effort
 requires a specific justification and cannot exceed high. These execution limits supersede the

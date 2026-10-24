@@ -3,23 +3,13 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|apply_patch|Edit|Write|mcp__.*|exec_command|functions\\.exec_command|functionsexec_command|functions\\.?apply_patch|collaboration.*",
+        "matcher": ".*",
         "hooks": [
           {
             "type": "command",
             "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event pre-tool",
             "timeout": 15,
             "statusMessage": "Checking harness policy"
-          }
-        ]
-      },
-      {
-        "matcher": "^(functions\\.)?request_user_input(_async)?$",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event ask",
-            "timeout": 10
           }
         ]
       }

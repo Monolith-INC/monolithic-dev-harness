@@ -10,8 +10,9 @@ from typing import Any
 
 from core.result import Err, Ok, Result, bind, err, fmap, require
 from harness import decisions, process_commands, project_paths, rules, settings
+from harness.process_assignment import authorize_call, authorize_model
 from harness.process_bus import get_record, local_bus
-from harness.process_messages import Context, Origin, cancel, status_update
+from harness.process_messages import Context, Origin, assign, cancel, status_update
 from host_adapters import (
     codex_bindings,
     codex_runtime,
@@ -71,7 +72,78 @@ def before_tool(
         case rules.Decision() as denied:
             return denied
         case _:
-            return _control(repo, payload, call)
+            match is_subagent(payload):
+                case True:
+                    return None
+                case False:
+                    return _control(repo, payload, call)
+
+
+def authorize_tool(
+    repo: Path, payload: dict[str, Any], call: rules.ToolCall
+) -> rules.Decision | None:
+    match is_subagent(payload):
+        case False:
+            return None
+        case _:
+            return _assignment_guard(repo, payload, call)
+
+
+def event_name(name: str, payload: dict[str, Any]) -> str:
+    match name, str(payload.get("tool_name", "")).removeprefix("functions."):
+        case "pre-tool", "request_user_input" | "request_user_input_async":
+            return "ask"
+        case _:
+            return name
+
+
+def _assignment_guard(
+    repo: Path, payload: dict[str, Any], call: rules.ToolCall
+) -> rules.Decision | None:
+    return _decision(
+        bind(
+            work_session_context.resolve_session(
+                repo, "codex", str(payload.get("session_id", ""))
+            ),
+            lambda scope: bind(
+                get_record(
+                    repo,
+                    Context("codex", str(payload.get("session_id", "")), scope or ""),
+                    str(payload.get("agent_id", "")),
+                ),
+                lambda record: _assignment_effect(repo, payload, call, record),
+            ),
+        )
+    )
+
+
+def _assignment_effect(
+    repo: Path, payload: dict[str, Any], call: rules.ToolCall, record: Any
+) -> Result[object]:
+    match record.assignment:
+        case None:
+            return err(
+                "process_assignment_missing",
+                "subagent requires a main-agent assignment before using tools",
+            )
+        case assignment:
+            return bind(
+                authorize_model(assignment, str(payload.get("model", ""))),
+                lambda verified: _authorized_call(repo, verified, call, record),
+            )
+
+
+def _authorized_call(
+    repo: Path, assignment: Any, call: rules.ToolCall, record: Any
+) -> Result[object]:
+    match authorize_call(repo, assignment, call):
+        case rules.Decision() as denied:
+            return err(
+                denied.rule or "assignment-policy",
+                denied.reason or "assignment denied",
+            )
+        case _:
+            return Ok(record)
 
 
 def _control(
@@ -129,6 +201,19 @@ def _control_message(
     record: Any,
 ) -> Result[object]:
     match intent.operation:
+        case "assign" if intent.assignment is not None:
+            return local_bus(repo).request(
+                assign(
+                    ctx,
+                    intent.process_id,
+                    intent.assignment,
+                    hashlib.sha256(
+                        json.dumps((ctx.owner_id, intent.process_id, tool_id)).encode()
+                    ).hexdigest(),
+                    record.revision,
+                ),
+                ctx,
+            )
         case "cancel" if record.revoked:
             return Ok(record)
         case "cancel":

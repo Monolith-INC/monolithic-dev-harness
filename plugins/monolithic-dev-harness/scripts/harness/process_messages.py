@@ -12,6 +12,7 @@ from enum import Enum
 from typing import Any
 
 from core.result import Failure, Ok, Result, err
+from harness.process_assignment import Assignment, decode_assignment
 
 VERSION = 1
 
@@ -46,6 +47,7 @@ class Request:
     revision: int = 0
     status: ProcessStatus = ProcessStatus.UNKNOWN
     origin: Origin = Origin.HOST
+    assignment: Assignment | None = None
 
 
 METHOD_FIELDS = {
@@ -56,6 +58,7 @@ METHOD_FIELDS = {
     "process.cancel": frozenset(("process_id", "revision")),
     "process.get": frozenset(("process_id",)),
     "process.list": frozenset(),
+    "process.assign": frozenset(("process_id", "revision", "assignment")),
 }
 BASE_FIELDS = frozenset(("version", "context", "event_id"))
 
@@ -112,6 +115,23 @@ def cancel(
     return _request("process.cancel", context, process_id, event_id, revision=revision)
 
 
+def assign(
+    context: Context,
+    process_id: str,
+    assignment: Assignment,
+    event_id: str,
+    revision: int,
+) -> dict[str, Any]:
+    return _request(
+        "process.assign",
+        context,
+        process_id,
+        event_id,
+        revision=revision,
+        assignment=asdict(assignment),
+    )
+
+
 def valid_text(value: Any) -> bool:
     return isinstance(value, str) and bool(value.strip()) and value == value.strip()
 
@@ -162,6 +182,9 @@ def decode(message: Any, context: Context) -> Result[Request]:
                     params.get("revision", 0),
                     ProcessStatus(params.get("status", "unknown")),
                     Origin(params.get("origin", "host")),
+                    decode_assignment(params["assignment"]).value
+                    if method == "process.assign"
+                    else None,
                 )
             )
         case _:
@@ -177,6 +200,12 @@ def _valid_fields(method: str, params: dict[str, Any]) -> bool:
             return True
         case "process.register":
             return valid_text(params.get("execution_id"))
+        case "process.assign":
+            return (
+                type(params.get("revision")) is int
+                and params["revision"] >= 0
+                and isinstance(decode_assignment(params.get("assignment")), Ok)
+            )
         case "process.cancel":
             return type(params.get("revision")) is int and params["revision"] >= 0
         case "process.status_update":

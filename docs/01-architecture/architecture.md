@@ -9,6 +9,10 @@ last_reviewed: 2026-10-24
 
 ## Context
 
+The [unified model adapter contract proposal](proposals/2026-10-24-unified-model-adapter-contract.md)
+records the owner's direction for future adapter evolution. It remains proposed; the ongoing
+release uses existing shared contracts without a product-wide migration.
+
 A delivery process built from prompts alone cannot guarantee its own rules. The harness separates
 what the model decides (skills) from what a deterministic runtime enforces (hooks, orchestrator
 contracts, evidence), and routes every provider call through a place the runtime can see.
@@ -133,6 +137,7 @@ constructed JSON-RPC response with the same request identifier.
 | --- | --- |
 | `process.get` / `process.list` | Read a process or list processes within the adapter-derived owner/work-session scope. |
 | `process.register` | Register an observed process in an existing active work session. It cannot replace a record or restore withdrawn permission. |
+| `process.assign` | Bind one immutable generic assignment to an owned process: reviewer/worker role, exact owned files, expected model and requested effort. It cannot broaden an assignment or restore revoked permission. |
 | `process.status_update` | Record a status for an identified execution. Host observations and main-agent reports remain separate. |
 | `process.cancel` | Withdraw permission immediately. It does not claim that the host or an operating-system process stopped. |
 

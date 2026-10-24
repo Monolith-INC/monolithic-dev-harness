@@ -4,20 +4,33 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0-rc.7] - 2026-10-24
 
 ### Added
 
 - Shared JSON-RPC process message catalog and bus interface with generic ownership, revision,
   duplicate-message and execution checks. Cancellation withdraws permission independently of
   vendor stop notifications; main-agent reports and host observations remain distinct.
-- Standard `harness process list|status|cancel|report` commands through the Codex adapter.
+- Standard `harness process list|status|cancel|report|assign` commands through the Codex adapter.
   Command bodies acknowledge adapter-applied state without directly editing process records.
+
+- Shared immutable reviewer/worker assignments with exact owned-file checks, symlink rejection,
+  observed model matching and fail-closed tool authorization. Native question routing remains
+  separate while the Codex pre-tool guard covers every tool name.
 
 ### Changed
 
 - Codex lifecycle translation now resides behind the adapter entry point. Shared harness policy
   consumes generic process state; later reports cannot restore revoked subagent permissions.
+
+### Qualification
+
+- Native source trials proved cancellation independently of interruption callbacks. Assignment
+  integration has focused regression coverage; installed-candidate acceptance remains pending.
+- Reviewer role files no longer imply an independent read-only sandbox. Shared policy denies
+  reviewer writes and opaque shell/MCP operations; the main agent runs verification commands.
+- Actual reasoning effort, Desktop structured controls, complete workflow parity and dedicated
+  external-write/recovery acceptance remain unqualified. This is a candidate, not final parity.
 
 ## [0.7.0-rc.6] - 2026-10-23
 
@@ -880,7 +893,6 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.3...HEAD
 [0.7.0-rc.3]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.2...v0.7.0-rc.3
 [0.7.0-rc.2]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.1...v0.7.0-rc.2
 [0.7.0-rc.1]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.2...v0.7.0-rc.1
@@ -910,3 +922,5 @@ First release.
 [0.7.0-rc.6]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.5...v0.7.0-rc.6
 [0.7.0-rc.5]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.4...v0.7.0-rc.5
 [0.7.0-rc.4]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.7.0-rc.4
+
+[0.7.0-rc.7]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.6...v0.7.0-rc.7

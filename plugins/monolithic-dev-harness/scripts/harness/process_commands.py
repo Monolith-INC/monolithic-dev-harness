@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.result import Ok, Result, bind, err
+from core.result import Ok, Result, attempt, bind, err, fmap
 from harness import commands, rules
+from harness.process_assignment import Assignment, decode_assignment
 from harness.process_messages import ProcessStatus
 
 
@@ -17,6 +19,7 @@ class ControlRequest:
     status: ProcessStatus | None = None
     session_id: str = ""
     adapter: str = ""
+    assignment: Assignment | None = None
 
 
 def _options(
@@ -28,7 +31,7 @@ def _options(
         case (str() as flag, *tail) if "=" in flag:
             return _options((*flag.split("=", 1), *tail), seen)
         case (flag, value, *tail) if (
-            flag in ("--repo", "--session-id", "--host", "--status")
+            flag in ("--repo", "--session-id", "--host", "--status", "--assignment")
             and value
             and not value.startswith("--")
             and flag not in dict(seen)
@@ -45,7 +48,7 @@ def control(call: rules.ToolCall, repo: Path) -> Result[ControlRequest | None]:
     match call.kind, commands.harness_args(call.command, Path(call.cwd or repo)):
         case "shell", (
             "process",
-            "cancel" | "report" as operation,
+            "cancel" | "report" | "assign" as operation,
             process_id,
             *options,
         ) if process_id and not process_id.startswith("--"):
@@ -55,7 +58,7 @@ def control(call: rules.ToolCall, repo: Path) -> Result[ControlRequest | None]:
                     operation, process_id, dict(values), Path(call.cwd or repo), repo
                 ),
             )
-        case "shell", ("process", "cancel" | "report", *_):
+        case "shell", ("process", "cancel" | "report" | "assign", *_):
             return err(
                 "invalid_process_command",
                 "process cancellation requires a process identifier",
@@ -67,10 +70,34 @@ def control(call: rules.ToolCall, repo: Path) -> Result[ControlRequest | None]:
 def _cancel_scope(
     operation: str, process_id: str, options: dict[str, str], cwd: Path, repo: Path
 ) -> Result[ControlRequest]:
-    match (cwd / options.get("--repo", ".")).resolve() == repo.resolve():
-        case True if (operation == "cancel" and "--status" not in options) or (
-            operation == "report"
-            and options.get("--status") in tuple(value.value for value in ProcessStatus)
+    match operation, (cwd / options.get("--repo", ".")).resolve() == repo.resolve():
+        case "assign", True if "--status" not in options:
+            return fmap(
+                bind(
+                    attempt(
+                        lambda: json.loads(options.get("--assignment", "")),
+                        "invalid_assignment",
+                        "assignment must be valid JSON",
+                        ValueError,
+                    ),
+                    decode_assignment,
+                ),
+                lambda assignment: ControlRequest(
+                    operation,
+                    process_id,
+                    None,
+                    options.get("--session-id", ""),
+                    options.get("--host", ""),
+                    assignment,
+                ),
+            )
+        case _, True if "--assignment" not in options and (
+            (operation == "cancel" and "--status" not in options)
+            or (
+                operation == "report"
+                and options.get("--status")
+                in tuple(value.value for value in ProcessStatus)
+            )
         ):
             return Ok(
                 ControlRequest(
@@ -112,7 +139,7 @@ def recovery_command(call: rules.ToolCall, repo: Path) -> bool:
             )
         case _:
             match control(call, repo):
-                case Ok(ControlRequest()):
+                case Ok(ControlRequest(operation="cancel" | "report")):
                     return True
                 case _:
                     return False

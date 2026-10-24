@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from core.result import Err, Ok, Result, bind, err, fmap, require
 from harness import work_sessions
+from harness.process_assignment import Assignment
 from harness.process_messages import (
     Context,
     Origin,
@@ -34,6 +35,7 @@ class ProcessRecord:
     revision: int = 0
     events: tuple[tuple[str, str], ...] = ()
     completed_executions: tuple[str, ...] = ()
+    assignment: Assignment | None = None
 
 
 @dataclass(frozen=True)
@@ -261,6 +263,19 @@ def _transition(
             )
         case "process.cancel", ProcessRecord():
             return _receipt(record, request, revoked=True)
+        case "process.assign", ProcessRecord() if (
+            record.assignment is None
+            and not record.revoked
+            and session.status == work_sessions.Status.ACTIVE
+            and record.runtime_status
+            in (ProcessStatus.RUNNING, ProcessStatus.COMPLETED)
+        ):
+            return _receipt(record, request, assignment=request.assignment)
+        case "process.assign", ProcessRecord():
+            return err(
+                "process_assignment_denied",
+                "assignment requires an active unassigned process; permissions cannot be broadened",
+            )
         case "process.status_update", ProcessRecord() if (
             request.execution_id != record.execution_id
             and request.origin == Origin.AGENT

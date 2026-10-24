@@ -43,6 +43,24 @@ def before_tool(
             return provider.before_tool(repo, payload, call)
 
 
+def authorize_tool(
+    host: str, repo: Path, payload: dict[str, Any], call: rules.ToolCall
+) -> rules.Decision | None:
+    match _provider(host):
+        case None:
+            return None
+        case provider:
+            return provider.authorize_tool(repo, payload, call)
+
+
+def event_name(host: str, name: str, payload: dict[str, Any]) -> str:
+    match _provider(host):
+        case None:
+            return name
+        case provider:
+            return provider.event_name(name, payload)
+
+
 def event(
     host: str, name: str, repo: Path, payload: dict[str, Any]
 ) -> Result[tuple[bool, str | None]]:

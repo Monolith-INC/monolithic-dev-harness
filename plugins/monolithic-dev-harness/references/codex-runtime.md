@@ -19,8 +19,39 @@ brief or naming a tool does not demonstrate successful delegation.
 
 Subagents return human decisions and harness control requests to the main agent. They cannot
 record human authority, switch work sessions, execute harness control commands or invoke nested
-collaboration controls. Ordinary test runners and diagnostics remain available under the common
-project rules.
+collaboration controls. The main agent runs test/build commands: a subagent assignment does not
+authorize opaque shell programs whose file effects cannot be established.
+
+## Assign before work
+
+For every native delegation, first request a tool-free `READY` response in an independent context.
+Read the real scoped process list, then bind an immutable assignment through the authenticated
+main-agent tool. For example, using the actually selected model and effort:
+
+```bash
+harness process assign <process-id> --repo . --assignment '{"role":"worker","owned_paths":["docs/planning/proof.md"],"model":"gpt-5.6-luna","effort":"low"}'
+```
+
+Use `role: reviewer` with an empty `owned_paths` list for review-only work. Only after the adapter
+acknowledges the assignment, send the actual task through the native follow-up tool to that same
+subagent. A completed READY execution can receive its first assignment; it does not regain
+execution permission until a fresh native turn. Assignments cannot be broadened or replaced;
+create a new delegation when a different assignment is needed. Cancellation remains permanent.
+
+The shared assignment policy requires exact owned files for edits, rejects symlink edits, and
+denies external tools, unknown wrappers and delegation. Reviewer edits are always denied.
+Read tools and the following restricted shell forms remain available from the repository root:
+`pwd`, `cat -- <repo-path>`, `rg --no-config -n -- <pattern> <repo-path>` and
+`sed -n '<start>,<end>p' -- <repo-path>`. Return other inspection/verification needs to the main
+agent. Existing harness laws still apply after assignment checks; an assignment grants no human
+approval and cannot override protected paths.
+
+Each native pre-tool model observation must match the assignment's exact model. The effort
+field records the requested policy; current hook observations do not independently attest actual
+reasoning effort. Use explicit native spawn settings, retain genuine native activity evidence,
+and do not describe that declaration alone as enforced runtime effort. Custom-agent sandbox
+settings do not override the parent's sandbox in the current official contract; these are
+harness-enforced restrictions, not a separate operating-system sandbox.
 
 ## Standard process messages
 
@@ -66,11 +97,11 @@ write by the same subagent. The generic record retained permission withdrawal an
 file stayed unchanged after cancellation. This is development-source evidence, not a new release
 or an upgrade of the active Desktop profile.
 
-Role, model/effort ceilings and assigned-file limits are not independently authenticated from
-an encrypted delegation brief or enforced as subagent-specific permissions. Common project rules
-still govern effects. Native cancellation of an in-flight OS command, Desktop behavior, all
-workflow families and every mutating wrapper require their own evidence. Hooks are not a
-universal security sandbox.
+The assignment channel now enforces declared roles, exact owned paths and observed model
+matching. Actual reasoning-effort ceilings, native cancellation of an in-flight OS command,
+Desktop behavior and all workflow families still require their own evidence. Hooks are not a
+universal security sandbox. Installed-candidate assignment acceptance remains pending until
+its actual trial is recorded.
 
 The Python subprocess subagent contract remains unsupported. It is separate from the native
 model tools and this adapter's standard process message channel. Other adapters can use the same

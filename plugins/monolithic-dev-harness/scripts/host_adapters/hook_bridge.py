@@ -199,7 +199,8 @@ def _paths(raw_name: str, arguments: dict[str, Any], cwd: str) -> tuple[str, ...
     patch = (
         tuple(
             str(Path(cwd) / path) if cwd and not Path(path).is_absolute() else path
-            for path in _patch_targets(str(arguments.get("command") or ""))
+            for field in ("command", "patch")
+            for path in _patch_targets(str(arguments.get(field) or ""))
         )
         if raw_name in {"apply_patch", "functions.apply_patch", "functionsapply_patch"}
         else ()

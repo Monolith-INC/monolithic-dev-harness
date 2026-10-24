@@ -9,6 +9,7 @@ from dataclasses import asdict
 from core.result import Ok, Result, bind, err, fmap
 from harness import process_bus
 from harness.cli_common import print_result, resolve_repo
+from harness.process_assignment import decode_assignment
 from harness.process_messages import Context, ProcessStatus
 from host_adapters import process_channel
 
@@ -20,11 +21,12 @@ def add_parser(sub: argparse._SubParsersAction) -> argparse.ArgumentParser:
     ):
         case parser:
             parser.add_argument(
-                "operation", choices=("list", "status", "cancel", "report")
+                "operation", choices=("list", "status", "cancel", "report", "assign")
             )
             parser.add_argument("process_id", nargs="?")
             parser.add_argument("--repo", default=".")
             parser.add_argument("--session-id")
+            parser.add_argument("--assignment")
             parser.add_argument(
                 "--status", choices=tuple(value.value for value in ProcessStatus)
             )
@@ -66,6 +68,31 @@ def _query(args: argparse.Namespace, context: Context) -> Result[dict]:
             return fmap(
                 process_bus.list_records(resolve_repo(args.repo), context),
                 lambda records: {"processes": [asdict(record) for record in records]},
+            )
+        case "assign", str() as pid:
+            from core.result import attempt
+
+            return bind(
+                bind(
+                    attempt(
+                        lambda: json.loads(args.assignment or ""),
+                        "invalid_assignment",
+                        "assignment must be JSON",
+                        ValueError,
+                    ),
+                    decode_assignment,
+                ),
+                lambda assignment: bind(
+                    process_bus.get_record(resolve_repo(args.repo), context, pid),
+                    lambda record: (
+                        _ack("status", record)
+                        if record.assignment == assignment
+                        else err(
+                            "process_request_not_observed",
+                            "the adapter has not applied this assignment",
+                        )
+                    ),
+                ),
             )
         case "status" | "cancel" | "report", str() as pid:
             return bind(

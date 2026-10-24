@@ -478,7 +478,7 @@ def test_binding_records_are_human_owned() -> None:
         ("scripts/harness/cli.py decision present --gate publish-branch", False),
     ),
 )
-def test_child_runtime_runner_preserves_tests_and_blocks_controls(
+def test_unassigned_subagent_runtime_and_controls_are_blocked(
     scoped: tuple[Path, str],
     arguments: str,
     allowed: bool,
@@ -501,8 +501,10 @@ def test_child_runtime_runner_preserves_tests_and_blocks_controls(
             },
         ),
     )
-    assert delegate.called == allowed
-    assert ("codex-child-authority" in capsys.readouterr().out) != allowed
+    assert not delegate.called
+    assert (
+        "process_assignment_missing" if allowed else "codex-child-authority"
+    ) in capsys.readouterr().out
 
 
 def test_child_runtime_runner_cannot_execute_host_hooks(
@@ -535,6 +537,23 @@ def test_effect_uses_parent_scope_when_project_current_differs(
 ) -> None:
     repo, scope = scoped
     codex_bindings.observe_lifecycle(repo, payload(repo))
+    from harness.process_assignment import Assignment
+    from harness.process_bus import local_bus
+    from harness.process_messages import Context, assign
+
+    assert isinstance(
+        local_bus(repo).request(
+            assign(
+                Context("codex", "parent-native", scope),
+                "child-native",
+                Assignment("worker", ("lib/a.py",), "test-model", "low"),
+                "assign",
+                0,
+            ),
+            Context("codex", "parent-native", scope),
+        ),
+        Ok,
+    )
     work_sessions.start(repo, "DAY-002")
     evaluate = Mock(return_value=rules.Decision.allow())
     delegate = Mock(return_value=0)
@@ -547,6 +566,7 @@ def test_effect_uses_parent_scope_when_project_current_differs(
             repo,
             "PreToolUse",
             tool_name="apply_patch",
+            model="test-model",
             tool_input={
                 "command": "*** Begin Patch\n*** Add File: lib/a.py\n+x\n*** End Patch"
             },
@@ -611,7 +631,7 @@ def test_lifecycle_hooks_and_native_control_matchers_are_registered() -> None:
         "hooks"
     ]
     assert {"SubagentStart", "SubagentStop", "Interrupt"}.issubset(hooks)
-    assert "collaboration.*" in hooks["PreToolUse"][0]["matcher"]
+    assert hooks["PreToolUse"][0]["matcher"] == ".*"
 
 
 @pytest.mark.parametrize(

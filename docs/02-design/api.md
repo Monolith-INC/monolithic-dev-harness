@@ -301,6 +301,7 @@ payloads. Native notifications and identifiers are translated inside `host_adapt
 
 ```bash
 harness process list --repo .
+harness process assign <process-id> --repo . --assignment '{"role":"reviewer","owned_paths":[],"model":"<actual-model>","effort":"medium"}'
 harness process status <process-id> --repo .
 harness process cancel <process-id> --repo .
 harness process report <process-id> --status interrupted --repo .

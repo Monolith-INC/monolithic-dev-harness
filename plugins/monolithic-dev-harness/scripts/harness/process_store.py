@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any
 
 from core.result import Ok, Result, attempt, bind, err, fmap, sequence
+from harness.process_assignment import decode_assignment
 from harness.process_bus import ProcessRecord, Receipt
 from harness.process_messages import (
     Context,
@@ -70,7 +71,11 @@ def _decode(value: Any) -> Result[ProcessRecord]:
             "events": list() as events,
             "completed_executions": list() as completed,
         } if (
-            set(value) == FIELDS
+            set(value) in (FIELDS, FIELDS | {"assignment"})
+            and (
+                value.get("assignment") is None
+                or isinstance(decode_assignment(value["assignment"]), Ok)
+            )
             and type(version) is int
             and version == 1
             and set(value["context"]) == {"adapter", "owner_id", "work_session_id"}
@@ -115,6 +120,9 @@ def _decode(value: Any) -> Result[ProcessRecord]:
                     revision,
                     tuple(tuple(event) for event in events),
                     tuple(completed),
+                    decode_assignment(value["assignment"]).value
+                    if value.get("assignment") is not None
+                    else None,
                 )
             )
         case _:

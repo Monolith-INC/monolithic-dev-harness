@@ -263,6 +263,12 @@ def _governed_pre_tool(
             )
     match decision.allowed:
         case True:
+            match process_channel.authorize_tool(host, repo, payload, call):
+                case rules.Decision() as denied:
+                    _emit_decision(host, denied)
+                    return 0
+                case _:
+                    pass
             match _bind(repo, host, payload, work_session_id, request):
                 case Err(failure):
                     _emit_decision(
@@ -1512,6 +1518,16 @@ def main(argv: list[str] | None = None) -> int:
         payload = {}
     if not isinstance(payload, dict):
         payload = {}
+    return _dispatch_event(
+        argparse.Namespace(
+            host=args.host,
+            event=process_channel.event_name(args.host, args.event, payload),
+        ),
+        payload,
+    )
+
+
+def _dispatch_event(args: argparse.Namespace, payload: dict[str, Any]) -> int:
     match process_channel.event(
         args.host, args.event, _workspace(payload, args.host), payload
     ):
