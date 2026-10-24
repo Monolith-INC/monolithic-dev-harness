@@ -1,70 +1,78 @@
-# Codex native child governance
+# Codex native subagent governance
 
-The adapter supports a narrow hook-based parent-scope check. This is not a claim of
-complete Codex workflow parity or release qualification.
+## Native identity and work-session scope
 
-## Native identity and authority
+Observed Codex CLI 0.162.1 events provide the main agent's `session_id` and each subagent's
+`agent_id` on shell and patch calls. Native start/stop notifications supply the same relationship.
+The adapter binds those identities to an existing active harness work session before accepting
+subagent writes. A session ID alone cannot establish subagent identity.
 
-Captured Codex CLI 0.162.1 events supply the parent's `session_id` and the child's
-`agent_id` on child `Bash` and `apply_patch` calls. `SubagentStart` and `SubagentStop`
-also supply that relationship. A parent session ID alone does not establish child
-identity. Desktop support requires its own installed-host evidence.
+The adapter retains private identity/turn observations under
+`.harness/state/host_sessions/codex/children/`. The shared process bus stores generic process
+state under `.harness/state/host_sessions/processes/`. The first record establishes the native
+execution context; the second is authoritative for permission withdrawal. Both must allow a
+subsequent guarded write. Neither record supplies human approval.
 
-Before delegation, the root must have an existing native conversation binding to
-an active harness work session. A host-originated `SubagentStart` freezes that
-binding for the observed child in the protected
-`.harness/state/host_sessions/codex/children/` tree. There is no agent-facing command
-that registers a child or grants authority.
+The main agent provides the governing plan, intended role, assigned files and effect limits in
+its delegation. It retains actual returned identities and checks execution evidence. Preparing a
+brief or naming a tool does not demonstrate successful delegation.
 
-Each governed child effect must match the saved child, parent, project and active
-work-session scope. Missing, contradictory or unreadable lineage blocks the effect. A completed
-turn cannot spend its former turn identity. Changing the root's work session does not move an existing child. Existing
-harness rules and workflow prerequisites then evaluate the effect under that same
-parent scope; a binding supplies no approval of its own.
+Subagents return human decisions and harness control requests to the main agent. They cannot
+record human authority, switch work sessions, execute harness control commands or invoke nested
+collaboration controls. Ordinary test runners and diagnostics remain available under the common
+project rules.
 
-## Worker instructions
+## Standard process messages
 
-The root invokes the host's actual native tools and supplies the governing plan,
-project, work session, task, intended role, owned files and effect limits in the
-brief. It must retain the actual returned identity and check real lifecycle
-evidence before reporting completion or cancellation. Preparing a brief or mapping
-a tool name is not evidence that delegation succeeded.
+All adapters use the catalog in `harness/process_messages.py` and the `MessageBus` interface in
+`harness/process_bus.py`. The common consumer checks identity, work session, protocol version,
+event deduplication, expected revision and execution history. Vendor parsing stays in the adapter.
 
-Children return human decision needs and harness control requests to the root.
-They cannot ask native questions, record answers or prompts as human authority,
-bind or switch sessions, execute harness CLI controls, or invoke native
-collaboration controls. The `harness-python` runtime runner remains available for
-ordinary test execution and diagnostics, including `-m pytest`; the existing host
-hook execution prohibition still applies.
+The main agent can inspect and control its delegated permissions with:
 
-`SubagentStop` closes the observed child turn, including when the parent is paused.
-Codex sends `SubagentStart` on child startup/fork, rather than every follow-up turn.
-An authentic child `PreToolUse` can renew a completed child only with a different,
-nonempty, never-completed turn ID and the same parent, project and active frozen
-work-session scope. Legacy records without turn identity cannot renew this way.
-`Interrupt` revokes observed matching children without claiming that cancellation
-succeeded; a late stop or fresh turn cannot undo that revocation. A duplicate start
-cannot revive an ended binding. Start notifications are not an enforceable spawn veto.
+```bash
+harness process list --repo .
+harness process status <process-id> --repo .
+harness process cancel <process-id> --repo .
+```
 
-## Current limits
+Use the exact process identifier returned by the scoped list. The adapter derives the sender
+from the actual native invocation and selects the central cancellation message. Permission
+withdrawal is persisted before the command acknowledges it. A standalone CLI invocation cannot
+write a lifecycle record or invent the required adapter observation.
 
-The captured spawn brief is encrypted. Role, model/effort ceilings and owned-path
-limits cannot be authenticated from that brief by this adapter and are **not
-enforced as child-specific permissions**. The persisted binding contains identity,
-project, parent work-session scope and lifecycle status only. Common project rules
-continue to govern paths and effects; they do not prove assignment-level ownership.
+The main agent then uses its actual native interruption tool. When its actual result/status
+reports interruption, the main agent can select the standard report message:
 
-The RC5 installed CLI trial completed a legitimate planning-document write and
-a same-child follow-up write with no failed worker hook callbacks. Its native
-interruption reported the child interrupted but produced no observed Interrupt
-hook; the saved binding stayed active on that turn. Fresh mismatching turns still
-fail the lineage check, but persisted cancellation revocation and cancellation of
-an underlying process are not qualified.
+```bash
+harness process report <process-id> --status interrupted --repo .
+```
 
-Deterministic tests verify additional adapter checks; they do not establish
-all native lifecycle operations, every Claude workflow family, or complete law parity. Unknown mutating wrappers and absent
-lineage coverage remain qualification blockers. Hooks are not a universal security
-sandbox.
+This updates `reported_status` with main-agent origin. It does not replace `runtime_status`, the
+last host observation, or claim that an already-running OS command was killed. `revoked: true`
+continues to block subsequent guarded writes regardless of later reports or running notifications.
+A new registration cannot reset a revoked process record.
 
-Python `codex_adapter.subagents()` still reports unsupported subprocess operations.
-Native model-callable tools and subprocess transport are separate capabilities.
+Native stop closes an observed turn. A legitimate follow-up turn requires a different nonempty,
+never-completed turn ID, the same main agent/project/work session and permission that has not
+been withdrawn. Stale stop messages cannot close a newer execution. Start notifications are not
+an enforceable spawn veto. Existing repository opt-out and suspension behavior is preserved.
+
+## Verification and limits
+
+A source-installed isolated CLI trial on 2026-10-24 observed a legitimate subagent write, standard
+cancellation through the adapter and bus, a main-agent interruption report, and a denied subsequent
+write by the same subagent. The generic record retained permission withdrawal and the fixture
+file stayed unchanged after cancellation. This is development-source evidence, not a new release
+or an upgrade of the active Desktop profile.
+
+Role, model/effort ceilings and assigned-file limits are not independently authenticated from
+an encrypted delegation brief or enforced as subagent-specific permissions. Common project rules
+still govern effects. Native cancellation of an in-flight OS command, Desktop behavior, all
+workflow families and every mutating wrapper require their own evidence. Hooks are not a
+universal security sandbox.
+
+The Python subprocess subagent contract remains unsupported. It is separate from the native
+model tools and this adapter's standard process message channel. Other adapters can use the same
+bus and catalog; their native process integrations remain explicitly unsupported until connected
+and verified.

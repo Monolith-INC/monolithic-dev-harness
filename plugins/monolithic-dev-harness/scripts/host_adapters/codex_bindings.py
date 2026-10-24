@@ -16,6 +16,14 @@ from typing import Any
 
 from core.result import Err, Ok, Result, attempt, bind, err, fmap, require, sequence
 from harness import project_paths, rules, shellscan, state, work_sessions
+from harness.process_bus import authorize, get_record, local_bus
+from harness.process_messages import (
+    Context,
+    ProcessStatus,
+    cancel,
+    register,
+    status_update,
+)
 from host_adapters import work_session_context
 
 ROOT = work_session_context.ROOT / "codex" / "children"
@@ -116,17 +124,76 @@ def _decode_turns(
 
 
 def _save(repo: Path, record: CodexChildBinding) -> Result[CodexChildBinding]:
-    return fmap(
-        attempt(
-            lambda: state.write_json(
-                _path(repo, record.child_native_session), asdict(record)
+    return bind(
+        _load(repo, record.child_native_session),
+        lambda previous: bind(
+            _publish(repo, record, previous),
+            lambda _: fmap(
+                attempt(
+                    lambda: state.write_json(
+                        _path(repo, record.child_native_session), asdict(record)
+                    ),
+                    "codex_child_unwritable",
+                    "native child binding",
+                    OSError,
+                ),
+                lambda _: record,
             ),
-            "codex_child_unwritable",
-            "native child binding",
-            OSError,
         ),
-        lambda _: record,
     )
+
+
+def _publish(
+    repo: Path, record: CodexChildBinding, previous: CodexChildBinding | None
+) -> Result[object]:
+    context = Context("codex", record.parent_native_session, record.work_session_id)
+    execution = record.turn_id or "unobserved"
+    event = hashlib.sha256(
+        json.dumps((record.child_native_session, execution, record.status)).encode()
+    ).hexdigest()
+    match previous, record.status:
+        case None, "active":
+            return local_bus(repo).request(
+                register(context, record.child_native_session, execution, event),
+                context,
+            )
+        case CodexChildBinding(), _ if previous == record:
+            return Ok(None)
+        case CodexChildBinding(), "interrupted" | "conflicted":
+            return bind(
+                get_record(repo, context, record.child_native_session),
+                lambda saved: (
+                    Ok(saved)
+                    if saved.revoked
+                    else local_bus(repo).request(
+                        cancel(
+                            context, record.child_native_session, event, saved.revision
+                        ),
+                        context,
+                    )
+                ),
+            )
+        case CodexChildBinding(), "active" | "stopped":
+            return bind(
+                get_record(repo, context, record.child_native_session),
+                lambda saved: local_bus(repo).request(
+                    status_update(
+                        context,
+                        record.child_native_session,
+                        execution,
+                        ProcessStatus.RUNNING
+                        if record.status == "active"
+                        else ProcessStatus.COMPLETED,
+                        event,
+                        saved.revision,
+                    ),
+                    context,
+                ),
+            )
+        case _:
+            return err(
+                "process_not_found", "native lifecycle has no registered process"
+            )
 
 
 def _parent_scope(repo: Path, payload: dict[str, Any]) -> Result[str]:
@@ -322,7 +389,7 @@ def resolve_child_scope(repo: Path, payload: dict[str, Any]) -> Result[str]:
         _parent_scope(repo, payload),
         lambda scope: bind(
             _load(repo, _identity(payload, "agent_id")),
-            lambda record: fmap(
+            lambda record: bind(
                 require(
                     isinstance(record, CodexChildBinding)
                     and record.status == "active"
@@ -337,7 +404,14 @@ def resolve_child_scope(repo: Path, payload: dict[str, Any]) -> Result[str]:
                     "codex_child_lineage",
                     "native child binding is missing, conflicting, stopped, or interrupted",
                 ),
-                lambda _: scope,
+                lambda _: fmap(
+                    authorize(
+                        repo,
+                        Context("codex", record.parent_native_session, scope),
+                        record.child_native_session,
+                    ),
+                    lambda _: scope,
+                ),
             ),
         ),
     )

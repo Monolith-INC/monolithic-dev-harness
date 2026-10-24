@@ -58,8 +58,8 @@ from harness import (  # noqa: E402
     workflow,
 )
 from host_adapters import (  # noqa: E402
-    codex_bindings,
     hook_bridge,
+    process_channel,
     work_session_context,
 )
 from host_adapters.answer_recovery import recorded_answer  # noqa: E402
@@ -167,14 +167,11 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
             return 0
         case _:
             pass
-    match host:
-        case "codex" if settings.governed(repo):
-            match codex_bindings.is_child(payload), payload.get("hook_event_name"):
-                case True, "PreToolUse":
-                    codex_bindings.observe_child_turn(repo, payload)
-                case _:
-                    pass
-            match codex_bindings.guard(repo, payload, _tool_call(host, event, payload)):
+    match settings.governed(repo):
+        case True:
+            match process_channel.before_tool(
+                host, repo, payload, _tool_call(host, event, payload)
+            ):
                 case rules.Decision() as denied:
                     _emit_decision(host, denied)
                     return 0
@@ -372,8 +369,13 @@ def _onboarding_control(call: rules.ToolCall, repo: Path) -> bool:
 
 def _progress_control(call: rules.ToolCall, repo: Path) -> bool:
     """Saving progress and navigating do not answer or bypass the pending choice."""
-    from harness import commands
+    from harness import commands, process_commands
 
+    match process_commands.recovery_command(call, repo):
+        case True:
+            return True
+        case _:
+            pass
     match call.kind, commands.harness_args(call.command, Path(call.cwd or repo)):
         case "shell", ("workflow", operation, *args) if operation in {
             "checkpoint",
@@ -420,8 +422,8 @@ def _bind(
     request: tuple[str, str] | None,
 ) -> Result[object]:
     """Bind the conversation to the session an allowed command chose; a failure binds nothing."""
-    match host, codex_bindings.is_child(payload):
-        case "codex", True:
+    match process_channel.is_subagent(host, payload):
+        case True:
             return Ok(current)
         case _:
             pass
@@ -1481,31 +1483,6 @@ def _save_captured_language(repo: Path, answer: str) -> str | None:
             return None
 
 
-def handle_codex_lifecycle(event: str, payload: dict[str, Any]) -> int:
-    """Lifecycle notification is evidence, never an enforceable spawn/cancel decision."""
-    match settings.governed(_workspace(payload, "codex")):
-        case False:
-            return 0
-        case _:
-            pass
-    match event:
-        case "interrupt":
-            observed = codex_bindings.interrupt(_workspace(payload, "codex"), payload)
-        case _:
-            observed = codex_bindings.observe_lifecycle(
-                _workspace(payload, "codex"), payload
-            )
-    match observed:
-        case Err(failure):
-            print(
-                f"[harness codex-child-lineage] {failure.message}; child effects remain blocked.",
-                file=sys.stderr,
-            )
-        case _:
-            pass
-    return 0
-
-
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
@@ -1535,57 +1512,19 @@ def main(argv: list[str] | None = None) -> int:
         payload = {}
     if not isinstance(payload, dict):
         payload = {}
-    match args.host, args.event:
-        case "codex", "subagent-start" | "subagent-stop" | "interrupt":
-            return handle_codex_lifecycle(args.event, payload)
-        case "codex", "prompt" if codex_bindings.is_child(payload):
-            _print_prompt(
-                "codex",
-                [
-                    "[harness] children return human decision and conversation-binding needs to their root; no human authority was recorded"
-                ],
-            )
+    match process_channel.event(
+        args.host, args.event, _workspace(payload, args.host), payload
+    ):
+        case Err(failure):
+            print(f"[harness process-status] {failure.message}", file=sys.stderr)
             return 0
-        case "codex", "answer" | "startup" if codex_bindings.is_child(payload):
-            print(
-                hook_bridge.format_answer_context(
-                    "[harness] children return human decision and conversation-binding needs to their root; no human authority was recorded"
-                )
-            )
-            return 0
-        case "codex", "ask" if codex_bindings.is_child(payload):
-            _emit_decision(
-                "codex",
-                rules.Decision.deny(
-                    "codex-child-authority",
-                    "children return human decision and conversation-binding needs to their root; no human authority was recorded",
-                ),
-            )
-            return 0
-        case _:
-            pass
-    match args.host, args.event, codex_bindings.is_child(payload):
-        case "codex", "pre-tool" | "ask" | "prompt", False if payload.get(
-            "session_id"
-        ) and (
-            settings.governed(_workspace(payload, "codex"))
-            or decisions.record(_workspace(payload, "codex")) is not None
-        ):
-            from host_adapters import codex_runtime
-
-            match codex_runtime.persist_observation(
-                _workspace(payload, "codex"), payload
-            ):
-                case Err(failure):
-                    _emit_decision(
-                        "codex",
-                        rules.Decision.deny(
-                            "codex-runtime-observation", failure.message
-                        ),
-                    )
-                    return 0
+        case Ok((True, output)):
+            match output:
+                case str() as text:
+                    print(text)
                 case _:
                     pass
+            return 0
         case _:
             pass
     match args.event:

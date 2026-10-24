@@ -255,3 +255,29 @@ The user subsequently required subagents one model tier below the root with medi
 by default, and builder/coder subagents on `gpt-5.6-luna` with low (light) reasoning. Higher effort
 requires a specific justification and cannot exceed high. These execution limits supersede the
 earlier blanket top-tier subagent allowance.
+
+## Owner-approved shared messaging correction (2026-10-24)
+
+The owner approved Constitution Article 13 and instructed implementation. This supersedes the
+earlier assumption that cancellation must depend solely on a vendor lifecycle hook. A main agent
+may request withdrawal of its subagent's permissions through its adapter; that request does not
+claim that the native runtime or an operating-system process stopped.
+
+- [x] Define one central JSON-RPC message catalog and bus interface for process registration,
+  status updates and cancellation requests. Use immutable values, existing `Result` helpers and
+  protected local storage. Validate ownership, work session, protocol version and revisions;
+  duplicate requests are idempotent and outdated updates cannot restore revoked permission.
+- [x] Connect authentic Codex observations and the standard `harness process` command channel
+  through the adapter to the bus. CLI cancellation acknowledges adapter-applied state; it cannot
+  write a lifecycle record directly. Move Codex lifecycle dispatch behind the adapter boundary.
+- [x] Enforce the generic revocation record on subagent writes, retaining adapter-specific native
+  identity/turn observations separately. Registration or later status reports cannot undo a
+  cancellation. Expose process list/status/cancel operations with exact sender/session scoping.
+- [x] Run focused protocol, adapter and command regressions. Then perform one native fixture
+  trial: legitimate write, standard cancellation request, native interrupt/status report and a
+  denied subsequent write. Retain genuine evidence and qualify runtime confirmation separately.
+
+Reuse existing CLI/JSON facilities; no external broker or new background service. Other adapters
+share the interface and catalog; unsupported native integrations remain explicit. Preserve the
+other release gates and the user's model/effort limits. Do not run broad local suites or publish
+another release merely to exercise this correction.

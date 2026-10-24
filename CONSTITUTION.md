@@ -2,7 +2,7 @@
 title: Constitution of the monolithic-dev-harness
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-10-15
+last_reviewed: 2026-10-24
 ---
 
 # Constitution
@@ -152,3 +152,28 @@ records.
 
 In documents, plans and replies, pair every skill, command, stage or file name with what it does,
 in plain words. Never assume the reader knows a name.
+
+## Article 13 — Adapters exchange centrally defined messages through one interface
+
+Owner decision, 2026-10-24: agent-host adapters and the harness communicate through a shared
+message bus using one standard protocol and interface. Every adapter and consumer follows that
+contract. The harness does not communicate with an agent directly or interpret vendor-specific
+implementation details.
+
+- **One message catalog.** Message types, required fields, meanings, validation and protocol
+  versions are defined centrally. Each case, such as a process status update, has a predefined
+  message. Adapters select and construct these messages through the shared contract; they do not
+  invent their own message names, payload shapes or meanings.
+- **Translation belongs in adapters.** An adapter translates its host's operations, notifications
+  and identifiers into the standard messages, and translates responses back for its host.
+- **The bus owns delivery; the harness owns policy.** All consumers use the same messaging
+  interface. The harness validates generic context and state transitions without parsing a
+  vendor's tool names, hook events or response envelopes.
+- **Reports retain their meaning.** A cancellation request and confirmation that execution
+  stopped are distinct messages. A status report cannot manufacture an approval or grant new
+  permission. Event identity and ordering must support duplicate and outdated-message handling.
+- **Extend once.** A new communication case extends the central contract once, then its adapters
+  and consumers implement that definition. Use existing standard transports where applicable;
+  the shared bus interface does not require a separately deployed broker.
+
+Implementation status and the central contracts are documented in [adapter messaging](docs/01-architecture/architecture.md#adapter-messaging-contract).

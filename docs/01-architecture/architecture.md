@@ -2,7 +2,7 @@
 title: Architecture
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-28
+last_reviewed: 2026-10-24
 ---
 
 # Architecture
@@ -81,6 +81,99 @@ contracts, evidence), and routes every provider call through a place the runtime
 | `trackers/<name>/` | One tracker each: `tracker.json` (what it is) and `adapter.py` (translation only). Shipped: Azure DevOps, Linear, local. |
 | Azure DevOps adapter | Internal gateway implementation using `@azure-devops/mcp`; it is not separately registered with the host. The gateway starts one persistent provider transport using repository settings. |
 
+## Adapter Messaging Contract
+
+**Owner decision, 2026-10-24. Shared process messaging implemented in the development source.**
+The governing rule is [Constitution Article 13](../../CONSTITUTION.md#article-13--adapters-exchange-centrally-defined-messages-through-one-interface).
+
+All agent-host adapters use one shared standard protocol and messaging interface. A central
+message contract defines the available messages for each case. An adapter selects a predefined
+message through the shared types or constructors, supplies the required data and submits it to
+the bus. Neither an adapter nor a consumer defines a private variation of that message.
+
+```text
+Codex  <-> Codex adapter  <-> |
+Claude <-> Claude adapter <-> | shared message bus <-> harness
+Cursor <-> Cursor adapter <-> |
+                             one interface and central message contract
+```
+
+| Component | Owns |
+| --- | --- |
+| Central protocol and message catalog | Message types, required fields, meanings, validation, versioning and shared constructors. |
+| Adapter | Vendor-specific tool calls, notifications, identifiers and response translation. |
+| Message bus | Delivery through the shared interface and explicit delivery outcomes. |
+| Harness consumer | Generic context checks, policy, valid state transitions and persistent records. |
+
+For a process status update, the contract must identify the process or subagent, the relevant
+work session, the reported status, the report's source and the information needed to correlate,
+order and deduplicate events. The exact schema belongs to the central catalog. Vendor-specific
+event names and payloads stay inside the adapter.
+
+Cancellation illustrates the distinction between intent and observation: the main agent sends a
+standard cancellation request through its adapter; the harness can withdraw the subagent's
+permission to make changes under its work session. Confirmation that the runtime stopped the
+subagent is a separate status update. Reporting a status never grants additional permission or
+creates a human approval.
+
+The bus is a shared communication abstraction. Implementation should reuse existing standard
+transport facilities where suitable; this decision does not select an external broker or require
+a separate service.
+
+### Shared protocol and first consumer
+
+The process catalog is `scripts/harness/process_messages.py`. It provides the constructors and
+validation for version 1 messages using [JSON-RPC 2.0](https://www.jsonrpc.org/specification),
+whose standard permits communication within one process. The `MessageBus` interface and generic
+consumer live in `scripts/harness/process_bus.py`; `process_store.py` isolates locked, atomic
+persistence under `.harness/state/host_sessions/processes/`. A typed receipt supplies the centrally
+constructed JSON-RPC response with the same request identifier.
+
+| Catalog message | Meaning |
+| --- | --- |
+| `process.get` / `process.list` | Read a process or list processes within the adapter-derived owner/work-session scope. |
+| `process.register` | Register an observed process in an existing active work session. It cannot replace a record or restore withdrawn permission. |
+| `process.status_update` | Record a status for an identified execution. Host observations and main-agent reports remain separate. |
+| `process.cancel` | Withdraw permission immediately. It does not claim that the host or an operating-system process stopped. |
+
+All messages carry a protocol version, event identity and adapter-derived conversation/work-session
+context. Process-specific messages also carry the process identity. Updates and cancellation requests include the expected record
+revision. A duplicate message has no additional effect; reused event identities with changed
+content, outdated revisions, old executions and contradictory ownership are refused. Cancellation
+is permanent for that process record. A later report, registration or running notification cannot
+restore its permissions.
+
+The command vocabulary is shared in `scripts/harness/process_commands.py`. The agent selects an
+operation with `harness process list|status|cancel|report`. The adapter derives the sender from the
+actual host invocation and submits the corresponding catalog message through the bus. Command
+bodies read results; they cannot directly publish a lifecycle update or edit the protected record.
+A cancellation or report run without its adapter observation is refused unless that requested
+state has already been applied. Reports expose only the main-agent origin; they cannot select a
+host-confirmed origin or grant an approval.
+
+`host_adapters/process_channel.py` is the shared adapter entry point. Codex's implementation is
+`host_adapters/codex_process.py`; native lifecycle dispatch has moved out of the shared harness
+hook. The existing Codex binding holds private identity and turn observations; the generic bus
+record controls permission withdrawal. Both must allow a subsequent subagent write. Adapter
+observations cannot bypass the shared consumer's ownership, revision or revocation checks.
+
+The same bus and catalog accept all adapter identifiers without vendor branches. Codex is the
+first connected native adapter. Claude and other adapters still lack a verified native process
+channel; this change does not advertise that they implement one. The older Python subprocess
+subagent contract in `host_adapters/subagents.py` remains separate and unsupported.
+
+### Verification and remaining scope
+
+A real isolated CLI trial on 2026-10-24 observed a successful subagent file write, a standard
+cancellation request, a main-agent interruption report, and a denied subsequent write by the
+same subagent. The generic record retained `revoked: true`, distinguished the main-agent report
+from its last host observation, and the file remained unchanged after cancellation. See the
+[native evidence](../06-delivery/acceptance/codex-adapter/process-bus-native-trial.json).
+
+This controls subsequent guarded effects. It does not retroactively stop an already-running OS
+command. Desktop controls, native observation delivery beyond the verified channel, other adapter
+integrations and the remaining release acceptance requirements retain their own qualification.
+
 ## Runtime State Machine
 
 Per tool call:
@@ -158,6 +251,8 @@ Details: [data-model.md](data-model.md).
 - `config/settings.schema.json`: the repository settings.
 - `config/tracker.schema.json` and `scripts/integrations/contracts.py`: the tracker contract.
 - `config/host.schema.json` and `scripts/host_adapters/subagents.py`: the subagent contract.
+- [Adapter messaging](#adapter-messaging-contract): the shared process bus interface and central
+  message catalog (`process_messages.py`, `process_bus.py`, `process_store.py`).
 - `skills/*/manifest.json` — orchestrated skills' input and output schemas.
 - `common/artifact-schema.json` — backlog draft frontmatter.
 - Command contracts: [../02-design/api.md](../02-design/api.md).

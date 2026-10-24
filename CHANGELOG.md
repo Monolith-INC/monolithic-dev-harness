@@ -6,6 +6,19 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Shared JSON-RPC process message catalog and bus interface with generic ownership, revision,
+  duplicate-message and execution checks. Cancellation withdraws permission independently of
+  vendor stop notifications; main-agent reports and host observations remain distinct.
+- Standard `harness process list|status|cancel|report` commands through the Codex adapter.
+  Command bodies acknowledge adapter-applied state without directly editing process records.
+
+### Changed
+
+- Codex lifecycle translation now resides behind the adapter entry point. Shared harness policy
+  consumes generic process state; later reports cannot restore revoked subagent permissions.
+
 ## [0.7.0-rc.6] - 2026-10-23
 
 ### Fixed

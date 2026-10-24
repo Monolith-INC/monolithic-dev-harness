@@ -47,6 +47,7 @@ from harness import (  # noqa: E402
     knowledge,
     local_tracker,
     preferences,
+    process_cli,
     project_paths,
     sessions,
     settings,
@@ -623,6 +624,7 @@ def parser() -> argparse.ArgumentParser:
     preference_parser.add_argument("value", nargs="?")
     preference_parser.add_argument("--repo")
     documents.add_parser(sub)
+    process_cli.add_parser(sub)
     tracker_parser = sub.add_parser(
         "tracker",
         help="list or inspect trackers, check readiness, stage a new one, or print the work-item tree",
@@ -678,12 +680,19 @@ def main(argv: list[str] | None = None) -> int:
     command_line = parser()
     args, extra = command_line.parse_known_args(argv)
     match args.command, extra:
-        case "workflow", [*unknown] if unknown:
-            command_line.error("unrecognized workflow arguments: " + " ".join(unknown))
+        case "workflow" | "process" as family, [*unknown] if unknown:
+            command_line.error(
+                "unrecognized " + family + " arguments: " + " ".join(unknown)
+            )
         case _:
             pass
     if args.command in cli_workflow.COMMANDS:
         return cli_workflow.run(args)
+    match args.command:
+        case "process":
+            return process_cli.run(args)
+        case _:
+            pass
     if args.command == "version":
         print(version())
         return 0

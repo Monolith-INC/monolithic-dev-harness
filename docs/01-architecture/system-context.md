@@ -2,7 +2,7 @@
 title: System Context
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-10-24
 ---
 
 # System Context
@@ -49,6 +49,13 @@ External systems: the agent host, the repository, the selected tracker (Azure De
 Linear, an onboarded provider, or none for the local tracker), the SCM (Azure Repos or GitHub), and
 the browser that completes OAuth for the providers' MCP servers. Internal components are described
 in [architecture.md](architecture.md).
+
+The required adapter communication boundary is defined in
+[adapter messaging](architecture.md#adapter-messaging-contract): agents interact through their
+host adapters; adapters and the harness exchange centrally defined messages through one shared
+bus interface and standard protocol. Vendor-specific details remain in the adapters. This is an
+accepted architectural requirement. The shared process bus and initial Codex command channel
+are implemented in the development source; other adapter integrations remain pending.
 
 ## Runtime State Machine
 

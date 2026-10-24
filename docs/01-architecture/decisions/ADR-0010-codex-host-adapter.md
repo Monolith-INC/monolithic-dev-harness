@@ -2,7 +2,7 @@
 title: ADR-0010 Codex host adapter
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-10-23
+last_reviewed: 2026-10-24
 ---
 
 # ADR-0010: Support Codex as a host
@@ -52,3 +52,17 @@ See the [current evidence and official source anchors](../../06-delivery/accepta
 and [development trial](../../06-delivery/acceptance/codex-adapter/trial.md) for precise supported
 boundaries and remaining release requirements. Native protocol observations do not yet qualify
 a fully functional installed Desktop release.
+
+## Shared process messages (owner decision, 2026-10-24)
+
+The development source now uses the shared process message catalog and bus described in
+[adapter messaging](../architecture.md#adapter-messaging-contract). Codex translates native
+observations and authenticated main-agent commands inside its adapter. Shared harness policy
+receives generic process state; it does not dispatch Codex lifecycle names directly.
+
+The main agent selects cancellation with `harness process cancel`: permission withdrawal is
+persisted independently of a native interruption notification. Main-agent status reports remain
+distinct from host observations, and later updates cannot restore revoked permission. Two real
+CLI probes verified withdrawal, reporting and denied subsequent writes, including a denied write
+in the original execution before native interruption was requested. Other adapter integrations
+and the remaining release gates retain their own qualification.

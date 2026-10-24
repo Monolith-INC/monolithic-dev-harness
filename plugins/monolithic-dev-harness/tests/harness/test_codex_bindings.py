@@ -339,7 +339,7 @@ def test_child_cannot_record_human_authority(
         "sys.stdin", io.StringIO(json.dumps(payload(repo, prompt="approve HB-ABCD")))
     )
     assert hook.main(["--host", "codex", "--event", event]) == 0
-    assert "children return human decision" in capsys.readouterr().out
+    assert "subagents return human decision" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -364,7 +364,7 @@ def test_child_non_pretool_dispatch_uses_native_output_contract(
     parsed = json.loads(output)
     assert parsed["hookSpecificOutput"]["hookEventName"] == hook_event_name
     assert (
-        "children return human decision"
+        "subagents return human decision"
         in parsed["hookSpecificOutput"]["additionalContext"]
     )
 

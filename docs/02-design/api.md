@@ -2,7 +2,7 @@
 title: Command and Contract Interfaces
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-28
+last_reviewed: 2026-10-24
 ---
 
 # Command and Contract Interfaces
@@ -291,3 +291,44 @@ In Claude, the same happens by click: a question that says "tracker", names an o
 and offers **Trust**, **Use it**, or **Stop trusting**. The question hook pins the tracker's version when the
 question is shown; the answer hook acts only on the user's click, and only if the folder has not
 changed since.
+
+## Process messages and commands
+
+The standard protocol is JSON-RPC 2.0 with the version 1 process message catalog in
+`scripts/harness/process_messages.py`. Every adapter uses the same `MessageBus.request` interface
+in `scripts/harness/process_bus.py`; it selects catalog constructors instead of writing private
+payloads. Native notifications and identifiers are translated inside `host_adapters/`.
+
+```bash
+harness process list --repo .
+harness process status <process-id> --repo .
+harness process cancel <process-id> --repo .
+harness process report <process-id> --status interrupted --repo .
+```
+
+All operations accept `--host` and `--session-id`; an explicit session must match the invoking
+main agent's bound work session. Codex is currently the connected native process adapter. A
+missing adapter or unbound conversation returns an explicit error.
+
+- `list` and `status` read only the caller's processes.
+- `cancel` selects the central cancellation message. The authenticated adapter applies permission
+  withdrawal before the command acknowledges the stored result. It does not invoke a vendor's
+  cancellation tool; the main agent uses that tool separately.
+- `report` selects the central status-update message with main-agent origin. Supported statuses
+  are `running`, `completed`, `failed`, `interrupted` and `unknown`. A report cannot replace a host
+  observation or restore permission. Missing/invalid statuses are refused before publication.
+
+The CLI does not write lifecycle state directly. Running cancellation or reporting outside its
+observed host invocation cannot manufacture an applied update. The adapter rejects subagent
+senders, conflicting project/session/adapter arguments and calls without native tool identity.
+The shared consumer additionally checks ownership, protocol fields, event identity and revision.
+
+The record exposes `runtime_status` (last host observation), `reported_status` (main-agent report),
+`revoked` (permission withdrawn), and `revision`. These are separate facts. The command's
+`runtime_stopped` field summarizes the last observed execution status; it is not a guarantee that
+an OS process was killed. Exit `0` acknowledges a successful scoped read/applied request; exit `2`
+reports an invalid, unavailable or unapplied request.
+
+Storage uses locked atomic updates under `.harness/state/host_sessions/processes/`. The bus
+refuses changed duplicate messages, stale revisions and replayed executions. Revocation cannot
+be undone by a later status message. No process message creates a human approval.

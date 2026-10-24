@@ -59,21 +59,66 @@ process's workspace sandbox and the harness hooks. The temporary RPC driver's re
 
 The source documentation and sanitized protocol/hook fixtures are linked from [evidence.md](evidence.md). Each probe answers a different unresolved boundary; no broad model-driven trial loop is authorized by this report.
 
+## Shared process messaging development trial (2026-10-24)
+
+The owner corrected the integration boundary: one standard protocol/interface and a central
+message catalog, with vendor translation only in adapters. The implementation uses JSON-RPC 2.0
+and one local message bus. Main-agent cancellation withdraws permission without waiting for a
+vendor interruption hook; agent-reported status and host-observed status are recorded separately.
+
+A fresh private profile installed a development source snapshot, retaining the RC6 manifest
+version; this was not a published release. Loaded module bytes matched the trial source and nine
+reviewed hook hashes were trusted only in that profile. A real native trial used a `gpt-6-sol`
+main agent at medium effort and one `gpt-5.6-luna` subagent at low effort.
+
+| Check | Result |
+| --- | --- |
+| Legitimate initial effect | Native file-change event completed; fixture contains `before cancellation`. |
+| Standard cancellation | `harness process cancel` returned success; generic record persisted `revoked: true`. |
+| Native interruption/report | Native activity reported interruption; standard `process report` saved `reported_status: interrupted`. |
+| Subsequent effect | The same subagent's actual patch attempt was denied; file content remained unchanged. |
+| State meaning | Last host observation remained `running`; the main-agent report and permission withdrawal were separate. |
+| Hook/driver health | No failed hook callback; driver exited zero. |
+
+[Authentic sanitized events and record](process-bus-native-trial.json) include source-module,
+driver and raw-log hashes. The parent work session was operator-seeded; this does not qualify
+onboarding, human UI or external writes. An already-running `sleep 30` command completed normally;
+no OS-process termination guarantee is inferred from native agent interruption.
+
+This closes the development implementation gap for permission withdrawal through the standard
+message channel. The published RC6 archive is unchanged. Packaging this correction and the other
+release requirements remain separate gates.
+
+A second bounded probe checked the remaining enforcement distinction on the final source: the
+main agent withdrew permission while the original subagent execution was still running, then
+waited for its next patch attempt before requesting native interruption. The patch was denied
+specifically because the process had no permission, with the same native turn ID as the initial
+successful write. The generic record subsequently observed execution completion while retaining
+`revoked: true`. The main agent correctly omitted an interruption report when native status
+showed the task had already completed. No hook callback failed; driver exited zero.
+The [same-execution evidence](process-bus-same-execution-trial.json) records the matching turn IDs,
+ordering, final state and exact loaded-module hashes.
+
+Focused protocol/adapter/hook/session/question checks passed 271 tests. A scoped review found
+one report from an old execution could carry over to a new execution. Its regression failed,
+then passed after resetting the report when a new execution starts. Queries, updates and their
+success/error envelopes use the same central JSON-RPC catalog and bus interface.
+
 ## Release requirements still to prove
 
 - Current Desktop surface and visible structured controls.
-- Independent read-only reviewer enforcement, exact owned-file scope and persisted cancellation revocation.
+- Independent read-only reviewer enforcement, exact owned-file scope and a release candidate containing the verified process-message correction.
 - Existing laws across every advertised Claude workflow family.
 - Genuine harness decision capture, reviewed content/scope binding, interruption/recovery and exactly-once scoped external write on a dedicated authorized fixture.
 
 A protocol pass or a green unit test does not clear these requirements. Preserve pending gates and report concrete blockers rather than describing a partial adapter as fully functional.
 
-The next qualification checkpoint needs actual Desktop rendering/capture and an authenticated
-way to associate native interruption with adapter revocation. Model-facing status text or a
-model-written lifecycle receipt cannot supply that authority. The observed interrupted child
-retained its old turn binding; a fresh mismatching turn remains denied, but this is not proof
-that the interrupted turn's authority or underlying process was revoked. Assignment permissions,
-the remaining workflow families and a dedicated external-write/recovery fixture also need their
+The next qualification checkpoint needs actual Desktop rendering/capture and a packaged candidate
+containing the standard process-message correction. Model-facing status text or a
+model-written lifecycle receipt cannot supply that authority. The shared message channel now
+withdraws permission independently of native interruption callbacks, as the same-execution
+trial demonstrates. Termination of already-running operating-system processes remains unqualified.
+Assignment permissions, the remaining workflow families and a dedicated external-write/recovery fixture also need their
 stated evidence. These are release blockers, not permission to bypass existing harness laws.
 
 ## Verification to date

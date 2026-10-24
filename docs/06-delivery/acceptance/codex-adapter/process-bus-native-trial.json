@@ -1,0 +1,305 @@
+{
+  "classification": "actual_native_events_sanitized_paths",
+  "date": "2026-10-24",
+  "build": "development source snapshot, not a published release",
+  "cli_version": "0.162.1",
+  "events": [
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low",
+          "id": "call_9e7f98e291de46b69b1acfb26a0aa032",
+          "kind": "started",
+          "agentThreadId": "01a16f5d-3100-7780-9ffe-944c4a17efd2",
+          "agentPath": "/root/proof_worker"
+        },
+        "threadId": "01a16f5d-1312-7270-99a3-eeeb53f2d8bb",
+        "turnId": "01a16f5d-167b-7ac2-ad5e-15185dcc50d6",
+        "completedAtMs": 1792869740815
+      },
+      "emittedAtMs": 1792869740819
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "fileChange",
+          "id": "exec-b9fddad6-0dcd-4a82-87fb-965a85995cab",
+          "changes": [
+            {
+              "path": "/fixture/process-bus/project/docs/planning/proof.md",
+              "kind": {
+                "type": "add"
+              },
+              "diff": "before cancellation\n"
+            }
+          ],
+          "status": "completed"
+        },
+        "threadId": "01a16f5d-3100-7780-9ffe-944c4a17efd2",
+        "turnId": "01a16f5d-310e-7b23-a1da-2ea80120f219",
+        "completedAtMs": 1792869745206
+      },
+      "emittedAtMs": 1792869745207
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-d5fb13ab-eb70-42b2-ae3c-ce3131460c88",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/bin/bash -lc '/fixture/process-bus/bin/harness process list --repo /fixture/process-bus/project --host codex'",
+          "cwd": "/fixture/process-bus/project",
+          "processId": "23997",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "/fixture/process-bus/bin/harness process list --repo /fixture/process-bus/project --host codex"
+            }
+          ],
+          "aggregatedOutput": "{\"processes\": [{\"completed_executions\": [], \"context\": {\"adapter\": \"codex\", \"owner_id\": \"01a16f5d-1312-7270-99a3-eeeb53f2d8bb\", \"work_session_id\": \"WS-b9cbe335a93a\"}, \"events\": [[\"f08089c8fa197f2fc54a3ae7fec20cb868195873b98f3fddf631088c82f4df97\", \"60a1fdaf8783e16cffa768f56fd7029f732bf9b6ab1532b4b1b6b59ae8a9e8b2\"]], \"execution_id\": \"01a16f5d-310e-7b23-a1da-2ea80120f219\", \"process_id\": \"01a16f5d-3100-7780-9ffe-944c4a17efd2\", \"reported_status\": null, \"revision\": 0, \"revoked\": false, \"runtime_status\": \"running\"}]}\n",
+          "exitCode": 0,
+          "durationMs": 236
+        },
+        "threadId": "01a16f5d-1312-7270-99a3-eeeb53f2d8bb",
+        "turnId": "01a16f5d-167b-7ac2-ad5e-15185dcc50d6",
+        "completedAtMs": 1792869754640
+      },
+      "emittedAtMs": 1792869754640
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-fe561858-51b9-431b-b9f2-bc85ecbf5d25",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/bin/bash -lc '/fixture/process-bus/bin/harness process cancel 01a16f5d-3100-7780-9ffe-944c4a17efd2 --repo /fixture/process-bus/project --host codex'",
+          "cwd": "/fixture/process-bus/project",
+          "processId": "12192",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "/fixture/process-bus/bin/harness process cancel 01a16f5d-3100-7780-9ffe-944c4a17efd2 --repo /fixture/process-bus/project --host codex"
+            }
+          ],
+          "aggregatedOutput": "{\"permission_revoked\": true, \"process\": {\"completed_executions\": [], \"context\": {\"adapter\": \"codex\", \"owner_id\": \"01a16f5d-1312-7270-99a3-eeeb53f2d8bb\", \"work_session_id\": \"WS-b9cbe335a93a\"}, \"events\": [[\"f08089c8fa197f2fc54a3ae7fec20cb868195873b98f3fddf631088c82f4df97\", \"60a1fdaf8783e16cffa768f56fd7029f732bf9b6ab1532b4b1b6b59ae8a9e8b2\"], [\"47395bb42d4a6fb18453568612b94904d3fc47e9ca6d1cddf0bcb36b1c9d640b\", \"3c27d04705dc900c21d3e54ebff911da65a7a62d64c633e34133aeec889cccdd\"]], \"execution_id\": \"01a16f5d-310e-7b23-a1da-2ea80120f219\", \"process_id\": \"01a16f5d-3100-7780-9ffe-944c4a17efd2\", \"reported_status\": null, \"revision\": 1, \"revoked\": true, \"runtime_status\": \"running\"}, \"runtime_stopped\": false}\n",
+          "exitCode": 0,
+          "durationMs": 128
+        },
+        "threadId": "01a16f5d-1312-7270-99a3-eeeb53f2d8bb",
+        "turnId": "01a16f5d-167b-7ac2-ad5e-15185dcc50d6",
+        "completedAtMs": 1792869757190
+      },
+      "emittedAtMs": 1792869757191
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "call_072c79ec4a7e4ad1a5f36df078c6502f",
+          "kind": "interrupted",
+          "agentThreadId": "01a16f5d-3100-7780-9ffe-944c4a17efd2",
+          "agentPath": "/root/proof_worker"
+        },
+        "threadId": "01a16f5d-1312-7270-99a3-eeeb53f2d8bb",
+        "turnId": "01a16f5d-167b-7ac2-ad5e-15185dcc50d6",
+        "completedAtMs": 1792869758961
+      },
+      "emittedAtMs": 1792869758961
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-75195574-7d7b-406c-9ffb-c2dbb32304e6",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/bin/bash -lc '/fixture/process-bus/bin/harness process report 01a16f5d-3100-7780-9ffe-944c4a17efd2 --status interrupted --repo /fixture/process-bus/project --host codex'",
+          "cwd": "/fixture/process-bus/project",
+          "processId": "84575",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "/fixture/process-bus/bin/harness process report 01a16f5d-3100-7780-9ffe-944c4a17efd2 --status interrupted --repo /fixture/process-bus/project --host codex"
+            }
+          ],
+          "aggregatedOutput": "{\"permission_revoked\": true, \"process\": {\"completed_executions\": [], \"context\": {\"adapter\": \"codex\", \"owner_id\": \"01a16f5d-1312-7270-99a3-eeeb53f2d8bb\", \"work_session_id\": \"WS-b9cbe335a93a\"}, \"events\": [[\"f08089c8fa197f2fc54a3ae7fec20cb868195873b98f3fddf631088c82f4df97\", \"60a1fdaf8783e16cffa768f56fd7029f732bf9b6ab1532b4b1b6b59ae8a9e8b2\"], [\"47395bb42d4a6fb18453568612b94904d3fc47e9ca6d1cddf0bcb36b1c9d640b\", \"3c27d04705dc900c21d3e54ebff911da65a7a62d64c633e34133aeec889cccdd\"], [\"89074bac2d8c516e14e4a2181452fe8bf4a81d50dceece0d97dd9db63b0da07a\", \"e2d9621af990acc2596507d562bb974d74d078bd10a6c3a849eb1cea21ef31f6\"]], \"execution_id\": \"01a16f5d-310e-7b23-a1da-2ea80120f219\", \"process_id\": \"01a16f5d-3100-7780-9ffe-944c4a17efd2\", \"reported_status\": \"interrupted\", \"revision\": 2, \"revoked\": true, \"runtime_status\": \"running\"}, \"runtime_stopped\": false}\n",
+          "exitCode": 0,
+          "durationMs": 129
+        },
+        "threadId": "01a16f5d-1312-7270-99a3-eeeb53f2d8bb",
+        "turnId": "01a16f5d-167b-7ac2-ad5e-15185dcc50d6",
+        "completedAtMs": 1792869764415
+      },
+      "emittedAtMs": 1792869764415
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "call_76c8b2d94b8c4c2abb36c2eb0357dd3d",
+          "kind": "interacted",
+          "agentThreadId": "01a16f5d-3100-7780-9ffe-944c4a17efd2",
+          "agentPath": "/root/proof_worker"
+        },
+        "threadId": "01a16f5d-1312-7270-99a3-eeeb53f2d8bb",
+        "turnId": "01a16f5d-167b-7ac2-ad5e-15185dcc50d6",
+        "completedAtMs": 1792869766927
+      },
+      "emittedAtMs": 1792869766927
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "agentMessage",
+          "id": "msg_05c3d1dce79acb88016add058be5448191b6ff49f65102a968",
+          "text": "The sole authorized `apply_patch` attempt was blocked by the PreToolUse hook: `[harness codex-child-lineage] native child binding is missing, conflicting, stopped, or interrupted.` No file change occurred.",
+          "phase": "final_answer",
+          "memoryCitation": null,
+          "delivery": null,
+          "questions": null
+        },
+        "threadId": "01a16f5d-3100-7780-9ffe-944c4a17efd2",
+        "turnId": "01a16f5d-970f-78b2-aa02-519b023a7eb8",
+        "completedAtMs": 1792869772236
+      },
+      "emittedAtMs": 1792869772236
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "subagent-completed-01a16f5d-970f-78b2-aa02-519b023a7eb8",
+          "kind": "completed",
+          "agentThreadId": "01a16f5d-3100-7780-9ffe-944c4a17efd2",
+          "agentPath": "/root/proof_worker"
+        },
+        "threadId": "01a16f5d-1312-7270-99a3-eeeb53f2d8bb",
+        "turnId": "01a16f5d-167b-7ac2-ad5e-15185dcc50d6",
+        "completedAtMs": 1792869772457
+      },
+      "emittedAtMs": 1792869772457
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-8a05fab2-7f6a-4217-987c-07c1e08bf491",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/bin/bash -lc '/fixture/process-bus/bin/harness process status 01a16f5d-3100-7780-9ffe-944c4a17efd2 --repo /fixture/process-bus/project --host codex'",
+          "cwd": "/fixture/process-bus/project",
+          "processId": "11949",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "commandActions": [
+            {
+              "type": "unknown",
+              "command": "/fixture/process-bus/bin/harness process status 01a16f5d-3100-7780-9ffe-944c4a17efd2 --repo /fixture/process-bus/project --host codex"
+            }
+          ],
+          "aggregatedOutput": "{\"permission_revoked\": true, \"process\": {\"completed_executions\": [], \"context\": {\"adapter\": \"codex\", \"owner_id\": \"01a16f5d-1312-7270-99a3-eeeb53f2d8bb\", \"work_session_id\": \"WS-b9cbe335a93a\"}, \"events\": [[\"f08089c8fa197f2fc54a3ae7fec20cb868195873b98f3fddf631088c82f4df97\", \"60a1fdaf8783e16cffa768f56fd7029f732bf9b6ab1532b4b1b6b59ae8a9e8b2\"], [\"47395bb42d4a6fb18453568612b94904d3fc47e9ca6d1cddf0bcb36b1c9d640b\", \"3c27d04705dc900c21d3e54ebff911da65a7a62d64c633e34133aeec889cccdd\"], [\"89074bac2d8c516e14e4a2181452fe8bf4a81d50dceece0d97dd9db63b0da07a\", \"e2d9621af990acc2596507d562bb974d74d078bd10a6c3a849eb1cea21ef31f6\"]], \"execution_id\": \"01a16f5d-310e-7b23-a1da-2ea80120f219\", \"process_id\": \"01a16f5d-3100-7780-9ffe-944c4a17efd2\", \"reported_status\": \"interrupted\", \"revision\": 2, \"revoked\": true, \"runtime_status\": \"running\"}, \"runtime_stopped\": false}\n",
+          "exitCode": 0,
+          "durationMs": 128
+        },
+        "threadId": "01a16f5d-1312-7270-99a3-eeeb53f2d8bb",
+        "turnId": "01a16f5d-167b-7ac2-ad5e-15185dcc50d6",
+        "completedAtMs": 1792869775450
+      },
+      "emittedAtMs": 1792869775451
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "agentMessage",
+          "id": "msg_05657c942b933527016add0592676c8191b1d9adf53b8a3e58",
+          "text": "The trial used one native worker. Harness process `01a16f5d-3100-7780-9ffe-944c4a17efd2` was selected from the actual `process list` reply.\n\n- `process cancel` succeeded: permission was revoked, while harness runtime status remained `running`.\n- Native `interrupt_agent` succeeded. `list_agents` then showed the worker as `interrupted`, so `process report --status interrupted` was submitted successfully.\n- The same worker completed the single follow-up `apply_patch` attempt. It reported that the PreToolUse hook blocked the append because the child binding was \u201cmissing, conflicting, stopped, or interrupted\u201d; it reported no file change.\n- Final harness status: `runtime_status: running`, `reported_status: interrupted`, `revoked: true`.",
+          "phase": "final_answer",
+          "memoryCitation": null,
+          "delivery": null,
+          "questions": null
+        },
+        "threadId": "01a16f5d-1312-7270-99a3-eeeb53f2d8bb",
+        "turnId": "01a16f5d-167b-7ac2-ad5e-15185dcc50d6",
+        "completedAtMs": 1792869780520
+      },
+      "emittedAtMs": 1792869780520
+    }
+  ],
+  "process_record": {
+    "completed_executions": [],
+    "context": {
+      "adapter": "codex",
+      "owner_id": "01a16f5d-1312-7270-99a3-eeeb53f2d8bb",
+      "work_session_id": "WS-b9cbe335a93a"
+    },
+    "events": [
+      [
+        "f08089c8fa197f2fc54a3ae7fec20cb868195873b98f3fddf631088c82f4df97",
+        "60a1fdaf8783e16cffa768f56fd7029f732bf9b6ab1532b4b1b6b59ae8a9e8b2"
+      ],
+      [
+        "47395bb42d4a6fb18453568612b94904d3fc47e9ca6d1cddf0bcb36b1c9d640b",
+        "3c27d04705dc900c21d3e54ebff911da65a7a62d64c633e34133aeec889cccdd"
+      ],
+      [
+        "89074bac2d8c516e14e4a2181452fe8bf4a81d50dceece0d97dd9db63b0da07a",
+        "e2d9621af990acc2596507d562bb974d74d078bd10a6c3a849eb1cea21ef31f6"
+      ]
+    ],
+    "execution_id": "01a16f5d-310e-7b23-a1da-2ea80120f219",
+    "process_id": "01a16f5d-3100-7780-9ffe-944c4a17efd2",
+    "reported_status": "interrupted",
+    "revision": 2,
+    "revoked": true,
+    "runtime_status": "running",
+    "version": 1
+  },
+  "file_content": "before cancellation\n",
+  "failed_hooks": 0,
+  "driver_exit_code": 0,
+  "module_hashes": {
+    "scripts/harness/process_messages.py": "f059e7a523241de950940a586c295e27062520955b4fc6c3d4afcdbd82b334e2",
+    "scripts/harness/process_bus.py": "7a6dbecc39890b6084721d63c2f2dd6d1f579212cb6e2be5230ca257318df312",
+    "scripts/harness/process_store.py": "07756316dbd9d45bc88b8c1b782bc91e1f5cc845fd0e6fe68de94f8972d87369",
+    "scripts/harness/process_cli.py": "cb1d06f75781c7cd082db58c34cf826083ecab63d4f373b08bf4456349ad848b",
+    "scripts/host_adapters/codex_process.py": "91d1499f0749284eb342485bec66ff86d642d20c03253f496317f30a4760f1b2",
+    "scripts/host_adapters/codex_bindings.py": "bd0141580c95226fd1c27e5cd77c935bbff919bf1bc924dc1b37589d4c859687",
+    "scripts/host_adapters/process_channel.py": "c6656d76f0c0f570c35831b5ef12880febb9a9048e42c2065e9abd6a02d2e7eb",
+    "scripts/harness/hook.py": "4f500fe5f4614a48566bb8164d1889f120a9ea563d0254c7f0a5da35ed001eec"
+  },
+  "driver_sha256": "f977ba2fc1e7de7427956558770b339e7dff0f93d5c93e775f906eea0d6065c1",
+  "raw_log_sha256": "1f8faaf8504aa1dc201474b4fd34292372ffc6f0393dd64a1fe21b1da056d59b",
+  "limits": [
+    "Operator-seeded disposable parent work session; not the full onboarding workflow.",
+    "Main agent report is recorded separately from host observation.",
+    "Cancellation withdraws subsequent guarded writes; it does not prove termination of an already-running OS command.",
+    "Active Desktop profile and release version were not changed."
+  ]
+}
