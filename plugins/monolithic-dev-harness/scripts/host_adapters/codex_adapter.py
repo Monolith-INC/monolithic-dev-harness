@@ -58,7 +58,7 @@ def subagents() -> SubagentOps:
     return unsupported_ops("codex")
 
 
-
 def installation():
     from .installation_layouts import adapter
-    return adapter('codex')
+
+    return adapter("codex")

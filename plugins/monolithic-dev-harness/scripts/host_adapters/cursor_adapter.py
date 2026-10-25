@@ -33,7 +33,7 @@ def subagents() -> SubagentOps:
     return unsupported_ops("cursor")
 
 
-
 def installation():
     from .installation_layouts import adapter
-    return adapter('cursor')
+
+    return adapter("cursor")

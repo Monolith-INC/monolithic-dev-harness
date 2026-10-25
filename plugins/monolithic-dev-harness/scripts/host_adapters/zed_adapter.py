@@ -54,7 +54,7 @@ def subagents() -> SubagentOps:
     return unsupported_ops("zed")
 
 
-
 def installation():
     from .installation_layouts import adapter
-    return adapter('zed')
+
+    return adapter("zed")

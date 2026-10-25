@@ -58,7 +58,7 @@ def subagents() -> SubagentOps:
     return unsupported_ops("kimi")
 
 
-
 def installation():
     from .installation_layouts import adapter
-    return adapter('kimi')
+
+    return adapter("kimi")

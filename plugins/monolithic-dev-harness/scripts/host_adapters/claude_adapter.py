@@ -63,7 +63,7 @@ def assistant_text_after(transcript: Path, command: str) -> str:
     return "\n".join(texts)
 
 
-
 def installation():
     from .installation_layouts import adapter
-    return adapter('claude')
+
+    return adapter("claude")

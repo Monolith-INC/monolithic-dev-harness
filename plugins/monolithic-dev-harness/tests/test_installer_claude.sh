@@ -15,7 +15,7 @@ elif command -v python3.12 >/dev/null 2>&1; then
   PY_BIN="$(command -v python3.12)"
 fi
 
-mkdir -p "${TEMP_ROOT}/bin" "${TEMP_ROOT}/harness" "${TEMP_ROOT}/claude"
+mkdir -p "${TEMP_ROOT}/bin" "${TEMP_ROOT}/harness" "${TEMP_ROOT}/claude" "${TEMP_ROOT}/claude-config"
 export HOME="${TEMP_ROOT}/home"
 mkdir -p "$HOME"
 # Stub `claude` that caches by version like the real CLI: `plugin update` keeps the cache, and
