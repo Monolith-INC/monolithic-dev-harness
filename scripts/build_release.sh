@@ -50,6 +50,17 @@ for required in .claude-plugin/marketplace.json .cursor-plugin/marketplace.json 
     plugins/monolithic-dev-harness/scripts/harness/process_store.py \
     plugins/monolithic-dev-harness/scripts/harness/process_commands.py \
     plugins/monolithic-dev-harness/scripts/harness/process_cli.py \
+    plugins/monolithic-dev-harness/scripts/harness/installation_scope.py \
+    plugins/monolithic-dev-harness/scripts/harness/installation_lifecycle.py \
+    plugins/monolithic-dev-harness/scripts/harness/installation_files.py \
+    plugins/monolithic-dev-harness/scripts/harness/installation_receipts.py \
+    plugins/monolithic-dev-harness/scripts/harness/installation_inventory.py \
+    plugins/monolithic-dev-harness/scripts/harness/installation_cleanup.py \
+    plugins/monolithic-dev-harness/scripts/harness/installation_doctor.py \
+    plugins/monolithic-dev-harness/scripts/harness/installation_ignore.py \
+    plugins/monolithic-dev-harness/scripts/host_adapters/installation_contract.py \
+    plugins/monolithic-dev-harness/scripts/host_adapters/installation_layouts.py \
+    plugins/monolithic-dev-harness/scripts/host_adapters/installation_project.py \
     plugins/monolithic-dev-harness/scripts/host_adapters/codex_bindings.py \
     plugins/monolithic-dev-harness/references/codex-runtime.md \
     plugins/monolithic-dev-harness/bin/harness; do

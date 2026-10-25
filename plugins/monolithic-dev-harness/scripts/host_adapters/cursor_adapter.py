@@ -31,3 +31,9 @@ def format_cursor_decision(decision: PolicyDecision) -> dict[str, Any]:
 def subagents() -> SubagentOps:
     """Nothing verified yet (see `hosts/cursor.json`), so every operation is unsupported."""
     return unsupported_ops("cursor")
+
+
+
+def installation():
+    from .installation_layouts import adapter
+    return adapter('cursor')

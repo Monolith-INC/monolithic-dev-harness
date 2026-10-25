@@ -14,3 +14,4 @@ bash tests/test_installer_kimi.sh
 bash tests/test_installer_claude.sh
 
 bash tests/test_installer_codex.sh
+bash "${ROOT}/../../tests/shell/test-install-scope.sh"

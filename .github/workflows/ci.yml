@@ -59,6 +59,8 @@ jobs:
           git config --global user.email "ci@example.invalid"
       - name: Run suites
         run: PYTHON=python plugins/monolithic-dev-harness/tests/run.sh
+      - name: Check installer scope parsing
+        run: tests/shell/test-install-scope.sh
 
   install:
     name: Build and install the release
@@ -94,7 +96,7 @@ jobs:
         run: scripts/build_release.sh
       - name: Install into a sandboxed home
         run: |
-          bash dist/install.sh --source dist/monolithic-dev-harness-*.tar.gz --host all --yes
+          bash dist/install.sh --source dist/monolithic-dev-harness-*.tar.gz --scope user --host all --yes
           claude plugin list --json | grep -q '"monolithic-dev-harness@monolithic-dev-harness"'
           details="$(claude plugin details monolithic-dev-harness@monolithic-dev-harness)"
           echo "$details" | grep -E "Skills|Agents|Hooks|MCP servers"
@@ -107,7 +109,7 @@ jobs:
           "$HARNESS_BIN_DIR/harness" doctor
       - name: Uninstall cleanly
         run: |
-          bash dist/install.sh --uninstall --yes
+          bash dist/install.sh --uninstall --scope user --source dist/monolithic-dev-harness-*.tar.gz --yes
           ! claude plugin list --json | grep -q '"monolithic-dev-harness@monolithic-dev-harness"'
           ! codex plugin list --json | grep -q '"monolithic-dev-harness@monolithic-dev-harness"'
           test ! -e "$CODEX_HOME/agents/mdh_thermo_review.toml"

@@ -1,7 +1,7 @@
 # monolithic-dev-harness
 
 [![CI](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Monolith-INC/monolithic-dev-harness/actions/workflows/ci.yml)
-[![Version](https://img.shields.io/badge/version-0.7.0--rc.7-orange.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
+[![Version](https://img.shields.io/badge/version-0.7.0--rc.8-orange.svg)](https://github.com/Monolith-INC/monolithic-dev-harness/releases)
 [![Python 3.12+](https://img.shields.io/badge/Python-3.12%2B-blue.svg)](https://www.python.org/)
 [![Claude Code](https://img.shields.io/badge/Claude_Code-supported-blueviolet.svg)](https://docs.anthropic.com/en/docs/claude-code)
 [![Cursor](https://img.shields.io/badge/Cursor-supported-black.svg)](https://cursor.com)
@@ -138,19 +138,29 @@ See [`docs/01-architecture/architecture.md`](./docs/01-architecture/architecture
 ## Installation
 
 ```bash
-curl -fsSL https://github.com/Monolith-INC/monolithic-dev-harness/releases/latest/download/install.sh | bash
+curl -fsSL https://github.com/Monolith-INC/monolithic-dev-harness/releases/latest/download/install.sh | bash -s -- --scope user
 ```
 
 While the repository is private, fetch the same installer with the GitHub CLI:
 
 ```bash
-gh release download --repo Monolith-INC/monolithic-dev-harness --pattern install.sh --output - | bash
+gh release download --repo Monolith-INC/monolithic-dev-harness --pattern install.sh --output - | bash -s -- --scope user
 ```
 
 The installer finds your hosts, downloads the release archive (no cloning), verifies its SHA-256,
 installs the plugin into each host and links `harness` into `~/.local/bin`. Configure Azure
 organization and project through the repository's harness bootstrap. Options go after
-`bash -s --`: `--host claude|cursor|codex|all`, `--version <x.y.z>`, `--uninstall`. See
+`bash -s --`: `--scope user|local|all`, `--project <dir>` (exactly one for `local`, repeatable
+for `all`), `--host claude|cursor|codex|all`, `--version <x.y.z>`, `--purge`, and
+`--uninstall`. `user` installs into the current user's hosts; `local` installs into one explicit
+project registration using the same original package location; `all` is removal-only and searches the current user plus explicit projects and bounded
+Claude/Codex project metadata (never an unbounded filesystem search). Without `--scope`, an
+interactive terminal prompts; noninteractive use must pass it even with `--yes`. Ordinary removal
+preserves project `.harness/settings.json` and state; `--purge` removes only owned installation
+assets, settings, and state, never foreign credentials, provider configuration, or source files.
+Both scopes share one current package at `~/.local/share/monolithic-dev-harness/marketplace`
+and the original `~/.local/bin/harness` command. Project scope does not activate user-wide
+host registrations. Repository bootstrap remains a separate step after installation. See
 [`docs/04-operations/deployment.md`](./docs/04-operations/deployment.md).
 
 ## Quick start

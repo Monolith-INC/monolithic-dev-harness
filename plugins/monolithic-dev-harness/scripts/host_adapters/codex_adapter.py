@@ -56,3 +56,9 @@ def format_codex_decision(decision: PolicyDecision) -> dict[str, Any]:
 def subagents() -> SubagentOps:
     """The subprocess contract is unsupported; native workflows use the host tool boundary."""
     return unsupported_ops("codex")
+
+
+
+def installation():
+    from .installation_layouts import adapter
+    return adapter('codex')

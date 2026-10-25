@@ -32,10 +32,12 @@ INSTALL_ENV=(
   "KIMI_CONFIG_DIR=${TEMP_ROOT}/kimi"
   "AGENTS_SHARED_DIR=${TEMP_ROOT}/agents"
   "HARNESS_PYTHON=${PY_BIN}"
+  "HOME=${TEMP_ROOT}/home"
+  "CLAUDE_CONFIG_DIR=${TEMP_ROOT}/claude-config"
   "PATH=${TEMP_ROOT}/bin:/usr/bin:/bin"
 )
 
-env "${INSTALL_ENV[@]}" bash "$INSTALLER" --source "$REPO_ROOT" --host kimi --yes >"${TEMP_ROOT}/install.log" 2>&1
+env "${INSTALL_ENV[@]}" bash "$INSTALLER" --source "$REPO_ROOT" --scope user --host kimi --yes >"${TEMP_ROOT}/install.log" 2>&1
 
 # Hooks: three managed entries, valid TOML, existing content preserved.
 grep -q -- '--host kimi --event pre-tool' "${TEMP_ROOT}/kimi/config.toml"
@@ -45,7 +47,7 @@ grep -q -- '--host kimi --event stop' "${TEMP_ROOT}/kimi/config.toml"
 "$PY_BIN" -c "import sys, tomllib; d = tomllib.loads(open(sys.argv[1]).read()); assert len(d['hooks']) == 3" "${TEMP_ROOT}/kimi/config.toml"
 
 # Reinstall stays idempotent (single managed block).
-env "${INSTALL_ENV[@]}" bash "$INSTALLER" --source "$REPO_ROOT" --host kimi --yes >"${TEMP_ROOT}/reinstall.log" 2>&1
+env "${INSTALL_ENV[@]}" bash "$INSTALLER" --source "$REPO_ROOT" --scope user --host kimi --yes >"${TEMP_ROOT}/reinstall.log" 2>&1
 [[ "$(grep -c '>>> monolithic-dev-harness hooks' "${TEMP_ROOT}/kimi/config.toml")" -eq 1 ]]
 
 # Shared skills/agents: harness entries linked, foreign bootstrap not clobbered.
@@ -54,7 +56,7 @@ env "${INSTALL_ENV[@]}" bash "$INSTALLER" --source "$REPO_ROOT" --host kimi --ye
 [[ "$(cat "${TEMP_ROOT}/agents/skills/bootstrap")" = "foreign" ]]
 [[ -e "${TEMP_ROOT}/agents/agents/thermo-nuclear-review-subagent.md" ]]
 
-env "${INSTALL_ENV[@]}" bash "$INSTALLER" --uninstall --yes >"${TEMP_ROOT}/uninstall.log" 2>&1
+env "${INSTALL_ENV[@]}" bash "$INSTALLER" --uninstall --scope user --source "$REPO_ROOT" --yes >"${TEMP_ROOT}/uninstall.log" 2>&1
 
 # Uninstall: hooks removed, shared links removed, foreign skill kept.
 [[ ! -e "${TEMP_ROOT}/kimi/config.toml.pre-harness" || ! -s "${TEMP_ROOT}/kimi/config.toml" ]] \

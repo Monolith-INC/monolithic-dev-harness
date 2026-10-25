@@ -4,6 +4,37 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0-rc.8] - 2026-10-25
+
+### Added
+
+- Explicit user and private-project installation scopes in the existing curl installer,
+  all-scope removal, and ownership-aware `--purge` for installation reset and removal.
+- One installation adapter contract across Claude, Codex, Cursor, Kimi and Zed,
+  including native plans, preflight, verification, project discovery and unregister operations.
+- Private before/after installation journals, preserved unrelated settings across upgrades,
+  scoped registrations using the original shared package/CLI locations, and managed Git exclusions without silently untracking files.
+- Cross-host installation inventory and explicit, fingerprint-bound doctor repair selections.
+  Ambiguous legacy backups can be archived outside active configuration rather than deleted.
+
+### Changed
+
+- Native plugin and marketplace registrations are removed independently. Codex inspection uses
+  installed records, rather than mistaking available marketplace entries for installed plugins.
+- Installation stops before package publication when required runtime dependencies fail.
+  Existing foreign destinations, configuration collisions and tracked private-project files
+  are preserved with actionable failures.
+- Kimi uses its documented current configuration directory, inspects legacy locations, and
+  uses its explicit config-file option for project registration.
+
+### Qualification
+
+- Installation lifecycle coverage is separate from native model/workflow acceptance.
+  RC7 assignment evidence remains applicable to its recorded native trial only.
+- Desktop structured controls, general observed-effort enforcement, complete Claude workflow
+  parity and dedicated external-write/recovery acceptance remain unqualified.
+  This is a release candidate, not a final parity claim.
+
 ## [0.7.0-rc.7] - 2026-10-24
 
 ### Added

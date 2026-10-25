@@ -18,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -91,7 +90,40 @@ class Report:
         print(f"  [{status:>4}] {label}{f' — {detail}' if detail else ''}")
 
 
+def _installation_host(report: Report, host: str, result: Result[bool]) -> str:
+    match result:
+        case Ok(True):
+            report.line(
+                "ok",
+                host,
+                "user registration/configuration verified; runtime activation requires host trust and reload",
+            )
+        case Ok(False):
+            report.line(
+                "skip",
+                host,
+                "no user registration; project installations are covered by the inventory",
+            )
+        case Err(failure):
+            report.line("FAIL", host, failure.message)
+    return host
+
+
 def doctor(args: argparse.Namespace) -> int:
+    match (
+        getattr(args, "installations", False),
+        getattr(args, "json", False),
+        getattr(args, "repair_id", ()),
+        getattr(args, "apply_repairs", None),
+    ):
+        case False, False, [], None:
+            pass
+        case False, False, (), None:
+            pass
+        case _:
+            from harness.installation_doctor import run
+
+            return run(args)
     report = Report()
     print(f"monolithic-dev-harness {version()} ({PLUGIN_ROOT})")
 
@@ -114,60 +146,27 @@ def doctor(args: argparse.Namespace) -> int:
         )
 
     print("Hosts")
-    if shutil.which("claude"):
-        listed = _run(["claude", "plugin", "list", "--json"])
-        installed = bool(
-            listed and listed.returncode == 0 and PLUGIN_ID in listed.stdout
+    from harness.installation_scope import _context
+    from host_adapters.installation_contract import adapter_for
+    from host_adapters.subagents import ADAPTERS
+
+    tuple(
+        _installation_host(
+            report,
+            host,
+            bind(adapter_for(host), lambda adapter: adapter.verify_user(_context(()))),
         )
-        report.line(
-            "ok" if installed else "warn",
-            "Claude Code",
-            "plugin installed" if installed else "plugin not installed",
-        )
-    else:
-        report.line("skip", "Claude Code", "claude CLI not on PATH")
-    cursor_dir = Path(
-        os.environ.get(
-            "CURSOR_PLUGIN_DIR",
-            Path.home() / ".cursor/plugins/local/monolithic-dev-harness",
-        )
+        for host in ADAPTERS
     )
+
+    from harness.installation_inventory import findings, scan
+
+    installation_inventory = scan(_context((project_paths.root(Path(args.repo)),)))
+    installation_findings = findings(installation_inventory)
     report.line(
-        "ok" if (cursor_dir / ".cursor-plugin" / "plugin.json").is_file() else "skip",
-        "Cursor",
-        str(cursor_dir) if cursor_dir.exists() else "plugin not installed",
-    )
-    match shutil.which("codex"):
-        case None:
-            report.line("skip", "Codex", "codex CLI not on PATH")
-        case _:
-            codex_plugins = _run(["codex", "plugin", "list", "--json"])
-            codex_installed = bool(
-                codex_plugins
-                and codex_plugins.returncode == 0
-                and PLUGIN_ID in codex_plugins.stdout
-            )
-            report.line(
-                "ok" if codex_installed else "warn",
-                "Codex",
-                "plugin installed" if codex_installed else "plugin not installed",
-            )
-    zed_settings = (
-        Path(os.environ.get("ZED_CONFIG_DIR", Path.home() / ".config" / "zed"))
-        / "settings.json"
-    )
-    zed_configured = False
-    if zed_settings.is_file():
-        try:
-            zed_configured = "backlog-orchestrator" in zed_settings.read_text(
-                encoding="utf-8"
-            )
-        except OSError:
-            zed_configured = False
-    report.line(
-        "ok" if zed_configured else "skip",
-        "Zed",
-        "MCP context servers registered" if zed_configured else "plugin not installed",
+        "FAIL" if installation_inventory.errors or installation_findings else "ok",
+        "installation inventory",
+        f"{len(installation_inventory.components)} components, {len(installation_findings)} findings, {len(installation_inventory.errors)} uninspected locations; use harness doctor --installations for details and repairs",
     )
 
     print("Repository")
@@ -594,6 +593,26 @@ def parser() -> argparse.ArgumentParser:
         "doctor", help="check tools, configuration, hosts, and the current repository"
     )
     doc.add_argument("--repo", default=".")
+    doc.add_argument(
+        "--installations",
+        action="store_true",
+        help="inventory all supported hosts and show explicit repair selections",
+    )
+    doc.add_argument(
+        "--json", action="store_true", help="machine-readable installation inventory"
+    )
+    doc.add_argument("--scope", choices=("user", "local", "all"), default="all")
+    doc.add_argument("--project", action="append", default=[])
+    doc.add_argument(
+        "--repair-id",
+        action="append",
+        default=[],
+        help="select an individual repair from the current inventory",
+    )
+    doc.add_argument(
+        "--apply-repairs",
+        help="apply selected repairs only when this selection digest matches",
+    )
     doc.add_argument(
         "--tools",
         action="store_true",

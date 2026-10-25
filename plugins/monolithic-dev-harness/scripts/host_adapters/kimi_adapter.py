@@ -56,3 +56,9 @@ def format_kimi_decision(decision: PolicyDecision) -> dict[str, Any]:
 def subagents() -> SubagentOps:
     """Runtime-internal only (see `hosts/kimi.json`), so every operation is unsupported."""
     return unsupported_ops("kimi")
+
+
+
+def installation():
+    from .installation_layouts import adapter
+    return adapter('kimi')

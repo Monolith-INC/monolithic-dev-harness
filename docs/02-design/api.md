@@ -2,7 +2,7 @@
 title: Command and Contract Interfaces
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-10-24
+last_reviewed: 2026-10-25
 ---
 
 # Command and Contract Interfaces
@@ -23,7 +23,7 @@ Published with every release; run by developers and by CI.
 ### Invocation / Shape
 
 ```bash
-curl -fsSL https://github.com/Monolith-INC/monolithic-dev-harness/releases/latest/download/install.sh | bash -s -- [options]
+curl -fsSL https://github.com/Monolith-INC/monolithic-dev-harness/releases/latest/download/install.sh | bash -s -- --scope user [options]
 bash install.sh [options]
 ```
 
@@ -32,9 +32,12 @@ bash install.sh [options]
 | Option / variable | Default | Meaning |
 | --- | --- | --- |
 | `--host auto\|claude\|cursor\|codex\|all` | `auto` | hosts to install into; `auto` = every host found |
+| `--scope user\|local\|all` | required | `user` installs globally for the current user; `local` requires exactly one project; `all` is removal-only |
+| `--project <dir>` | current project only for local | repeatable explicit projects for `all`; discovery is bounded to Claude/Codex known metadata |
 | `--version <x.y.z>` / `HARNESS_VERSION` | latest release | version to install |
 | `--source <dir\|archive>` | download | install from a local build |
 | `--uninstall` | | remove from every host |
+| `--purge` | | remove owned installation assets, settings, and state; never foreign credentials, providers, or source files |
 | `--yes` | | skip install or uninstall confirmation prompts; use for automation |
 | `HARNESS_HOME` | `~/.local/share/monolithic-dev-harness` | installed marketplace copy |
 | `HARNESS_BIN_DIR` | `~/.local/bin` | where `harness` is linked |
@@ -45,7 +48,12 @@ bash install.sh [options]
 ### Outputs
 
 The marketplace copy under `HARNESS_HOME`, the plugin registered in selected hosts, and the
-`harness` link. Azure organization and project are repository settings configured during bootstrap.
+`harness` link at the original user locations for both scopes. Local scope changes only project
+registration/configuration; it creates no project package copy or project command directory and
+does not register global host state. One current package is shared; no side-by-side release
+store is maintained. A project reference index preserves the package during scoped removal
+while another project uses it. Receipts carry private provenance metadata (mode 0600). Azure
+organization and project are repository settings configured during bootstrap.
 
 ### Exit Codes
 
@@ -60,9 +68,9 @@ rename), so a failed copy never leaves a half-installed plugin.
 ### Examples
 
 ```bash
-curl -fsSL …/install.sh | bash -s -- --host claude
-bash install.sh --source dist/monolithic-dev-harness-0.1.0.tar.gz --yes
-bash install.sh --uninstall
+curl -fsSL …/install.sh | bash -s -- --scope user --host claude
+bash install.sh --scope local --project "$PWD" --source dist/monolithic-dev-harness-0.1.0.tar.gz --yes
+bash install.sh --scope user --uninstall --yes
 ```
 
 ## harness
@@ -77,6 +85,8 @@ safe adoption of implementation already in progress.
 ```bash
 harness version
 harness doctor [--repo <dir>] [--tools]
+harness doctor --installations --json --scope <user|local|all> [--project <dir>] \
+  [--repair-id <id> ...] [--apply-repairs]
 harness bootstrap [--repo <dir>] [--settings-from <file>]
 harness session start <work item> [--workflow <name>] [--base-ref <Feature branch>] [--repo <dir>]
 harness session status | pause | resume | close [--repo <dir>]
@@ -104,7 +114,11 @@ source delta on that base in the new worktree.
 
 ### Outputs
 
-`doctor` prints one line per check (`ok`, `warn`, `skip`, `FAIL`), including the settings, the
+`doctor --installations --json` inventories all five host adapters from default roots, configured
+overrides, bounded known project metadata, and explicit projects. Static presence is not runtime
+activation: unreadable files, ambiguous backups, and unverified native registrations remain
+findings and cannot be reported clean. `--repair-id` is repeatable; `--apply-repairs` requires the
+current selection digest. `doctor` prints one line per check (`ok`, `warn`, `skip`, `FAIL`), including the settings, the
 selected tracker, broken tracker folders, the tracking mode, and the checkout's session.
 `session` prints the session id, work item, branch, and phase. `tracker show` and `tracker stage`
 print everything a person needs to review an onboarded tracker, and how to ask the user: a

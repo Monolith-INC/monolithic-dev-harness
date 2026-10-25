@@ -52,3 +52,9 @@ def format_zed_decision(decision: PolicyDecision) -> dict[str, Any]:
 def subagents() -> SubagentOps:
     """Nothing verified yet (see `hosts/zed.json`), so every operation is unsupported."""
     return unsupported_ops("zed")
+
+
+
+def installation():
+    from .installation_layouts import adapter
+    return adapter('zed')

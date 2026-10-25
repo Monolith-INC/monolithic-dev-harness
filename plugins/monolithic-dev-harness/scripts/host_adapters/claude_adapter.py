@@ -61,3 +61,9 @@ def assistant_text_after(transcript: Path, command: str) -> str:
                 case _:
                     pass
     return "\n".join(texts)
+
+
+
+def installation():
+    from .installation_layouts import adapter
+    return adapter('claude')
