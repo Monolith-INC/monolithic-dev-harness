@@ -14,6 +14,10 @@ and requirements-first review. Model-driven skills do the
 work; a deterministic hook runtime, fed by evidence keyed to git ids, decides which tool calls are
 allowed.
 
+Before designing, planning or changing a workflow, read the
+[constitution](../CONSTITUTION.md): the owner's settled rules on what each source project owns,
+what refinement is, how approvals and tracker writes work, and how obsolete material is removed.
+
 ## Documentation map
 
 ```text
@@ -80,7 +84,9 @@ docs/
 When documentation and behavior disagree, the authority order is: the code and its tests
 (`plugins/monolithic-dev-harness/scripts/`, `runtime/`, `trackers/`, `tests/`), then the schemas
 (`config/settings.schema.json`, `config/tracker.schema.json`), then each skill's `SKILL.md`,
-then the ADRs, then these documents. Installed copies (the Claude plugin cache, Cursor's local
+then the ADRs, then these documents. The [constitution](../CONSTITUTION.md) governs design intent:
+when a plan, design or document disagrees with it, the constitution wins and the other is
+corrected. Installed copies (the Claude plugin cache, Cursor's local
 plugin directory, `~/.local/share/monolithic-dev-harness`) and release archives are derived
 artifacts and must not be hand-edited.
 

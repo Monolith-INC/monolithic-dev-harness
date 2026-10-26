@@ -500,7 +500,12 @@ def test_cancel_completes_interrupted_checkpoint_before_changing_status(
     assert isinstance(onboarding.control(tmp_path, "onboarding", "restart"), Ok)
     assert decisions.record(tmp_path)["status"] == "cancelled"
     assert "review_checkpoint" not in decisions.record(tmp_path)
-    assert len(workflow.load(tmp_path).value.points) == 2
+    assert len(workflow.load(tmp_path).value.points) == 1
+    assert workflow.load(tmp_path).value.current.stage == "discovery"
+    assert any(
+        len((state.read_json(path) or {}).get("points", ())) == 2
+        for path in (tmp_path / ".harness/state/workflows").glob("*.json")
+    )
     assert isinstance(
         decisions.begin(tmp_path, "new", "Continue?", ("Yes", "No"), "chat"), Ok
     )

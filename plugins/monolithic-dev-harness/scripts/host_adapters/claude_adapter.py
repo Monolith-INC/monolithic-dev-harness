@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
+from pathlib import Path
 from typing import Any
 
 from policy.events import CanonicalToolEvent, PolicyDecision
@@ -34,3 +36,34 @@ def format_claude_decision(decision: PolicyDecision) -> dict[str, Any]:
 def subagents() -> SubagentOps:
     """Nothing verified yet (see `hosts/claude.json`), so every operation is unsupported."""
     return unsupported_ops("claude")
+
+
+def assistant_text_after(transcript: Path, command: str) -> str:
+    """The text Claude wrote to the user after its last tool call whose command contains
+    `command`. Tool output is collapsed in the host, so only this text is what the user saw."""
+    texts: list[str] = []
+    for line in transcript.read_text(encoding="utf-8").splitlines():
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        content = (row.get("message") or {}).get("content")
+        if row.get("type") != "assistant" or not isinstance(content, list):
+            continue
+        for block in content:
+            match block:
+                case {"type": "tool_use", "input": {"command": str() as ran}} if (
+                    command in ran
+                ):
+                    texts.clear()
+                case {"type": "text", "text": str() as text}:
+                    texts.append(text)
+                case _:
+                    pass
+    return "\n".join(texts)
+
+
+def installation():
+    from .installation_layouts import adapter
+
+    return adapter("claude")

@@ -1,0 +1,130 @@
+{
+  "candidate": "/home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/bin/harness",
+  "model_context": {
+    "model": "GPT-6 Luna",
+    "reasoning_effort": "medium",
+    "note": "Assigned test context; the harness CLI itself does not invoke a model."
+  },
+  "scope": "read-only process test; no workflow advancement; no human-answer simulation",
+  "command_count": 3,
+  "read_counts": {
+    "supplied_session_record": 1,
+    "target_configuration_and_state_files": 5,
+    "skill_file": 1,
+    "implementation_excerpt": 1,
+    "cli_help_invocation": 1,
+    "bounded_text_search": 1,
+    "target_file_listing": 1,
+    "project_source_files": 0
+  },
+  "runs": [
+    {
+      "cwd": "/tmp/monolithic-dev-harness-trial-locw4ixf",
+      "command": "HARNESS_USER_STATE_DIR=/tmp/monolithic-dev-harness-trial-locw4ixf/user-state /home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/bin/harness bootstrap --inspect --repo /tmp/monolithic-dev-harness-trial-locw4ixf/project",
+      "exit_code": 0,
+      "stdout": {
+        "current_scm": {"name": "local", "values": {}},
+        "current_tracker": {"name": "local", "values": {}},
+        "handoff": {
+          "command": "/home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/bin/harness",
+          "environment": {"HARNESS_USER_STATE_DIR": "/tmp/monolithic-dev-harness-trial-locw4ixf/user-state"},
+          "instruction": "Use this project and environment for every operation. Preserve the saved original request and current checkpoint. Do not repeat confirmed setup choices, restart an existing run, or advance while a question is unanswered. Report invalid saved state instead of replacing it. Suspended policies do not authorize automatically resuming the run.",
+          "next_action": "Draft, enrich, decompose, and break down local work items for human batch review; do not publish.",
+          "original_request": "Bootstrap the harness and continue the existing request backlog/DAY-001-task-counts.md through planning and artifacts, stopping before implementation.",
+          "paths": {
+            "artifacts": "/tmp/monolithic-dev-harness-trial-locw4ixf/project/docs/planning",
+            "preferences": "/tmp/monolithic-dev-harness-trial-locw4ixf/user-state/preferences.json",
+            "settings": "/tmp/monolithic-dev-harness-trial-locw4ixf/project/.harness/settings.json",
+            "workflow": "/tmp/monolithic-dev-harness-trial-locw4ixf/project/.harness/state/workflow.json"
+          },
+          "pending_question": null,
+          "policies_suspended": true,
+          "project_root": "/tmp/monolithic-dev-harness-trial-locw4ixf/project",
+          "waiting_for_answer": false,
+          "workflow_status": "active",
+          "working_directory": "/tmp/monolithic-dev-harness-trial-locw4ixf/project"
+        },
+        "language": "en",
+        "language_confirmed": true,
+        "missing": [],
+        "repository": {
+          "branch": "master",
+          "git_present": true,
+          "has_committed_head": true,
+          "head": "a2549ed11e043ba65c6a380f43c3bbe1a2d22c30"
+        },
+        "status": "ready",
+        "tracker_storage": {
+          "folders": ["backlog", "ready", "in_progress", "done", "canceled", "artifacts", "capacity"],
+          "path": "/tmp/monolithic-dev-harness-trial-locw4ixf/project/.harness/tracker",
+          "ready": true,
+          "work_item_count": 0
+        },
+        "trackers": [
+          {"label": "Azure DevOps Boards", "name": "azure-devops", "required_values": ["organization", "project"]},
+          {"label": "Linear", "name": "linear", "required_values": ["team"]},
+          {"label": "Local tracker", "name": "local", "required_values": []}
+        ],
+        "workflow": {
+          "artifacts": [{"digest": "3b43bca461415807f77239587c2947b2cda1b2ce4ce2ab93ed869c92a238227c", "path": "/tmp/monolithic-dev-harness-trial-locw4ixf/project/docs/planning/DAY-001-task-counts-plan.md"}],
+          "label": "Approved DAY-001 discovery plan",
+          "next_action": "Draft, enrich, decompose, and break down local work items for human batch review; do not publish.",
+          "pending": "",
+          "point": 4,
+          "request": "Bootstrap the harness and continue the existing request backlog/DAY-001-task-counts.md through planning and artifacts, stopping before implementation.",
+          "stage": "backlog",
+          "stale_artifacts": [],
+          "status": "active"
+        }
+      }
+    },
+    {
+      "cwd": "/tmp/monolithic-dev-harness-trial-locw4ixf/project",
+      "command": "HARNESS_USER_STATE_DIR=/tmp/monolithic-dev-harness-trial-locw4ixf/user-state /home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/bin/harness bootstrap --inspect --repo /tmp/monolithic-dev-harness-trial-locw4ixf/project",
+      "exit_code": 0,
+      "stdout": "Identical JSON response to run 1; see run 1 stdout."
+    },
+    {
+      "cwd": "/tmp/monolithic-dev-harness-trial-locw4ixf/project",
+      "command": "HARNESS_USER_STATE_DIR=/tmp/monolithic-dev-harness-trial-locw4ixf/user-state /home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/bin/harness bootstrap --inspect --repo /tmp/monolithic-dev-harness-trial-locw4ixf/project",
+      "exit_code": 0,
+      "stdout": "Identical JSON response to run 1; see run 1 stdout."
+    }
+  ],
+  "comparison": {
+    "responses_agree": true,
+    "project_command_environment_agree": true,
+    "language_and_setup_confirmed": true,
+    "original_request_and_next_action_agree": true,
+    "suspension_agrees": true,
+    "pending_question_agrees": true,
+    "missing_or_inconsistent_context": [],
+    "process_fixture_stop": "Recorded separately as Stop with a different test call id; not replayed as an answer or treated as the target project's pending question.",
+    "native_installed_host_activation": "unverified"
+  },
+  "integrity": {
+    "settings_path": "/tmp/monolithic-dev-harness-trial-locw4ixf/project/.harness/settings.json",
+    "settings_sha256_post_run": "37829d62a173bb07d1edc8c1c76e16aa4a81629c291ac492199b7a7aafe42dce",
+    "workflow_path": "/tmp/monolithic-dev-harness-trial-locw4ixf/project/.harness/state/workflow.json",
+    "workflow_sha256_post_run": "f2ffabb7fcf005411a700d88d04f5c248c4f62747c0fa6e21588828ea9e4b9bd",
+    "pre_run_hashes_captured": false,
+    "strict_before_after_hash_match_claim": false,
+    "project_writes_requested": 0,
+    "separate_additional_check": {
+      "purpose": "Bracket one additional read-only inspection with hashes; this does not retroactively prove the first two inspections had matching pre-run hashes.",
+      "command": "HARNESS_USER_STATE_DIR=/tmp/monolithic-dev-harness-trial-locw4ixf/user-state /home/monolith/projects/monolithic-dev-harness/plugins/monolithic-dev-harness/bin/harness bootstrap --inspect --repo /tmp/monolithic-dev-harness-trial-locw4ixf/project",
+      "cwd": "/tmp/monolithic-dev-harness-trial-locw4ixf/project",
+      "exit_code": 0,
+      "before": {
+        "settings_sha256": "37829d62a173bb07d1edc8c1c76e16aa4a81629c291ac492199b7a7aafe42dce",
+        "workflow_sha256": "f2ffabb7fcf005411a700d88d04f5c248c4f62747c0fa6e21588828ea9e4b9bd"
+      },
+      "after": {
+        "settings_sha256": "37829d62a173bb07d1edc8c1c76e16aa4a81629c291ac492199b7a7aafe42dce",
+        "workflow_sha256": "f2ffabb7fcf005411a700d88d04f5c248c4f62747c0fa6e21588828ea9e4b9bd"
+      },
+      "hashes_match": true,
+      "handoff_matches_prior_inspections": true
+    }
+  }
+}

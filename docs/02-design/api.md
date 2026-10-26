@@ -2,7 +2,7 @@
 title: Command and Contract Interfaces
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-28
+last_reviewed: 2026-10-25
 ---
 
 # Command and Contract Interfaces
@@ -23,7 +23,7 @@ Published with every release; run by developers and by CI.
 ### Invocation / Shape
 
 ```bash
-curl -fsSL https://github.com/Monolith-INC/monolithic-dev-harness/releases/latest/download/install.sh | bash -s -- [options]
+curl -fsSL https://github.com/Monolith-INC/monolithic-dev-harness/releases/latest/download/install.sh | bash -s -- --scope user [options]
 bash install.sh [options]
 ```
 
@@ -32,9 +32,12 @@ bash install.sh [options]
 | Option / variable | Default | Meaning |
 | --- | --- | --- |
 | `--host auto\|claude\|cursor\|codex\|all` | `auto` | hosts to install into; `auto` = every host found |
+| `--scope user\|local\|all` | required | `user` installs globally for the current user; `local` requires exactly one project; `all` is removal-only |
+| `--project <dir>` | current project only for local | repeatable explicit projects for `all`; discovery is bounded to Claude/Codex known metadata |
 | `--version <x.y.z>` / `HARNESS_VERSION` | latest release | version to install |
 | `--source <dir\|archive>` | download | install from a local build |
 | `--uninstall` | | remove from every host |
+| `--purge` | | remove owned installation assets, settings, and state; never foreign credentials, providers, or source files |
 | `--yes` | | skip install or uninstall confirmation prompts; use for automation |
 | `HARNESS_HOME` | `~/.local/share/monolithic-dev-harness` | installed marketplace copy |
 | `HARNESS_BIN_DIR` | `~/.local/bin` | where `harness` is linked |
@@ -45,7 +48,12 @@ bash install.sh [options]
 ### Outputs
 
 The marketplace copy under `HARNESS_HOME`, the plugin registered in selected hosts, and the
-`harness` link. Azure organization and project are repository settings configured during bootstrap.
+`harness` link at the original user locations for both scopes. Local scope changes only project
+registration/configuration; it creates no project package copy or project command directory and
+does not register global host state. One current package is shared; no side-by-side release
+store is maintained. A project reference index preserves the package during scoped removal
+while another project uses it. Receipts carry private provenance metadata (mode 0600). Azure
+organization and project are repository settings configured during bootstrap.
 
 ### Exit Codes
 
@@ -60,9 +68,9 @@ rename), so a failed copy never leaves a half-installed plugin.
 ### Examples
 
 ```bash
-curl -fsSL …/install.sh | bash -s -- --host claude
-bash install.sh --source dist/monolithic-dev-harness-0.1.0.tar.gz --yes
-bash install.sh --uninstall
+curl -fsSL …/install.sh | bash -s -- --scope user --host claude
+bash install.sh --scope local --project "$PWD" --source dist/monolithic-dev-harness-0.1.0.tar.gz --yes
+bash install.sh --scope user --uninstall --yes
 ```
 
 ## harness
@@ -77,6 +85,8 @@ safe adoption of implementation already in progress.
 ```bash
 harness version
 harness doctor [--repo <dir>] [--tools]
+harness doctor --installations --json --scope <user|local|all> [--project <dir>] \
+  [--repair-id <id> ...] [--apply-repairs]
 harness bootstrap [--repo <dir>] [--settings-from <file>]
 harness session start <work item> [--workflow <name>] [--base-ref <Feature branch>] [--repo <dir>]
 harness session status | pause | resume | close [--repo <dir>]
@@ -104,7 +114,11 @@ source delta on that base in the new worktree.
 
 ### Outputs
 
-`doctor` prints one line per check (`ok`, `warn`, `skip`, `FAIL`), including the settings, the
+`doctor --installations --json` inventories all five host adapters from default roots, configured
+overrides, bounded known project metadata, and explicit projects. Static presence is not runtime
+activation: unreadable files, ambiguous backups, and unverified native registrations remain
+findings and cannot be reported clean. `--repair-id` is repeatable; `--apply-repairs` requires the
+current selection digest. `doctor` prints one line per check (`ok`, `warn`, `skip`, `FAIL`), including the settings, the
 selected tracker, broken tracker folders, the tracking mode, and the checkout's session.
 `session` prints the session id, work item, branch, and phase. `tracker show` and `tracker stage`
 print everything a person needs to review an onboarded tracker, and how to ask the user: a
@@ -158,8 +172,9 @@ Always `0`; the decision is in stdout.
 ### Cross-field Invariants
 
 A deny reason always starts with `[harness <rule>]` (`human-owned`, `tracker-invalid`,
-`approval-required`, `protected-items`, `tests-with-code`, `generated-files`, `guarded-paths`, `feature-branch`,
-`draft-reviewed-prs`, `history-preserved`, `harness-error`) or comes from the workflow policy.
+`approval-required`, `protected-items`, `generated-files`, `feature-branch`, `draft-reviewed-prs`,
+`history-preserved`, `harness-error`) or comes from the workflow policy, whose refusals name the
+next workflow step from `config/prepared-workflows.json`.
 
 ### Failure Behavior
 
@@ -178,8 +193,8 @@ echo '{"tool_name":"Bash","tool_input":{"command":"git push"},"cwd":"."}' \
 
 | Command | Writes | Exit codes |
 | --- | --- | --- |
-| `scripts/harness/checks.py [--head \| --staged] [--only <name>…]` | `.harness/state/checks/<tree>.json` | `0` all passed or none applied; `1` a check failed; `2` `--head` with uncommitted tracked changes, or `--staged` when the working files differ from the index |
-| `scripts/harness/review_verdict.py --verdict ready\|blocked --summary <text>` | `.harness/state/review/<commit>.json` | `0` recorded; `2` `ready` with uncommitted tracked changes |
+| `scripts/harness/checks.py [--session-id <id>] [--only <name>…]` | `.harness/state/checks/<code digest>.json` | `0` all passed or none applied; `1` a check failed; `2` the checks changed code files, so nothing was recorded |
+| `scripts/harness/review_verdict.py --verdict ready\|blocked --summary <text>` | `.harness/state/review/<code digest>.json` | `0` recorded |
 | `scripts/harness/bootstrap.py --repo <dir> --settings-from <file>` | `.harness/settings.json` (once), `.git/info/exclude`, the knowledge store | `0`; `2` not a repository root, invalid settings, or an unusable selected tracker |
 | `bin/agile-backlog-toolkit <command>` | backlog reports | per command; `config --show` exits non-zero while required values are missing |
 
@@ -198,15 +213,16 @@ harness makes when the user chooses a tracker.
 | --- | --- | --- |
 | `tracker` | `{name, source?: shipped\|onboarded, values{}}` | registry, gateway, rules, backlog stage |
 | `scm` | `{name: github\|azure-repos, values{}}` | gateway |
-| `branch_template` | string containing `{key}` | workflow policy, `harness session start` |
+| `branch_template` | string containing `{key}` | Git delivery: branch convention, commits on the item's branch |
 | `protected_work_items` | string[] | `protected-items` |
 | `artifacts_path` | string | backlog stage, spec gate |
-| `git.base_branch` | string (default `develop`) | branch diffs, `tests-with-code`, `check` |
+| `git.base_branch` | string (default `develop`) | adoption branch diffs |
+| `git.delivery` | boolean (default false) | whether the rules about Git commands apply |
 | `approvals.window_minutes` | 1–240 (default 20) | `approval-required` |
-| `checks[]` | `{name, run, when[]}` | `checks.py`, `guarded-paths`, `draft-reviewed-prs` |
-| `tests_required[]` | `{source[], tests[], exclude[]}` | `tests-with-code`, spec gate |
+| `checks[]` | `{name, run, when[]}` | `checks.py`, completion requirements, `draft-reviewed-prs` |
+| `tests_required[]` | `{source[], tests[], exclude[]}` | which files are code; `tests_with_code` completion requirement |
 | `generated[]` | glob[] | `generated-files` |
-| `guarded_paths[]` | `{path, evidence: check:<name>\|manual:<name>}` | `guarded-paths` |
+| `guarded_paths[]` | `{path, evidence: check:<name>\|manual:<name>}` | `guarded_paths_verified` completion requirement |
 | `pull_requests` | `{require_draft, require_review_verdict}` (both default true) | `draft-reviewed-prs` |
 
 ### Cross-field Invariants
@@ -262,9 +278,9 @@ story tasks; `ids.pattern`, `ids.branch_key` (with a named group `id`), and ever
 | Tool | Write (needs approval) |
 | --- | --- |
 | `tracker_describe`, `tracker_get_work_item`, `tracker_search_work_items`, `tracker_list_children`, `tracker_list_artifacts` | no |
-| `tracker_create_work_item`, `tracker_transition_work_item`, `tracker_publish_artifact`, `tracker_link_development_artifact` | yes |
+| `tracker_create_work_item`, `tracker_update_work_item`, `tracker_transition_work_item`, `tracker_publish_artifact`, `tracker_link_development_artifact` | yes |
 | `scm_get_pull_request`, `scm_list_review_threads` | no |
-| `scm_create_pull_request` (drafts only), `scm_reply_to_thread`, `scm_link_work_item` | yes |
+| `scm_create_pull_request` (drafts only), `scm_reply_to_thread`, `scm_create_review_thread`, `scm_update_thread_comment`, `scm_set_thread_status`, `scm_link_work_item` | yes |
 | `workflow_tracking_status`, `workflow_resume_tracker` | no |
 | `workflow_skip_tracker` | yes |
 
@@ -278,7 +294,7 @@ not offered.
 | --- | --- |
 | `approve HB-XXXX` / `aprovo HB-XXXX` | opens an approval window (`approvals.window_minutes`) |
 | `harness revoke` | closes every open window |
-| `harness manual-check <name> ok` | records manual evidence for the currently staged tree (in Claude, click **Approve change**) |
+| `harness manual-check <name> ok` | records manual evidence for the code as it is now (in Claude, click **Approve change**) |
 | `approve HT-XXXXXX` | Cursor: trusts the onboarded tracker whose current version has that short id |
 | `use HT-XXXXXX` | Cursor: selects that trusted tracker, writing it into the settings file |
 | `stop trusting <tracker>` | Cursor: withdraws trust from the tracker named by label or name |
@@ -289,3 +305,45 @@ In Claude, the same happens by click: a question that says "tracker", names an o
 and offers **Trust**, **Use it**, or **Stop trusting**. The question hook pins the tracker's version when the
 question is shown; the answer hook acts only on the user's click, and only if the folder has not
 changed since.
+
+## Process messages and commands
+
+The standard protocol is JSON-RPC 2.0 with the version 1 process message catalog in
+`scripts/harness/process_messages.py`. Every adapter uses the same `MessageBus.request` interface
+in `scripts/harness/process_bus.py`; it selects catalog constructors instead of writing private
+payloads. Native notifications and identifiers are translated inside `host_adapters/`.
+
+```bash
+harness process list --repo .
+harness process assign <process-id> --repo . --assignment '{"role":"reviewer","owned_paths":[],"model":"<actual-model>","effort":"medium"}'
+harness process status <process-id> --repo .
+harness process cancel <process-id> --repo .
+harness process report <process-id> --status interrupted --repo .
+```
+
+All operations accept `--host` and `--session-id`; an explicit session must match the invoking
+main agent's bound work session. Codex is currently the connected native process adapter. A
+missing adapter or unbound conversation returns an explicit error.
+
+- `list` and `status` read only the caller's processes.
+- `cancel` selects the central cancellation message. The authenticated adapter applies permission
+  withdrawal before the command acknowledges the stored result. It does not invoke a vendor's
+  cancellation tool; the main agent uses that tool separately.
+- `report` selects the central status-update message with main-agent origin. Supported statuses
+  are `running`, `completed`, `failed`, `interrupted` and `unknown`. A report cannot replace a host
+  observation or restore permission. Missing/invalid statuses are refused before publication.
+
+The CLI does not write lifecycle state directly. Running cancellation or reporting outside its
+observed host invocation cannot manufacture an applied update. The adapter rejects subagent
+senders, conflicting project/session/adapter arguments and calls without native tool identity.
+The shared consumer additionally checks ownership, protocol fields, event identity and revision.
+
+The record exposes `runtime_status` (last host observation), `reported_status` (main-agent report),
+`revoked` (permission withdrawn), and `revision`. These are separate facts. The command's
+`runtime_stopped` field summarizes the last observed execution status; it is not a guarantee that
+an OS process was killed. Exit `0` acknowledges a successful scoped read/applied request; exit `2`
+reports an invalid, unavailable or unapplied request.
+
+Storage uses locked atomic updates under `.harness/state/host_sessions/processes/`. The bus
+refuses changed duplicate messages, stale revisions and replayed executions. Revocation cannot
+be undone by a later status message. No process message creates a human approval.

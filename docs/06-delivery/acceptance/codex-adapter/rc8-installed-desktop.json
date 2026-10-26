@@ -1,0 +1,68 @@
+{
+  "classification": "actual_installed_desktop_operator_trial",
+  "release": "v0.7.0-rc.8",
+  "tagged_commit": "e883695c69b2d8be97d3d5c18b41584ec2db6963",
+  "archive_sha256": "3882d8cc11b1d25f62f79aba389f5b969a204c40d213dec966af412843daa0ad",
+  "decision": {
+    "allow_free_text": false,
+    "answer": "Accept",
+    "approval": false,
+    "artifacts": [
+      [
+        "REVIEW.md",
+        "39bd37c99fe8c2d5d7210a9b5ee2357aa2e54b62409f80a2e193a7b0f340540f"
+      ]
+    ],
+    "details": [],
+    "id": "call_edfbe6f914c34081a898dcfe39ea9278",
+    "kind": "required",
+    "native_session_id": "01a17265-d5b4-7050-a1b3-3f9ea8c8e3fb",
+    "options": [
+      "Accept",
+      "Revise"
+    ],
+    "presentation_id": "HD-a8d5817d7e140f55",
+    "question": "Accept this acceptance outline?",
+    "status": "answered",
+    "transport": "async"
+  },
+  "authentic_question_invocation": {
+    "type": "function_call",
+    "status": "completed",
+    "id": "fc_0b65371abdf13358016addccd55ce88191ae0e38d7464f3c0a",
+    "name": "request_user_input_async",
+    "arguments": "{\"questions\":[{\"title\":\"Accept this acceptance outline?\",\"options\":[\"Accept\",\"Revise\"]}]}",
+    "call_id": "call_edfbe6f914c34081a898dcfe39ea9278",
+    "internal_chat_message_metadata_passthrough": {
+      "turn_id": "01a17265-e168-7e52-8fc1-db0a34bf1a56",
+      "create_time": 1792920789.3649545
+    }
+  },
+  "authentic_operator_response": {
+    "type": "message",
+    "id": "msg_01a17268-46a1-74d2-b617-5ead8b4827e0",
+    "role": "user",
+    "content": [
+      {
+        "type": "input_text",
+        "text": "<send_user_message_question_reply>\n[{\"questionItemId\":\"[\\\"request_user_input_async\\\",\\\"call_edfbe6f914c34081a898dcfe39ea9278\\\",0]\",\"question\":\"Accept this acceptance outline?\",\"answer\":\"Accept\"}]\n</send_user_message_question_reply>\n"
+      }
+    ],
+    "internal_chat_message_metadata_passthrough": {
+      "turn_id": "01a17265-e168-7e52-8fc1-db0a34bf1a56",
+      "create_time": 1792920798.881584,
+      "content_item_kinds": [
+        "user.text"
+      ],
+      "content_item_metadata": [
+        {
+          "provenance": {
+            "type": "user"
+          }
+        }
+      ]
+    }
+  },
+  "review_preview": "open_in_codex returned queued; visible artifact review not independently qualified",
+  "qualification": "Desktop async domain-feedback selection and genuine harness answer capture, bound to artifact digest. No work-session approval, recovery, external write or complete workflow parity claim."
+}

@@ -31,15 +31,25 @@ harness decision present --repo <project> --host <host> \
 | `setup-confirm` | The setup proposal is ready |
 | `next-step` | Setup is done and the request did not say what to do |
 | `starting-point` | An idea arrives with no clear starting point |
+| `idea-continue` | The idea route ends: continue into technical discovery, or stop with the brief or spec |
+| `refined-start` | The item the user started from is already refined: rework it, or use it as it is (`--value item=`) |
+| `planning-depth` | Discovery is done and the depth (Light, Standard, Hardcore) is not chosen yet |
+| `planning-methods` | Standard or Hardcore depth: shortlist, full catalog, or recommended methods |
 | `plan-checkpoint` | The discovery plan is ready (`--artifact` the plan) |
-| `publish-items`, `move-item`, `approve-spec`, `publish-branch`, `reply-pr`, `pause-tracking` | Approvals; see the harness skill's approval protocol |
+| `refinement-split` | A proposed split of an Epic, Feature or Story is ready (`--artifact` the outline); no write |
+| `harness-controls` | The user wants to suspend, resume, or use free mode |
+| `publish-items` (`--value count= --value tracker=`), `move-item` (`--value item= --value status= --value ref=`), `approve-spec`, `implementation-confirm`, `approve-document`, `publish-branch` (`--value branch=`), `reply-pr` (`--value pr=`), `pause-tracking` | Approvals; see the harness skill's approval protocol. `publish-items`, `implementation-confirm` and `approve-document` require the files shown first: run `harness workflow show`, put its output in your reply, run `harness decision status` (the host records a reply only once another tool runs), then ask |
 
 - Never pass a session id: the harness asks in the project's current work session, or
   project-wide when there is none. Asking never requires a session to exist.
 - `--value` fills the gate's `{slots}`; the command names any that are missing.
 - `--recommended` names an option id to mark instead of the gate's default.
 - Pass every reviewed file with `--artifact`. A changed file invalidates the earlier answer.
-- Say which controls are actually callable: `--blocking-available`, `--async-available`.
+- Claude Code gets its native question control by default. Other hosts pass
+  `--blocking-available` when theirs can. Codex selection requires an observed runtime profile:
+  availability flags cannot establish mode, permission, root identity or structured UI qualification.
+  Missing mode evidence leaves required structured decisions pending with
+  `unsupported_decision_transport`; use the recovery command below for the same typed menu.
 
 A **one-off question** that no gate covers (a product choice specific to this work) uses
 `--question`, `--option` (at most three), `--detail` per option, `--recommended <label>`, and
@@ -53,18 +63,31 @@ The command returns one of:
   line so the human can reopen it. An approval is reused while it holds (not revoked, its work
   session still running, and what it is tied to unchanged).
 - `"state": "waiting_for_human"`, with a `transport`:
-  - `blocking` or `async`: invoke the returned native control. Show the review first.
+  - `blocking` or `async`: invoke the returned native control using its `questions` payload
+    verbatim. Keep each question ID, question text, option label, and description unchanged. Show
+    the review first.
   - `chat`: show the review, then `menu` exactly as written, and end the turn.
 
 ### Fallback
 
-Delivery problems are recoverable and invisible to the human. When a control fails to show, or its
+Delivery problems are recoverable. When a control fails to show, or its
 reply is not captured, run `harness decision fallback --repo <project> --host
 <host>` (add `--async-available` when that control is callable). It moves the same question to the
-next transport (blocking → async → chat) with the same options, details, and menu text. Never
+next transport (blocking → async → chat) with the same options, details, and menu text. A
+fallback is for that one question: present the next question with native controls again. Never
 replace the question, ask the human to diagnose hooks, or show internal errors. Reuse a captured
 answer rather than asking again. If an optional preference was not captured, continue with its
 default; do not keep retrying controls or repeat the preference question.
+
+For Codex, availability flags never qualify another native transport. A typed recovery preserves
+the pending decision and may capture a genuine human answer, but its `structured_qualified: false`
+does not satisfy a workflow or release requirement for native structured controls. Report a
+required transport incompatibility as a blocker; do not silently declare chat equivalent.
+
+The fallback command accepts only `--repo`, `--session-id`, `--host`, and transport-availability
+flags. Do not add a decision ID or a reason: the pending question is resolved from the saved
+project/session state. If a native presentation is rejected because its payload does not match,
+reuse the exact payload returned by `decision present`; do not invent a replacement question.
 
 ### Answers
 
@@ -92,7 +115,8 @@ suspend`, and typed `approve HB-…` keep working while a menu waits.
 A pending required decision or approval blocks writes and workflow advancement in its scope (its work session, or the whole
 project for an unscoped one). Read-only inspection, `harness decision status`, `harness
 suspension status`, and `harness decision fallback` still run. For a Codex asynchronous control,
-keep the turn open with the returned interruptible wait; do not ask another question meanwhile.
+use a returned interruptible wait only when observed. Without a wait tool, end the turn while the
+decision remains pending. Do not ask another question or do dependent work meanwhile.
 Onboarding status, skip, dismissal, restart and mode selection are recovery controls, not answers.
 They may discard optional onboarding prompts while preserving evidence, without granting approval.
 Known onboarding prompts can be cancelled when onboarding is skipped, dismissed or restarted.
@@ -136,3 +160,27 @@ creates no checkpoint; an interrupted projection is completed once on workflow r
 capture. Recovery never answers for the user or grants approval. A conflict preserves both records
 and stops advancement for inspection; do not replace either record or re-ask approval to bypass it.
 Questions without a workflow or in a paused workflow continue without an automatic checkpoint.
+
+## Codex delivery follows the observed mode
+
+The immutable Codex runtime profile separates surface, actual collaboration mode, root identity,
+advertised tools, permission and observed structured UI qualification. Selection never grants
+approval. Plan may present a permitted domain decision through a qualified native control;
+implementation must await an actual host mode switch. Default's optional question contract cannot
+host a required approval. Optional Default input never claims `isBlocking: true`, and unanswered
+preferences may use their safe defaults. Host permissions and sandbox escalations always use the
+host's permission mechanism. Async delivery additionally requires the root, an observed async
+tool and independent permission for required decisions. A native async hook can establish this
+delivery contract within its exact session, turn and model. It does not establish a human answer
+or rendered UI qualification. Use an observed interruptible wait when available; otherwise end
+the turn with the pending decision intact.
+
+Current native hook observations are stored under the protected
+`.harness/state/host_sessions/codex/` directory and read only for the exact native conversation.
+Each root observation replaces stale evidence. Hook `permission_mode` describes approval policy;
+it does not prove collaboration mode. Existing hook observations consequently leave that mode
+unknown and cannot qualify a structured control. No agent-facing mode or availability flag can
+change this evidence. Required structured delivery remains a qualification blocker until a trusted
+current observation establishes the needed contract. A real native trial and genuine human answer
+remain necessary to establish live capture; synthetic fixtures and operator automation prove only
+their stated technical boundary.

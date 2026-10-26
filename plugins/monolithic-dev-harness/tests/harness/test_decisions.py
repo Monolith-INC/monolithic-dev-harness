@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from core.result import Err, Ok
-from harness import decisions, state, work_sessions
+from harness import decisions, review_decisions, state, work_sessions, workflow
 from host_adapters import work_session_context
 from integrations import gateway
 from tests.settings_fixture import write_settings
@@ -74,6 +74,24 @@ def test_stale_review_cannot_be_approved_but_can_be_revised(tmp_path: Path) -> N
     assert not decisions.waiting(tmp_path)
 
 
+def test_marking_a_reviewed_document_active_keeps_its_approval(tmp_path: Path) -> None:
+    spec = tmp_path / "spec.md"
+    spec.write_text("---\nstatus: draft\n---\n\nThe spec.\n", encoding="utf-8")
+    decisions.begin(
+        tmp_path,
+        "d1",
+        "Approve?",
+        ("Approve", "Revise"),
+        "chat",
+        (("spec.md", workflow.file_digest(spec).value),),
+        True,
+    )
+    spec.write_text("---\nstatus: active\n---\n\nThe spec.\n", encoding="utf-8")
+    native(tmp_path, "prompt", {"prompt": "Approve"})
+    assert not decisions.waiting(tmp_path)
+    assert (decisions.record(tmp_path) or {})["answer"] == "Approve"
+
+
 def test_pending_gate_blocks_workflow_and_gateway_before_configuration(
     tmp_path: Path,
 ) -> None:
@@ -95,7 +113,43 @@ def test_pending_gate_blocks_workflow_and_gateway_before_configuration(
     assert result.failure.code == "decision_pending"
 
 
-def test_only_a_plain_status_query_passes_the_pending_gate(tmp_path: Path) -> None:
+def test_implementation_confirmation_keeps_the_refinement_stage_and_recovers(
+    tmp_path: Path,
+) -> None:
+    plan = tmp_path / "plan.md"
+    plan.write_text("Reviewed implementation plan\n", encoding="utf-8")
+    started = workflow.start("Build the reviewed plan", "en").value
+    refinement = workflow.add_point(started, "Plan saved", "refinement").value
+    assert isinstance(workflow.save(tmp_path, refinement), Ok)
+
+    assert isinstance(
+        review_decisions.begin(
+            tmp_path,
+            "confirm-plan",
+            "Approve this implementation plan?",
+            ("Approve", "Revise", "Stop here"),
+            "chat",
+            (("plan.md", workflow.file_digest(plan).value),),
+            approval=True,
+            gate="implementation-confirm",
+        ),
+        Ok,
+    )
+
+    checkpoint = workflow.load(tmp_path).value
+    assert checkpoint.current.stage == "refinement"
+    assert checkpoint.current.artifacts == (
+        ("plan.md", workflow.file_digest(plan).value),
+    )
+
+    # Re-running recovery is idempotent and retains the truthful stage label.
+    assert isinstance(review_decisions.recover(tmp_path), Ok)
+    assert workflow.load(tmp_path).value.current.stage == "refinement"
+
+
+def test_only_a_plain_status_query_or_show_passes_the_pending_gate(
+    tmp_path: Path,
+) -> None:
     write_settings(tmp_path)
     decisions.begin(tmp_path, "d1", "Continue?", ("Continue",), "chat")
     fake = tmp_path / "bin" / "harness"
@@ -111,7 +165,14 @@ def test_only_a_plain_status_query_passes_the_pending_gate(tmp_path: Path) -> No
         )
 
     assert "deny" not in shell(f"{CLI} decision status --repo {tmp_path}")
+    # The next step reports the waiting question; it may always be asked for.
+    assert "deny" not in shell(f"{CLI} next --repo {tmp_path}")
+    # Showing the files a question is about only reads them, so it may run while it waits.
+    assert "deny" not in shell(
+        f"{CLI} workflow show --repo {tmp_path} --artifact docs/plan.md --artifact b.md"
+    )
     for command in (
+        f"{CLI} workflow show --artifact a.md; touch P4",
         "touch notes.txt",
         f"{CLI} decision status; touch P1",
         f'{CLI} decision status --repo "$(touch P2)"',
@@ -304,11 +365,7 @@ def test_async_delivery_waits_for_matching_actual_reply(tmp_path: Path) -> None:
     )
     native(tmp_path, "prompt", {"prompt": changed_question})
     assert decisions.waiting(tmp_path)
-    for message in (
-        "the buttons disappeared",
-        "I did not click",
-        reply("call-1", "I can reopen it"),
-    ):
+    for message in ("the buttons disappeared", "I did not click"):
         native(tmp_path, "prompt", {"prompt": message})
         assert decisions.waiting(tmp_path)
     native(
@@ -448,3 +505,25 @@ def test_async_adapter_owns_button_format_and_live_wait() -> None:
         ]
         == "chat"
     )
+
+
+def test_a_reply_in_the_users_own_words_closes_the_question_and_approves_nothing(
+    tmp_path: Path,
+) -> None:
+    """Live run 2026-10-16: "i see no corrections" left the question pending and blocked everything."""
+    decisions.begin(
+        tmp_path,
+        "d1",
+        "Apply the six fixes?",
+        ("Approve", "Not now"),
+        "chat",
+        approval=True,
+    )
+    found = decisions.resolve(tmp_path, "d1", "i see no corrections", "chat").value
+    assert (found["status"], found["answer"], found["own_words"]) == (
+        "answered",
+        "i see no corrections",
+        True,
+    )
+    assert not decisions.waiting(tmp_path)
+    assert not state.open_approvals(tmp_path, None)

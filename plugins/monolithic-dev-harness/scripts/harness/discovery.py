@@ -168,11 +168,10 @@ def _context(
 
 
 def _command(repo: Path, session_id: str, operation: str) -> str:
+    """The command as the agent runs every harness command: `harness` from its own shell."""
     return shlex.join(
         (
-            "env",
-            f"HARNESS_USER_STATE_DIR={preferences.path().resolve().parent}",
-            str(PLUGIN_ROOT / "bin" / "harness"),
+            "harness",
             "workflow",
             operation,
             "--repo",

@@ -23,10 +23,10 @@ References (start at `./references/pipeline.md`):
 
 Glossary path: `./references/assets/tech-glossary-en-pt-br.json` (bundled with the skill).
 
-Resolve the artifacts path with `bin/agile-backlog-toolkit config --show` when persisting output. If it is
-unset, ask the user where to write — never assume a location. Not needed for loading skill assets.
+When persisting output, ask `harness document path` for the document's path
+(`../../references/document-layout.md`); never assume a location. Not needed for loading skill assets.
 
-**Not in scope:** creating Azure work items, enricher emoji layouts, or backlog hierarchy — use the
+**Not in scope:** creating tracker work items, enricher emoji layouts, or backlog hierarchy — use the
 sibling skills for those; call this skill for the **prose** inside their outputs.
 
 ---
@@ -106,13 +106,13 @@ Run the quality-gate checklist in the principles reference before presenting.
 
 ## PHASE 5 — GATE & DESTINATION
 
-**── GATE —** WAIT for explicit approval (`proceed`, `looks good`, `publish`) before any file write.
-Silence is not approval.
+**── GATE —** A document the workflow keeps (a risk or verification document, for example) is
+written as a draft where `harness document path` says, shown with `harness workflow show
+--artifact <document>`, and approved with `harness decision present --gate approve-document
+--artifact <document>`. Silence is not approval.
 
-Then ask **where to persist** (if not already chosen):
-
-1. **Local file** — write to the configured artifacts path, or a path the user names.
-2. **Chat only** — formatted markdown ready to copy (default when invoked as a sub-pass).
+Otherwise the output stays in chat (the default when invoked as a sub-pass), unless the user names
+a file to write.
 
 When invoked **inline** from a sibling skill (`integration-notes.md`), skip this gate unless the
 sibling skill is at its own persistence gate — return polished prose to the caller.

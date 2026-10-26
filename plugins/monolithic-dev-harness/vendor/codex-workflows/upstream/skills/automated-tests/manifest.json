@@ -1,0 +1,14 @@
+{
+  "name": "automated-tests",
+  "version": "1.0.0",
+  "description": "Create and run automated tests for workflow and policy changes.",
+  "input_schema": {
+    "type": "object",
+    "properties": {}
+  },
+  "output_signature": {
+    "type": "object",
+    "properties": {}
+  },
+  "tools": []
+}

@@ -6,13 +6,13 @@
 Writes, once:
   .harness/settings.json   the repository's only settings file, copied from --settings-from after
                            it is checked; an existing one is never replaced (people own it)
-  .git/info/exclude        ignores .harness/state/ and the local tracker's .harness/tracker/ in
-                           this clone only (the shared .gitignore is never edited)
+  .git/info/exclude        ignores .harness/state/ in this clone only (the shared .gitignore is
+                           never edited); the local tracker's Tickets/ is project content
   .harness/knowledge/      the harness knowledge store, seeded with a pointer to the settings
 
 Then checks that the selected tracker exists and has the values it needs. Review configuration
 (.harness/review/sources.json) is interactive: run the `review-setup` skill afterwards. Bootstrap
-adds only the Codex project default needed for option-based questions; hooks and MCP servers come
+preserves Codex question feature preferences; hooks and MCP servers come
 from the plugin itself.
 """
 
@@ -20,7 +20,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -29,68 +28,14 @@ from pathlib import Path
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(PLUGIN_ROOT / "scripts"))
 
-from core.result import Err, Failure, Ok, Result, attempt, bind, fmap  # noqa: E402
+from core.result import Err, Ok, Result, attempt, bind, fmap  # noqa: E402
 from harness import bmad, gitstate, settings, setup, state  # noqa: E402
 from integrations import registry  # noqa: E402
 
 
 def _ensure_codex_config(repo: Path) -> Result[str]:
-    """Add the shared Codex picker default without taking over other project settings."""
-    path = repo / ".codex" / "config.toml"
-    try:
-        original = path.read_text(encoding="utf-8") if path.is_file() else ""
-        lines = original.splitlines()
-        features = re.compile(r"^\s*\[features\]\s*$")
-        assignment = re.compile(
-            r"^\s*default_mode_request_user_input\s*=\s*(true|false)\s*$"
-        )
-        in_features = False
-        found: str | None = None
-        insert_at = len(lines)
-        for index, line in enumerate(lines):
-            if line.lstrip().startswith("["):
-                if in_features:
-                    insert_at = index
-                    in_features = False
-                if features.match(line):
-                    in_features = True
-            if in_features and (match := assignment.match(line)):
-                found = match.group(1)
-        match found:
-            case "true":
-                return Ok(f"kept {path}: request_user_input already enabled")
-            case "false":
-                return Err(
-                    Failure(
-                        "codex_config_conflict",
-                        f"{path} explicitly disables default_mode_request_user_input",
-                    )
-                )
-            case None:
-                addition = (
-                    "# Shared harness interaction: allow option-based questions in Codex."
-                    "\ndefault_mode_request_user_input = true"
-                ).splitlines()
-                updated = [*lines[:insert_at], *addition, *lines[insert_at:]]
-                if not lines:
-                    updated = ["[features]", *addition]
-                elif not any(features.match(line) for line in lines):
-                    updated = [*lines, "", "[features]", *addition]
-                content = "\n".join(updated).rstrip() + "\n"
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_text(content, encoding="utf-8")
-                return Ok(f"wrote {path}: enabled request_user_input")
-            case _:
-                return Err(
-                    Failure(
-                        "codex_config_conflict",
-                        f"{path} has an unreadable request_user_input setting",
-                    )
-                )
-    except OSError as exc:
-        return Err(
-            Failure("codex_config_unwritable", f"{path} could not be updated: {exc}")
-        )
+    """Preserve host preferences; actual native hooks establish question transport."""
+    return Ok(f"left Codex feature settings unchanged for {repo}")
 
 
 def _candidate(source: Path) -> Result[settings.Settings]:
@@ -147,6 +92,11 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--repo", default=".")
     parser.add_argument(
+        "--host",
+        default="",
+        help="the host running setup; only codex gets the project's Codex picker setting",
+    )
+    parser.add_argument(
         "--settings-from",
         help="legacy one-time import of a reviewed settings file",
     )
@@ -162,6 +112,11 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--scm-value", action="append", default=[])
     parser.add_argument("--artifacts-path")
     parser.add_argument("--base-branch")
+    parser.add_argument(
+        "--git-delivery",
+        choices=("on", "off"),
+        help="whether the user chose Git-based delivery (branches, pull requests); off by default",
+    )
     args = parser.parse_args(argv)
 
     repo = Path(args.repo).resolve()
@@ -176,6 +131,9 @@ def main(argv: list[str] | None = None) -> int:
         ),
         "artifacts_path": args.artifacts_path or "",
         "base_branch": args.base_branch or "",
+        "git_delivery": None
+        if args.git_delivery is None
+        else args.git_delivery == "on",
     }
     match (
         args.settings_from,
@@ -198,9 +156,11 @@ def main(argv: list[str] | None = None) -> int:
         case None, True, None, False, False:
             return _report(setup.review(repo, **choices))
         case None, _, str() as approved, False, False:
-            return _apply_reviewed(repo, choices, approved, args.source_digest or "")
+            return _apply_reviewed(
+                repo, choices, approved, args.source_digest or "", args.host
+            )
         case str() as source, False, None, False, False:
-            return _legacy_install(repo, Path(source))
+            return _legacy_install(repo, Path(source), args.host)
         case _:
             print("choose one bootstrap operation", file=sys.stderr)
             return 2
@@ -217,7 +177,7 @@ def _report(result: Result[dict]) -> int:
 
 
 def _apply_reviewed(
-    repo: Path, choices: dict, approved: str, source_digest: str
+    repo: Path, choices: dict, approved: str, source_digest: str, host: str
 ) -> int:
     match setup.review(repo, **choices):
         case Err(failure):
@@ -230,10 +190,10 @@ def _apply_reviewed(
                     return 2
                 case Ok(file):
                     print(f"wrote {file}")
-                    return _finish(repo)
+                    return _finish(repo, host)
 
 
-def _legacy_install(repo: Path, source: Path) -> int:
+def _legacy_install(repo: Path, source: Path, host: str) -> int:
     # State stays out of git before anything can write it: the settings opt the repository in.
     added = state.ensure_local_exclude(repo)
     if added:
@@ -264,10 +224,10 @@ def _legacy_install(repo: Path, source: Path) -> int:
             return 2
         case Ok(note):
             print(note)
-    return _finish(repo)
+    return _finish(repo, host)
 
 
-def _finish(repo: Path) -> int:
+def _finish(repo: Path, host: str) -> int:
     chosen = settings.load(repo)
     match chosen:
         case Err(failure):
@@ -290,7 +250,8 @@ def _finish(repo: Path) -> int:
             )
         case Ok(report):
             print(f"bmad: setup {report['setup']}, output folder {report['output']}")
-    match _ensure_codex_config(repo):
+    # Codex transport is observed at runtime; bootstrap preserves host feature settings.
+    match _ensure_codex_config(repo) if host == "codex" else None:
         case Err(failure):
             print(
                 f"warning: {failure.message}; clickable choices require host support",
@@ -298,6 +259,8 @@ def _finish(repo: Path) -> int:
             )
         case Ok(note):
             print(note)
+        case None:
+            pass
     active = registry.selected(repo, settings.load(repo)).value
     print(f"tracker: {active.manifest.label} ({active.manifest.source})")
     from harness.knowledge import initialize as initialize_knowledge

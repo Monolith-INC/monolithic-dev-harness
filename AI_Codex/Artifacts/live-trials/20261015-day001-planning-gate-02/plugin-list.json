@@ -1,0 +1,23 @@
+{
+  "installed": [
+    {
+      "pluginId": "monolithic-dev-harness@monolithic-dev-harness",
+      "name": "monolithic-dev-harness",
+      "marketplaceName": "monolithic-dev-harness",
+      "version": "0.6.2",
+      "installed": true,
+      "enabled": true,
+      "source": {
+        "source": "local",
+        "path": "/tmp/monolithic-dev-harness-trial-ed0k7v76/harness-install/marketplace/codex-marketplace/plugins/monolithic-dev-harness"
+      },
+      "marketplaceSource": {
+        "sourceType": "local",
+        "source": "/tmp/monolithic-dev-harness-trial-ed0k7v76/harness-install/marketplace/codex-marketplace"
+      },
+      "installPolicy": "AVAILABLE",
+      "authPolicy": "ON_INSTALL"
+    }
+  ],
+  "available": []
+}

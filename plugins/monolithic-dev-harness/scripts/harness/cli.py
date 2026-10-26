@@ -6,9 +6,10 @@ harness doctor [--repo <dir>] [--tools]
 harness bootstrap --repo <dir> [--inspect | --propose | --apply-digest <hash>]
 harness session start <work item> [--workflow <name>] | status | pause | resume | close
 harness work-session route --request <text> | start --request <text> | list | select <id> | pause|stop|resume|complete <id>
-harness workflow start | render | checkpoint | list | status | routes | prepare | back | pause | resume | cancel | complete --session-id <id>
+                    | track [<id>] --work-item <key> | link [<id>] --work-item <key>
+harness workflow start | render | checkpoint | list | status | requirements | routes | prepare | back | pause | resume | cancel | complete --session-id <id>
 harness preference show | language <en|pt-br>
-harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...]
+harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...] | tree
 harness adoption assess | plan | status | materialize ...
 harness knowledge <operation> ...
 """
@@ -17,7 +18,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shutil
 import subprocess
 import sys
@@ -41,13 +41,17 @@ from harness import (  # noqa: E402
     adoption,
     bmad,
     cli_workflow,  # noqa: E402
+    documents,
     gitstate,
     knowledge,
     local_tracker,
     preferences,
+    process_cli,
+    project_paths,
     sessions,
     settings,
     state,
+    tracker_tree,
 )
 from harness.cli_common import pairs, print_result, resolve_repo  # noqa: E402
 from integrations import (  # noqa: E402
@@ -86,7 +90,40 @@ class Report:
         print(f"  [{status:>4}] {label}{f' — {detail}' if detail else ''}")
 
 
+def _installation_host(report: Report, host: str, result: Result[bool]) -> str:
+    match result:
+        case Ok(True):
+            report.line(
+                "ok",
+                host,
+                "user registration/configuration verified; runtime activation requires host trust and reload",
+            )
+        case Ok(False):
+            report.line(
+                "skip",
+                host,
+                "no user registration; project installations are covered by the inventory",
+            )
+        case Err(failure):
+            report.line("FAIL", host, failure.message)
+    return host
+
+
 def doctor(args: argparse.Namespace) -> int:
+    match (
+        getattr(args, "installations", False),
+        getattr(args, "json", False),
+        getattr(args, "repair_id", ()),
+        getattr(args, "apply_repairs", None),
+    ):
+        case False, False, [], None:
+            pass
+        case False, False, (), None:
+            pass
+        case _:
+            from harness.installation_doctor import run
+
+            return run(args)
     report = Report()
     print(f"monolithic-dev-harness {version()} ({PLUGIN_ROOT})")
 
@@ -109,47 +146,31 @@ def doctor(args: argparse.Namespace) -> int:
         )
 
     print("Hosts")
-    if shutil.which("claude"):
-        listed = _run(["claude", "plugin", "list", "--json"])
-        installed = bool(
-            listed and listed.returncode == 0 and PLUGIN_ID in listed.stdout
+    from harness.installation_scope import _context
+    from host_adapters.installation_contract import adapter_for
+    from host_adapters.subagents import ADAPTERS
+
+    tuple(
+        _installation_host(
+            report,
+            host,
+            bind(adapter_for(host), lambda adapter: adapter.verify_user(_context(()))),
         )
-        report.line(
-            "ok" if installed else "warn",
-            "Claude Code",
-            "plugin installed" if installed else "plugin not installed",
-        )
-    else:
-        report.line("skip", "Claude Code", "claude CLI not on PATH")
-    cursor_dir = Path(
-        os.environ.get(
-            "CURSOR_PLUGIN_DIR",
-            Path.home() / ".cursor/plugins/local/monolithic-dev-harness",
-        )
+        for host in ADAPTERS
     )
+
+    from harness.installation_inventory import findings, scan
+
+    installation_inventory = scan(_context((project_paths.root(Path(args.repo)),)))
+    installation_findings = findings(installation_inventory)
     report.line(
-        "ok" if (cursor_dir / ".cursor-plugin" / "plugin.json").is_file() else "skip",
-        "Cursor",
-        str(cursor_dir) if cursor_dir.exists() else "plugin not installed",
+        "FAIL" if installation_inventory.errors or installation_findings else "ok",
+        "installation inventory",
+        f"{len(installation_inventory.components)} components, {len(installation_findings)} findings, {len(installation_inventory.errors)} uninspected locations; use harness doctor --installations for details and repairs",
     )
-    match shutil.which("codex"):
-        case None:
-            report.line("skip", "Codex", "codex CLI not on PATH")
-        case _:
-            codex_plugins = _run(["codex", "plugin", "list", "--json"])
-            codex_installed = bool(
-                codex_plugins
-                and codex_plugins.returncode == 0
-                and PLUGIN_ID in codex_plugins.stdout
-            )
-            report.line(
-                "ok" if codex_installed else "warn",
-                "Codex",
-                "plugin installed" if codex_installed else "plugin not installed",
-            )
 
     print("Repository")
-    repo = gitstate.repo_root(Path(args.repo)) or Path(args.repo).resolve()
+    repo = project_paths.root(Path(args.repo))
     if not settings.governed(repo):
         report.line("skip", str(repo), "not opted in (run `harness bootstrap`)")
     else:
@@ -201,10 +222,10 @@ def _repository(report: Report, repo: Path, args: argparse.Namespace) -> None:
     for problem in registry.problems(repo):
         report.line("warn", "tracker folder", problem.message)
     report.line("ok", "tracking", state.tracking_mode(repo))
-    if gitstate.repo_root(repo) is not None:
+    if settings.git_delivery(repo):
         report.line("ok", "session", sessions.describe(sessions.resolve(repo)))
     else:
-        report.line("skip", "session", "version control is not in use")
+        report.line("skip", "session", "Git-based delivery is not selected")
     if args.tools and isinstance(selected, Ok):
         report.line(*_tools(repo, selected.value))
 
@@ -251,7 +272,7 @@ def _tools(repo: Path, active: registry.Active) -> tuple[str, str, str]:
 def bootstrap(extra: list[str]) -> int:
     args = list(extra)
     if "--repo" not in args:
-        repo = gitstate.repo_root(Path.cwd()) or Path.cwd().resolve()
+        repo = project_paths.root(Path.cwd())
         args += ["--repo", str(repo)]
     script = PLUGIN_ROOT / "scripts" / "harness" / "bootstrap.py"
     return subprocess.call([sys.executable, str(script), *args])
@@ -434,6 +455,13 @@ def tracker_command(args: argparse.Namespace) -> int:
             )
         case "preflight":
             return _tracker_preflight(repo)
+        case "tree":
+            return print_result(
+                bind(
+                    registry.selected(repo, settings.load(repo)),
+                    lambda active: tracker_tree.render(repo, active.manifest),
+                )
+            )
     return 2
 
 
@@ -552,7 +580,8 @@ def knowledge_command(args: argparse.Namespace) -> int:
     return 0
 
 
-def main(argv: list[str] | None = None) -> int:
+def parser() -> argparse.ArgumentParser:
+    """Every `harness` command and its arguments."""
     parser = argparse.ArgumentParser(
         prog="harness",
         description=__doc__,
@@ -564,6 +593,26 @@ def main(argv: list[str] | None = None) -> int:
         "doctor", help="check tools, configuration, hosts, and the current repository"
     )
     doc.add_argument("--repo", default=".")
+    doc.add_argument(
+        "--installations",
+        action="store_true",
+        help="inventory all supported hosts and show explicit repair selections",
+    )
+    doc.add_argument(
+        "--json", action="store_true", help="machine-readable installation inventory"
+    )
+    doc.add_argument("--scope", choices=("user", "local", "all"), default="all")
+    doc.add_argument("--project", action="append", default=[])
+    doc.add_argument(
+        "--repair-id",
+        action="append",
+        default=[],
+        help="select an individual repair from the current inventory",
+    )
+    doc.add_argument(
+        "--apply-repairs",
+        help="apply selected repairs only when this selection digest matches",
+    )
     doc.add_argument(
         "--tools",
         action="store_true",
@@ -593,11 +642,14 @@ def main(argv: list[str] | None = None) -> int:
     preference_parser.add_argument("operation", choices=("show", "language"))
     preference_parser.add_argument("value", nargs="?")
     preference_parser.add_argument("--repo")
+    documents.add_parser(sub)
+    process_cli.add_parser(sub)
     tracker_parser = sub.add_parser(
-        "tracker", help="list or inspect trackers, check readiness, or stage a new one"
+        "tracker",
+        help="list or inspect trackers, check readiness, stage a new one, or print the work-item tree",
     )
     tracker_parser.add_argument(
-        "operation", choices=("list", "show", "stage", "preflight")
+        "operation", choices=("list", "show", "stage", "preflight", "tree")
     )
     tracker_parser.add_argument(
         "target", nargs="?", help="a tracker name (show) or folder (stage)"
@@ -640,14 +692,26 @@ def main(argv: list[str] | None = None) -> int:
     knowledge_parser.add_argument("terms", nargs="*")
     knowledge_parser.add_argument("--repo", default=".")
     knowledge_parser.add_argument("--store", default="project")
-    args, extra = parser.parse_known_args(argv)
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    command_line = parser()
+    args, extra = command_line.parse_known_args(argv)
     match args.command, extra:
-        case "workflow", [*unknown] if unknown:
-            parser.error("unrecognized workflow arguments: " + " ".join(unknown))
+        case "workflow" | "process" as family, [*unknown] if unknown:
+            command_line.error(
+                "unrecognized " + family + " arguments: " + " ".join(unknown)
+            )
         case _:
             pass
     if args.command in cli_workflow.COMMANDS:
         return cli_workflow.run(args)
+    match args.command:
+        case "process":
+            return process_cli.run(args)
+        case _:
+            pass
     if args.command == "version":
         print(version())
         return 0
@@ -661,6 +725,8 @@ def main(argv: list[str] | None = None) -> int:
         return preference_command(args)
     if args.command == "tracker":
         return tracker_command(args)
+    if args.command == "document":
+        return documents.command(args)
     if args.command == "adoption":
         return adoption_command(args)
     return bootstrap(extra)

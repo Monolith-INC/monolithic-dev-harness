@@ -10,7 +10,7 @@ from pathlib import Path
 import pytest
 
 from core.result import Ok
-from harness import decisions, state, work_sessions, workflow
+from harness import decisions, onboarding, state, work_sessions, workflow
 from host_adapters import work_session_context
 from tests.settings_fixture import write_settings
 
@@ -28,7 +28,7 @@ def repo(tmp_path: Path) -> Path:
     )
     started = workflow.start("DAY-003: share a list").value
     planned = workflow.add_point(
-        started, "Plan drafted", "discover", (), (), "", "Ask the open questions", ()
+        started, "Plan drafted", "discovery", (), (), "", ()
     ).value
     assert isinstance(workflow.save(tmp_path, planned, session), Ok)
     return tmp_path
@@ -59,18 +59,18 @@ def session_of(repo: Path) -> str:
     return work_sessions.list_sessions(repo).value[0].id
 
 
-def test_a_silent_stop_is_sent_back_with_the_next_action(repo: Path) -> None:
+def test_a_silent_stop_is_sent_back_to_the_next_step(repo: Path) -> None:
     out = json.loads(stop(repo, "Both choices are saved. Next: supported devices."))
     assert out["decision"] == "block"
-    assert "Ask the open questions" in out["reason"]
+    assert "harness next" in out["reason"]
 
 
-def test_a_question_to_the_user_ends_the_turn(repo: Path) -> None:
-    assert stop(repo, "Which phones should shared lists support?") == ""
+def test_a_prose_question_requires_the_presentation_contract(repo: Path) -> None:
     assert (
-        stop(repo, "1. **Service?**\n   a. Firebase\n\nReply in any form.\n**Ready?**")
-        == ""
+        json.loads(stop(repo, "Which phones should shared lists support?"))["decision"]
+        == "block"
     )
+    assert "native" in json.loads(stop(repo, "Ready?"))["reason"]
 
 
 def test_a_pending_menu_ends_the_turn(repo: Path) -> None:
@@ -85,6 +85,20 @@ def test_a_pending_menu_ends_the_turn(repo: Path) -> None:
     assert stop(repo, "The plan is ready.") == ""
 
 
+def test_unpresented_native_menu_requires_delivery_or_fallback(repo: Path) -> None:
+    decisions.begin(
+        repo,
+        "native1",
+        "Continue?",
+        ("Continue", "Stop"),
+        "blocking",
+        work_session_id=session_of(repo),
+    )
+    out = json.loads(stop(repo, "Continue?"))
+    assert out["decision"] == "block"
+    assert "fallback" in out["reason"]
+
+
 def test_the_guard_sends_the_agent_back_only_once(repo: Path) -> None:
     assert stop(repo, "Saved.", stop_hook_active=True) == ""
 
@@ -93,6 +107,11 @@ def test_a_finished_workflow_may_stop(repo: Path) -> None:
     current = workflow.load(repo, session_of(repo)).value
     workflow.save(repo, workflow.complete(current).value, session_of(repo))
     assert stop(repo, "Done.") == ""
+
+
+def test_paused_onboarding_does_not_demand_more_work(repo: Path) -> None:
+    onboarding.control(repo, "onboarding", "pause")
+    assert stop(repo, "Paused at your request.") == ""
 
 
 def test_a_suspended_harness_does_not_nudge(repo: Path) -> None:

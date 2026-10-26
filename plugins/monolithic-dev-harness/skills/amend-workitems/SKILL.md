@@ -1,7 +1,7 @@
 ---
 name: amend-workitems
 description: >
-  Analyze user instructions and safely amend an entire Azure DevOps or local artifacts work-item tree. Use when a user supplies corrections or adjustments for an Epic or Feature and expects the Epic, Features, User Stories, and child Tasks to be scanned, placed, reviewed, and updated consistently. This skill gathers and presents a change set before any write, creates a recoverable tree backup, and never changes work items without explicit approval.
+  Analyze user instructions and safely amend an entire work-item tree in the selected tracker. Use when a user supplies corrections or adjustments for an Epic or Feature and expects the Epic, Features, User Stories, and child Tasks to be scanned, placed, reviewed, and updated consistently. This skill gathers and presents a change set before any write, creates a recoverable tree backup, and never changes work items without explicit approval.
 license: MIT
 ---
 
@@ -14,10 +14,11 @@ remain unchanged. Read the references below before making placement or persisten
 References:
 
 - `./references/placement.md` — keyword ranking and type/section placement.
-- `./references/backup-and-ledger.md` — backup, revision, Obsidian, and recovery rules.
+- `./references/backup-and-artifacts path.md` — backup, revision, Obsidian, and recovery rules.
 - `./references/approval-and-persistence.md` — change-set approval and delegated writers.
 - `../../references/ticket-structure.md` — artifacts path structure and section order.
-- `../../references/azure-mechanics.md` — Azure reads, links, updates, and read-back.
+- `../../references/tracker-contract.md` — the tracker gateway: every read and write goes through
+  its `tracker_*` tools, never a tracker's own tools.
 - `../enrich-work-item/references/` — canonical sections and examples for Epic, Feature, and Story.
 - `../generate-breakdown-work-items/references/` — Implementation Plans and Task child rules.
 
@@ -28,7 +29,7 @@ References:
 Ask one question at a time through the host UI:
 
 1. Collect the amendment instructions verbatim. Do not paraphrase away corrections.
-2. Collect the reference Epic or Feature (Azure id/URL, Artifacts path, or filesystem path).
+2. Collect the reference Epic or Feature (tracker id or link, artifacts path, or filesystem path).
 3. Confirm scope as the complete descendant tree and the non-destructive, content-only policy.
 
 Do not read or write the tree before the reference is supplied. If the reference is ambiguous,
@@ -36,9 +37,9 @@ stop and ask for a resolvable id, URL, or path.
 
 ### 2. Resolve, snapshot, and scan
 
-Read `references/backup-and-ledger.md` before resolving the source. Create a backup of the entire tree before
+Read `./references/backup-and-ledger.md` before resolving the source. Create a backup of the entire tree before
 semantic analysis. The snapshot must include every Epic, Feature, Story, and Task body; ids,
-revisions, parent links, child links, attachments, and related `Implementation_Plans/` notes. Verify
+revisions, parent links, child links, attachments, and the related implementation plans in the items' folders. Verify
 that the backup is readable and complete. A failed or partial backup is a hard stop.
 
 Resolve the reference and enumerate descendants from Epic → Feature → User Story → Task before
@@ -70,8 +71,9 @@ Produce a consolidated preview containing, for every selected placement:
 - backup location and source revisions.
 
 Re-read current revisions immediately before the approval prompt. If any revision changed since
-the scan, refresh that node and rebuild the affected proposal. Request approval with the `publish-items` approval gate with the drafts as `--artifact`s (see the harness skill's approval protocol), passing the
-consolidated change set. Cancellation or rejection ends the run without writes.
+the scan, refresh that node and rebuild the affected proposal. Write the change set as the reviewed drafts, show them with `harness workflow show
+--artifact <draft>`, and ask `harness decision present --gate publish-items` with them as
+`--artifact`s. Cancellation or rejection ends the run without writes.
 
 ### 5. Apply using existing Agile Backlog Toolkit skills
 
@@ -97,7 +99,7 @@ Re-check the total against the assignee's remaining capacity in the active sprin
 fits, STOP and ask before writing. Full rules in
 `../generate-breakdown-work-items/references/atomic-tasks.md`.
 Update related Artifacts Implementation Plans when the amendment changes scope, acceptance coverage,
-or task sequencing. Read back every changed Azure item and Artifacts file, verify parent links and
+or task sequencing. Read back every changed tracker item and artifacts file, verify parent links and
 revisions, and run the applicable `validate-artifact` checks. Stop on the first failed write or
 read-back; leave the backup intact and report the exact recovery target.
 
@@ -114,4 +116,4 @@ that no state or hierarchy changes were made when that is true.
 - Never overwrite a newer revision; refresh and re-propose instead.
 - Never delete, relink, or change state without a separate explicit approval.
 - Preserve original instruction text and all unmatched items in the report.
-- If Azure and Artifacts disagree, stop and present the conflict; do not guess which copy wins.
+- If the tracker and the artifacts disagree, stop and present the conflict; do not guess which copy wins.

@@ -92,7 +92,14 @@ def check_package(
     memlog = project.resolve() / "_bmad/scripts/memlog.py"
     assert str(memlog) in text and memlog.is_file()
     plan_step = (entry.parent / "step-02-plan.md").read_text()
-    assert "2. **Deepen**" in plan_step and "Never ask them one at a time" in plan_step
+    assert (
+        "planning-depth" in plan_step and "one focused decision at a time" in plan_step
+    )
+    assert plan_step.index("planning-depth") < plan_step.index(
+        "planning approach draft"
+    )
+    assert "Refinement" in plan_step and "implementation-confirm" not in plan_step
+    assert shlex.split(package["context"]["status_command"])[0] == "harness"
     assert shlex.split(package["context"]["status_command"])[-2:] == [
         "--session-id",
         selected.id,
@@ -160,7 +167,7 @@ def change_language(project: Path, selected: work_sessions.Session) -> None:
 
 @pytest.mark.parametrize(
     "operation",
-    ["start", "render", "checkpoint", "back", "pause", "resume", "cancel", "complete"],
+    ["start", "render", "complete"],
 )
 def test_cli_refuses_missing_session_before_any_workflow_write(
     project: Path, operation: str
@@ -237,7 +244,7 @@ def check_cli_render(project: Path, selected: work_sessions.Session) -> None:
         "workflow",
         "render",
         "--stage",
-        "discover",
+        "discovery",
         "--session-id",
         selected.id,
     )
@@ -337,7 +344,7 @@ def test_cli_rejects_unknown_render_options(project: Path) -> None:
             "workflow",
             "render",
             "--stage",
-            "discover",
+            "discovery",
             "--sessoin-id",
             "WS-MISSING",
         ).returncode

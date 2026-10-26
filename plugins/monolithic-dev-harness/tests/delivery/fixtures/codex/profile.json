@@ -1,0 +1,68 @@
+{
+  "surface": "cli",
+  "host_version": "0.162.1",
+  "upstream_revision": "398500106707f0a3217c7cf83edc2bf226cc342f",
+  "mode": "default",
+  "qualification_status": "partial",
+  "advertised_tools": [
+    "collaboration.spawn_agent",
+    "collaboration.wait_agent",
+    "apply_patch",
+    "exec_command"
+  ],
+  "observed_tool_names": [
+    "collaborationspawn_agent",
+    "collaborationwait_agent",
+    "apply_patch",
+    "Bash"
+  ],
+  "observed_events": ["PreToolUse", "PostToolUse", "SubagentStart", "SubagentStop"],
+  "trust_status": "capture_handlers_executed_in_disposable_config",
+  "evidence_paths": [
+    "pre-tool.json",
+    "pre-tool-shell.json",
+    "post-tool-shell-failure.json",
+    "pre-tool-spawn.json",
+    "post-tool-spawn.json",
+    "pre-tool-wait.json",
+    "post-tool-wait.json",
+    "subagent-start.json",
+    "subagent-stop.json",
+    "protocol-question-request.json",
+    "protocol-question-resolved.json",
+    "protocol-question-result.json",
+    "protocol-question-provenance.json",
+    "protocol-async-question.json",
+    "protocol-async-operator-answer.json",
+    "protocol-async-result.json",
+    "protocol-async-provenance.json",
+    "ask-async.json",
+    "answer-async-delivery.json",
+    "async-hook-provenance.json"
+  ],
+  "claims": {
+    "child_identity_on_apply_patch_pre_tool": "verified",
+    "child_identity_on_shell_pre_tool": "verified",
+    "child_identity_distinct_from_shared_session": "verified",
+    "native_spawn_and_wait_hook_aliases": "verified",
+    "successful_child_effect": "unknown",
+    "harness_policy_denies_child_effect": "unknown",
+    "default_sync_required_structured_approval": "unsupported",
+    "plan_domain_planning_decision": "documented",
+    "plan_planning_preference_native_protocol": "verified",
+    "plan_planning_preference_operator_response": "verified",
+    "plan_external_effect_approval": "unknown",
+    "async_required_domain_review_protocol": "verified",
+    "async_pre_post_hooks_on_trusted_disposable_capture": "verified",
+    "async_post_tool_result_is_delivery_only": "verified",
+    "async_required_structured_harness_authority": "unknown",
+    "genuine_human_answer": "unknown",
+    "desktop_child_hook_coverage": "unknown"
+  },
+  "sanitization": {
+    "path_prefix": "/tmp/mdh-codex-proof replaced by /fixture/codex-proof",
+    "native_ids": "Preserved to retain cross-event identity relationships; disposable native IDs carry no human answer",
+    "child_brief": "Encrypted message string replaced by a fixed redaction marker in spawn fixtures",
+    "unobserved_events": "No ask, answer, prompt or interrupt hook payload manufactured; separate native app-server Plan request and resolution fixtures are real operator protocol evidence"
+  }
+}

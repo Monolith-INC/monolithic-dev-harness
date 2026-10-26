@@ -1,0 +1,40 @@
+{
+  "name": "generate-work-item",
+  "description": "Context7 research, raw spec + Tickets/Ready draft (title, Requisitos, Critérios de Aceite), provider-aware create on approval.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "work_item_type": {
+        "type": "string",
+        "enum": ["epic", "feature", "user-story", "task"],
+        "description": "Vendor-neutral work item type to generate"
+      },
+      "title": {
+        "type": "string",
+        "description": "Short work item title"
+      },
+      "description": {
+        "type": "string",
+        "description": "Problem statement or scope in the author's words"
+      },
+      "parent": {
+        "type": "string",
+        "description": "Parent work item id or URL (Epic for Feature, Feature for Story, Story for Task)"
+      },
+      "attachment": {
+        "type": "string",
+        "description": "Supporting documentation URL or local path"
+      },
+      "language": {
+        "type": "string",
+        "enum": ["en", "pt-br"],
+        "default": "pt-br",
+        "description": "Output language for section labels and body prose; defaults to the description's own locale when omitted, else pt-BR"
+      }
+    },
+    "required": ["work_item_type", "title", "description"]
+  },
+  "output_signature": {
+    "required": ["spec_path", "draft_path", "title"]
+  }
+}

@@ -68,6 +68,8 @@ class Settings:
     guarded_paths: tuple[GuardedPath, ...]
     require_draft: bool
     require_review_verdict: bool
+    # The user chose Git-based delivery: only then do the rules about Git commands apply.
+    git_delivery: bool = False
 
     @property
     def check_names(self) -> frozenset[str]:
@@ -80,6 +82,15 @@ def path(repo: Path) -> Path:
 
 def governed(repo: Path) -> bool:
     return path(repo).is_file()
+
+
+def git_delivery(repo: Path) -> bool:
+    """Whether the user chose Git-based delivery; a project without usable settings has not."""
+    match load(repo):
+        case Ok(chosen):
+            return chosen.git_delivery
+        case _:
+            return False
 
 
 def load(repo: Path) -> Result[Settings]:
@@ -216,6 +227,7 @@ def _parse(raw: Mapping[str, Any]) -> Result[Settings]:
             require_review_verdict=bool(
                 pull_requests.get("require_review_verdict", True)
             ),
+            git_delivery=raw.get("git", {}).get("delivery") is True,
         )
     )
 

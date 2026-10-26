@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any
 
 from core.result import Result, attempt
+from harness import route
 from integrations.gateway import TOOLS_BY_NAME
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
@@ -22,18 +23,12 @@ PROJECT_CONTEXT_TOTAL_LIMIT = 96_000
 MARKDOWN_LINK = re.compile(r"(?<!!)\[[^\]]+\]\(([^)]+)\)")
 LOCAL_OPERATIONS = {
     "harness.bootstrap.inspect": "Inspect project settings, saved progress, and repository state.",
-    "harness.work-session.route": "Match the exact request to saved project work or present a new-session choice.",
-    "harness.work-session.start": "Start a separate project work session for the selected request.",
-    "harness.work-session.resume": "Resume a paused project work session.",
-    "harness.work-session.pause": "Pause project work while preserving its saved context.",
-    "harness.work-session.stop": "Stop a project work session without deleting its history.",
-    "harness.work-session.select": "Bind this host conversation to one project work session.",
     "harness.doctor": "Check local harness setup and required tools.",
     "harness.workflow.status": "Read the current saved workflow checkpoint.",
     "harness.workflow.checkpoint": "Save a workflow checkpoint without granting write approval.",
+    "harness.knowledge.catalog": "List the bounded project knowledge routing catalog.",
     "harness.knowledge.find": "Search the selected harness knowledge store.",
     "harness.knowledge.fetch": "Read a selected harness knowledge item.",
-    "harness.suspension.status": "Read whether the user suspended the harness checks; only their own `harness suspend` message does.",
 }
 
 
@@ -57,34 +52,88 @@ def load_catalog(plugin_root: Path = PLUGIN_ROOT) -> dict[str, Any]:
 
 
 def routes(plugin_root: Path = PLUGIN_ROOT) -> Result[dict[str, tuple[str, ...]]]:
+    """The stage sequences the route gives: `onboarding` from discovery, `explore-idea` from
+    the idea stage. Both are read from the route, never written separately."""
     return attempt(
         lambda: _routes(plugin_root),
         "prepared_workflow_invalid",
         "prepared workflow",
         _Invalid,
+        ValueError,
     )
 
 
 def _routes(plugin_root: Path) -> dict[str, tuple[str, ...]]:
-    catalog = load_catalog(plugin_root)
-    raw_routes = catalog.get("routes")
-    stages = catalog.get("stages")
-    if not isinstance(raw_routes, dict) or not isinstance(stages, dict):
-        raise _Invalid("prepared workflow catalog is missing routes or stages")
-    checked: dict[str, tuple[str, ...]] = {}
-    for route_id, stage_ids in raw_routes.items():
-        if (
-            not isinstance(route_id, str)
-            or not isinstance(stage_ids, list)
-            or not stage_ids
-            or not all(
-                isinstance(stage_id, str) and stage_id in stages
-                for stage_id in stage_ids
-            )
-        ):
-            raise _Invalid(f"route {route_id!r} refers to an unknown stage")
-        checked[route_id] = tuple(stage_ids)
-    return checked
+    onboarding = tuple(
+        s
+        for s in route.load_or_raise(plugin_root).stages
+        if s not in ("setup", "ideate")
+    )
+    return {"onboarding": onboarding, "explore-idea": ("ideate", *onboarding)}
+
+
+def stage_requirements(
+    stage_id: str, plugin_root: Path = PLUGIN_ROOT
+) -> Result[tuple[dict[str, str], ...]]:
+    """What a stage's guarded action needs (code changes, for execution), in route order: id,
+    description, and the stage and skill that produce each. A stage without one needs nothing."""
+    return attempt(
+        lambda: _stage_requirements(stage_id, plugin_root),
+        "prepared_workflow_invalid",
+        "prepared workflow",
+        _Invalid,
+        ValueError,
+    )
+
+
+def guard_requirements(
+    guard: str, plugin_root: Path = PLUGIN_ROOT
+) -> Result[tuple[dict[str, str], ...]]:
+    """What must hold before a guarded action (`code-change`, `completion`, `story-start`,
+    `tasks-publish`), as the route gives it."""
+    return attempt(
+        lambda: _as_entries(
+            route.guard_requirements(route.load_or_raise(plugin_root), guard)
+        ),
+        "prepared_workflow_invalid",
+        "prepared workflow",
+        _Invalid,
+        ValueError,
+    )
+
+
+def completion_requirements(
+    plugin_root: Path = PLUGIN_ROOT,
+) -> Result[tuple[dict[str, str], ...]]:
+    """What must hold before a Story or Bug is marked done."""
+    return guard_requirements("completion", plugin_root)
+
+
+_STAGE_GUARD = {"execution": "code-change"}
+
+
+def _stage_requirements(stage_id: str, plugin_root: Path) -> tuple[dict[str, str], ...]:
+    if stage_id not in load_catalog(plugin_root).get("stages", {}):
+        raise _Invalid(f"unknown prepared stage: {stage_id}")
+    guard = _STAGE_GUARD.get(stage_id)
+    if guard is None:
+        return ()
+    return _as_entries(
+        route.guard_requirements(route.load_or_raise(plugin_root), guard)
+    )
+
+
+def _as_entries(found: Iterable[route.Requirement]) -> tuple[dict[str, str], ...]:
+    return tuple(
+        {
+            "id": r.id,
+            "description": r.description,
+            "stage": r.stage,
+            "skill": r.skill,
+            "how": r.how,
+        }
+        for r in found
+    )
 
 
 def _digest(path: Path) -> str:
@@ -193,11 +242,13 @@ def prepare_stage(
     plugin_root: Path = PLUGIN_ROOT,
     original_request: str = "",
     available_operations: Iterable[str] | None = None,
+    git_delivery: bool,
 ) -> Result[dict[str, Any]]:
     """A read-only step package with verified references and skill guidance.
 
     The step is `ready` only when its inputs are present and the host confirmed, through
-    `available_operations`, every tracker or SCM operation it needs.
+    `available_operations`, every tracker or SCM operation it needs. Skills marked
+    `"delivery": "git"` are recommended only when the user chose Git-based delivery.
     """
     return attempt(
         lambda: _prepare_stage(
@@ -207,6 +258,7 @@ def prepare_stage(
             plugin_root,
             original_request,
             available_operations,
+            git_delivery,
         ),
         "prepared_workflow_invalid",
         "prepared workflow",
@@ -221,6 +273,7 @@ def _prepare_stage(
     plugin_root: Path,
     original_request: str,
     available_operations: Iterable[str] | None,
+    git_delivery: bool,
 ) -> dict[str, Any]:
     canonical_repo = repo.resolve()
     if not canonical_repo.is_dir():
@@ -241,6 +294,8 @@ def _prepare_stage(
     )
     skill_entries: list[dict[str, str]] = []
     for recommendation in stage.get("skills", ()):
+        if recommendation.get("delivery") == "git" and not git_delivery:
+            continue
         name = recommendation.get("name", "")
         when = recommendation.get("when", "")
         skill_file = _inside(
@@ -319,6 +374,14 @@ def _prepare_stage(
         ],
         "operations": operations,
         "recommended_skills": skill_entries,
+        "entry_requirements": list(_stage_requirements(stage_id, plugin_root)),
+        "completion_requirements": list(
+            _as_entries(
+                route.guard_requirements(route.load_or_raise(plugin_root), "completion")
+            )
+            if stage.get("completes_work_item")
+            else ()
+        ),
         "expected_outputs": list(stage.get("outputs", ())),
         "checks": list(stage.get("checks", ())),
         "recovery": list(stage.get("recovery", ())),

@@ -68,5 +68,5 @@ Shape contracts: `canonical-*.md` (read-only; see above).
 
 ## Provider description
 
-When persisting to Azure DevOps or Linear, the enriched body becomes the provider item description
+When persisting to the tracker, the enriched body becomes the item description
 in **Markdown** format.

@@ -40,6 +40,8 @@ class Session:
     events: tuple[dict[str, str], ...]
     folder: Path
     implicit_selection: bool = True
+    work_item: str = ""  # the Story or Bug this session implements, once linked
+    entry_item: str = ""  # the Epic, Feature, Story or Bug the user started from
 
 
 def scope_folder(
@@ -75,6 +77,8 @@ def _payload(session: Session) -> dict[str, Any]:
         "updated_at": session.updated_at,
         "events": list(session.events),
         "implicit_selection": session.implicit_selection,
+        "work_item": session.work_item,
+        "entry_item": session.entry_item,
     }
 
 
@@ -96,6 +100,8 @@ def _from_payload(
             ),
             folder=folder,
             implicit_selection=payload.get("implicit_selection", True) is True,
+            work_item=str(payload.get("work_item") or ""),
+            entry_item=str(payload.get("entry_item") or ""),
         )
     except (KeyError, TypeError, ValueError):
         return err(
@@ -248,6 +254,22 @@ def current(project: Path) -> str | None:
             )
         case _:
             return None
+
+
+def acting(project: Path, linked: str | None) -> str | None:
+    """The work session something belongs to: the one it names or is linked to, else the current."""
+    return linked or current(project)
+
+
+def ended(project: Path, identifier: str | None) -> bool:
+    """A stopped, completed, or unreadable session: the approvals given in it cover nothing."""
+    if identifier is None:
+        return False
+    match select(project, identifier):
+        case Ok(session):
+            return session.status in (Status.STOPPED, Status.COMPLETE)
+        case _:
+            return True
 
 
 def _current_active(active: tuple[str, ...], remembered: object) -> str | None:
@@ -433,6 +455,64 @@ def _transition(
                 ),
                 lambda _: Ok(updated),
             )
+
+
+def link(project: Path, identifier: str, work_item: str) -> Result[Session]:
+    """Name the Story or Bug an active session implements; a new link replaces the old one."""
+    return bind(
+        require_active(project, identifier),
+        lambda current: save_link(current, work_item),
+    )
+
+
+def save_link(current: Session, work_item: str) -> Result[Session]:
+    """Record the Story or Bug this already-read session implements."""
+    key = work_item.strip()
+    return bind(
+        require(bool(key), "invalid_request", "name the work item to link"),
+        lambda _: _save(current, work_item=key, event="linked"),
+    )
+
+
+def track(project: Path, identifier: str, entry_item: str) -> Result[Session]:
+    """Record the item the user started from; a session tracks one, set once."""
+    key = entry_item.strip()
+    return bind(
+        require(bool(key), "invalid_request", "name the item the work started from"),
+        lambda _: bind(
+            require_active(project, identifier),
+            lambda current: (
+                _save(current, entry_item=key, event="tracked")
+                if current.entry_item in ("", key)
+                else err(
+                    "invalid_request",
+                    f"this session tracks {current.entry_item}; start a new work session for "
+                    f"{key}",
+                )
+            ),
+        ),
+    )
+
+
+def _save(current: Session, *, event: str, **changes: str) -> Result[Session]:
+    now = _now()
+    updated = replace(
+        current,
+        **changes,
+        updated_at=now,
+        events=(*current.events, {"type": event, "at": now}),
+    )
+    return fmap(
+        attempt(
+            lambda: state.write_json(
+                updated.folder / "session.json", _payload(updated)
+            ),
+            "session_unwritable",
+            f"could not update work session {current.id}",
+            OSError,
+        ),
+        lambda _: updated,
+    )
 
 
 def as_json(session: Session) -> dict[str, Any]:

@@ -1,0 +1,18 @@
+{
+  "method": "item/completed",
+  "params": {
+    "item": {
+      "type": "agentMessage",
+      "id": "msg_0dd853b252217716016adb8dab312481918fcee2e4081d0b27",
+      "text": "Operator choice: Approve.",
+      "phase": "final_answer",
+      "memoryCitation": null,
+      "delivery": null,
+      "questions": null
+    },
+    "threadId": "01a169a1-4b88-74a3-b1ed-804353d242a7",
+    "turnId": "01a169a1-4be2-7390-a908-de1716ec883c",
+    "completedAtMs": 1792773547449
+  },
+  "emittedAtMs": 1792773547449
+}

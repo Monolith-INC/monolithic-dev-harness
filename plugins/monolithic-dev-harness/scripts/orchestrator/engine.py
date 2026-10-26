@@ -96,6 +96,7 @@ class ToolCallResult:
                 "task_id": self.task_id,
                 "state": self.state,
                 "error": self.error,
+                "output": self.output,
             }
         )
         return [{"type": "text", "text": json.dumps(payload, indent=2)}]
@@ -141,6 +142,23 @@ class OrchestratorEngine:
             for manifest in self._manifests.values()
         ]
 
+    def _draft_review(self, name: str, arguments: dict[str, Any]) -> ToolCallResult:
+        from runtime.orchestrator_core.draft_review import evaluate
+        from runtime.orchestrator_core.project_config import plugin_dir, project_root
+
+        from core.result import Err, Ok
+
+        match evaluate(name, arguments, self.skills_dir, plugin_dir(project_root())):
+            case Ok(output):
+                return ToolCallResult(
+                    ok=bool(output.get("ok")),
+                    output=output,
+                    error=output.get("error"),
+                    state=output.get("mode", "completed"),
+                )
+            case Err(failure):
+                return ToolCallResult(ok=False, output=None, error=failure.message)
+
     def run_tool_call(
         self, name: str, arguments: dict[str, Any] | None
     ) -> ToolCallResult:
@@ -156,6 +174,12 @@ class OrchestratorEngine:
             return ToolCallResult(
                 ok=False, output=None, error="; ".join(input_critiques)
             )
+
+        match name:
+            case "validate-artifact" | "auto-fix-artifact":
+                return self._draft_review(name, arguments)
+            case _:
+                pass
 
         task_id = f"{name}-{uuid.uuid4().hex[:8]}"
         task = Task(id=task_id, skill_name=name, inputs=arguments)

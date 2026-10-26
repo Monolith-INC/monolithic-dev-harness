@@ -4,9 +4,13 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from integrations import gateway
+from core.result import Ok
+from integrations import gateway, scm
 from tests.settings_fixture import write_settings
+
+from .fakes import FakeTransport
 
 
 class GatewayTest(unittest.TestCase):
@@ -61,6 +65,24 @@ class GatewayTest(unittest.TestCase):
             [],
         )
         self.assertEqual(self.call("tracker_describe").value["name"], "local")
+
+    def test_an_existing_item_is_updated_and_read_back(self) -> None:
+        story = self.call(
+            "tracker_create_work_item", kind="user_story", title="S"
+        ).value
+        updated = self.call(
+            "tracker_update_work_item",
+            ref=story["key"],
+            title="Refined",
+            description="refined text",
+            storyPoints=3,
+        ).value
+        self.assertEqual(
+            (updated["title"], updated["description"]), ("Refined", "refined text")
+        )
+        self.assertIsInstance(
+            self.call("tracker_update_work_item", ref=story["key"]).failure.message, str
+        )
 
     def test_arguments_are_checked_against_the_tool_schema(self) -> None:
         self.assertIn(
@@ -146,3 +168,82 @@ class GatewayTest(unittest.TestCase):
         )
         self.assertEqual(len(listed["result"]["tools"]), len(gateway.TOOLS))
         self.assertEqual(gateway.process_message("not json", self.root), "")
+
+    def test_review_thread_writes_reach_the_code_host(self) -> None:
+        transport = FakeTransport({"repo_pull_request_thread_write": {"id": 1}})
+        azure = scm.azure_repos(
+            {"organization": "o", "project": "proj", "repository": "repo"}, transport
+        )
+        offered = {tool["name"] for tool in gateway.tools_for(self.root)}
+        with mock.patch.object(scm, "build", return_value=Ok(azure)):
+            results = [
+                self.call(
+                    "scm_create_review_thread",
+                    pullRequestRef="7",
+                    filePath="/a.dart",
+                    startLine=3,
+                    endLine=5,
+                    endOffset=41,
+                    content="Name this.",
+                ),
+                self.call(
+                    "scm_update_thread_comment",
+                    pullRequestRef="7",
+                    threadRef="5",
+                    content="Reworded.",
+                ),
+                self.call(
+                    "scm_set_thread_status",
+                    pullRequestRef="7",
+                    threadRef="5",
+                    status="Fixed",
+                ),
+            ]
+        self.assertLessEqual(
+            {
+                "scm_create_review_thread",
+                "scm_update_thread_comment",
+                "scm_set_thread_status",
+            },
+            offered,
+        )
+        self.assertEqual([result.value for result in results], [{"id": 1}] * 3)
+        self.assertEqual(
+            [
+                sent["action"]
+                for sent in transport.sent("repo_pull_request_thread_write")
+            ],
+            ["create", "update", "update_status"],
+        )
+
+    def test_a_code_host_without_review_thread_writes_refuses_them(self) -> None:
+        refused = self.call(
+            "scm_set_thread_status", pullRequestRef="7", threadRef="5", status="Fixed"
+        )
+        self.assertEqual(refused.failure.code, "unsupported_capability")
+        self.assertIn("code host", refused.failure.message)
+
+    def test_a_thread_anchor_must_be_whole_numbers(self) -> None:
+        self.assertIn(
+            "must be integer",
+            self.call(
+                "scm_create_review_thread",
+                pullRequestRef="7",
+                filePath="/a.dart",
+                startLine="3",
+                endLine=5,
+                endOffset=41,
+                content="x",
+            ).failure.message,
+        )
+
+    def test_every_tool_property_declares_a_json_schema_type(self) -> None:
+        # Kimi/Moonshot strictly validates tool schemas and rejects properties
+        # that lack a "type" (e.g. {"enum": [...]} alone); other providers tolerate it.
+        for tool in gateway.TOOLS:
+            for name, spec in tool["inputSchema"].get("properties", {}).items():
+                self.assertIn(
+                    "type",
+                    spec,
+                    f"{tool['name']}.{name} is missing a JSON Schema type",
+                )

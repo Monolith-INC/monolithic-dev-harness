@@ -1,0 +1,30 @@
+{
+  "method": "item/tool/requestUserInput",
+  "id": 0,
+  "params": {
+    "threadId": "01a1699e-77fc-71c1-80e9-cd904cfef62d",
+    "turnId": "01a1699e-785b-7bd0-ae37-b912fdbd1912",
+    "itemId": "call_43d65e686445447bb6a19906e22e2809",
+    "questions": [
+      {
+        "id": "color",
+        "header": "Color",
+        "question": "Which color should the test artifact use?",
+        "isOther": true,
+        "isSecret": false,
+        "options": [
+          {
+            "label": "Blue",
+            "description": "Use blue for the test artifact."
+          },
+          {
+            "label": "Green",
+            "description": "Use green for the test artifact."
+          }
+        ]
+      }
+    ],
+    "isBlocking": true,
+    "autoResolutionMs": null
+  }
+}

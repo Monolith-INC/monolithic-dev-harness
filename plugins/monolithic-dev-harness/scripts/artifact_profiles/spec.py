@@ -8,9 +8,8 @@ SPEC_REQUIRED_HEADINGS: dict[str, tuple[str, ...]] = {
     "rfc": ("Summary", "Motivation", "Proposal", "Alternatives", "Open Questions"),
     "adr": ("Status", "Context", "Decision", "Consequences"),
     "design-doc": ("Context", "Goals", "Non-Goals", "Proposed Design"),
-    "tech-spec": ("Overview", "Data Model", "API", "Implementation Plan"),
+    "tech-spec": ("Overview", "Data Model", "API", "Testing Strategy"),
     "srs": ("Introduction", "Functional Requirements", "Non-Functional Requirements"),
-    "implementation-plan": ("Scope", "Milestones", "Validation"),
     "bugfix-spec": ("Problem Statement", "Root Cause", "Fix Strategy", "Verification"),
     "api-contract": ("Endpoints", "Schemas", "Error Handling"),
 }
@@ -36,7 +35,6 @@ def _spec_non_goals_check(text: str, context: ArtifactContext) -> list[str]:
 def _spec_rollback_check(text: str, context: ArtifactContext) -> list[str]:
     if context.artifact_kind in {
         "tech-spec",
-        "implementation-plan",
         "bugfix-spec",
     } and not re.search(r"(?im)(rollback|revert|mitigation)", text):
         return ["Missing rollback or mitigation plan for failed implementation."]

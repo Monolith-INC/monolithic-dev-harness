@@ -10,6 +10,8 @@
 #   approval                answering Approve authorizes tracker/SCM writes
 #   artifact                the human reviews files; at least one --artifact is required
 #   recommended             the option id marked as recommended unless --recommended names another
+#   shown                   the reviewed files must have been printed with `harness workflow show`,
+#                           as they read now, and (on Claude) carried in the agent's own reply
 #   binds                   for approvals, what the approval is tied to:
 #                             "artifacts"        the reviewed files, unchanged (tracker writes)
 #                             "branch:{slot}"    pushes and draft pull requests for that branch
@@ -21,6 +23,107 @@
 # Every gate must define every language in `languages`, with the same options in each.
 
 languages = ["en", "pt-br"]
+
+[[gate]]
+id = "harness-controls"
+kind = "preference"
+question.en = "How would you like to control the harness?"
+question.pt-br = "Como você quer controlar o harness?"
+[[gate.option]]
+id = "suspend"
+label.en = "Suspend harness"
+label.pt-br = "Suspender harness"
+detail.en = "Disable every harness check and continue your work freely."
+detail.pt-br = "Desativar todas as verificações do harness e continuar livremente."
+[[gate.option]]
+id = "resume"
+label.en = "Resume harness"
+label.pt-br = "Retomar harness"
+detail.en = "Restore checks while keeping the existing work and decisions."
+detail.pt-br = "Restaurar as verificações e manter o trabalho e as decisões existentes."
+[[gate.option]]
+id = "free"
+label.en = "Free mode"
+label.pt-br = "Modo livre"
+detail.en = "Use skills without guided onboarding; action checks remain enabled."
+detail.pt-br = "Usar skills sem onboarding guiado; verificações de ações continuam ativas."
+
+[[gate]]
+id = "implementation-confirm"
+approval = true
+artifact = true
+shown = true
+binds = "artifacts"
+question.en = "Approve the implementation plan for {story}?"
+question.pt-br = "Aprovar o plano de implementação de {story}?"
+[[gate.option]]
+id = "approve"
+label.en = "Approve"
+label.pt-br = "Aprovar"
+detail.en = "Propose its Tasks next. Changing the plan needs a new approval."
+detail.pt-br = "Propor as Tasks em seguida. Mudar o plano exige nova aprovação."
+[[gate.option]]
+id = "revise"
+label.en = "Revise"
+label.pt-br = "Revisar"
+detail.en = "Change the affected part of the plan; keep the other recorded decisions."
+detail.pt-br = "Ajustar a parte afetada do plano; manter as outras decisões registradas."
+[[gate.option]]
+id = "stop"
+label.en = "Stop here"
+label.pt-br = "Parar aqui"
+detail.en = "Keep the plan and decisions for a later return."
+detail.pt-br = "Guardar o plano e as decisões para retomar depois."
+
+[[gate]]
+id = "planning-depth"
+kind = "preference"
+recommended = "standard"
+question.en = "How thoroughly should we explore this work before drafting the plan?"
+question.pt-br = "Quanto devemos aprofundar este trabalho antes de escrever o plano?"
+[[gate.option]]
+id = "light"
+label.en = "Light"
+label.pt-br = "Leve"
+detail.en = "A focused review and self-check; faster, with fewer scenarios explored."
+detail.pt-br = "Revisão focada e autocheck; mais rápido, com menos cenários explorados."
+[[gate.option]]
+id = "standard"
+label.en = "Standard"
+label.pt-br = "Padrão"
+detail.en = "Explore relevant approaches, risks, edge cases and technical choices."
+detail.pt-br = "Explorar abordagens relevantes, riscos, casos limite e escolhas técnicas."
+[[gate.option]]
+id = "hardcore"
+label.en = "Hardcore"
+label.pt-br = "Intensivo"
+detail.en = "Add adversarial reviews and deeper checks of assumptions and verification."
+detail.pt-br = "Adicionar revisões adversariais e verificações profundas de premissas e validação."
+
+[[gate]]
+id = "planning-methods"
+kind = "preference"
+recommended = "shortlist"
+question.en = "How would you like to choose the planning methods?"
+question.pt-br = "Como você quer escolher os métodos de planejamento?"
+[[gate.option]]
+id = "shortlist"
+label.en = "Contextual shortlist"
+label.pt-br = "Seleção contextual"
+detail.en = "Choose from five methods selected for the discovered work and its risks."
+detail.pt-br = "Escolher entre cinco métodos selecionados para o trabalho e seus riscos."
+[[gate.option]]
+id = "all"
+label.en = "Full catalog"
+label.pt-br = "Catálogo completo"
+detail.en = "See every available method and choose one or several."
+detail.pt-br = "Ver todos os métodos disponíveis e escolher um ou vários."
+[[gate.option]]
+id = "recommend"
+label.en = "Agent recommendations"
+label.pt-br = "Recomendações do agente"
+detail.en = "Review a suggested combination with reasons, then select or revise it."
+detail.pt-br = "Revisar uma combinação sugerida com justificativas e selecionar ou ajustar."
 
 [[gate]]
 id = "language"
@@ -154,6 +257,7 @@ question.en = "Publish these {count} work items to {tracker}?"
 question.pt-br = "Publicar estes {count} itens de trabalho em {tracker}?"
 approval = true
 artifact = true
+shown = true
 binds = "artifacts"
 recommended = "approve"
 
@@ -170,6 +274,88 @@ label.en = "Not now"
 label.pt-br = "Agora não"
 detail.en = "Keep the drafts and publish nothing."
 detail.pt-br = "Manter os rascunhos e não publicar nada."
+
+[[gate]]
+id = "refinement-split"
+artifact = true
+recommended = "approve"
+question.en = "Approve this split of the work?"
+question.pt-br = "Aprovar esta divisão do trabalho?"
+[[gate.option]]
+id = "approve"
+label.en = "Approve"
+label.pt-br = "Aprovar"
+detail.en = "Write the content of these items next; nothing is created yet."
+detail.pt-br = "Escrever em seguida o conteúdo destes itens; nada é criado ainda."
+[[gate.option]]
+id = "revise"
+label.en = "Revise"
+label.pt-br = "Revisar"
+detail.en = "Change the split before writing the items."
+detail.pt-br = "Mudar a divisão antes de escrever os itens."
+[[gate.option]]
+id = "stop"
+label.en = "Stop here"
+label.pt-br = "Parar aqui"
+detail.en = "Keep the proposed split for a later return."
+detail.pt-br = "Guardar a divisão proposta para retomar depois."
+
+[[gate]]
+id = "approve-document"
+question.en = "Approve this document and save it?"
+question.pt-br = "Aprovar este documento e salvá-lo?"
+approval = true
+artifact = true
+shown = true
+binds = "artifacts"
+recommended = "approve"
+[[gate.option]]
+id = "approve"
+label.en = "Approve"
+label.pt-br = "Aprovar"
+detail.en = "Save it as reviewed. Changing it needs a new approval."
+detail.pt-br = "Salvar como revisado. Mudá-lo exige nova aprovação."
+[[gate.option]]
+id = "not-now"
+label.en = "Not now"
+label.pt-br = "Agora não"
+detail.en = "Keep the draft and save nothing."
+detail.pt-br = "Manter o rascunho e não salvar nada."
+
+[[gate]]
+id = "refined-start"
+question.en = "{item} is already refined. Rework it, or use it as it is?"
+question.pt-br = "{item} já está refinado. Retrabalhar ou usar como está?"
+[[gate.option]]
+id = "rework"
+label.en = "Rework it"
+label.pt-br = "Retrabalhar"
+detail.en = "Run discovery, planning and hardening; the result updates its refined text, keeping the original."
+detail.pt-br = "Fazer descoberta, planejamento e revisão; o resultado atualiza o texto refinado, mantendo o original."
+[[gate.option]]
+id = "as-is"
+label.en = "Use it as it is"
+label.pt-br = "Usar como está"
+detail.en = "Validate it and its children, then break down any Story without Tasks."
+detail.pt-br = "Validar o item e seus filhos, depois quebrar em Tasks as Stories que ainda não têm."
+
+[[gate]]
+id = "idea-continue"
+recommended = "continue"
+question.en = "Continue into technical discovery, or stop here?"
+question.pt-br = "Continuar para a descoberta técnica ou parar aqui?"
+[[gate.option]]
+id = "continue"
+label.en = "Continue"
+label.pt-br = "Continuar"
+detail.en = "Investigate the code and plan the technical work for this idea."
+detail.pt-br = "Investigar o código e planejar o trabalho técnico desta ideia."
+[[gate.option]]
+id = "stop"
+label.en = "Stop here"
+label.pt-br = "Parar aqui"
+detail.en = "Keep the brief or spec as the result; nothing else is planned."
+detail.pt-br = "Manter o resumo ou a especificação como resultado; nada mais é planejado."
 
 [[gate]]
 id = "approve-spec"

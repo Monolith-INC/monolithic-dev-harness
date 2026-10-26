@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import subprocess
+from collections import Counter
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
@@ -20,7 +22,7 @@ from harness import (
     state,
     workflow,
 )
-from integrations import registry, scm
+from integrations import registry
 
 
 def _raw(repo: Path) -> Result[dict[str, Any]]:
@@ -79,15 +81,13 @@ def inferred_base(repo: Path) -> str:
 
 
 def _repository_snapshot(repo: Path) -> dict[str, Any]:
-    present = _git(repo, "rev-parse", "--is-inside-work-tree") == "true"
-    head = _git(repo, "rev-parse", "--verify", "HEAD") if present else ""
     return {
-        "git_present": present,
-        "has_committed_head": bool(head),
-        "head": head,
-        "branch": _git(repo, "symbolic-ref", "--quiet", "--short", "HEAD")
-        if present
-        else "",
+        "git_present": None,
+        "git_access": "deferred",
+        "git_access_note": "Versioning is detected automatically at execution entry; preparation does not depend on it.",
+        "has_committed_head": None,
+        "head": "",
+        "branch": "",
     }
 
 
@@ -101,7 +101,6 @@ def _workflow_snapshot(repo: Path) -> dict[str, Any]:
                 "pending": current.current.pending,
                 "point": current.current.id,
                 "label": current.current.label,
-                "next_action": current.current.next_action,
                 "artifacts": [
                     {"path": str((repo / name).resolve()), "digest": digest}
                     for name, digest in current.current.artifacts
@@ -139,7 +138,7 @@ def _handoff(
             "HARNESS_USER_STATE_DIR": str(preferences.path().resolve().parent)
         },
         "original_request": current.get("request", ""),
-        "next_action": current.get("next_action", ""),
+        "next_step": "harness next --repo " + str(repo.resolve()),
         "workflow_status": current.get("status", "absent"),
         "harness_suspended": state.harness_mode(repo) == "suspended",
         "waiting_for_answer": decisions.waiting(repo),
@@ -164,6 +163,36 @@ def _values(raw: Mapping[str, Any]) -> dict[str, str]:
         if isinstance(values, dict)
         else {}
     )
+
+
+_WORK_BRANCH = re.compile(r"^(?P<prefix>[a-z][a-z0-9_-]*)/[A-Za-z]*-?\d+-[a-z0-9-]+$")
+
+
+def _branch_template(repo: Path) -> str:
+    """The branch naming the project already uses for work items (`userstory/8082-…` gives
+    `userstory/{key}-{slug}`); `feature/{key}-{slug}` when no branch shows one."""
+    try:
+        listed = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(repo),
+                "for-each-ref",
+                "--format=%(refname:short)",
+                "refs/heads",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+            check=False,
+        ).stdout.split()
+    except (OSError, subprocess.SubprocessError):
+        listed = []
+    prefixes = Counter(
+        found.group("prefix") for name in listed if (found := _WORK_BRANCH.match(name))
+    )
+    prefix = prefixes.most_common(1)[0][0] if prefixes else "feature"
+    return f"{prefix}/{{key}}-{{slug}}"
 
 
 def _git_settings(raw: Mapping[str, Any]) -> Mapping[str, Any]:
@@ -199,26 +228,9 @@ def _readiness(
         else {}
     )
     current_scm = _selection(raw, "scm")
-    source = current_scm or {"name": "local", "values": {}}
-    scm_name = str(source.get("name", ""))
-    scm_missing = (
-        _missing(_values(source), scm.REQUIRED_VALUES[scm_name])
-        if scm_name in scm.REQUIRED_VALUES
-        else ()
-        if scm_name == "local"
-        else ("scm",)
-    )
     missing = (
         *(f"tracker.{item}" for item in tracker_missing),
         *(("tracker.storage",) if local_storage and not local_storage["ready"] else ()),
-        *(f"scm.{item}" for item in scm_missing),
-        *(
-            ("git.base_branch",)
-            if scm_name != "local"
-            and not _git_settings(raw).get("base_branch")
-            and not inferred_base(repo)
-            else ()
-        ),
         *(("artifacts_path",) if not raw.get("artifacts_path") else ()),
     )
     return selected, current_scm, local_storage, missing
@@ -339,17 +351,14 @@ def propose(
     scm_values: Mapping[str, str] | None = None,
     artifacts_path: str = "",
     base_branch: str = "",
+    git_delivery: bool | None = None,
 ) -> Result[dict[str, Any]]:
     def candidate(raw: dict[str, Any]) -> Result[dict[str, Any]]:
         old_tracker = _selection(raw, "tracker")
         old_scm = _selection(raw, "scm") or {"name": "local", "values": {}}
         chosen_tracker = tracker_name or str(old_tracker.get("name", ""))
         chosen_scm = scm_name or str(old_scm.get("name", ""))
-        chosen_base = (
-            base_branch
-            or _git_settings(raw).get("base_branch", "")
-            or (inferred_base(repo) if chosen_scm != "local" else "")
-        )
+        chosen_base = base_branch or _git_settings(raw).get("base_branch", "")
         revised = {
             **raw,
             "schemaVersion": 1,
@@ -357,11 +366,12 @@ def propose(
                 old_tracker, chosen_tracker, tracker_values or {}
             ),
             "scm": _merged_selection(old_scm, chosen_scm, scm_values or {}),
-            "branch_template": raw.get("branch_template", "feature/{key}-{slug}"),
+            "branch_template": raw.get("branch_template") or _branch_template(repo),
             "artifacts_path": artifacts_path or raw.get("artifacts_path", ""),
             "git": {
                 **_git_settings(raw),
                 **({"base_branch": chosen_base} if chosen_base else {}),
+                **({} if git_delivery is None else {"delivery": git_delivery}),
             },
         }
         return bind(
@@ -371,29 +381,9 @@ def propose(
                 "choose where plans and drafts will be stored",
             ),
             lambda _: bind(
-                require(
-                    chosen_scm == "local" or bool(chosen_base),
-                    "setup_missing",
-                    "choose the repository base branch",
-                ),
-                lambda _: bind(
-                    settings.parse(revised),
-                    lambda chosen: bind(
-                        registry.selected(repo, Ok(chosen)),
-                        lambda _: bind(
-                            require(
-                                chosen_scm == "local"
-                                or chosen_scm in scm.REQUIRED_VALUES
-                                and not _missing(
-                                    _values(revised["scm"]),
-                                    scm.REQUIRED_VALUES.get(chosen_scm, ()),
-                                ),
-                                "setup_missing",
-                                "source-control provider and its required values are missing",
-                            ),
-                            lambda _: Ok(revised),
-                        ),
-                    ),
+                settings.parse(revised),
+                lambda chosen: fmap(
+                    registry.selected(repo, Ok(chosen)), lambda _: revised
                 ),
             ),
         )

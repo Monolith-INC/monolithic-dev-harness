@@ -37,4 +37,5 @@ jobs:
             dist/install.sh dist/SHA256SUMS \
             --title "${GITHUB_REF_NAME}" \
             --notes-file "${RUNNER_TEMP}/notes.md" \
-            --verify-tag
+            --verify-tag \
+            $([[ "${GITHUB_REF_NAME}" == *-* ]] && echo --prerelease)

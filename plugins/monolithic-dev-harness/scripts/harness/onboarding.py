@@ -5,11 +5,20 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.result import Ok, Result, attempt, bind, err, fmap, require
-from harness import commands, decisions, state
+from harness import commands, decisions, state, workflow
 
 RELATIVE_PATH = Path(".harness/state/onboarding.json")
 OPERATIONS = {
-    "onboarding": ("status", "skip", "dismiss", "restart"),
+    "onboarding": (
+        "status",
+        "skip",
+        "dismiss",
+        "restart",
+        "reset",
+        "drop",
+        "pause",
+        "resume",
+    ),
     "mode": ("status", "free", "structured"),
 }
 
@@ -20,7 +29,7 @@ def status(repo: Path) -> dict[str, str]:
             return {"mode": "free", "status": progress}
         case {
             "mode": "structured",
-            "status": ("pending" | "skipped" | "dismissed") as progress,
+            "status": ("pending" | "skipped" | "dismissed" | "paused") as progress,
         }:
             return {"mode": "structured", "status": progress}
         case _:
@@ -68,15 +77,27 @@ def _control(repo: Path, family: str, operation: str) -> Result[dict[str, str]]:
     match family, operation:
         case (("onboarding" | "mode"), "status"):
             return Ok({**status(repo), "instruction": guidance(repo)})
-        case "onboarding", ("skip" | "dismiss") as progress:
-            return _free(repo, {"skip": "skipped", "dismiss": "dismissed"}[progress])
+        case "onboarding", ("skip" | "dismiss" | "drop") as progress:
+            return _free(
+                repo,
+                {"skip": "skipped", "dismiss": "dismissed", "drop": "dismissed"}[
+                    progress
+                ],
+            )
         case "mode", "free":
             return _free(repo, "skipped")
-        case "onboarding", "restart":
+        case "onboarding", "restart" | "reset":
             return bind(
-                decisions.cancel_onboarding(repo),
-                lambda _: _save(repo, {"mode": "structured", "status": "pending"}),
+                workflow.restart_preparation(repo),
+                lambda _: bind(
+                    decisions.cancel_onboarding(repo),
+                    lambda _: _save(repo, {"mode": "structured", "status": "pending"}),
+                ),
             )
+        case "onboarding", "pause":
+            return _save(repo, {"mode": "structured", "status": "paused"})
+        case "onboarding", "resume":
+            return _save(repo, {"mode": "structured", "status": "pending"})
         case "mode", "structured":
             return _save(repo, {**status(repo), "mode": "structured"})
         case _:
@@ -106,6 +127,14 @@ def _save(repo: Path, value: dict[str, str]) -> Result[dict[str, str]]:
 def recovery_command(command: str, cwd: Path, repo: Path) -> bool:
     """Only an exact control for this repo can pass the pending guard."""
     match commands.harness_args(command, cwd):
+        case ("decision", "present", *args) if (
+            commands.option(tuple(args), "--gate") == "harness-controls"
+        ):
+            return (
+                sum(arg == "--repo" or arg.startswith("--repo=") for arg in args) <= 1
+                and (cwd / (commands.option(tuple(args), "--repo") or ".")).resolve()
+                == repo.resolve()
+            )
         case (family, operation):
             return _valid_control(family, operation) and cwd.resolve() == repo.resolve()
         case (family, operation, "--repo", destination):

@@ -27,19 +27,19 @@ last_reviewed: 2026-09-30
 | Guarded path | A path whose commits need specific evidence (`check:<name>` or `manual:<name>`). |
 | Hook runtime | `scripts/harness/hook.py` plus the workflow policy runtime; runs before every governed tool call. |
 | Host declaration | `hosts/<host>.json`, checked against `config/host.schema.json`: which subagent operations the harness can ask of one host, each with its source. A supported claim needs a source; the adapter must behave as declared. |
-| Manual check | Evidence that a person validated a guarded change by hand, recorded from their own prompt or their click on **Approve change** for the exact staged tree. |
+| Manual check | Evidence that a person validated a guarded change by hand, recorded from their own prompt or their click on **Approve change** for the code exactly as it is on disk. |
 | Onboarded tracker | A tracker folder under `.harness/trackers/<name>/` that the repository brought in; it counts only while the user trusts it as it reads now. |
 | Adoption | Taking over implementation that predates a session: `harness adoption` assesses it, the user approves one exact plan with **Approve adoption**, and the verified delta is staged on the approved base in a separate worktree. |
 | Orchestrator | An MCP server that validates a skill's inputs and outputs and runs its Actor-Critic loop. |
 | Protected work item | A work item id listed in `protected_work_items` that the agent may never write, link, parent, or mention in text the tracker turns into a link, not even with approval. |
 | Product spec | The compact pre-backlog contract for one epic or coherent outcome: Why, capabilities, constraints, non-goals, success signal, and load-bearing companions. |
 | Review verdict | `ready` or `blocked`, recorded for one HEAD commit by the review stage. |
-| Rule | One named deterministic check: `human-owned`, `tracker-invalid`, `approval-required`, `protected-items`, `tests-with-code`, `generated-files`, `guarded-paths`, `feature-branch`, `draft-reviewed-prs`, `history-preserved`. |
-| Session | A binding of one work item to one checkout (`harness session start`); governed code changes need an active one, and the workflow checks its work item. Phases: active, paused, closed. |
+| Rule | One named deterministic check: `human-owned`, `tracker-invalid`, `approval-required`, `protected-items`, `generated-files`, `feature-branch`, `draft-reviewed-prs`, `history-preserved`. Workflow requirements (`config/prepared-workflows.json`) gate code changes and completion. |
+| Session | A work session holds one request and, once linked (`harness work-session link`), the Story or Bug it implements; the workflow requirements are read against that item. A checkout session (`harness session start`) is used only with Git-based delivery, to pin a Feature branch. |
 | Settings | `.harness/settings.json`, the repository's only settings file: tracker, SCM, branch template, rules. Human-owned: the harness changes only its `tracker` section, when the user chooses a tracker. |
 | Stacked branches | Story branches based on a Feature branch, landed into it in order. |
 | Subagent contract | `SubagentOps` in `scripts/host_adapters/subagents.py`: start, status, follow-up, cancel, and events for subagents on a host. An operation a host does not declare returns `unsupported_capability`; a malformed answer returns `invalid_host_result`. |
-| Suspension | The user's own `harness suspend` message turns off every harness check in one repository except `human-owned`; `harness resume` (or `harness suspension resume`) restores them. Kept in `.harness/state/suspension.json`. |
+| Suspension | The user's own `harness suspend` message turns off every harness veto in one project, including protected-record checks; `harness resume` (or `harness suspension resume`) restores them. Kept in `.harness/state/suspension.json`. |
 | Tracker contract | What every tracker meets: `tracker.json` checked against `config/tracker.schema.json`, and an adapter returning `TrackerOps`. |
 | Tracker manifest | A tracker folder's `tracker.json`: kinds, states, hierarchy, id formats, which tools write, how to connect, which settings it needs. |
 | Tracker policy | What the rules know about trackers for one hook call: which calls write (from every shipped and onboarded tracker folder, trusted or not), and how ids look and which text links (from every usable one). |

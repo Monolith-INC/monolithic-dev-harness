@@ -15,7 +15,7 @@ from .artifact_validator import (
 
 HEADING_RE = re.compile(r"^(#{1,3})\s+(.+)$", re.MULTILINE)
 BOLD_SECTION_RE = re.compile(r"^\*\*(.+?)\*\*\s*$", re.MULTILINE)
-SPEC_WIKILINK_RE = re.compile(r"\[\[Specs/[^\]]+\]\]")
+SPEC_WIKILINK_RE = re.compile(r"\[\[spec-[a-z0-9-]+\]\]")
 CHECKBOX_RE = re.compile(r"^- \[[ xX]\] ", re.MULTILINE)
 
 GENERATE_WORK_ITEM_SECTIONS = ("Requisitos", "Critérios de Aceite")
@@ -127,7 +127,7 @@ def validate_generate_work_item_body(body: str) -> FormatValidationResult:
         errors.append("H1 title must be non-empty")
 
     if not SPEC_WIKILINK_RE.search(body):
-        errors.append("missing [[Specs/<basename>]] wikilink")
+        errors.append("missing [[spec-<scope>]] wikilink to the item's spec")
 
     h2_labels = _extract_h2_headings(body)
     for section in GENERATE_WORK_ITEM_SECTIONS:

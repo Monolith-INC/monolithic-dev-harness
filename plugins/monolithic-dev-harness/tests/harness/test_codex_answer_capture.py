@@ -179,8 +179,13 @@ def test_other_never_authorizes_an_approval_question(repo: Path, chosen: str) ->
         case "Approve":
             assert not decisions.waiting(repo)
             assert state.active_approval(repo) is not None
-        case _:
+        case " ":
             assert decisions.waiting(repo)
+            assert state.active_approval(repo) is None
+        case _:
+            # The user's own words close the question and approve nothing.
+            assert not decisions.waiting(repo)
+            assert decisions.record(repo)["own_words"]
             assert state.active_approval(repo) is None
 
 

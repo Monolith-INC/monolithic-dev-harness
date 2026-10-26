@@ -31,5 +31,9 @@
       }
     }
   },
-  "tools": []
+  "tools": [],
+  "stage": {
+    "name": "start-feature-development",
+    "workflow": "skills/feature-implementation/references/stage-workflow.md"
+  }
 }

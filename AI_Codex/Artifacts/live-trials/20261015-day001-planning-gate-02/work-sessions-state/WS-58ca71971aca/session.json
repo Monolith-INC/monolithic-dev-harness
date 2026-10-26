@@ -1,0 +1,17 @@
+{
+  "created_at": "2026-10-15T11:47:32.429248+00:00",
+  "events": [
+    {
+      "at": "2026-10-15T11:47:32.429248+00:00",
+      "type": "started"
+    }
+  ],
+  "id": "WS-58ca71971aca",
+  "implicit_selection": false,
+  "project_root": "/tmp/monolithic-dev-harness-trial-ed0k7v76/project",
+  "request": "I can see how many tasks I still need to do, but I also want to see how many I have finished. Show both counts on the task screen.",
+  "status": "active",
+  "updated_at": "2026-10-15T11:47:32.429248+00:00",
+  "version": 1,
+  "work_item": ""
+}

@@ -13,9 +13,9 @@ establishes all three, confirms them with the user, and writes them to
 The first two are pointers to systems outside the repository. The third is the project itself, and
 it is built by `discover-project-knowledge` into a store this skill locates and records.
 
-This toolkit names no tracker vendor. Which system holds requirements is the consuming repository's
-business — Linear, Jira, Azure DevOps, YouTrack, GitHub issues, or plain files. Map whatever is
-present onto the capability contract below.
+This toolkit names no tracker vendor. In the harness, requirements live in the selected tracker and
+are read through the gateway (`tracker_get_work_item`, `tracker_list_artifacts`); map those onto the
+capability contract below.
 
 ## The capability contract
 
@@ -58,9 +58,9 @@ with the user.
 | `post_summary_comment`     | create a general PR comment |
 | `reply_to_review_thread`   | reply to an existing review thread |
 
-Concrete values may be MCP tool names or command templates. For Azure DevOps, use the configured
-`workflow-integrations` gateway and its onboarding flow. Do not use Azure CLI or native Azure MCP
-tools.
+Concrete values may be MCP tool names or command templates. For a code host the harness connects,
+use the configured `workflow-integrations` gateway and its `scm_*` tools, never the host's own CLI
+or MCP tools.
 
 ### 2. Enumerate what is actually available
 
@@ -155,14 +155,14 @@ Write `.harness/review/sources.json` in the repository root:
   },
   "tracker": {
     "kind": "mcp",
-    "label": "Linear",
+    "label": "harness tracker gateway",
     "authoritative": true,
     "capabilities": {
-      "fetch_work_item": "mcp__linear__get_issue",
-      "fetch_parent": "mcp__linear__get_issue",
-      "list_linked_artifacts": "mcp__linear__list_documents"
+      "fetch_work_item": "tracker_get_work_item",
+      "fetch_parent": "tracker_get_work_item on parent_id",
+      "list_linked_artifacts": "tracker_list_artifacts"
     },
-    "scope": { "team": "AGE" },
+    "scope": {},
     "unsupported": []
   },
   "vault": {
@@ -242,30 +242,24 @@ a working configuration.
 ## SCM provider recipes
 
 Worked examples, not dependencies. Preserve the provider's native identifiers and fields in
-`scm` (for example Azure DevOps `organization` and `project`) in addition to the common fields.
+`scm` (for example Azure Repos `organization` and `project`) in addition to the common fields.
 
 | Provider | Repository identity | Typical capability implementation |
 | -------- | ------------------- | --------------------------------- |
 | GitHub | `owner`, `repo` | `gh pr view`, `gh pr diff`, GraphQL review threads, and `gh api` comment endpoints |
-| Azure DevOps | `organization`, `project`, `repo` | `workflow-integrations` tools only; the gateway currently supports PR metadata and review threads, not PR diffs |
+| Azure Repos | `organization`, `project`, `repo` | `workflow-integrations` tools only; the gateway currently supports PR metadata and review threads, not PR diffs |
 | Other | provider-native fields | available MCP tools, first-party CLI, or authenticated API command templates satisfying each SCM capability |
 
 Do not record the illustrative recipe text itself as a capability. Inspect the installed tool's
 actual command or tool signature and record an executable concrete mapping.
 
-## Requirement-source recipes
+## Requirement source
 
-Worked examples, not dependencies. An unlisted tracker works as long as the three capabilities
-resolve to something.
+In the harness the requirement source is always the tracker gateway, whatever tracker is behind it:
 
-| Source           | `fetch_work_item`                    | `fetch_parent`                          | `list_linked_artifacts`             |
-| ---------------- | ------------------------------------ | --------------------------------------- | ----------------------------------- |
-| Linear MCP       | `get_issue`                          | `get_issue` on `parent.id`; milestone for feature scope | `list_documents`, issue attachments |
-| Jira MCP         | `getJiraIssue`                       | issue link of type *parent*             | remote links, attachments           |
-| Azure DevOps | `tracker_get_work_item` through `workflow-integrations` | parent reference | gateway work-item relations |
-| YouTrack         | issue by id                          | `parent` link                           | issue attachments                   |
-| GitHub issues    | `gh issue view <n> --json title,body` | parent from tracking checklist or label | links parsed from the issue body    |
-| Local vault      | read `<stories>/**/{id}*.md`         | `feature:` frontmatter key              | `## Specs` links in the ledger      |
+| Source           | `fetch_work_item`        | `fetch_parent`                          | `list_linked_artifacts`  |
+| ---------------- | ------------------------ | --------------------------------------- | ------------------------ |
+| Tracker gateway  | `tracker_get_work_item`  | `tracker_get_work_item` on `parent_id`  | `tracker_list_artifacts` |
 
 For file-backed sources, requirements and DoD are conventionally the `## Requirements` and
 `## Definition of Done` sections. Record the actual heading names if the repository differs.

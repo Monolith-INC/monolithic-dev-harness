@@ -1,0 +1,24 @@
+{
+  "classification": "actual_persisted_native_operator_decision",
+  "decision": {
+    "allow_free_text": false,
+    "answer": "Yes",
+    "approval": false,
+    "artifacts": [],
+    "details": [],
+    "id": "call_c30b44df7ae94498ab2d3ba269469126",
+    "kind": "required",
+    "native_session_id": "01a16a57-8caa-7311-a509-a5eff4836317",
+    "options": [
+      "Yes",
+      "No"
+    ],
+    "presentation_id": "HD-a73f37c7dab6b80b",
+    "question": "Confirm?",
+    "status": "answered",
+    "transport": "async",
+    "work_session_id": "WS-7b554b4d3494"
+  },
+  "log_sha256": "96003eee183385da0d3250dfb7786e194b7b3aeba44645845190ea6aa29f30c3",
+  "limit": "Operator protocol answer, not human Desktop click; no external-effect approval."
+}

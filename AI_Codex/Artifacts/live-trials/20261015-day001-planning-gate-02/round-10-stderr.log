@@ -1,0 +1,286 @@
+2026-10-15T12:10:28.109058Z ERROR codex_core::tools::router: error=Command blocked by PreToolUse hook: [harness] Code changes waits for what the workflow catalog (config/prepared-workflows.json) requires. This refusal is for you, not for the user: continue the workflow from the step below. Ask the user only where that step itself asks for a decision.
+Next: run `harness work-session link --work-item <key>` for the Story or Bug being implemented (`start-ticket` skill, execution stage). The work session names the Story or Bug it implements. Found: work session WS-58ca71971aca names no work item.
+`harness workflow requirements --gate code-change` shows the same state.. Command: *** Begin Patch
+*** Add File: /tmp/monolithic-dev-harness-trial-ed0k7v76/project/docs/planning/Specs/draft-show-active-and-completed-task-counts-spec.md
++---
++type: spec
++work_item_type: User Story
++ticket: null
++area: task-list
++stack: [Flutter, Riverpod, flutter_test]
++tags: [spec, user-story]
++created: 2026-10-15
++source: [context7, https://github.com/flutter/website/blob/main/sites/docs/src/content/cookbook/testing/widget/introduction.md]
++---
++
++# Show active and completed task counts — Work Item Spec
++
++## Problem / need
++
++The task screen shows how many tasks remain active, but it does not show how many are completed. Showing both totals will let people understand the full state of their task list at a glance.
++
++## Technical details to preserve
++
++- The task screen displays both active and completed task counts.
++- Counts refer to the full task list, independently of search and status filters.
++- Both counts respond when a task changes completion state.
++- Labels handle zero, singular, and plural counts.
++
++## Expected behavior (draft)
++
++- Derive both totals from the existing task list state.
++- Keep search and status filters limited to visible task rows.
++- Rebuild the displayed totals when task completion changes.
++
++## Tech stack
++
++Flutter and Riverpod are already used by the task screen. Focused screen verification can use Flutter's `testWidgets`, text finders, and `WidgetTester` interactions.
++
++## Research summary
++
++Context7 `/flutter/website` documents widget tests that build a screen with `pumpWidget`, locate rendered labels with `find.text`, perform user interactions with `WidgetTester`, and pump again to observe state changes. This supports focused verification of displayed counts and completion toggles; it does not require an application architecture change.
++
++## Acceptance criteria (draft)
++
++- [ ] Given active and completed tasks, when the task screen is shown, then both full-list totals are visible.
++- [ ] Given either total is zero or one, when the task screen is shown, then the count and label use the correct singular or plural form.
++- [ ] Given a task is marked done or active, when the task state updates, then both totals reflect the change.
++- [ ] Given search or a status filter hides tasks, when the task screen is shown, then both totals still describe the full list.
++
++## References
++
++- Project request and acceptance checks: `backlog/DAY-001-task-counts.md`.
++- Context7 `/flutter/website`: <https://github.com/flutter/website/blob/main/sites/docs/src/content/cookbook/testing/widget/introduction.md>.
++
++## Open questions
++
++None.
++
++## Original description
++
++I can see how many tasks I still need to do, but I also want to see how many I have finished. Show both counts on the task screen.
+*** Add File: /tmp/monolithic-dev-harness-trial-ed0k7v76/project/docs/planning/Tickets/Ready/draft-show-active-and-completed-task-counts.md
++---
++date: 2026-10-15
++type: ticket
++work_item_type: User Story
++provider: local
++story_points: 3
++language: en
++tags: [ticket, user-story, task-list]
++---
++
++# Show active and completed task counts
++
++[[Specs/draft-show-active-and-completed-task-counts-spec.md]]
++
++## 🎯 What
++
++Show the number of active tasks and the number of completed tasks on the task screen.
++
++## 💡 Why
++
++People can already see how many tasks remain. Showing completed tasks makes the state of the full list clear without changing how the list is filtered.
++
++## 📋 Expected Behavior
++
++- Display active and completed totals based on the full task list.
++- Keep both totals current when a task is marked done or active.
++- Use sensible labels when either total is zero, one, or more than one.
++
++## ✅ Acceptance Criteria
++
++- [ ] Given active and completed tasks, when the task screen is shown, then both full-list totals are visible.
++- [ ] Given either total is zero or one, when the task screen is shown, then the count and label use the correct singular or plural form.
++- [ ] Given a task is marked done or active, when the task state updates, then both totals reflect the change.
++- [ ] Given search or a status filter hides tasks, when the task screen is shown, then both totals still describe the full list.
++
++## 🔧 Technical Notes
++
++The task screen already watches the full task list and derives the active total before applying search and status filters. Keep the totals derived from that state rather than introducing duplicate count state.
++
++## 📊 Complexity
++
++**3 points** — Largest driver: Scope=2, Uncertainty=1, Integrations=1, Data=1, QA=3, Rollout=1 → 3 points
++
++## 📄 Original Description
++
++I can see how many tasks I still need to do, but I also want to see how many I have finished. Show both counts on the task screen.
+*** Add File: /tmp/monolithic-dev-harness-trial-ed0k7v76/project/docs/planning/tracker-drafts.json
++{
++  "items": [
++    {
++      "ref": "S1",
++      "kind": "user_story",
++      "title": "Show active and completed task counts",
++      "description": "Show both full-list totals on the task screen. Keep the counts current when completion changes, independent of search and status filters, and use suitable zero, singular, and plural labels.",
++      "acceptance_criteria": [
++        "Given active and completed tasks, when the task screen is shown, then both full-list totals are visible.",
++        "Given either total is zero or one, when the task screen is shown, then the count and label use the correct singular or plural form.",
++        "Given a task is marked done or active, when the task state updates, then both totals reflect the change.",
++        "Given search or a status filter hides tasks, when the task screen is shown, then both totals still describe the full list."
++      ],
++      "estimate": 3
++    }
++  ]
++}
+*** End Patch
+2026-10-15T12:11:40.834533Z ERROR codex_core::tools::router: error=Command blocked by PreToolUse hook: [harness] Code changes waits for what the workflow catalog (config/prepared-workflows.json) requires. This refusal is for you, not for the user: continue the workflow from the step below. Ask the user only where that step itself asks for a decision.
+Next: run `harness work-session link --work-item <key>` for the Story or Bug being implemented (`start-ticket` skill, execution stage). The work session names the Story or Bug it implements. Found: work session WS-58ca71971aca names no work item.
+`harness workflow requirements --gate code-change` shows the same state.. Command: cat > docs/planning/Tickets/Ready/draft-task-display-both-counts.md <<'EOF'
+---
+date: 2026-10-15
+type: ticket
+work_item_type: Task
+provider: local
+parent_id: S1
+language: en
+tags: [ticket, task-list]
+---
+
+# Display both task counts
+
+Show active and completed totals from the full task list on the task screen. Use labels that handle zero, singular, and plural counts, and preserve existing search and status filtering.
+
+## Plan reference
+
+- `docs/planning/2026-10-15-show-active-and-completed-task-counts.md`
+- Parent Story: `S1`
+EOF
+cat > docs/planning/Tickets/Ready/draft-task-test-both-task-counts.md <<'EOF'
+---
+date: 2026-10-15
+type: ticket
+work_item_type: Task
+provider: local
+parent_id: S1
+language: en
+tags: [ticket, task-list, tests]
+---
+
+# Test both task counts
+
+Add focused task-screen widget coverage for mixed counts, zero and singular/plural labels, both directions of completion changes, and counts that stay based on the full list when search or filters hide tasks.
+
+## Plan reference
+
+- `docs/planning/2026-10-15-show-active-and-completed-task-counts.md`
+- Parent Story: `S1`
+EOF
+cat > docs/planning/Tickets/Ready/draft-task-staging.md <<'EOF'
+---
+date: 2026-10-15
+type: ticket
+work_item_type: Task
+provider: local
+parent_id: S1
+language: en
+tags: [ticket, task-list, staging]
+---
+
+# Staging
+
+Prepare the local Flutter environment needed to verify the task-count Story.
+
+## Plan reference
+
+- `docs/planning/2026-10-15-show-active-and-completed-task-counts.md`
+- Parent Story: `S1`
+EOF
+cat > docs/planning/Tickets/Ready/draft-task-review.md <<'EOF'
+---
+date: 2026-10-15
+type: ticket
+work_item_type: Task
+provider: local
+parent_id: S1
+language: en
+tags: [ticket, task-list, review]
+---
+
+# Review
+
+Review the delivered task counts against the Story acceptance criteria.
+
+## Plan reference
+
+- `docs/planning/2026-10-15-show-active-and-completed-task-counts.md`
+- Parent Story: `S1`
+EOF
+cat > docs/planning/Tickets/Ready/draft-task-breakdown.md <<'EOF'
+---
+date: 2026-10-15
+type: ticket
+work_item_type: Task
+provider: local
+parent_id: S1
+language: en
+tags: [ticket, task-list, breakdown]
+---
+
+# Breakdown
+
+Record completion of the task breakdown after its child Tasks are verified.
+
+State: Done
+
+## Plan reference
+
+- `docs/planning/2026-10-15-show-active-and-completed-task-counts.md`
+- Parent Story: `S1`
+EOF
+cat > docs/planning/tracker-drafts.json <<'EOF'
+{
+  "items": [
+    {
+      "ref": "S1",
+      "kind": "user_story",
+      "title": "Show active and completed task counts",
+      "description": "Show both full-list totals on the task screen. Keep the counts current when completion changes, independent of search and status filters, and use suitable zero, singular, and plural labels.",
+      "acceptance_criteria": [
+        "Given active and completed tasks, when the task screen is shown, then both full-list totals are visible.",
+        "Given either total is zero or one, when the task screen is shown, then the count and label use the correct singular or plural form.",
+        "Given a task is marked done or active, when the task state updates, then both totals reflect the change.",
+        "Given search or a status filter hides tasks, when the task screen is shown, then both totals still describe the full list."
+      ],
+      "estimate": 3
+    },
+    {
+      "ref": "T1",
+      "kind": "task",
+      "parent": "S1",
+      "title": "Display both task counts",
+      "description": "Update the task screen to display active and completed totals from the full task list with zero, singular, and plural wording. Keep search and status filtering limited to task rows."
+    },
+    {
+      "ref": "T2",
+      "kind": "task",
+      "parent": "S1",
+      "title": "Test both task counts",
+      "description": "Add focused widget coverage for mixed counts, zero and singular/plural labels, completion toggles in both directions, and counts that remain based on the full list during search and filtering."
+    },
+    {
+      "ref": "T3",
+      "kind": "task",
+      "parent": "S1",
+      "title": "Staging",
+      "description": "Prepare the local Flutter environment needed to verify the task-count Story."
+    },
+    {
+      "ref": "T4",
+      "kind": "task",
+      "parent": "S1",
+      "title": "Review",
+      "description": "Review the delivered task counts against the Story acceptance criteria."
+    },
+    {
+      "ref": "T5",
+      "kind": "task",
+      "parent": "S1",
+      "title": "Breakdown",
+      "description": "Record completion of the task breakdown after its child Tasks are verified. State: Done."
+    }
+  ]
+}
+EOF
+

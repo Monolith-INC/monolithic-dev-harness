@@ -6,6 +6,7 @@ The record describes progress; it never grants permission to write to a tracker 
 from __future__ import annotations
 
 import hashlib
+import re
 import secrets
 import subprocess
 from dataclasses import asdict, dataclass, replace
@@ -16,7 +17,16 @@ from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
 from harness import state
 
 VERSION = 1
-STAGES = ("setup", "discover", "ideate", "backlog", "technical-plan", "build", "verify")
+STAGES = (
+    "ideate",
+    "discovery",
+    "planning",
+    "hardening",
+    "refinement",
+    "preparation",
+    "execution",
+    "verify",
+)
 STATUSES = ("active", "paused", "cancelled", "completed")
 TERMINAL_STATUSES = frozenset({"cancelled", "completed"})
 RELATIVE_PATH = Path(".harness/state/workflow.json")
@@ -30,7 +40,6 @@ class Point:
     artifacts: tuple[tuple[str, str], ...] = ()
     decisions: tuple[tuple[str, str], ...] = ()
     pending: str = ""
-    next_action: str = ""
     completed_writes: tuple[str, ...] = ()
 
 
@@ -83,7 +92,7 @@ def _archive_if_active(
     return bind(
         Ok(None)
         if session_id is None
-        else fmap(work_sessions.require_active(repo, session_id), lambda _: None),
+        else fmap(work_sessions.select(repo, session_id), lambda _: None),
         lambda _: attempt(
             lambda: _archive(repo, current, session_id),
             "workflow_unwritable",
@@ -112,19 +121,75 @@ def start(request: str, language: str = "") -> Result[Workflow]:
                     "active",
                     request.strip(),
                     language,
-                    (
-                        Point(
-                            1,
-                            "First request",
-                            "discover",
-                            next_action="Continue original request",
-                        ),
-                    ),
+                    (Point(1, "First request", "discovery"),),
                     0,
                 )
             )
         case _:
             return err("invalid_workflow", "language must be en or pt-br")
+
+
+def restart_preparation(repo: Path) -> Result[object]:
+    """Archive only the current preparation, preserving approvals and completed writes."""
+    from harness import work_sessions
+
+    match work_sessions.current(repo):
+        case scope:
+            match load(repo, scope):
+                case Err(failure) if failure.code == "workflow_absent":
+                    return Ok(None)
+                case Err() as failure:
+                    return failure
+                case Ok(current) if current.current.stage in {"execution", "verify"}:
+                    return Ok(None)
+                case Ok(current):
+                    return bind(
+                        start(current.request, current.language),
+                        lambda fresh: bind(
+                            attempt(
+                                lambda: _retain_preparation(repo, current, scope),
+                                "workflow_unwritable",
+                                "archive preparation before reset",
+                                OSError,
+                            ),
+                            lambda _: save(
+                                repo,
+                                replace(
+                                    fresh,
+                                    points=(
+                                        replace(
+                                            fresh.current,
+                                            completed_writes=tuple(
+                                                dict.fromkeys(
+                                                    receipt
+                                                    for point in current.points
+                                                    for receipt in point.completed_writes
+                                                )
+                                            ),
+                                        ),
+                                    ),
+                                ),
+                                scope,
+                            ),
+                        ),
+                    )
+
+
+def _retain_preparation(repo: Path, current: Workflow, scope: str | None) -> Path:
+    from harness import decisions
+
+    destination = (
+        path(repo, scope).parent / "workflows" / f"{secrets.token_hex(8)}.json"
+    )
+    state.write_json(destination, asdict(current))
+    match decisions.cancel_preparation(repo, scope):
+        case Err(failure):
+            raise OSError(
+                failure.message
+            )  # isolated persistence edge; archive already retained
+        case Ok():
+            pass
+    return destination
 
 
 def add_point(
@@ -134,11 +199,12 @@ def add_point(
     artifacts: tuple[tuple[str, str], ...] = (),
     decisions: tuple[tuple[str, str], ...] = (),
     pending: str = "",
-    next_action: str = "",
     completed_writes: tuple[str, ...] = (),
 ) -> Result[Workflow]:
     match workflow.status, label.strip(), stage:
-        case "active", str() as name, str() as selected if name and selected in STAGES:
+        case "active" | "paused", str() as name, str() as selected if (
+            name and selected in STAGES
+        ):
             kept = workflow.points[: workflow.cursor + 1]
             point = Point(
                 max(item.id for item in workflow.points) + 1,
@@ -147,7 +213,6 @@ def add_point(
                 artifacts,
                 decisions,
                 pending,
-                next_action,
                 tuple(
                     dict.fromkeys(
                         (
@@ -162,10 +227,10 @@ def add_point(
                 ),
             )
             return Ok(replace(workflow, points=(*kept, point), cursor=len(kept)))
-        case "active", _, _:
+        case "active" | "paused", _, _:
             return err("invalid_workflow", "a label and known stage are required")
         case _:
-            return err("invalid_workflow", "resume the workflow before saving a point")
+            return err("invalid_workflow", "a finished workflow cannot save a point")
 
 
 def navigate(workflow: Workflow, point_id: int | None = None) -> Result[Workflow]:
@@ -184,7 +249,7 @@ def navigate(workflow: Workflow, point_id: int | None = None) -> Result[Workflow
 
 def pause(workflow: Workflow) -> Result[Workflow]:
     match workflow.status:
-        case "active":
+        case "active" | "paused":
             return Ok(replace(workflow, status="paused"))
         case _:
             return err("invalid_workflow", "only an active workflow can be paused")
@@ -266,7 +331,6 @@ def _point(raw: Any) -> Result[Point]:
             "artifacts": list() as artifacts,
             "decisions": list() as decisions,
             "pending": str() as pending,
-            "next_action": str() as next_action,
             "completed_writes": list() as writes,
         } if (
             point_id > 0
@@ -288,7 +352,6 @@ def _point(raw: Any) -> Result[Point]:
                     tuple(tuple(pair) for pair in artifacts),
                     tuple(tuple(pair) for pair in decisions),
                     pending,
-                    next_action,
                     tuple(writes),
                 )
             )
@@ -321,8 +384,16 @@ def save(repo: Path, workflow: Workflow, session_id: str | None = None) -> Resul
         from harness import work_sessions
 
         return bind(
-            work_sessions.require_active(repo, session_id),
-            lambda selected: persist(repo, workflow, selected.folder / "workflow.json"),
+            work_sessions.select(repo, session_id),
+            lambda selected: bind(
+                require(
+                    selected.status
+                    in {work_sessions.Status.ACTIVE, work_sessions.Status.PAUSED},
+                    "session_not_active",
+                    "resume a stopped work session before advancing it",
+                ),
+                lambda _: persist(repo, workflow, selected.folder / "workflow.json"),
+            ),
         )
     return persist(repo, workflow, path(repo))
 
@@ -350,10 +421,29 @@ def _save(destination: Path, workflow: Workflow) -> Path:
     return destination
 
 
+# A front-matter `status:` line: a document's place in its lifecycle, not its content.
+_STATUS_LINE = re.compile(rb"^status:[^\n]*\n", re.MULTILINE)
+_FRONT_MATTER = re.compile(rb"\A(?:\xef\xbb\xbf)?---\r?\n.*?\n---\r?\n", re.DOTALL)
+
+
+def document_digest(content: bytes) -> str:
+    """The digest of a file's content, its front-matter `status` left out.
+
+    Marking a reviewed document accepted (`status: draft` to `active`, as the
+    agile-backlog-toolkit does) keeps what was reviewed, so it keeps the approval.
+    """
+    match _FRONT_MATTER.match(content):
+        case None:
+            pass
+        case found:
+            content = _STATUS_LINE.sub(b"", found.group(0)) + content[found.end() :]
+    return hashlib.sha256(content).hexdigest()
+
+
 def file_digest(file: Path) -> Result[str]:
     return fmap(
         attempt(lambda: file.read_bytes(), "artifact_unreadable", str(file), OSError),
-        lambda content: hashlib.sha256(content).hexdigest(),
+        document_digest,
     )
 
 

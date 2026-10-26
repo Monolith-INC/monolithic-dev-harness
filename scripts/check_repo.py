@@ -9,7 +9,8 @@
   meets the tracker contract (both with the plugin's own standard-library checker);
 - every skill's frontmatter `name` matches its folder;
 - every document under docs/ has title / status / owner / last_reviewed frontmatter;
-- every relative Markdown link in README.md, CHANGELOG.md, THIRD_PARTY_NOTICES.md, and docs/
+- the workflow diagram matches the route it is drawn from;
+- every relative Markdown link in README.md, CONSTITUTION.md, CHANGELOG.md, THIRD_PARTY_NOTICES.md, and docs/
   points at a file or folder that exists.
 """
 
@@ -129,6 +130,7 @@ def check_docs(problems: list[str]) -> None:
 def check_links(problems: list[str]) -> None:
     documents = [
         ROOT / "README.md",
+        ROOT / "CONSTITUTION.md",
         ROOT / "CHANGELOG.md",
         ROOT / "THIRD_PARTY_NOTICES.md",
     ]
@@ -143,6 +145,20 @@ def check_links(problems: list[str]) -> None:
                 problems.append(f"{path.relative_to(ROOT)}: broken link {target}")
 
 
+def check_route_diagram(problems: list[str]) -> None:
+    """The workflow diagram is drawn from the route; it must not drift from it."""
+    diagram = ROOT / "docs" / "assets" / "diagrams" / "harness-main-flow.mmd"
+    script = PLUGIN / "scripts" / "harness" / "route_diagram.py"
+    found = subprocess.run(
+        [sys.executable, str(script), "--check", str(diagram)],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if found.returncode != 0:
+        problems.append((found.stdout or found.stderr).strip())
+
+
 def main() -> int:
     problems: list[str] = []
     for check in (
@@ -151,6 +167,7 @@ def main() -> int:
         check_skills,
         check_docs,
         check_links,
+        check_route_diagram,
     ):
         check(problems)
     for problem in problems:

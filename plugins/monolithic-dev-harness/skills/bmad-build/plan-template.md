@@ -1,6 +1,6 @@
 ---
 title: '{title}'
-type: 'feature' # feature | bugfix | refactor | chore
+type: 'approach'
 ticket: '' # the entry id from the ticket tree, or the story file's stem when the entry has no id; empty outside it
 created: '{date}'
 status: 'draft' # draft | ready-for-dev | in-progress | in-review | built | done | blocked

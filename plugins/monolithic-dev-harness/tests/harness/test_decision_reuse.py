@@ -48,6 +48,12 @@ def present(
 
 
 def present_gate(repo: Path, *args: str) -> dict:
+    subprocess.run(
+        [str(CLI), "workflow", "show", "--repo", str(repo), "--artifact", "plan.md"],
+        capture_output=True,
+        timeout=30,
+        check=True,
+    )
     result = subprocess.run(
         [
             str(CLI),
@@ -155,7 +161,9 @@ def test_fallback_keeps_the_same_menu(repo: Path) -> None:
     shown = present(
         repo, "--host", "codex", "--blocking-available", "--detail", "Go on."
     )
-    assert shown["transport"] == "blocking"
+    assert shown["transport"] == "chat"
+    assert shown["native_candidate"]["tool"] == "request_user_input_async"
+    assert not shown["structured_qualified"]
     result = subprocess.run(
         [str(CLI), "decision", "fallback", "--repo", str(repo), "--host", "codex"],
         capture_output=True,

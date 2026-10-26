@@ -1,35 +1,25 @@
 # Harness
 
-Follow [the workflow storyboard](workflow-storyboard.md) for stage entry and exit,
-review surfaces, and Back/Pause/Resume/Cancel/Complete behavior. This skill supplies the
-stage-specific details. Each stage consumes the previous stage's output; none re-invents it. Hooks
-enforce the rules that must never depend on the model remembering them.
+The order of the stages and of every step inside them is the route in
+`config/prepared-workflows.json`. `harness next` gives the current step; the guards read their
+requirements from the same route. This guide supplies the stage-specific details. Each stage
+consumes the previous stage's output; none re-invents it. Hooks enforce the rules that must never
+depend on the model remembering them.
 
-```
- idea / work item
-      │
- 0 DISCOVER ──── bmad-build: read request → investigate (subagents) → plan + batched questions → Deepen → approve
-      │           plan-initiative: ideate or shape a product idea when selected
-      │
- 1 BACKLOG ───── generate-work-item → enrich-work-item → decompose-backlog → generate-breakdown-work-items
-      │           (top ancestor draft)  (team format)     (Epic→Features→Stories,  (Tasks + Staging/
-      │                                                     points)                  Review/Breakdown)
-      ├── G1  Feature Owner / PO reviews the complete batch before any tracker write
- 2 TECH PLAN ─── start-ticket → write-spec (Actor-Critic)
-      ├── G2  Tech Lead approves the spec
- 3 BUILD ─────── implement-story: per Task architect → tdd → implement → check → deslop → commit;
-      │           Story done: bmad-qa-generate-e2e-tests → prove-it-works
- 4 VERIFY ────── review: review-story-preflight → thermos ∥ bmad-review (edge cases, claims, gaps) → triage → fixes → verdict → branch-and-pr (draft)
-      ├── G3  Feature Owner validates in staging
-      └── G4  a human publishes and approves the pull request
-```
+Refinement, right after Hardening, runs the agile-backlog-toolkit skills against the selected
+tracker: items are written in their type's template, created and read back, and each Story's
+implementation plan is shown and approved on its own (`implementation-confirm`) before its Tasks are
+proposed and approved. Nothing is approved in bulk. Git, branches and commits are optional
+execution and delivery tools; they never gate local work.
 
 A change of direction at any stage (a new constraint, a failed assumption, a rescoped goal) goes
 through `bmad-correct-course`: it assesses impact on the plan, spec, and work items, proposes the
 changes, and routes back to the earliest stage whose approved output the change invalidates.
 
-Stacked Feature work (several Stories under one Feature) runs stage 3–4 per Story inside
-`feature-implementation`, then `merge-story-stack-into-feature` and `finish-feature-development`.
+Feature work (several Stories under one Feature) runs execution and verify per Story inside
+`feature-implementation`, then closes the Feature with `finish-feature-development`. With Git-based
+delivery the Story stack lands first through `merge-story-stack-into-feature`; without it, the
+Feature closes locally once every Story is done.
 
 ## Complete onboarding, then select a project work session
 
@@ -39,7 +29,8 @@ this skill's own location; do not ask the user to find the path, change their sh
 the plugin again. Report a missing command only if neither the shell command nor the bundled
 executable exists.
 
-Start with `harness begin --request "<exact user request>" --repo <project>`.
+Start with `harness begin --request "<exact user request>" --repo <project>`, run on its own as one
+plain command (see the harness skill).
 Follow its setup or session-choice instructions before doing work.
 Onboarding is optional. `harness mode free` provides direct skill use and guidance without creating
 a session, requiring tracker setup or confirming language. `harness onboarding skip|dismiss|restart`
@@ -49,8 +40,11 @@ may still require their own dependencies.
 
 You never need to carry the work-session ID. Starting, resuming, or selecting a work session makes it
 the project's current session, and every `workflow` and `decision` command without `--session-id`
-uses it (else the only active session, else the project as a whole). Session checkpoints are
-stored with that session.
+uses it (else the only active session, else the project as a whole). A conversation not yet linked
+to a session, such as a resumed chat, acts in that same current session: its commands and the
+approvals that cover its writes read the same records. A conversation linked to another session
+passes its own `--session-id`; the hooks refuse a `workflow` or `decision` command that would use
+the current session instead. Session checkpoints are stored with that session.
 Project settings such as tracker and planning folder remain shared. Onboarding establishes the
 tracker and runtime before session creation. A project work session does not require Git, a project
 contract, or starting the checkout-bound implementation session.
@@ -67,9 +61,9 @@ provide the work-item capabilities for planning; do not start a second tracker o
 setup during discovery, ideation, or backlog drafting. Mark the workflow complete when its
 requested outcome is finished.
 
-Use the inspection's current `repository.has_committed_head`, `tracker_storage`, and `workflow`
-fields when resuming. A saved note about a missing commit describes the past. Recheck current
-state and continue the pending product or engineering step. If the bundled local tracker has missing
+Use the inspection's `tracker_storage` and `workflow` fields when resuming. Versioning is deferred
+until execution and is never a preparation prerequisite. Continue the pending product or
+engineering step. If the bundled local tracker has missing
 folders, bootstrap prepares them without a user question.
 
 `back`, `pause`, `resume`, and `cancel` are workflow actions. Use native controls; never ask the user
@@ -80,16 +74,16 @@ permission for an external write. Resume rechecks files, tracker, and approvals 
 ### Suspend harness checks on the human's request
 
 For skills without a session while retaining governance, use free mode rather than suspension.
-Only the human can suspend the harness: the hook records it when they send `harness suspend` as its
-own message, and no command lets an agent do it. When they want to continue ordinary work outside
-the harness, use `suspend-harness` to ask them to send it. It works before setup and with invalid
-settings or an unavailable tracker. Verify with `harness suspension status --repo <project>`; until
-it reports `"mode": "suspended"`, the checks still apply.
+Only the human can suspend checks. Present the `harness-controls` gate using native controls;
+its reply is recorded independently of pending decisions or sessions. If delivery fails, repeat
+that gate with async then chat fallback. Plain or fenced `harness suspend` user messages also work.
+Verify with `harness suspension status --repo <project>`. Free mode and workflow pause are separate.
 
 While suspended, continue the human's ordinary work without harness workflow, tracker, branch,
 commit, review, decision-wait, or question-wording checks. Approval and decision clicks are still
-recorded, a pending decision is kept rather than answered, and direct edits to human-owned
-control/evidence records remain protected; host permissions and other plugins are independent.
+recorded when capture succeeds, and a pending decision is kept rather than answered.
+No harness check vetoes tools, including protected-record checks; host permissions and other plugins
+are independent.
 Preserve the existing workflow, settings, tracker, and evidence. Workflow/session pause and
 `skip-tracker` are different operations and do not suspend all checks.
 
@@ -108,7 +102,7 @@ Use `workflow prepare` only when the stage needs a consolidated reference packag
 Discover required tools at their point of use; `--available` remains an optional diagnostic check.
 A gate with artifacts saves its review checkpoint automatically; manual checkpoints cover stage ends.
 
-## Stage 0: Technical discovery
+## Discovery, planning and hardening
 
 For an assigned ticket or request to change an existing product, invoke `bmad-build`. It renders
 the bundled clarify-and-route and plan templates with this project's verified context and selected
@@ -120,9 +114,9 @@ separately built parts consistent) are available; `bmad-build` uses `bmad-prd` w
 behavior is too unclear to investigate. `bmad-build` investigates with subagents, uses `bmad-deep-recon` for
 unfamiliar code or domains, flags drift between the code and the project's agent instructions (fixed
 with `bmad-project-context`), keeps a decision memlog beside the plan, and offers **Deepen**
-(adversarial and edge-case review, elicitation, party mode) at its approval checkpoint. Do not start implementation from this step. On approval, save the plan as a harness workflow
-checkpoint and pass it to Stage 1 as the source for work-item drafting. The Stage 0 approval does
-not publish tracker items; the normal backlog review and write gates still apply.
+(adversarial and edge-case review, elicitation, party mode) at its review points. Do not start
+implementation here. Save the hardened approach as a workflow checkpoint: Refinement takes it as the
+input for the work items. Nothing here creates or publishes tracker items.
 
 For a ticket in an external or local harness tracker, check `workflow_tracking_status`, use
 `tracker_get_work_item` for the named item and `tracker_list_children` for relevant parent context.
@@ -147,66 +141,41 @@ research, brief, requirements, experience, and architecture routes remain availa
 that only needs a product contract can still go directly to `product-spec`. Do not make ideation a
 prerequisite for an assigned change.
 
-The BMad plan is the feature-level strategy. Later `write-spec` work must use it as an input and
-cover only story-level details needed for implementation. Do not repeat Stage 0 investigation or
-silently change its accepted decisions. Finishing Stage 0 never implies permission to create or
-publish tracker items.
+The hardened approach is the feature-level strategy. Later `write-spec` work uses it as an input and
+covers only story-level details needed for implementation. Do not repeat discovery or silently
+change its accepted decisions; a change reaches the work items first. Finishing discovery never
+implies permission to create or publish tracker items.
 
-### Offer the starting point
+### The starting point
 
-When the request names an existing task or ticket, follow the storyboard directly; do not ask whether
-to investigate or draft new work items. When the request is a feature idea with no clear starting
-point, ask the `starting-point` gate: `harness decision present --gate starting-point`. The existing `plain-questions` hook validates the question before
-display. Use the available native control. If delivery fails, quietly run `harness decision fallback`
-and re-ask the same question by the next method, including ordinary chat when needed. Preserve
-the choices and progress and continue this same run after the reply; do not abandon it or expose
-internal question-tool errors. The shared human-decisions contract applies to every later question too.
+The route asks where work starts; the agent never decides it. A request that names a work item is
+tracked (`harness work-session track`); one that names none gets the `starting-point` question
+(`Investigate first`, `Draft work items`, `Explore the idea`). An Epic, Feature or Story whose text
+is already refined (it passes `validate-artifact`) gets `refined-start`: rework it with discovery,
+planning and hardening, or use it as it is and go to Refinement. Tasks play no part in that check.
+The idea route (`plan-initiative`) ends with `idea-continue`: continue into technical discovery, or
+stop with the brief or spec. These choices are routing, not approval: they never open an approval
+window.
 
-The choice is routing, not approval: it never opens an approval window. `Investigate first` invokes
-`bmad-build`; `Draft work items` enters Stage 1; `Explore the idea` invokes `plan-initiative`.
-Continue directly when the user already chose a starting point, named an existing task, directly
-invoked a planning skill, or explicitly asked to create or modify a work item.
+## Execution from an approved plan
 
-## Stage 1: Backlog
-
-1. **Top ancestor.** `generate-work-item` drafts the highest item in the tree (usually an Epic) from
-   the product spec, user's idea, or an existing item. When a product spec exists, preserve its
-   `CAP-N` identifiers and companions rather than re-inventing the intent. The **Descrição Original** section keeps the source text
-   verbatim. The top ancestor can be a Feature or a User Story: neither needs a parent, so do not
-   ask for or invent one. When the source is an item that must stay intact (for example, the
-   original of a copied item), create a new item and name the original in plain text (id and
-   title, for example `Idea 4007`). Never link to it, and never write `#4007` or its URL in a
-   description or comment: Azure DevOps turns a mention into a link, and links are two-way. Rule
-   `protected-items` blocks protected ids in id fields and in text.
-2. **Enrich** it (`enrich-work-item`) into the team format.
-3. **Decompose** (`decompose-backlog`, tree mode for an Epic): Features, then Stories with points,
-   one outline at GATE 1 and one body batch at GATE 2. Points go into the Azure points field.
-4. **Break down** each Story that will be built next (`generate-breakdown-work-items`): atomic Tasks
-   aligned to the acceptance criteria, plus Staging, Review, and a done Breakdown Task.
-5. `validate-artifact` on anything the user edited by hand. Check the selected tracker's hierarchy,
-   labels, and required values before publishing the batch. In Linear, confirm Story and Task
-   labels exist before the first item is created. Explain where every Task will be visible.
-
-## Stage 2: Technical plan
-
-`start-ticket` on the Story (moves it to in progress), then `write-spec`. The spec takes the
-Story, its acceptance criteria, its covered `CAP-N` values, its Tasks, and any adopted UX and
-architecture companions as input. It decides the Story-local *how*: affected modules, contracts,
-test strategy, and implementation details. It cannot override an upstream `AD-N` or product
-constraint silently. Present its exact revision through the best available review surface for
-**G2** and stop until the user approves. A path or short summary alone is insufficient.
-
-## Stage 3: Build
-
-`implement-story`. One Task, one verified commit, in breakdown order. When the Story is done, it
+`start-ticket` links the Story and moves it to in progress; `write-spec` writes any technical spec
+kind it still lacks; `implement-story` consumes the Story's approved implementation plan, the
+reading manifest and the documents this Story needs, one Task at a time in breakdown order, each
+ending in a passing check (and a commit, with Git-based delivery). When the Story is done, it
 generates API and end-to-end tests for the delivered behavior with `bmad-qa-generate-e2e-tests`
-before `prove-it-works`.
+before `prove-it-works`. Each tracker write is asked with its own approval. Recheck content digests;
+consult the user only for changed circumstances or genuinely missing contracts. Detect optional
+version control at execution; absence does not prevent local implementation.
 
-## Stage 4: Verify
+## Verify
 
-`review`. The requirements check first, then thermos alongside `bmad-review`'s edge-case and
+`review`: the requirements check first, then thermos alongside `bmad-review`'s edge-case and
 verification-gap lenses (the edge-case lens also falsifies the plan's claims and checks deletions),
-one triage of all findings, fixes, a verdict for HEAD, and the draft PR.
+one triage of all findings, fixes, and a verdict for the code as it is now. When the user wants a
+pull request, `branch-and-pr` opens it as a draft and `review-pr` answers its comments. `resolve-ticket`
+publishes the resolution report and verification evidence, and the Story is done. A Feature closes
+with `finish-feature-development` once all its Stories are done.
 
 ## Talking to the user
 
@@ -239,8 +208,10 @@ standard approval gates in `config/gates.toml`; each is tied to what the user re
 
 | Write | Gate | Tied to | Pass |
 | --- | --- | --- | --- |
-| Create, update, or link items from reviewed drafts | `publish-items` | the drafts | `--artifact` per draft, `--value count=`, `--value tracker=` |
-| Move one existing item (start a Story, finish a Feature) | `move-item` | that item | `--value item=`, `--value status=`, `--value ref=` |
+| Create, update, or link items from reviewed drafts, including rewriting an item's title, description or points | `publish-items` | the drafts | `--artifact` per draft, `--value count=`, `--value tracker=` |
+| Move one existing item (start a Story, finish a Feature), or set its hours, assignee or sprint; never its title, description or points | `move-item` | that item | `--value item=`, `--value status=`, `--value ref=` |
+| Approve one Story's implementation plan (shown first) | `implementation-confirm` | the plan | `--artifact` the plan; its Story comes from the plan |
+| Save a created document such as a risk or verification document (shown first) | `approve-document` | the document | `--artifact` the document |
 | Build from a spec (Task transitions, publishing the spec) | `approve-spec` | the spec | `--artifact` the spec |
 | Push a branch and open its draft pull request | `publish-branch` | that branch | `--value branch=` |
 | Reply on or link to a pull request | `reply-pr` | that pull request and the reviewed replies | `--artifact`, `--value pr=` |
@@ -258,7 +229,7 @@ standard approval gates in `config/gates.toml`; each is tied to what the user re
    tell the user what changed and ask the gate again.
 
 Where questions cannot be asked (Cursor without a menu), a typed `approve HB-…` still opens a
-general window of `approvals.window_minutes` (default 20). `harness revoke` ends approvals early.
+general window of `approvals.window_minutes` (default 20). The user typing `harness revoke` in chat ends approvals early.
 
 You cannot approve anything yourself: approvals are recorded only from the user's own prompt or
 click, a question that arrives with answers already filled in is refused, and hook `human-owned`
@@ -273,18 +244,23 @@ blocks any agent write to the records. Gates G1, G2, and G4 map to these approva
 | `plain-questions` | questions to the user that are long, ask several things, contain file names, code, or internal names, or come with answers filled in |
 | `approval-required` | tracker/SCM writes and `git push` without an open approval window |
 | `protected-items` | any write, link, or child on a protected work item, even with approval |
-| `tests-with-code` | commits that change source files with no test change in the commit or on the branch |
 | `generated-files` | hand edits to generated files |
-| `guarded-paths` | commits to guarded paths without check or manual evidence for the staged tree |
-| `draft-reviewed-prs` | non-draft pull requests; pull requests without a `ready` verdict and passing checks for HEAD; publishing drafts or voting |
-| `history-preserved` | rewriting branch history: rebase, squash merges, force-push, `filter-branch`, completing a pull request by squash or rebase |
-| workflow | code changes without an active session for this checkout (`harness session start`), new branches off the convention, the session's work item not in progress, code before an accepted spec, completion without evidence, protected branches |
+| `draft-reviewed-prs` | publishing drafts or voting; with Git-based delivery, non-draft pull requests and pull requests without a `ready` verdict and passing checks for the code as it is now |
+| `history-preserved` | with Git-based delivery: rewriting branch history (rebase, squash merges, force-push, `filter-branch`, completing a pull request by squash or rebase) |
+| workflow: code changes | code edits until the execution stage's `requires` hold (`harness workflow requirements`): a linked work session, Tasks parented to its Story or Bug, an approved unchanged implementation plan, the item in progress |
+| workflow: completion | marking a Story or Bug done until the verify stage's `completes` hold (`--gate completion`): tests with code, checks, guarded-path evidence, a `ready` review, verification and resolution reports, and a pull request only with Git-based delivery to a remote host; a Task closes inside its Story's work session |
+| workflow: Git delivery | with Git-based delivery only: protected-branch guard, branch naming convention, commits and pushes inside a branch-bound session |
 
-When a hook blocks you, read its reason and fix the cause. Never retry through another tool or
-route around it.
+The workflow rows read `config/prepared-workflows.json`; no harness decision depends on version
+control. Evidence (checks, review verdicts, manual checks) is keyed to a digest of the code on
+disk.
+
+When a hook denies the requested effect, respect that boundary. When it cannot classify a
+permitted read, use a narrow verified reader such as jq or a native file-read tool. Tool fallback
+must not broaden authorization. Preserve progress and continue unaffected work.
 
 When the user asks to work outside the harness, use `suspend-harness`: the user sends
-`harness suspend` as its own message, and the hook turns off every rule above except `human-owned`
+`harness suspend` as its own message, and the hook turns off every rule above
 while keeping the settings, tracker, and evidence. Only the user's own message can suspend the
 harness. `resume-harness` turns the checks back on.
 

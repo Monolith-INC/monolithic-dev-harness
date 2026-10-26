@@ -39,5 +39,9 @@
       }
     }
   },
-  "tools": []
+  "tools": [],
+  "stage": {
+    "name": "merge-story-stack-into-feature",
+    "workflow": "skills/merge-story-stack-into-feature/references/stage-workflow.md"
+  }
 }

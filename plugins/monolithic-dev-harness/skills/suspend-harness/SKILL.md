@@ -1,31 +1,24 @@
 ---
 name: suspend-harness
-description: Explain how the user turns off every harness check in this repository so they can work outside its enforcement. Use when the user asks to turn off, disable, suspend, or bypass the harness (/suspend-harness).
+description: Help the user suspend every harness check or restore it using native controls with graceful fallback.
 ---
 
 # Suspend harness
 
-Only the user can suspend the harness: the hook records it from their own message, and no command
-or tool call lets an agent do it. Ask the user to send this as its own message, with nothing else in
-it:
+Present `harness decision present --gate harness-controls --repo <project>` and use the returned
+native control. This control channel is independent of pending work, sessions and setup. Only a
+real human reply changes suspension. Never write suspension records or fabricate an answer.
 
-```text
-harness suspend
-```
+If delivery fails, repeat this same gate with `--async-available`, then `--native-unavailable`.
+Do not use another pending work question as the fallback. The chat labels are recognized directly:
+Suspend harness, Resume harness, Free mode (and their pt-BR equivalents). A plain or fenced
+`harness suspend` user message also works; do not insist on magic formatting.
 
-It works before setup, with invalid settings, and with an unavailable tracker. After they send it,
-run `harness suspension status --repo <project>` (or the sibling `bin/harness` from this plugin)
-and confirm it reports `"mode": "suspended"`. Never try to suspend the harness yourself, and never
-ask the user to suspend it to get past a refusal they did not ask about.
+Verify with `harness suspension status --repo <project>`. While suspended, every harness veto is
+off, including protected-record, hook-entry, session, tracker, branch and decision-wait checks.
+Host permissions and other plugins remain independent. Question evidence may be observed, but
+observation cannot veto a tool or grant an unreviewed approval. Preserve existing work and evidence.
 
-Tell the user what changes while it is suspended:
-
-- Workflow, session, tracker, branch, commit, review, and question-wording checks are off in this
-  repository.
-- Approval, trust, manual-check, and adoption clicks are still recorded.
-- The settings, tracker, sessions, approvals, and evidence are kept as they are.
-- Direct edits to the harness's own records under `.harness/` stay blocked; host permissions and
-  other plugins are unaffected.
-- Sending `harness resume`, or `/resume-harness`, turns the checks back on.
-
-`/skip-tracker` is different: it only pauses tracker enforcement and keeps the other checks.
+Resume restores checks without accepting changed artifacts or opening an unrelated permission.
+Free mode means direct skill use without guided onboarding; it preserves action governance.
+`skip-tracker` pauses only tracker enforcement. Workflow pause preserves preparation progress.

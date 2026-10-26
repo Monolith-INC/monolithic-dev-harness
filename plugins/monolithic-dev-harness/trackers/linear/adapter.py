@@ -17,11 +17,13 @@ from integrations import artifacts, payloads
 from integrations.contracts import (
     EMPTY,
     AdapterContext,
+    FieldNames,
     LogicalState,
     Page,
     TrackerOps,
     WorkItem,
     WorkItemKind,
+    changed_fields,
 )
 from integrations.payloads import as_float, first_number, parse_date
 from integrations.planning import (
@@ -32,6 +34,7 @@ from integrations.planning import (
     pick_sprint,
 )
 
+FIELDS = FieldNames("title", "description", "estimate", "assignee", "cycle")
 CYCLE_MARKERS = ("startsAt", "endsAt")  # a single cycle, not a listing
 NO_CAPACITY = (
     "Linear records no team capacity; only the cycle's dates are known, so availability is "
@@ -60,6 +63,10 @@ def adapter(context: AdapterContext) -> TrackerOps:
                 },
             ),
             issue,
+        ),
+        update_work_item=lambda ref, changes: bind(
+            changed_fields(changes, FIELDS, no_hours),
+            lambda fields: bind(call("save", {"id": ref.upper(), **fields}), issue),
         ),
         transition_work_item=lambda ref, state: bind(
             call("save", {"id": ref.upper(), "state": context.manifest.states[state]}),
@@ -99,7 +106,7 @@ def adapter(context: AdapterContext) -> TrackerOps:
                 if payloads.text(record, "identifier", "id")
             ),
         ),
-        hour_fields=no_hours,
+        records_hours=False,
     )
 
 

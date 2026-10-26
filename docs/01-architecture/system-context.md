@@ -2,7 +2,7 @@
 title: System Context
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-09-26
+last_reviewed: 2026-10-24
 ---
 
 # System Context
@@ -50,6 +50,13 @@ Linear, an onboarded provider, or none for the local tracker), the SCM (Azure Re
 the browser that completes OAuth for the providers' MCP servers. Internal components are described
 in [architecture.md](architecture.md).
 
+The required adapter communication boundary is defined in
+[adapter messaging](architecture.md#adapter-messaging-contract): agents interact through their
+host adapters; adapters and the harness exchange centrally defined messages through one shared
+bus interface and standard protocol. Vendor-specific details remain in the adapters. This is an
+accepted architectural requirement. The shared process bus and initial Codex command channel
+are implemented in the development source; other adapter integrations remain pending.
+
 ## Runtime State Machine
 
 Not applicable at the system level; see [architecture.md](architecture.md#runtime-state-machine).
@@ -71,7 +78,7 @@ committed; `.harness/state/` ignored by git).
 - Host hook payloads: Claude `PreToolUse` / `UserPromptSubmit` / `Stop`; Codex the same plus
   `PostToolUse`; Cursor `preToolUse`,
   `beforeShellExecution`, `beforeMCPExecution`, `beforeSubmitPrompt`.
-- Azure DevOps calls: provider-neutral `tracker_*` and `scm_*` tools from `workflow-integrations` (`skills/azure-devops/references/tool-map.md`).
+- Azure DevOps calls: provider-neutral `tracker_*` and `scm_*` tools from `workflow-integrations` (`trackers/azure-devops/notes/tool-map.md`).
 
 ## Host Differences
 

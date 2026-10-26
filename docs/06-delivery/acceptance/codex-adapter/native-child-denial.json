@@ -1,0 +1,42 @@
+{
+  "provenance": {
+    "kind": "actual app-server hook/completed notification",
+    "runtime": "Codex CLI0.162.1 app-server",
+    "source_log": "/tmp/mdh-codex-proof/governance-events.jsonl",
+    "source_sha256": "195dff16a46bf4ae8d37a052b6e768d7feb1ea563f994938a3a90d288cd4d5f6",
+    "fixture": "operator seeded parent work-session binding from real thread/start id before model delegation; current source hook, not archive",
+    "driver_limit": "probe terminated on child turn/completed; parent final completion not qualified",
+    "driver_cleanup": "driver reported event-loop cleanup warning after native observed child completion; this does not invalidate captured hook denial"
+  },
+  "notifications": [
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a169a5-25f6-70f3-a66f-08277c6948d5",
+        "turnId": "01a169a5-262a-7be0-af43-3f70d5cb75be",
+        "run": {
+          "id": "pre-tool-use:0:/tmp/mdh-codex-proof/home/config.toml:exec-88ad8cc6-c820-45f9-a404-aa57818ad71c",
+          "eventName": "preToolUse",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/tmp/mdh-codex-proof/home/config.toml",
+          "source": "user",
+          "displayOrder": 0,
+          "status": "blocked",
+          "statusMessage": null,
+          "startedAt": 1792773798,
+          "completedAt": 1792773798,
+          "durationMs": 247,
+          "entries": [
+            {
+              "kind": "feedback",
+              "text": "[harness human-owned] .harness/settings.json is human-owned. Approvals, manual checks, and tracker trust are recorded from the user's own prompt; checkout sessions change through `harness session`, and work sessions through `harness work-session`; check results and review verdicts are recorded by scripts/harness/checks.py and review_verdict.py; the settings are edited by a person (or created once by bootstrap)."
+            }
+          ]
+        }
+      },
+      "emittedAtMs": 1792773798422
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "name": "auto-fix-artifact",
+  "description": "Validate then reflect on a draft with circuit-breaker retries. Actor revises; Python critic gates each attempt.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "file_path": { "type": "string", "description": "Path to a draft markdown file" },
+      "draft_content": { "type": "string", "description": "Revised draft content from Actor" },
+      "attempt": { "type": "integer", "description": "Current reflection attempt number" },
+      "max_attempts": { "type": "integer", "description": "Circuit breaker threshold (default 3)" },
+      "record_mistake": { "type": "boolean", "description": "Persist flaws to _mistakes on block" }
+    }
+  },
+  "output_signature": {
+    "required": ["ok", "mode", "report", "critiques", "reflection"]
+  }
+}

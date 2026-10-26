@@ -1,27 +1,31 @@
 {
   "name": "generate-breakdown-work-items",
-  "description": "Break a User Story—or fan out a Feature/Epic—into Implementation Plans and atomic child Tasks (Staging, Review, Breakdown) for filesystem and/or Azure.",
+  "description": "Break a User Story—or fan out a Feature/Epic—into Implementation Plans and atomic child Tasks (Staging, Review, Breakdown) in the selected tracker.",
   "input_schema": {
     "type": "object",
     "properties": {
       "work_item_ref": {
         "type": "string",
-        "description": "Azure work item ID, URL, or filesystem path to a User Story, Feature, or Epic"
-      },
-      "destination": {
-        "type": "string",
-        "enum": ["filesystem", "azure", "both"],
-        "description": "Where to write the Implementation Plan and Tasks"
+        "description": "Tracker work item id or link, or a filesystem path to a User Story, Feature, or Epic"
       },
       "language": {
         "type": "string",
-        "enum": ["en", "pt-BR"],
-        "description": "Output language; defaults to en when omitted"
+        "enum": [
+          "en",
+          "pt-BR"
+        ],
+        "description": "Output language; defaults to the project's harness language"
       }
     },
-    "required": ["work_item_ref"]
+    "required": [
+      "work_item_ref"
+    ]
   },
   "output_signature": {
-    "required": ["work_item_ref", "source_kind", "destination", "language"]
+    "required": [
+      "work_item_ref",
+      "source_kind",
+      "language"
+    ]
   }
 }

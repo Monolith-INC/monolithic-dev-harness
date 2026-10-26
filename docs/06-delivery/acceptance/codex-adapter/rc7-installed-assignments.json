@@ -1,0 +1,425 @@
+{
+  "classification": "actual_native_events_sanitized_paths",
+  "date": "2026-10-24",
+  "build": "published v0.7.0-rc.7",
+  "commit": "276f8f2cdcb4f0cedc36359a553f09f00ee5ecce",
+  "cli_version": "0.162.1",
+  "archive_sha256": "7e44101de9dc6c962a2c0656553bd150819286f5e2a8f6b25ec6e32f1fb43fe3",
+  "events": [
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": "gpt-5.6-luna",
+          "reasoningEffort": "low",
+          "id": "call_38ee6de3971041aba9f2ff48a8023216",
+          "kind": "started",
+          "agentThreadId": "01a17045-dfe2-7f60-bafa-37365b60389c",
+          "agentPath": "/root/worker"
+        },
+        "threadId": "01a17045-c7c9-70f0-93b9-f0961e62c64b",
+        "turnId": "01a17045-cafe-7341-a7ea-70bb4cd0fd0c",
+        "completedAtMs": 1792884989927
+      },
+      "emittedAtMs": 1792884989927
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "subagent-completed-01a17045-dfe7-7511-931e-61f949eade83",
+          "kind": "completed",
+          "agentThreadId": "01a17045-dfe2-7f60-bafa-37365b60389c",
+          "agentPath": "/root/worker"
+        },
+        "threadId": "01a17045-c7c9-70f0-93b9-f0961e62c64b",
+        "turnId": "01a17045-cafe-7341-a7ea-70bb4cd0fd0c",
+        "completedAtMs": 1792884993917
+      },
+      "emittedAtMs": 1792884993917
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "call_ed74c844e97845fea9eff2366f3e54b6",
+          "kind": "interacted",
+          "agentThreadId": "01a17045-dfe2-7f60-bafa-37365b60389c",
+          "agentPath": "/root/worker"
+        },
+        "threadId": "01a17045-c7c9-70f0-93b9-f0961e62c64b",
+        "turnId": "01a17045-cafe-7341-a7ea-70bb4cd0fd0c",
+        "completedAtMs": 1792885004881
+      },
+      "emittedAtMs": 1792885004881
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "subagent-completed-01a17046-1a51-76c0-9e12-1176dbc39013",
+          "kind": "completed",
+          "agentThreadId": "01a17045-dfe2-7f60-bafa-37365b60389c",
+          "agentPath": "/root/worker"
+        },
+        "threadId": "01a17045-c7c9-70f0-93b9-f0961e62c64b",
+        "turnId": "01a17045-cafe-7341-a7ea-70bb4cd0fd0c",
+        "completedAtMs": 1792885012732
+      },
+      "emittedAtMs": 1792885012732
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": "gpt-6-sol",
+          "reasoningEffort": "medium",
+          "id": "call_11950cba19d94d628b4e2f8937a8a2d5",
+          "kind": "started",
+          "agentThreadId": "01a17046-4006-7bc2-abe3-343334456c53",
+          "agentPath": "/root/reviewer"
+        },
+        "threadId": "01a17045-c7c9-70f0-93b9-f0961e62c64b",
+        "turnId": "01a17045-cafe-7341-a7ea-70bb4cd0fd0c",
+        "completedAtMs": 1792885014544
+      },
+      "emittedAtMs": 1792885014545
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "subagent-completed-01a17046-4010-7d01-9bb4-237083e52ec7",
+          "kind": "completed",
+          "agentThreadId": "01a17046-4006-7bc2-abe3-343334456c53",
+          "agentPath": "/root/reviewer"
+        },
+        "threadId": "01a17045-c7c9-70f0-93b9-f0961e62c64b",
+        "turnId": "01a17045-cafe-7341-a7ea-70bb4cd0fd0c",
+        "completedAtMs": 1792885017850
+      },
+      "emittedAtMs": 1792885017850
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "call_d1961f43d7024fb0b2b11431a9c20f61",
+          "kind": "interacted",
+          "agentThreadId": "01a17046-4006-7bc2-abe3-343334456c53",
+          "agentPath": "/root/reviewer"
+        },
+        "threadId": "01a17045-c7c9-70f0-93b9-f0961e62c64b",
+        "turnId": "01a17045-cafe-7341-a7ea-70bb4cd0fd0c",
+        "completedAtMs": 1792885026061
+      },
+      "emittedAtMs": 1792885026061
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "subAgentActivity",
+          "model": null,
+          "reasoningEffort": null,
+          "id": "subagent-completed-01a17046-6d0d-7492-b7d3-1dfef74bc1ae",
+          "kind": "completed",
+          "agentThreadId": "01a17046-4006-7bc2-abe3-343334456c53",
+          "agentPath": "/root/reviewer"
+        },
+        "threadId": "01a17045-c7c9-70f0-93b9-f0961e62c64b",
+        "turnId": "01a17045-cafe-7341-a7ea-70bb4cd0fd0c",
+        "completedAtMs": 1792885032588
+      },
+      "emittedAtMs": 1792885032588
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "fileChange",
+          "id": "exec-1d4cf6fa-2850-4f41-807b-282e48ec834a",
+          "changes": [
+            {
+              "path": "/fixture/assignment-trial/project/docs/planning/proof.md",
+              "kind": {
+                "type": "add"
+              },
+              "diff": "# Assignment Proof\n\n- process_id: `01a17045-dfe2-7f60-bafa-37365b60389c`\n- role: `worker`\n- owned_path: `docs/planning/proof.md`\n- model: `gpt-5.6-luna`\n- effort: `low`\n- assignment_timing: Main assigned before my first tool use.\n"
+            }
+          ],
+          "status": "completed"
+        },
+        "threadId": "01a17045-dfe2-7f60-bafa-37365b60389c",
+        "turnId": "01a17046-1a51-76c0-9e12-1176dbc39013",
+        "completedAtMs": 1792885007447
+      },
+      "emittedAtMs": 1792885007447
+    },
+    {
+      "method": "item/completed",
+      "params": {
+        "item": {
+          "type": "commandExecution",
+          "id": "exec-985238a7-4c04-421d-9518-df1cf3f03644",
+          "pluginId": null,
+          "scriptPath": null,
+          "command": "/bin/bash -lc 'cat -- docs/planning/proof.md'",
+          "cwd": "/fixture/assignment-trial/project",
+          "processId": "32379",
+          "source": "unifiedExecStartup",
+          "status": "completed",
+          "commandActions": [
+            {
+              "type": "read",
+              "command": "cat -- docs/planning/proof.md",
+              "name": "proof.md",
+              "path": "/fixture/assignment-trial/project/docs/planning/proof.md"
+            }
+          ],
+          "aggregatedOutput": "# Assignment Proof\n\n- process_id: `01a17045-dfe2-7f60-bafa-37365b60389c`\n- role: `worker`\n- owned_path: `docs/planning/proof.md`\n- model: `gpt-5.6-luna`\n- effort: `low`\n- assignment_timing: Main assigned before my first tool use.\n",
+          "exitCode": 0,
+          "durationMs": 0
+        },
+        "threadId": "01a17046-4006-7bc2-abe3-343334456c53",
+        "turnId": "01a17046-6d0d-7492-b7d3-1dfef74bc1ae",
+        "completedAtMs": 1792885028136
+      },
+      "emittedAtMs": 1792885028136
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a17045-dfe2-7f60-bafa-37365b60389c",
+        "turnId": "01a17046-1a51-76c0-9e12-1176dbc39013",
+        "run": {
+          "id": "pre-tool-use:0:/fixture/assignment-profile/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.7/hooks/codex.hooks.json:exec-57eb2518-e042-4304-a465-a441b11f1890",
+          "eventName": "preToolUse",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/assignment-profile/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.7/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 0,
+          "status": "blocked",
+          "statusMessage": "Checking harness policy",
+          "startedAt": 1792885009,
+          "completedAt": 1792885009,
+          "durationMs": 255,
+          "entries": [
+            {
+              "kind": "feedback",
+              "text": "[harness assignment-policy] [harness assignment-policy] call is outside the process assignment"
+            }
+          ]
+        }
+      },
+      "emittedAtMs": 1792885009456
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a17045-dfe2-7f60-bafa-37365b60389c",
+        "turnId": "01a17046-1a51-76c0-9e12-1176dbc39013",
+        "run": {
+          "id": "pre-tool-use:0:/fixture/assignment-profile/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.7/hooks/codex.hooks.json:exec-3f7497da-c7a0-447f-b7cb-0b85272c87d9",
+          "eventName": "preToolUse",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/assignment-profile/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.7/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 0,
+          "status": "blocked",
+          "statusMessage": "Checking harness policy",
+          "startedAt": 1792885010,
+          "completedAt": 1792885010,
+          "durationMs": 231,
+          "entries": [
+            {
+              "kind": "feedback",
+              "text": "[harness assignment-policy] [harness assignment-policy] call is outside the process assignment"
+            }
+          ]
+        }
+      },
+      "emittedAtMs": 1792885010902
+    },
+    {
+      "method": "hook/completed",
+      "params": {
+        "threadId": "01a17046-4006-7bc2-abe3-343334456c53",
+        "turnId": "01a17046-6d0d-7492-b7d3-1dfef74bc1ae",
+        "run": {
+          "id": "pre-tool-use:0:/fixture/assignment-profile/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.7/hooks/codex.hooks.json:exec-622f27ac-1774-410e-a1f7-01db397e93de",
+          "eventName": "preToolUse",
+          "handlerType": "command",
+          "executionMode": "sync",
+          "scope": "turn",
+          "sourcePath": "/fixture/assignment-profile/plugins/cache/monolithic-dev-harness/monolithic-dev-harness/0.7.0-rc.7/hooks/codex.hooks.json",
+          "source": "plugin",
+          "displayOrder": 0,
+          "status": "blocked",
+          "statusMessage": "Checking harness policy",
+          "startedAt": 1792885030,
+          "completedAt": 1792885030,
+          "durationMs": 219,
+          "entries": [
+            {
+              "kind": "feedback",
+              "text": "[harness assignment-policy] [harness assignment-policy] call is outside the process assignment"
+            }
+          ]
+        }
+      },
+      "emittedAtMs": 1792885030838
+    }
+  ],
+  "final_records": [
+    {
+      "assignment": {
+        "effort": "medium",
+        "model": "gpt-6-sol",
+        "owned_paths": [],
+        "role": "reviewer"
+      },
+      "completed_executions": [
+        "01a17046-4010-7d01-9bb4-237083e52ec7",
+        "01a17046-6d0d-7492-b7d3-1dfef74bc1ae"
+      ],
+      "context": {
+        "adapter": "codex",
+        "owner_id": "01a17045-c7c9-70f0-93b9-f0961e62c64b",
+        "work_session_id": "WS-6c7b61017e3d"
+      },
+      "events": [
+        [
+          "c3852350652f8a4ad91fe201dacc742a4020bc4b1f8f46b27d48da80469ec6e8",
+          "eab70a19af6fc8408b8e6c0bea2ad7c288f108bb42c7fb4f06a26b65afa7a7cf"
+        ],
+        [
+          "d7471edafaf93897fe8389b3aece09ccc2c154f6df6fb586f03e11b663d5b678",
+          "3a5032ee979556a168ee2b996bf8fb864c6537550c1b9e6f200411982b6be3bf"
+        ],
+        [
+          "bd5c8cc6d54caeefe8058e4c343b442c93730e2e30236584b3827b16c0312599",
+          "343d9c434aad3b6f1ccb9b20121a928c6663d50831c867ba01366f3a13d763e0"
+        ],
+        [
+          "d62abb07b0b4443ed53ccf7358edfa33b02c51cafb70d7c672576ceb840cf568",
+          "09ce66a9d3295710740388335e32eb50efad23b3fe2bf1e415db94c6b554d723"
+        ],
+        [
+          "00d24de8879647ca84bd9f80e12e85929a1d0bc1c51d4d34a2d0036872af8085",
+          "a2caec3f878968004499dd715a4e4b88e87e30e4a96a1c63d50b5269da2041c0"
+        ]
+      ],
+      "execution_id": "01a17046-6d0d-7492-b7d3-1dfef74bc1ae",
+      "process_id": "01a17046-4006-7bc2-abe3-343334456c53",
+      "reported_status": null,
+      "revision": 4,
+      "revoked": false,
+      "runtime_status": "completed",
+      "version": 1
+    },
+    {
+      "assignment": {
+        "effort": "low",
+        "model": "gpt-5.6-luna",
+        "owned_paths": [
+          "docs/planning/proof.md"
+        ],
+        "role": "worker"
+      },
+      "completed_executions": [
+        "01a17045-dfe7-7511-931e-61f949eade83",
+        "01a17046-1a51-76c0-9e12-1176dbc39013"
+      ],
+      "context": {
+        "adapter": "codex",
+        "owner_id": "01a17045-c7c9-70f0-93b9-f0961e62c64b",
+        "work_session_id": "WS-6c7b61017e3d"
+      },
+      "events": [
+        [
+          "f439b51aa713fa37938d9298fcfe1a2ee5a78ff386ed11858fe20652d0e436dc",
+          "ac4ba28be34491cb89cb533208c2634d7bdbcf2876b2457b0c963f84755f3037"
+        ],
+        [
+          "30f9d2ff23291cc14c5f6c27e73d3667991b64cdae9849f561acf5579225eabb",
+          "c28ff16d82351ea80a4cd3ab3adda91ed10b007c94a1d02c715cbd4b4cf91f3b"
+        ],
+        [
+          "77c353a301f95ee75eb71903b14da88ff56803cc94246aa67b670631c4ce2433",
+          "5ddee9a16a6713f25ac8952099d7619fa7bfb69592b83ddefcbe77f1052e01e4"
+        ],
+        [
+          "56ccbed114014910a0c2752e1f772b79b9f58319bd85c7ad95af72fac4d63922",
+          "96b2756abc327871edc6abba43149a69d2a370d65eeae2711ae616b685122dbb"
+        ],
+        [
+          "0922ba3c64c83c0194e1a767704ec564ef40dfe106028460d2bcaed836c9bf1d",
+          "336bd6fc4e210988e9e93e3aa946bab008ec3bbeda524f494b113e0862fb9fc2"
+        ]
+      ],
+      "execution_id": "01a17046-1a51-76c0-9e12-1176dbc39013",
+      "process_id": "01a17045-dfe2-7f60-bafa-37365b60389c",
+      "reported_status": null,
+      "revision": 4,
+      "revoked": false,
+      "runtime_status": "completed",
+      "version": 1
+    }
+  ],
+  "proof_text": "# Assignment Proof\n\n- process_id: `01a17045-dfe2-7f60-bafa-37365b60389c`\n- role: `worker`\n- owned_path: `docs/planning/proof.md`\n- model: `gpt-5.6-luna`\n- effort: `low`\n- assignment_timing: Main assigned before my first tool use.\n",
+  "outside_exists": false,
+  "failed_hooks": 0,
+  "worker_blocked_calls": 2,
+  "reviewer_blocked_calls": 1,
+  "driver_exit": 0,
+  "loaded_module_hashes": {
+    "scripts/harness/process_messages.py": "d56e04f1f75689551b67fb84ccba5e09cde4080ff35d48bcf3dcc8817c65469d",
+    "scripts/harness/process_bus.py": "630822ff3cef91b5b8d09eaf8f473cbc89c236a4c32cd494897d1223b0000754",
+    "scripts/harness/process_store.py": "a2695883b62c7a525aabb3c13cc57dbe3c2e1a9acebf628b25668df3f76c9fd2",
+    "scripts/harness/process_cli.py": "f11c7a2dc407b589288e7b20808ceed7e89d1403ea86fb2b142049f240dd003b",
+    "scripts/harness/process_commands.py": "729d6010244059a7e08cd546c2eb4b0c4c14a911a9f0c6143e5a71ea54c845fb",
+    "scripts/harness/process_assignment.py": "4f7ed314a00e2aa3fce087727687aa0b57e593b8e7f73e447bc499fd56374afb",
+    "scripts/harness/cli.py": "59cbe24dfa1a798a20ba6f917779753e9acb08a6531096b6ab13e06fc14de020",
+    "scripts/harness/hook.py": "3f736d530db4992773da82997b17e378013d3b9a45fa0bf3349c186f67c8cf9c",
+    "scripts/host_adapters/codex_process.py": "4066d560cc6e8b38949a2925fc5a8d49f6204059cc55006c224f3d48aa12d0bc",
+    "scripts/host_adapters/codex_bindings.py": "bd0141580c95226fd1c27e5cd77c935bbff919bf1bc924dc1b37589d4c859687",
+    "scripts/host_adapters/process_channel.py": "40fadeaeacb18baff4e5346d1d86f01141ececbdae554a0be5d772f613e7cb6f",
+    "scripts/host_adapters/hook_bridge.py": "58db6387838930d003146e6a7d26c43773e780b892a990dcdd27435144acad33"
+  },
+  "provenance_hashes": {
+    "probe.py": "bbb049c0d6fc8a809c99c14be7332447ba1c22603f9d71e36076422249ce1024",
+    "native-events.jsonl": "693d7c5da0c3b6f8e7b5655fdcc07055764f1a6af7fb9526319ca33057abb6f7",
+    "hooks-result.json": "b14e587b3d1d69046c4f2cce1e51501b387c1958001efe00dd7b8e20bac0596e",
+    "install-rc7.txt": "d02b26cdcc9b7787cce5eedf8dd4bf2a8d04b2b88e3de7985c0a5a0b5912b6a3"
+  },
+  "limits": [
+    "Isolated CLI profile; active Desktop installation unchanged.",
+    "Parent work session was operator-seeded; no onboarding or genuine human approval qualified.",
+    "Worker emitted two blocked calls despite the requested single negative attempt; no exactly-once claim.",
+    "Native activity confirms selected model/effort for this trial; general reasoning-effort enforcement is not attested by PreToolUse.",
+    "No external-write/recovery, editable Canvas or full workflow-family acceptance proof.",
+    "Harness tool enforcement is not a separate operating-system sandbox."
+  ]
+}

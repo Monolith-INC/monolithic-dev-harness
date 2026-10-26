@@ -1,0 +1,24 @@
+{
+  "classification": "native_cli_app_server_protocol_with_operator_automation",
+  "host_version": "0.162.1",
+  "mode": "plan",
+  "question_class": "planning_preference",
+  "transport": "item/tool/requestUserInput",
+  "request_capture": "protocol-question-request.json",
+  "resolution_capture": "protocol-question-resolved.json",
+  "result_capture": "protocol-question-result.json",
+  "raw_server_event_log": "/tmp/mdh-codex-proof/question-events.jsonl",
+  "raw_server_event_log_sha256": "78f8210ae7cd177f2527a5a974b114fb379d1bba5533ebdc82b9002f976fe27f",
+  "operator_driver": "/tmp/mdh-codex-proof/question-probe.py",
+  "operator_driver_sha256": "b5c34fc7506cc86d69832630d3a99d651232da3cf9d7d81e27c83ef7fd8536ae",
+  "outgoing_response_capture": null,
+  "operator_response_proof": "Driver handles the actual native request id and sends answers Blue for each actual question id; serverRequest/resolved and final Selected color Blue are observed. Outgoing bytes were not logged, so no response event fixture is manufactured.",
+  "driver_send_expression": "await send(proc,{'id':request,'result':{'answers':{q['id']:{'answers':['Blue']} for q in questions}}})",
+  "authority": "User delegated autonomous operator execution of trial to root; this is not a human UI selection",
+  "limitations": [
+    "No Desktop rendering observed",
+    "No ask or answer hook capture",
+    "No required external-effect approval attempted",
+    "No async qualification"
+  ]
+}

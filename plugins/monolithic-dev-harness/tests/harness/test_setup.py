@@ -38,9 +38,8 @@ class SetupTests(unittest.TestCase):
             current = workflow.add_point(
                 workflow.start("Continue DAY-001 task counts", "en").value,
                 "Review the plan",
-                "discover",
+                "discovery",
                 pending="Plan review",
-                next_action="Present the saved plan",
             ).value
             workflow.save(self.repo, current)
             decisions.begin(
@@ -56,7 +55,9 @@ class SetupTests(unittest.TestCase):
             self.preference_env["HARNESS_USER_STATE_DIR"],
         )
         self.assertEqual(context["original_request"], "Continue DAY-001 task counts")
-        self.assertEqual(context["next_action"], "Present the saved plan")
+        self.assertEqual(
+            context["next_step"], f"harness next --repo {self.repo.resolve()}"
+        )
         self.assertTrue(context["waiting_for_answer"])
         self.assertEqual(context["pending_question"]["id"], "q1")
         self.assertTrue(context["harness_suspended"])
@@ -235,12 +236,13 @@ class SetupTests(unittest.TestCase):
         before = setup.inspect(self.repo).value
         self.assertEqual(before["status"], "ready")
         self.assertTrue(before["tracker_storage"]["ready"])
-        self.assertFalse(before["repository"]["has_committed_head"])
+        self.assertIsNone(before["repository"]["has_committed_head"])
+        self.assertEqual(before["repository"]["git_access"], "deferred")
         paused = workflow.pause(
             workflow.add_point(
                 workflow.start("DAY-001").value,
                 "Old blocker",
-                "discover",
+                "discovery",
                 pending="No first commit",
             ).value
         ).value
@@ -263,8 +265,8 @@ class SetupTests(unittest.TestCase):
             check=True,
         )
         after = setup.inspect(self.repo).value
-        self.assertTrue(after["repository"]["has_committed_head"])
-        self.assertTrue(after["repository"]["head"])
+        self.assertIsNone(after["repository"]["has_committed_head"])
+        self.assertEqual(after["repository"]["head"], "")
         self.assertEqual(after["workflow"]["pending"], "No first commit")
 
     def test_existing_local_settings_prepare_missing_folders_without_replacing_records(
@@ -278,9 +280,9 @@ class SetupTests(unittest.TestCase):
             ).value["candidate"],
         )
         self.assertIn("tracker.storage", setup.inspect(self.repo).value["missing"])
-        record = self.repo / ".harness/tracker/backlog/STORY-0001.json"
+        record = self.repo / "Tickets/Ready/0001-story.md"
         record.parent.mkdir(parents=True)
-        record.write_text('{"key":"STORY-0001"}\n')
+        record.write_text("---\nprovider_id: STORY-0001\n---\n")
         before = record.read_bytes()
         command = subprocess.run(
             [
@@ -331,3 +333,30 @@ class SetupTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_the_branch_template_follows_the_projects_own_branches(tmp_path) -> None:
+    """Live run 2026-10-16: the project names Story branches `userstory/<id>-<slug>`."""
+    import subprocess as run
+
+    from scripts.harness import setup as chosen
+
+    def git(*args: str) -> None:
+        run.run(["git", "-C", str(tmp_path), *args], check=True, capture_output=True)
+
+    git("init", "-q", "-b", "develop")
+    git(
+        "-c",
+        "user.email=a@b",
+        "-c",
+        "user.name=a",
+        "commit",
+        "-q",
+        "--allow-empty",
+        "-m",
+        "i",
+    )
+    assert chosen._branch_template(tmp_path) == "feature/{key}-{slug}"
+    for name in ("userstory/7824-train", "userstory/7927-photo", "feature/7822-tuning"):
+        git("branch", name)
+    assert chosen._branch_template(tmp_path) == "userstory/{key}-{slug}"

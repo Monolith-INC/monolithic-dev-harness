@@ -18,9 +18,9 @@ Entities, fields, invariants.
 
 Endpoints/events with request/response shapes.
 
-## Implementation Plan
+## Plan
 
-Ordered tasks and owners.
+Link the Story's approved implementation plan; do not restate its steps or Tasks here.
 
 ## Testing Strategy
 

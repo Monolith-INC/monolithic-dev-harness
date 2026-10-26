@@ -12,6 +12,25 @@ from tests.harness.test_decisions import CLI, native
 
 
 def approve(repo: Path, session: str, native_id: str, gate: str, *args: str) -> dict:
+    shown = [
+        arg for flag, arg in zip(args, args[1:], strict=False) if flag == "--artifact"
+    ]
+    if shown:
+        subprocess.run(
+            [
+                str(CLI),
+                "workflow",
+                "show",
+                "--repo",
+                str(repo),
+                "--session-id",
+                session,
+                *(a for name in shown for a in ("--artifact", name)),
+            ],
+            capture_output=True,
+            timeout=30,
+            check=True,
+        )
     result = subprocess.run(
         [
             str(CLI),
@@ -72,6 +91,31 @@ def test_a_publish_approval_holds_until_the_drafts_change(tmp_path: Path) -> Non
     (tmp_path / "drafts.md").write_text("four stories")
     denied = tracker_write(tmp_path, "native-a")
     assert "approval-required" in denied and "changed" in denied
+
+
+def test_marking_a_reviewed_draft_active_keeps_the_publish_approval(
+    tmp_path: Path,
+) -> None:
+    first, _ = project(tmp_path)
+    drafts = tmp_path / "drafts.md"
+    drafts.write_text("---\nstatus: draft\n---\n\nthree stories\n")
+    approve(
+        tmp_path,
+        first,
+        "native-a",
+        "publish-items",
+        "--value",
+        "count=3",
+        "--value",
+        "tracker=Azure Boards",
+        "--artifact",
+        "drafts.md",
+    )
+    assert "deny" not in tracker_write(tmp_path, "native-a")
+    drafts.write_text("---\nstatus: active\n---\n\nthree stories\n")
+    assert "deny" not in tracker_write(tmp_path, "native-a")
+    drafts.write_text("---\nstatus: active\n---\n\nfour stories\n")
+    assert "approval-required" in tracker_write(tmp_path, "native-a")
 
 
 def test_a_branch_approval_covers_only_that_branch(tmp_path: Path) -> None:
@@ -139,3 +183,139 @@ def test_a_story_approval_covers_only_that_item(tmp_path: Path) -> None:
     assert "deny" not in update("42")
     assert "approval-required" in update("43")
     assert "approval-required" in tracker_write(tmp_path, "native-a")
+
+
+GATEWAY = "mcp__plugin_monolithic-dev-harness_workflow-integrations__"
+
+
+def test_an_item_approval_does_not_cover_rewriting_its_content(tmp_path: Path) -> None:
+    first, _ = project(tmp_path)
+    approve(
+        tmp_path,
+        first,
+        "native-a",
+        "move-item",
+        "--value",
+        "item=Shared lists",
+        "--value",
+        "status=In Progress",
+        "--value",
+        "ref=42",
+    )
+
+    def gateway(tool: str, **arguments: object) -> str:
+        return native(
+            tmp_path,
+            "pre-tool",
+            {
+                "tool_name": GATEWAY + tool,
+                "tool_input": {"ref": "42", **arguments},
+                "session_id": "native-a",
+            },
+        )
+
+    assert "deny" not in gateway("tracker_transition_work_item", state="in_progress")
+    assert "deny" not in gateway("tracker_update_work_item", hours=4)
+    for content in ({"title": "New"}, {"description": "New"}, {"storyPoints": 3}):
+        assert "approval-required" in gateway("tracker_update_work_item", **content)
+
+
+def test_a_work_item_is_written_as_the_draft_the_user_approved(tmp_path: Path) -> None:
+    """The toolkit's Gate 2: what reaches the tracker is the approved draft's body, word for
+    word, even after creating the item replaced its draft in `Tickets/`."""
+    first, _ = project(tmp_path)
+    ready = tmp_path / "Tickets" / "Ready"
+    ready.mkdir(parents=True)
+    body = "## 🎯 What\n\nShow both counts.\n"
+    for name, text in (
+        ("draft-one.md", body),
+        ("draft-two.md", "## 🎯 What\n\nOther.\n"),
+    ):
+        (ready / name).write_text(
+            f"---\ntype: ticket\nwork_item_type: User Story\n---\n\n{text}"
+        )
+    approve(
+        tmp_path,
+        first,
+        "native-a",
+        "publish-items",
+        "--value",
+        "count=2",
+        "--value",
+        "tracker=Local tracker",
+        "--artifact",
+        "Tickets/Ready/draft-one.md",
+        "--artifact",
+        "Tickets/Ready/draft-two.md",
+    )
+
+    def create(description: str) -> str:
+        return native(
+            tmp_path,
+            "pre-tool",
+            {
+                "tool_name": GATEWAY + "tracker_create_work_item",
+                "tool_input": {
+                    "kind": "user_story",
+                    "title": "Counts",
+                    "description": description,
+                },
+                "session_id": "native-a",
+            },
+        )
+
+    assert "deny" not in create(body)
+    assert "approved draft" in create("Show both counts, in my own words.")
+    # Creating the first item replaced its draft; the second draft is still approved as it was.
+    (ready / "draft-one.md").unlink()
+    assert "deny" not in create("## 🎯 What\n\nOther.")
+    (ready / "draft-two.md").write_text("---\ntype: ticket\n---\n\nChanged.\n")
+    assert "approval-required" in create("Changed.")
+
+
+THREAD_WRITES = {
+    "scm_create_review_thread": {
+        "filePath": "/lib/a.dart",
+        "startLine": 3,
+        "endLine": 3,
+        "endOffset": 20,
+        "content": "Name this.",
+    },
+    "scm_update_thread_comment": {"threadRef": "5", "content": "Reworded."},
+    "scm_set_thread_status": {"threadRef": "5", "status": "Fixed"},
+}
+
+
+def test_a_reply_approval_covers_review_thread_writes_on_that_pull_request_only(
+    tmp_path: Path,
+) -> None:
+    first, _ = project(tmp_path)
+    (tmp_path / "replies.md").write_text("Fixed in the next commit.")
+    approve(
+        tmp_path,
+        first,
+        "native-a",
+        "reply-pr",
+        "--value",
+        "pr=12",
+        "--artifact",
+        "replies.md",
+    )
+
+    def thread_write(tool: str, pull_request: str) -> str:
+        return native(
+            tmp_path,
+            "pre-tool",
+            {
+                "tool_name": GATEWAY + tool,
+                "tool_input": {
+                    "pullRequestRef": pull_request,
+                    **THREAD_WRITES[tool],
+                },
+                "session_id": "native-a",
+            },
+        )
+
+    for tool in THREAD_WRITES:
+        assert "deny" not in thread_write(tool, "12"), tool
+        assert "approval-required" in thread_write(tool, "13"), tool

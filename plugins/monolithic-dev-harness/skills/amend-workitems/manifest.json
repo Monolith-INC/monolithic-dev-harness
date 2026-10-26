@@ -10,7 +10,7 @@
       },
       "reference": {
         "type": "string",
-        "description": "Epic or Feature Azure id/URL, or filesystem path"
+        "description": "Epic or Feature tracker id or link, or filesystem path"
       },
       "scope": {
         "type": "string",

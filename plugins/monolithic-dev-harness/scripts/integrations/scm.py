@@ -286,6 +286,60 @@ def azure_repos(values: Mapping[str, str], call: Transport) -> ScmOps:
             ),
         ),
         link_work_item=lambda pr, item: _azure_link(tool, raw, pr, item),
+        create_review_thread=lambda pr, path, start, end, end_offset, content: bind(
+            payloads.number(pr, "pull request"),
+            lambda number: fmap(
+                tool(
+                    "repo_pull_request_thread_write",
+                    "create",
+                    {
+                        "pullRequestId": number,
+                        "filePath": path,
+                        "rightFileStartLine": start,
+                        "rightFileStartOffset": 1,
+                        "rightFileEndLine": end,
+                        "rightFileEndOffset": end_offset,
+                        "content": content,
+                    },
+                ),
+                payloads.mapping,
+            ),
+        ),
+        update_thread_comment=lambda pr, thread, content: bind(
+            sequence(
+                (payloads.number(pr, "pull request"), payloads.number(thread, "thread"))
+            ),
+            lambda numbers: fmap(
+                tool(
+                    "repo_pull_request_thread_write",
+                    "update",
+                    {
+                        "pullRequestId": numbers[0],
+                        "threadId": numbers[1],
+                        "commentId": 1,
+                        "content": content,
+                    },
+                ),
+                payloads.mapping,
+            ),
+        ),
+        set_thread_status=lambda pr, thread, status: bind(
+            sequence(
+                (payloads.number(pr, "pull request"), payloads.number(thread, "thread"))
+            ),
+            lambda numbers: fmap(
+                tool(
+                    "repo_pull_request_thread_write",
+                    "update_status",
+                    {
+                        "pullRequestId": numbers[0],
+                        "threadId": numbers[1],
+                        "status": status,
+                    },
+                ),
+                payloads.mapping,
+            ),
+        ),
     )
 
 

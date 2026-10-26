@@ -27,6 +27,7 @@ def begin(
     details: tuple[str, ...] = (),
     gate: str = "",
     binds: dict | None = None,
+    native_session_id: str = "",
 ) -> Result[dict]:
     return bind(
         _checkpoint(repo, work_session_id, question, artifacts),
@@ -45,6 +46,7 @@ def begin(
                 details=details,
                 gate=gate,
                 binds=binds,
+                native_session_id=native_session_id,
             ),
             lambda value: fmap(
                 recover(repo, work_session_id),
@@ -55,7 +57,10 @@ def begin(
 
 
 def _checkpoint(
-    repo: Path, scope: str | None, question: str, artifacts: tuple[tuple[str, str], ...]
+    repo: Path,
+    scope: str | None,
+    question: str,
+    artifacts: tuple[tuple[str, str], ...],
 ) -> Result[dict | None]:
     match artifacts:
         case ():
@@ -69,15 +74,14 @@ def _checkpoint(
                 case Ok(current) if current.status != "active":
                     return Ok(None)
                 case Ok(current):
+                    stage = current.current.stage
                     return fmap(
                         workflow.add_point(
                             current,
                             question,
-                            current.current.stage,
+                            stage,
                             artifacts=artifacts,
                             pending=question,
-                            next_action="Continue from the human's answer to: "
-                            + question,
                         ),
                         lambda updated: {
                             "before": asdict(current),
@@ -131,7 +135,6 @@ def _validated(
                                 previous.current.stage,
                                 artifacts=intended.current.artifacts,
                                 pending=intended.current.pending,
-                                next_action=intended.current.next_action,
                             )
                             == Ok(intended),
                             "review_recovery_invalid",

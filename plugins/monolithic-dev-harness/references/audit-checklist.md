@@ -1,10 +1,10 @@
 # Audit Checklist (Phase 7)
 
 Run AFTER all Stories are created and structurally verified. Retrieve each work item **fresh from
-Azure** (not the local draft) — the draft is what you meant to send; the Azure item is what landed.
+the tracker** (not the local draft) — the draft is what you meant to send; the tracker item is what landed.
 
 ## a) Fidelity
-- [ ] The Azure description matches the approved enriched draft (no truncation, no MCP re-encoding).
+- [ ] The tracker description matches the approved enriched draft (no truncation, no MCP re-encoding).
 - [ ] ASCII diagrams render intact.
 - [ ] Story points and tags persisted.
 

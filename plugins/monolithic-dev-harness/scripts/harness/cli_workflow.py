@@ -4,34 +4,47 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from dataclasses import asdict
 from pathlib import Path
 
 from core.result import Err, Failure, Ok, Result, attempt, bind, err, fmap, require
 from harness import (
+    artifact_manifest,
+    artifact_review,
     decisions,
     discovery,
     gates,
+    harness_controls,
     onboarding,
+    plan_review,
     preferences,
     prepared_workflows,
     questions,
     review_decisions,
+    route_facts,
     settings,
     startup,
     state,
     work_lifecycle,
     work_sessions,
     workflow,
+    workflow_requirements,
 )
 from harness.cli_common import pairs, print_result, resolve_repo
+from host_adapters.codex_runtime import (
+    CodexRuntimeProfile,
+    DecisionContext,
+    load_profile,
+)
 from host_adapters.interactions import present
 from integrations import registry
 
 COMMANDS = (
     "plan",
     "begin",
+    "next",
     "work-session",
     "workflow",
     "decision",
@@ -39,6 +52,14 @@ COMMANDS = (
     "onboarding",
     "mode",
 )
+
+
+def _default_decision_host() -> str:
+    if os.environ.get("CODEX_THREAD_ID"):
+        return "codex"
+    if os.environ.get("ZED_WORKTREE_ROOT"):
+        return "zed"
+    return "text"
 
 
 def _control_parser(
@@ -82,6 +103,15 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     begin_parser.add_argument(
         "--new", action="store_true", help="start a new session even if one matches"
     )
+    next_parser = sub.add_parser(
+        "next",
+        help="the one next step of the current work session: the skill to run, the question "
+        "to ask, or the command to use",
+    )
+    next_parser.add_argument("--repo", default=".")
+    next_parser.add_argument(
+        "--session-id", help="a work session other than the current one"
+    )
     work_session_parser = sub.add_parser(
         "work-session",
         help="start, choose, pause, stop, or resume project work sessions",
@@ -98,11 +128,18 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
             "stop",
             "resume",
             "complete",
+            "track",
+            "link",
         ),
     )
     work_session_parser.add_argument("session_id", nargs="?")
     work_session_parser.add_argument(
         "--request", help="the exact request for a new work session"
+    )
+    work_session_parser.add_argument(
+        "--work-item",
+        help="track: the Epic, Feature, Story or Bug the work started from; link: the Story or "
+        "Bug being implemented, under that item",
     )
     work_session_parser.add_argument("--repo", default=".")
     workflow_parser = sub.add_parser(
@@ -115,9 +152,12 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
             "render",
             "checkpoint",
             "status",
+            "requirements",
             "list",
             "routes",
             "prepare",
+            "manifest",
+            "show",
             "back",
             "pause",
             "resume",
@@ -133,14 +173,32 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
         "--request",
         help="start a workflow or include the exact request in a prepared handoff",
     )
+    workflow_parser.add_argument(
+        "--gate",
+        choices=tuple(workflow_requirements.GATES),
+        default="code-change",
+        help="requirements only: code-change (before editing code) or completion (before done)",
+    )
     workflow_parser.add_argument("--point", type=int)
-    workflow_parser.add_argument("--stage", choices=workflow.STAGES)
+    workflow_parser.add_argument(
+        "--stage",
+        choices=workflow.STAGES,
+        help="render only: the stage to render (discovery)",
+    )
     workflow_parser.add_argument("--label")
     workflow_parser.add_argument("--artifact", action="append")
     workflow_parser.add_argument("--decision", action="append")
     workflow_parser.add_argument("--pending")
-    workflow_parser.add_argument("--next-action")
     workflow_parser.add_argument("--write-id", action="append")
+    workflow_parser.add_argument(
+        "--manifest-output", help="local Markdown reading manifest"
+    )
+    workflow_parser.add_argument(
+        "--document",
+        action="append",
+        help='one document per flag, a JSON object: {"path": "<file in the project>", '
+        '"purpose": "<what it holds>", "read_when": "<when to load it>", "owner": "<skill>"}',
+    )
     workflow_parser.add_argument("--route", help="prepared route to inspect")
     workflow_parser.add_argument(
         "--prepared-stage", help="stage within a prepared route to inspect"
@@ -161,10 +219,15 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
         "--session-id", help="scope the question to a project work session"
     )
     decision_parser.add_argument(
-        "--host", choices=("codex", "claude", "cursor", "text"), default="text"
+        "--host",
+        # Claude Code is `claude`; agents often write its full name.
+        type=lambda value: {"claude-code": "claude"}.get(value, value),
+        choices=("codex", "claude", "cursor", "zed", "kimi", "text"),
+        default=_default_decision_host(),
     )
     decision_parser.add_argument("--blocking-available", action="store_true")
     decision_parser.add_argument("--async-available", action="store_true")
+    decision_parser.add_argument("--native-unavailable", action="store_true")
     decision_parser.add_argument("--question")
     decision_parser.add_argument("--option", action="append")
     decision_parser.add_argument(
@@ -227,6 +290,13 @@ def run(args: argparse.Namespace) -> int:
                     lambda value: json.dumps(value, ensure_ascii=False),
                 )
             )
+        case "next":
+            return print_result(
+                fmap(
+                    route_facts.next_for(resolve_repo(args.repo), args.session_id),
+                    lambda value: json.dumps(value, ensure_ascii=False),
+                )
+            )
         case "work-session":
             return work_session_command(args)
         case "workflow":
@@ -244,8 +314,7 @@ def _current_as_json(project: Path, session: work_sessions.Session) -> dict:
 
 def _with_current_session(args: argparse.Namespace) -> argparse.Namespace:
     """Nobody has to name the work session: an unnamed one is the project's current session."""
-    if args.session_id is None:
-        args.session_id = work_sessions.current(Path(args.repo).resolve())
+    args.session_id = work_sessions.acting(Path(args.repo).resolve(), args.session_id)
     return args
 
 
@@ -282,6 +351,16 @@ def work_session_command(args: argparse.Namespace) -> int:
         case "resume":
             result = fmap(
                 work_lifecycle.resume(project, args.session_id or ""),
+                work_sessions.as_json,
+            )
+        case "track" | "link" as operation:
+            bound = {"track": work_lifecycle.track, "link": work_lifecycle.link}
+            result = fmap(
+                bound[operation](
+                    project,
+                    args.session_id or work_sessions.current(project) or "",
+                    args.work_item or "",
+                ),
                 work_sessions.as_json,
             )
         case "pause" | "stop" | "complete":
@@ -340,7 +419,20 @@ def decision_command(args: argparse.Namespace) -> int:
             return _fallback_decision(repo, args)
         case "present":
             key = decisions.new_key()
-            match _question_spec(repo, args):
+            match bind(
+                _gate_values(repo, args),
+                lambda values: bind(
+                    _question_spec(repo, args, values),
+                    lambda spec: fmap(
+                        artifact_review.shown(
+                            repo, args.session_id, list(args.artifact or ())
+                        )
+                        if spec.shown
+                        else Ok(None),
+                        lambda _: spec,
+                    ),
+                ),
+            ):
                 case Err(failure):
                     print(failure.message, file=sys.stderr)
                     return 2
@@ -368,16 +460,69 @@ def decision_command(args: argparse.Namespace) -> int:
                     "options": _choice_options(spec.options, spec.details),
                 },
                 args.host,
-                args.blocking_available,
+                args.blocking_available
+                or (
+                    args.host in ("codex", "claude")
+                    and not args.async_available
+                    and not args.native_unavailable
+                ),
                 args.async_available,
                 free_text=spec.free_text,
                 language=_language(repo),
+                codex_profile=_codex_profile(repo, args.host),
+                decision=DecisionContext(
+                    kind=spec.kind,
+                    approval=spec.approval,
+                    structured_required=not args.native_unavailable,
+                ),
             )
             binds = (
                 {"bound": spec.bound, "target": list(spec.target or ())}
                 if spec.approval
                 else None
             )
+            match spec.gate:
+                case "harness-controls":
+                    match shown.get("transport_error"):
+                        case dict():
+                            return print_result(_presentation_result(shown, key))
+                        case _:
+                            pass
+                    match repo.resolve() == resolve_repo(".").resolve():
+                        case False:
+                            return print_result(
+                                err(
+                                    "control_project_mismatch",
+                                    "Show lifecycle controls from the target project's workspace. A reply must never change a different project.",
+                                )
+                            )
+                        case True:
+                            pass
+                    match shown["transport"]:
+                        case "chat":
+                            harness_controls.stage_chat(
+                                repo,
+                                key,
+                                spec.question,
+                                spec.options,
+                                os.environ.get("CODEX_THREAD_ID", ""),
+                            )
+                        case _:
+                            pass
+                    return print_result(
+                        Ok(
+                            json.dumps(
+                                {
+                                    **shown,
+                                    "state": "control",
+                                    "decision_id": key,
+                                    "instruction": "Show this lifecycle control independently of pending work. If native delivery fails, repeat this gate with --async-available, then --native-unavailable. Do not fallback to another pending decision. Real human replies are recorded by the host hook.",
+                                }
+                            )
+                        )
+                    )
+                case _:
+                    pass
             return print_result(
                 bind(
                     _workflow_artifacts(repo, args.artifact),
@@ -393,7 +538,7 @@ def decision_command(args: argparse.Namespace) -> int:
                                 target=spec.target,
                             )
                         )
-                        or fmap(
+                        or bind(
                             review_decisions.begin(
                                 repo,
                                 key,
@@ -407,14 +552,11 @@ def decision_command(args: argparse.Namespace) -> int:
                                 details=spec.details,
                                 gate=spec.gate,
                                 binds=binds,
+                                native_session_id=os.environ.get("CODEX_THREAD_ID", "")
+                                if args.host == "codex"
+                                else "",
                             ),
-                            lambda _: json.dumps(
-                                {
-                                    **shown,
-                                    "decision_id": key,
-                                    "state": "waiting_for_human",
-                                }
-                            ),
+                            lambda _: _presentation_result(shown, key),
                         )
                     ),
                 )
@@ -443,12 +585,31 @@ def _reused(entry: dict | None) -> Result[str] | None:
             return None
 
 
-def _question_spec(repo: Path, args: argparse.Namespace) -> Result[gates.Rendered]:
+def _gate_values(repo: Path, args: argparse.Namespace) -> Result[dict[str, str]]:
+    """The `--value`s that fill the gate's slots. `implementation-confirm` names the Story its one
+    approved plan is for, and that Story must be in the tracker: it comes from the plan, never
+    from the agent."""
+    values = dict(pairs(args.value))
+    if args.gate != "implementation-confirm":
+        return Ok(values)
+    return bind(
+        plan_review.story(repo, list(args.artifact or ())),
+        lambda key: bind(
+            registry.open_selected(repo, settings.load(repo)),
+            lambda ops: fmap(
+                plan_review.tracked(ops, key), lambda _: {**values, "story": key}
+            ),
+        ),
+    )
+
+
+def _question_spec(
+    repo: Path, args: argparse.Namespace, values: dict[str, str]
+) -> Result[gates.Rendered]:
     """The question to ask: a catalog gate in the project's language, or a one-off question.
 
     Approvals always come from the catalog, so their wording and what they are tied to are fixed.
     """
-    values = dict(pairs(args.value))
     if args.gate:
         if (
             args.question
@@ -553,8 +714,38 @@ def _fallback_decision(repo: Path, args: argparse.Namespace) -> int:
                     args.async_available and pending.transport == "blocking",
                     free_text=pending.allow_free_text,
                     language=_language(repo),
+                    codex_profile=_fallback_profile(repo, args.host, pending.transport),
+                    decision=DecisionContext(
+                        kind=pending.kind,
+                        approval=pending.approval,
+                        structured_required=False,
+                    ),
                 ),
             )
+
+
+def _codex_profile(repo: Path, host: str) -> CodexRuntimeProfile | None:
+    match host:
+        case "codex":
+            return load_profile(repo, os.environ.get("CODEX_THREAD_ID", ""))
+        case _:
+            return None
+
+
+def _presentation_result(shown: dict, key: str) -> Result[str]:
+    return Ok(json.dumps({**shown, "decision_id": key, "state": "waiting_for_human"}))
+
+
+def _fallback_profile(
+    repo: Path, host: str, transport: str
+) -> CodexRuntimeProfile | None:
+    match host, transport:
+        case "codex", "blocking":
+            return _codex_profile(repo, host)
+        case "codex", _:
+            return CodexRuntimeProfile()
+        case _:
+            return None
 
 
 def _show_fallback(
@@ -565,7 +756,14 @@ def _show_fallback(
 ) -> int:
     return print_result(
         fmap(
-            decisions.fallback(repo, shown["transport"], work_session_id=pending.scope),
+            decisions.fallback(
+                repo,
+                shown["transport"],
+                work_session_id=pending.scope,
+                native_session_id={"codex": os.environ.get("CODEX_THREAD_ID", "")}.get(
+                    args.host, ""
+                ),
+            ),
             lambda _: json.dumps(
                 {**shown, "decision_id": pending.id, "state": "waiting_for_human"}
             ),
@@ -595,15 +793,22 @@ def _workflow_point(repo: Path, args: argparse.Namespace) -> Result[workflow.Wor
             lambda artifacts: workflow.add_point(
                 current,
                 args.label or "",
-                args.stage or "",
+                _derived_stage(repo, args.session_id, current),
                 artifacts,
                 pairs(args.decision),
                 args.pending or "",
-                args.next_action or "",
                 tuple(args.write_id or ()),
             ),
         ),
     )
+
+
+def _derived_stage(
+    repo: Path, session_id: str | None, current: workflow.Workflow
+) -> str:
+    """The stage the route puts the work session in; the agent never names it."""
+    stage = route_facts.next_stage(repo, session_id)
+    return stage if stage in workflow.STAGES else current.current.stage
 
 
 def _workflow_artifacts(
@@ -629,42 +834,36 @@ def _workflow_artifact(repo: Path, name: str) -> Result[tuple[str, str]]:
 def _workflow_resume(
     repo: Path, point_id: int | None, session_id: str | None = None
 ) -> Result[workflow.Workflow]:
-    def checked(current: workflow.Workflow) -> Result[workflow.Workflow]:
-        return bind(
-            workflow.resume(current, point_id),
-            lambda selected: bind(
-                require(
-                    not workflow.stale_artifacts(repo, selected.current),
-                    "stale_workflow",
-                    "a reviewed document changed; go Back and review its new revision",
+    # Changed pinned instructions are consequential; absence of a session is not.
+    match session_id:
+        case None:
+            return bind(
+                workflow.load(repo), lambda current: workflow.resume(current, point_id)
+            )
+        case scope:
+            return bind(
+                discovery.verify(repo, scope),
+                lambda _: bind(
+                    workflow.load(repo, scope),
+                    lambda current: workflow.resume(current, point_id),
                 ),
-                lambda _: (
-                    fmap(
-                        registry.selected(repo, settings.load(repo)),
-                        lambda _: selected,
-                    )
-                    if selected.current.stage != "setup"
-                    else Ok(selected)
-                ),
-            ),
-        )
-
-    return bind(
-        discovery.verify(repo, session_id),
-        lambda _: bind(workflow.load(repo, session_id), checked),
-    )
+            )
 
 
 def workflow_command(args: argparse.Namespace) -> int:
     repo = resolve_repo(args.repo)
     if decisions.blocking(repo, args.session_id) and args.operation not in (
         "status",
+        "requirements",
         "list",
         "pause",
         "cancel",
         "back",
         "routes",
         "prepare",
+        "checkpoint",
+        "resume",
+        "manifest",
     ):
         return print_result(
             Err(
@@ -677,9 +876,17 @@ def workflow_command(args: argparse.Namespace) -> int:
     match args.operation, args.session_id:
         case operation, None if operation not in (
             "status",
+            "requirements",
             "list",
             "routes",
             "prepare",
+            "show",
+            "checkpoint",
+            "pause",
+            "resume",
+            "cancel",
+            "back",
+            "manifest",
         ):
             return print_result(
                 err(
@@ -690,13 +897,23 @@ def workflow_command(args: argparse.Namespace) -> int:
         case _:
             pass
     match args.operation:
+        case "show":
+            return print_result(
+                artifact_review.show(repo, args.session_id, list(args.artifact or ()))
+            )
+        case "manifest":
+            return print_result(
+                artifact_manifest.save(
+                    repo, args.manifest_output or "", tuple(args.document or ())
+                )
+            )
         case "render":
             return print_result(
                 bind(
                     require(
-                        args.stage == "discover",
+                        args.stage == "discovery",
                         "invalid_request",
-                        "runtime rendering supports the discover stage",
+                        "runtime rendering supports the discovery stage",
                     ),
                     lambda _: fmap(
                         discovery.render(repo, args.session_id),
@@ -722,9 +939,25 @@ def workflow_command(args: argparse.Namespace) -> int:
                         args.prepared_stage or "",
                         original_request=args.request or "",
                         available_operations=args.available,
+                        git_delivery=settings.git_delivery(repo),
                     ),
                     lambda package: json.dumps(
                         package, ensure_ascii=False, indent=2, sort_keys=True
+                    ),
+                )
+            )
+        case "requirements":
+            return print_result(
+                fmap(
+                    workflow_requirements.evaluate(
+                        repo,
+                        args.session_id or work_sessions.current(repo),
+                        workflow_requirements.GATES[args.gate],
+                    ),
+                    lambda report: json.dumps(
+                        workflow_requirements.as_json(report),
+                        ensure_ascii=False,
+                        indent=2,
                     ),
                 )
             )
@@ -752,7 +985,6 @@ def workflow_command(args: argparse.Namespace) -> int:
                                     "stage": point.stage,
                                     "current": index == current.cursor,
                                     "pending": point.pending,
-                                    "next_action": point.next_action,
                                     "artifacts": [name for name, _ in point.artifacts],
                                 }
                                 for index, point in enumerate(current.points)
@@ -784,19 +1016,9 @@ def workflow_command(args: argparse.Namespace) -> int:
                 workflow.load(repo, args.session_id),
                 lambda current: workflow.navigate(current, args.point),
             )
-            match result:
-                case Ok():
-                    state.revoke_approvals(repo, args.session_id)
-                case _:
-                    pass
             return _workflow_result(repo, result, args.session_id)
         case "resume":
             result = _workflow_resume(repo, args.point, args.session_id)
-            match result:
-                case Ok():
-                    state.revoke_approvals(repo, args.session_id)
-                case _:
-                    pass
             return _workflow_result(repo, result, args.session_id)
         case "cancel":
             result = bind(workflow.load(repo, args.session_id), workflow.cancel)

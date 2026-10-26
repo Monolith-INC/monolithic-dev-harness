@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import secrets
 from dataclasses import dataclass
@@ -10,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
-from harness import commands, gates, questions, setup_reviews, state
+from harness import commands, gates, questions, setup_reviews, state, workflow
 
 RELATIVE_PATH = Path(".harness/state/decision.json")
 HISTORY = "decision-history.json"
@@ -55,7 +54,11 @@ class Pending:
             and self.transport == transport
             and (
                 question.get("id") == self.id
-                or (transport == "async" and question.get("question") == self.question)
+                # Async questions and Claude's AskUserQuestion carry no id; match the wording.
+                or (
+                    (transport == "async" or "id" not in question)
+                    and question.get("question") == self.question
+                )
             )
             and not self.presentation_id
         )
@@ -128,6 +131,27 @@ def cancel_onboarding(repo: Path) -> Result[dict[str, Any]]:
             return bind(review_decisions.recover(repo), lambda _: _cancel_ready(repo))
         case current:
             return Ok(current or {})
+
+
+def cancel_preparation(repo: Path, scope: str | None) -> Result[object]:
+    """A reset abandons a pending preparation question; it grants no approval."""
+    return bind(
+        _path(repo, scope),
+        lambda path: _cancel_preparation_at(path),
+    )
+
+
+def _cancel_preparation_at(path: Path) -> Result[object]:
+    match state.read_json(path):
+        case {"status": "pending"} as current:
+            return attempt(
+                lambda: _archive_dismissal(path, {**current, "status": "cancelled"}),
+                "decision_invalid",
+                "archive preparation question",
+                OSError,
+            )
+        case _:
+            return Ok(None)
 
 
 def _cancel_ready(repo: Path) -> Result[dict[str, Any]]:
@@ -308,7 +332,7 @@ def pending(repo: Path, work_session_id: str | None = None) -> Pending | None:
     """
     from harness import work_sessions
 
-    first = work_session_id or work_sessions.current(repo)
+    first = work_sessions.acting(repo, work_session_id)
     for scope in (first, None) if first else (None,):
         value = record(repo, scope)
         if value and value.get("status") == "pending":
@@ -356,6 +380,7 @@ def begin(
     binds: dict[str, Any] | None = None,
     review_checkpoint: dict | None = None,
     kind: str | None = None,
+    native_session_id: str = "",
 ) -> Result[dict[str, Any]]:
     from harness import review_decisions
 
@@ -379,6 +404,7 @@ def begin(
                     binds,
                     review_checkpoint,
                     kind,
+                    native_session_id,
                 ),
                 lambda value: fmap(
                     _save_prepared(path, value),
@@ -404,6 +430,7 @@ def _prepared(
     binds: dict | None,
     checkpoint: dict | None,
     kind: str | None,
+    native_session_id: str,
 ) -> Result[dict]:
     return bind(
         require(
@@ -438,6 +465,7 @@ def _prepared(
                 "approval": approval,
                 "status": "pending",
                 "answer": "",
+                "native_session_id": native_session_id,
                 "allow_free_text": free_text,
                 "details": details,
                 **{
@@ -478,6 +506,69 @@ def resolve(
                 ValueError,
             ),
         ),
+    )
+
+
+def adopt_native_async(
+    repo: Path,
+    key: str,
+    question: str,
+    options: tuple[str, ...],
+    native_session_id: str,
+    *,
+    work_session_id: str | None = None,
+) -> Result[dict[str, Any]]:
+    """Hook-only discovery upgrades exact prepared delivery, never human authority."""
+    return bind(
+        _path(repo, work_session_id),
+        lambda path: bind(
+            _async_adoption(
+                repo,
+                state.read_json(path) or {},
+                key,
+                question,
+                options,
+                native_session_id,
+            ),
+            lambda updated: fmap(
+                attempt(
+                    lambda: state.write_json(path, updated),
+                    "decision_invalid",
+                    "native async discovery",
+                    OSError,
+                ),
+                lambda _: updated,
+            ),
+        ),
+    )
+
+
+def _async_adoption(
+    repo: Path,
+    current: dict[str, Any],
+    key: str,
+    question: str,
+    options: tuple[str, ...],
+    native_session_id: str,
+) -> Result[dict[str, Any]]:
+    return fmap(
+        require(
+            current.get("status") == "pending"
+            and current.get("transport") == "chat"
+            and current.get("id") == key
+            and current.get("question") == question
+            and tuple(current.get("options", ())) == options
+            and not current.get("presentation_id")
+            and bool(native_session_id)
+            and current.get("native_session_id") == native_session_id
+            and all(
+                workflow.file_digest(repo / name) == Ok(digest)
+                for name, digest in current.get("artifacts", ())
+            ),
+            "decision_invalid",
+            "Native discovery does not match the prepared decision and session.",
+        ),
+        lambda _: {**current, "transport": "async"},
     )
 
 
@@ -528,21 +619,30 @@ def _resolve(
     if current.get("status") != "pending" or current.get("id") != key:
         raise ValueError("this answer does not belong to the pending decision")
     answer = questions.match_option(answer, tuple(current.get("options", ()))) or answer
-    if answer not in current.get("options", ()) and not _free_text_allowed(
+    # A reply in the user's own words closes the question too: it chose none of the options, so
+    # it approves nothing, and the agent acts on what it says. A question never stays stuck.
+    own_words = answer not in current.get("options", ()) and not _free_text_allowed(
         current, answer
-    ):
-        raise ValueError("the human reply does not select an offered option")
+    )
+    if own_words and not answer.strip():
+        raise ValueError("the human reply is empty")
     if source != current.get("transport"):
         raise ValueError("the answer arrived through a different interaction")
     if questions.choice_label(
         answer
     ).casefold() not in questions.DECLINE_LABELS and any(
-        _digest(repo / name) != digest for name, digest in current.get("artifacts", ())
+        workflow.file_digest(repo / name) != Ok(digest)
+        for name, digest in current.get("artifacts", ())
     ):
         raise ValueError(
             "the reviewed artifact changed; return to its review before approving"
         )
-    updated = {**current, "status": "answered", "answer": answer}
+    updated = {
+        **current,
+        "status": "answered",
+        "answer": answer,
+        **({"own_words": True} if own_words else {}),
+    }
     state.write_json(path, updated)
     history = path.with_name(HISTORY)
     earlier = (state.read_json(history) or {}).get("answers", [])
@@ -600,8 +700,10 @@ def reusable(
 
 def _window_open(repo: Path, entry: dict[str, Any], scope: str | None) -> bool:
     """Whether the approval this answer opened still holds (not revoked, expired, or ended)."""
+    from harness import work_sessions
+
     wanted = questions.approval_id(str(entry.get("id", "")))
-    return any(
+    return not work_sessions.ended(repo, scope) and any(
         record.get("id") == wanted for _, record in state.open_approvals(repo, scope)
     )
 
@@ -640,12 +742,16 @@ def fallback(
     transport: str,
     *,
     work_session_id: str | None = None,
+    native_session_id: str = "",
 ) -> Result[dict[str, Any]]:
     """Move the same unanswered review to a simpler delivery method; never answer it."""
     return bind(
         _path(repo, work_session_id),
         lambda path: bind(
-            _fallback_record(state.read_json(path) or {}, transport),
+            fmap(
+                _fallback_record(state.read_json(path) or {}, transport),
+                lambda updated: _fallback_origin(updated, native_session_id),
+            ),
             lambda updated: fmap(
                 attempt(
                     lambda: state.write_json(path, updated),
@@ -657,6 +763,15 @@ def fallback(
             ),
         ),
     )
+
+
+def _fallback_origin(current: dict[str, Any], native_session_id: str) -> dict[str, Any]:
+    """The conversation re-presenting the saved menu owns its next human reply."""
+    match native_session_id:
+        case str() as session if session:
+            return {**current, "native_session_id": session}
+        case _:
+            return current
 
 
 def _fallback_record(current: dict[str, Any], transport: str) -> Result[dict[str, Any]]:
@@ -672,10 +787,6 @@ def _fallback_record(current: dict[str, Any], transport: str) -> Result[dict[str
                 "decision_invalid",
                 "fallback requires a pending question and a simpler transport",
             )
-
-
-def _digest(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def status(repo: Path, work_session_id: str | None = None) -> str:
@@ -697,6 +808,31 @@ def status_command(command: str, cwd: Path) -> bool:
             return False
 
 
+def next_command(command: str, cwd: Path) -> bool:
+    """Whether a shell command only asks for the next step (`harness next`), which reports a
+    waiting question instead of advancing past it."""
+    match commands.harness_args(command, cwd):
+        case ("next", *options):
+            return len(options) % 2 == 0 and all(
+                flag in ("--repo", "--session-id") for flag in options[::2]
+            )
+        case _:
+            return False
+
+
+def show_command(command: str, cwd: Path) -> bool:
+    """Whether a shell command only shows files (`harness workflow show`), so a waiting question
+    about them can be shown again. Anything but exactly one show invocation disqualifies it."""
+    match commands.harness_args(command, cwd):
+        case ("workflow", "show", *options):
+            return len(options) % 2 == 0 and all(
+                flag in ("--repo", "--session-id", "--artifact")
+                for flag in options[::2]
+            )
+        case _:
+            return False
+
+
 def fallback_command(command: str, cwd: Path) -> bool:
     """Only the controlled transport change may pass the waiting gate."""
     match commands.harness_args(command, cwd):
@@ -710,7 +846,7 @@ def _fallback_options(options: tuple[str, ...]) -> bool:
     match options:
         case ():
             return True
-        case ("--async-available", *rest):
+        case ("--async-available" | "--native-unavailable", *rest):
             return _fallback_options(tuple(rest))
         case ("--repo" | "--session-id" | "--host", value, *rest) if (
             not value.startswith("--")

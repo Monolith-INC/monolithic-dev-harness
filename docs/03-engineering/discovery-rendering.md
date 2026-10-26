@@ -11,7 +11,7 @@ Onboarding is session-free. Bootstrap prepares settings, language confirmation, 
 storage, and the bundled BMAD runtime. The CLI refuses to start project work until this setup is
 verified. Project work then selects a work session and starts its workflow.
 
-`harness workflow render --stage discover --session-id <id> --repo <project>` resolves the project
+`harness workflow render --stage discovery --session-id <id> --repo <project>` resolves the project
 path, original saved request, language, tracker, source control, preference environment, route,
 and session-bound workflow commands, including the decision-log (`memlog.py`) command the plan's
 memlog uses. Without `--session-id`, rendering uses the project's current work session. It runs the unchanged vendored BMAD renderer against the

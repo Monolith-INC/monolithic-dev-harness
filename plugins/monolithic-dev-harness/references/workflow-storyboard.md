@@ -1,42 +1,34 @@
 # Harness workflow storyboard
 
 The harness owns the sequence and the meaning of each decision. Every question to the human is a
-**menu** (`harness decision present`, rendered the same way on every transport and falling back
-silently from native controls to chat) or a **question batch** (all open questions in one chat
+**menu** (`harness decision present`) or a **question batch** (all open questions in one chat
 message). Follow [human-decisions.md](human-decisions.md). Native controls supply their own **Other**
-field, so never add an `Other` option yourself. A first request resumes after setup instead of
-making the user repeat it. The target flow and its gates are drawn in the project documentation
+field, so never add an `Other` option yourself. When native delivery fails, explain the fallback
+and preserve the exact pending decision and options; never silently replace a formal menu with
+prose. A first request resumes after setup instead of making the user repeat it. The target flow
+and its gates are drawn in the project documentation
 (`docs/02-design/specs/harness-main-flow.md`).
 
-| Stage | Entry | Work before stopping | Review point | Exit |
-| --- | --- | --- | --- | --- |
-| Setup | First use or changed project configuration | Reuse the supplied project path; inspect settings; prepare the bundled runtime and local tracker if needed; confirm language; ask only for missing choices. No session or workflow is required. | Show chosen settings with the alternatives offered | Verify setup, then return to the original request |
-| Project and session | Setup verified, immediately before product or engineering work | Read-only route the exact request to a project work session, then select or start it | Ask only when resuming paused/stopped work or choosing among matches | Carry the selected work-session ID and request into the focused skill; never start a central loop just to select a session |
-| Discover | Named existing task or request for a technical plan | Read the named item directly. Use tracker tools for tracker items; read an explicitly linked project file directly. Investigate with subagents, ask every open question in one batch, re-check scope on the decided plan, and keep the decision memlog. | Plan checkpoint menu: recap of every decision; *Approve and continue*, *Deepen*, *Approve and stop*, or typed changes | Accepted plan enters backlog; no repeated starting-point question |
-| Ideate | User selects idea exploration or submits a new idea | Use `plan-initiative` and only its needed routes: brainstorm, pressure-test, research, brief, requirements, UX, architecture, product spec | Show the product contract and critique | Accepted contract enters backlog; ideation is offered after setup |
-| Backlog | Accepted product contract or sufficiently defined work item | Draft, enrich, decompose, create Story Tasks, and validate locally; check tracker readiness before publication | Show the complete Feature, Story, and Task batch and its destination; seek one approval for the specified external writes | Publish and read back the approved batch |
-| Technical plan | A ready Story and its Tasks | Start the Story, draft and validate its Story-local technical spec | Present the exact spec revision, then seek the technical decision | Approved spec is pinned to its revision |
-| Build | Approved spec and active implementation session | Work through atomic Tasks and checks | Stop only for a material decision or protected write | Verified implementation and evidence |
-| Verify | Checked implementation | Review requirements, quality, and delivery evidence | Present verdict and any required staging or pull-request decision | Draft pull request or a clearly blocked result, then mark the workflow complete |
+The current contract is [onboarding](onboarding.md).
 
-An agent continues through reversible local work within a stage. It stops for missing information that cannot be inferred, a material product choice, a review of a complete contract, or a write that policy protects. A `proceed` prompt for routine drafting is not a gate. Story breakdown precedes changing the Story to In Progress.
+The order of the stages and of every step inside them is the route in
+`config/prepared-workflows.json`; `harness next` gives the current step, and the stage details are in
+[onboarding](onboarding.md).
+
+Save evidence during every stage. Preparation assembles it rather than delaying persistence.
+No repository versioning rule applies before execution. No language preference stops work.
+Pause/reset/drop controls preserve evidence; suspension disables every harness veto.
 
 ## After setup
 
-Onboarding is the optional initial setup workflow. The user may skip, dismiss or restart it,
+Onboarding is the optional discovery-through-verify workflow. The user may skip, dismiss or restart it,
 or use `harness mode free` for skills and guidance without a session. Language uses a captured
-choice or saved preference, else English; no confirmation is required. These controls preserve
+choice or saved preference, else English; outside setup, no confirmation is required. These controls preserve
 structured work and strict action governance. The routing below applies when guided work is wanted.
 
-When a request needs routing, present a menu with up to three routes that fit it:
-
-- Continue the named task or request.
-- Prepare or organize work items.
-- Explore an idea.
-
-When no request was supplied, label the first route **Start feature work**. Do not add a literal
-`Other` choice; the Codex control already provides a free-text field. Route the click or Other-field
-answer and continue without asking the user to invoke the harness again.
+Routing is a step of the route: `harness next` names the `starting-point` question when the request
+names no work item, and `refined-start` when the item is already refined. Route the click or the
+Other-field answer and continue without asking the user to invoke the harness again.
 
 ## Ready reference: information and tools
 
@@ -44,10 +36,11 @@ Use this map instead of searching plugin files to rediscover workflow capabiliti
 
 | Need | Source |
 | --- | --- |
+| The one next step of the current work session | `harness next --repo <project>` |
 | Project language confirmation, tracker choices, missing settings | `harness bootstrap --inspect` |
-| Current commit, branch, saved workflow, and local tracker readiness | `harness bootstrap --inspect` |
+| Saved workflow and local tracker readiness; versioning deferred to execution | `harness bootstrap --inspect` |
 | Work sessions for this exact request | `harness work-session route --request "<exact request>" --repo <project>` |
-| Validated discovery instructions bound to the current session | `harness workflow render --stage discover --repo <project>` |
+| Validated discovery instructions bound to the current session | `harness workflow render --stage discovery --repo <project>` |
 | Start, inspect, pause, stop, or resume a project work session | `harness work-session` |
 | Prepare missing bundled local tracker folders | `harness bootstrap --prepare-local-tracker` |
 | Setup health | `harness doctor` |
@@ -57,15 +50,17 @@ Use this map instead of searching plugin files to rediscover workflow capabiliti
 | Parent and child context | `tracker_list_children` |
 | Existing requirements/spec/review artifacts | `tracker_list_artifacts` |
 | Active or saved workflow state | `harness workflow status` / `harness workflow list` |
-| Settings and artifact folder for backlog work | `bin/agile-backlog-toolkit config --show` |
+| What code changes still need, and which step produces it | `harness workflow requirements` |
+| Settings and artifact folder for backlog work | `harness bootstrap --inspect`; a document's path: `harness document path` |
 | Technical discovery | `bmad-build` (BMad Build's clarify and plan steps) |
 | Ideation and product shaping | `plan-initiative` and its listed optional routes |
 
 For a named project file, open that file directly. Use the host's tool catalog and these known
 capabilities; do not search source code to find tool names or infer settings already reported by a
-command. The bundled local tracker needs no provider onboarding. Its records are under
-`.harness/tracker/`; the configured artifact folder holds plans and drafts. A project file can be
-planned directly even when it is not yet a tracker record.
+command. The bundled local tracker needs no provider onboarding. Its work items are the agile-backlog-toolkit's
+ticket files in `Tickets/Ready`, `Tickets/InProgress` and `Tickets/Done` at the project root; the
+configured artifact folder holds plans and specs. A project file can be planned directly even when
+it is not yet a tracker record.
 
 ## Workflow actions
 
@@ -76,9 +71,11 @@ planned directly even when it is not yet a tracker record.
 - **Complete:** mark the requested outcome finished. Starting a later workflow archives the completed record first.
 
 Project work sessions (`harness work-session`) hold one request and checkpoint path per ticket or
-problem. Checkout-bound implementation sessions (`harness session`) continue to protect code changes
-for one branch. They are separate records. A work-session pause or stop is local and should remain
-easy; it does not require closing the checkout-bound session or asking the tracker for approval.
+problem. The unchanged `implementation-confirm` approval in that active project work-session is
+sufficient context for local code edits. Checkout-bound implementation sessions (`harness session`)
+are optional and apply only when branch-based delivery is selected. A work-session pause or stop is
+local and should remain easy; it does not require closing a checkout-bound session or asking the
+tracker for approval.
 No command needs the work-session ID: the harness keeps track of the current session (the one last
 started, resumed, or selected) and uses it, so each ticket keeps its own checkpoints and questions.
 Without any session, questions and answers still work, project-wide.
@@ -103,11 +100,12 @@ routing choice, Back, Pause, Resume, Cancel, or Complete never opens a write win
 
 ## Language and setup
 
-Ask for English or Português (Brasil) once for each project, even when another project has a saved
-user-level preference. Store the preference outside the repository and a project confirmation under
+Setup (the bootstrap skill) asks for English or Português (Brasil) once for each project, even when
+another project has a saved user-level preference; outside setup, a missing choice uses the saved
+preference, else English, and never stops work. Store the preference outside the repository and a project confirmation under
 `.harness/state/`; record the effective language in the workflow checkpoint. Repository settings
 hold tracker and project choices. Default source control to local and do not expose provider setup
-as a routine choice. Preserve unrelated user-owned settings. Do not silently select the bundled
-Azure example. Check the selected tracker's required values and capabilities before any publication
+as a routine choice. Preserve unrelated user-owned settings. Do not silently select a tracker
+from the example settings. Check the selected tracker's required values and capabilities before any publication
 batch. Check current commit state afresh on each run; a saved checkpoint can describe an earlier
 state. Git metadata, an initial commit, branches, and hosted code are optional for setup and planning.

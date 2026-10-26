@@ -44,6 +44,14 @@ note telling the agent to explain what changed and ask again. A general approval
 again for unchanged context returns the earlier answer instead of a new question. Answers are kept
 in a human-owned history beside the decision record.
 
+**Amended after 0.7.0-rc.2: one session for the command and the hook.** An approval belongs to the
+work session the conversation acts in: the one it is linked to, else the project's current one,
+which is also what `harness decision` and `harness workflow` use without `--session-id`. A resumed
+chat with no link therefore sees the approvals given in the current session, and an answer is
+reused only while the write hook would accept its approval; a stopped or completed session reuses
+nothing. A linked conversation that runs one of these commands against another session is refused
+until it passes its own `--session-id`.
+
 The decision itself is unchanged: only the user opens an approval, never the agent.
 
 ## Options Considered

@@ -1,0 +1,54 @@
+%% Generated from the route in config/prepared-workflows.json by route_diagram.py.
+flowchart TD
+  setup["Setup: setup<br/>bootstrap"]
+  starting_item{{"Discovery: starting item<br/>asks starting-point<br/>skipped when entry tracked"}}
+  refined_start{{"Discovery: refined start<br/>asks refined-start<br/>only when entry refined at start"}}
+  idea{{"Ideate: idea<br/>plan-initiative<br/>asks idea-continue<br/>only when idea chosen"}}
+  idea_stop["Ideate: idea stop<br/>only when idea stopped<br/>ends the work"]
+  discovery{{"Discovery: discovery<br/>bmad-build<br/>asks planning-depth<br/>skipped when shaping skipped"}}
+  planning_methods{{"Planning: planning methods<br/>bmad-build<br/>asks planning-methods<br/>skipped when shaping skipped or depth light"}}
+  approach["Planning: approach<br/>bmad-build<br/>skipped when shaping skipped"]
+  hardening{{"Hardening: hardening<br/>bmad-build<br/>asks plan-checkpoint<br/>skipped when shaping skipped"}}
+  create_entry{{"Refinement: create entry<br/>generate-work-item<br/>asks publish-items<br/>skipped when entry tracked"}}
+  refine_entry{{"Refinement: refine entry<br/>enrich-work-item<br/>asks publish-items"}}
+  split{{"Refinement: split<br/>decompose-backlog<br/>asks refinement-split<br/>only when entry is parent"}}
+  subgraph story["For each Story"]
+  story_refine{{"Refinement: story refine<br/>enrich-work-item<br/>asks publish-items"}}
+  story_plan{{"Refinement: story plan<br/>generate-breakdown-work-items<br/>asks implementation-confirm"}}
+  story_tasks{{"Refinement: story tasks<br/>generate-breakdown-work-items<br/>asks publish-items"}}
+  risk{{"Preparation: risk<br/>generate-plain-language-documentation<br/>asks approve-document"}}
+  verification_plan{{"Preparation: verification plan<br/>generate-plain-language-documentation<br/>asks approve-document"}}
+  manifest["Preparation: manifest"]
+  end
+  subgraph delivery["Story by Story"]
+  start{{"Execution: start<br/>start-ticket<br/>asks move-item"}}
+  implement["Execution: implement<br/>implement-story"]
+  review["Verify: review<br/>review"]
+  resolve["Verify: resolve<br/>resolve-ticket"]
+  story_done{{"Verify: story done<br/>resolve-ticket<br/>asks move-item"}}
+  end
+  close_entry["Verify: close entry<br/>finish-feature-development<br/>only when entry is parent"]
+  setup --> starting_item
+  starting_item --> refined_start
+  refined_start --> idea
+  idea --> idea_stop
+  idea_stop --> discovery
+  discovery --> planning_methods
+  planning_methods --> approach
+  approach --> hardening
+  hardening --> create_entry
+  create_entry --> refine_entry
+  refine_entry --> split
+  split --> story_refine
+  story_refine --> story_plan
+  story_plan --> story_tasks
+  story_tasks --> risk
+  risk --> verification_plan
+  verification_plan --> manifest
+  manifest --> start
+  start --> implement
+  implement --> review
+  review --> resolve
+  resolve --> story_done
+  story_done --> close_entry
+  close_entry --> finished(["Done"])

@@ -1,28 +1,26 @@
 ---
 name: decompose-backlog
 description: >
-  Decompose a parent work item into correctly-parented, audited children. A Feature parent yields Stories; an Epic parent yields Features and, under each, Stories — in one linear run. Use when the user asks to "break down this Feature/Epic", "decompose Epic/Feature N", "create the features and user stories for <epic>", "groom this backlog item", or provides a Feature/Epic id and wants the tree drafted and created in Azure DevOps. Drives 7 phases: ingest the parent, split into right-sized Features (Epic only) and Stories (1 Story = 1 sprint = 1 PR), draft them in the artifacts path, enrich to the team format, create them top-down in Azure DevOps (Features under the Epic, Stories under their FEATURE), verify the hierarchy, and audit that every parent requirement has a home. Self-contained rules; two approval gates before any write. For plain-language scope lines and story narrative, delegates sub-passes to generate-plain-language-documentation in DRAFT and ENRICH phases.
+  Decompose a parent work item into correctly-parented, audited child Stories. Use when the user asks to "break down this Feature", "decompose Epic/Feature N into stories", "create the user stories for <feature>", "groom this backlog item", or provides a Feature/Epic id and wants Stories drafted and created in the selected tracker. Drives 7 phases: ingest the parent, split into right-sized Stories (1 Story = 1 sprint = 1 PR), draft them in the artifacts path, enrich to the team format, create them in the tracker parented to the FEATURE, verify the hierarchy, and audit that every parent requirement has a home. Self-contained rules; two approval gates before any write. For plain-language scope lines and story narrative, delegates sub-passes to generate-plain-language-documentation in DRAFT and ENRICH phases.
 license: MIT
 ---
 
 # Decompose Backlog
 
-Conductor for turning a parent work item into its child tree in Azure DevOps: Feature → Stories
-(*story mode*), or Epic → Features → Stories (*tree mode*). Load the reference files
+Conductor for turning a parent work item into child Stories in the selected tracker. Load the reference files
 as each phase needs them — they carry the self-contained rules so this file stays a score, not a
 textbook.
 
 References (in `../../references/`):
 
-- `decomposition-rules.md` — hierarchy, Feature sizing (Epic → Feature), Story sizing (1 Story = 1 sprint = 1 PR), story-point heuristic, DoR, parent-type branch.
+- `decomposition-rules.md` — hierarchy, sizing (1 Story = 1 sprint = 1 PR), story-point heuristic, DoR.
 - `ticket-structure.md` — draft format + draft file constraints (frontmatter, filename regex).
-- `azure-mechanics.md` — create/link MCP calls + the two linking gotchas + rendering rules.
+- `tracker-contract.md` — the tracker gateway: every read and write goes through its `tracker_*`
+  tools, never a tracker's own tools.
 - `audit-checklist.md` — fidelity / coverage / DoR postflight.
 
-Shape contracts and sub-pass notes:
+References (skill-specific, in `./references/`):
 
-- `../../common/templates/canonical-feature.md` — **read-only shape contract** for Feature drafts in
-  tree mode (Objetivo, Escopo, Critérios de Sucesso, Áreas/Módulos, Descrição Original).
 - `../../common/templates/canonical-user-story.md` — **read-only shape contract** for enriched Story drafts (seven
   emoji sections per `ticket-structure.md`, pt-BR labels). Do not edit; validate every draft against
   this template when `language` is `pt-BR`.
@@ -43,54 +41,27 @@ matching labels.
 
 ### 1. INGEST
 
-Read the parent via `tracker_get_work_item(ref=<id>)` through `workflow-integrations`. Capture the original text VERBATIM, its
-acceptance criteria, and the parent chain. Read any linked spike/wiki. Determine parent type and the
-mode (decomposition-rules.md → Parent-type branch):
-
-- **Feature** → *story mode*. Continue to DECOMPOSE.
-- **Epic** → *tree mode*. Also read the Epic's existing child Features (`tracker_list_children` and inspect each returned child): their titles, descriptions, and existing Stories. Continue to DECOMPOSE
-  without asking; the tree proposal at GATE 1 is where the user steers.
-
-Stories never attach to an Epic, in either mode.
-
-If the parent references a `product-spec`, read `SPEC.md` and all `companions:` before decomposing.
-Treat `CAP-N` intent and success conditions, product constraints, non-goals, UX contracts, and
-`AD-N` rules as binding. Existing work-item prose does not override them silently.
+Read the parent via `tracker_get_work_item` (and its children via `tracker_list_children`). Capture the original text VERBATIM, its
+acceptance criteria, and the parent chain. Read any linked spike/wiki. Determine parent type.
+**Branch:** if the parent is an **Epic**, STOP and ask whether to create intervening Feature(s) first
+or target an existing child Feature (see decomposition-rules.md → Parent-type branch). Stories never
+attach to an Epic.
 
 ### 2. DECOMPOSE
 
-Apply the sizing rules and story-point heuristic from `decomposition-rules.md`.
-
-- *Story mode:* an ordered list of Story stubs (title + one-line scope + dependencies + provisional
-  points), each tracing to a verbatim slice of the Feature and the `CAP-N` values it covers.
-- *Tree mode:* first the Features (Feature sizing rule): for each, title + one-line objective + the
-  verbatim Epic slice it covers + `existing #<id>` or `new`. Then, under each Feature, its Story stubs
-  as in story mode, each tracing to a slice of that Feature's slice. Every Epic slice must land in
-  exactly one Feature.
-
-Every relevant capability must land in at least one Story, and every Story must cite at least one
-capability when a product spec exists. A new constraint or architectural choice discovered while
-slicing goes back to the owning planning artifact; do not bury it in a Story.
-
-**── GATE 1 —** present the whole split (the tree, in tree mode) as one outline and WAIT for explicit
-approval before drafting anything. Edits the user asks for re-run DECOMPOSE; do not draft a partial
-tree.
+Apply the sizing rule and story-point heuristic from `decomposition-rules.md`. Produce an ordered list
+of Story stubs (title + one-line scope + dependencies), each tracing to a verbatim slice of the parent.
+**── GATE 1 —** present the split and ask `harness decision present --gate refinement-split`
+before drafting anything.
 
 ### 3. DRAFT
 
-*Tree mode first:* per approved **new** Feature, write a local draft against
-`../../common/templates/canonical-feature.md` — frontmatter `work_item_type: Feature`,
-`parent_id: "<epic id>"`, filename `<epicId>-f<n>-<slug>.md`, Descrição Original = its verbatim Epic
-slice. Existing Features get no draft; their Stories use the existing Feature id.
-
-Per approved Story stub, write a local draft per `ticket-structure.md` and the canonical template matching
+Per approved stub, write a local draft at the path `harness document path --type ticket --new
+user-story --title "<title>" --parent <feature key>` prints (in `Tickets/Ready/`), per `ticket-structure.md` and the canonical template matching
 the run's `language` (`../../common/templates/canonical-user-story.md` for pt-BR,
 `canonical-user-story.en.md` for en) — hook-valid frontmatter (`type`, no `status`, `language:` set
-to the chosen value), filename regex with the Feature-id prefix, the 7 body sections in canonical
-order using that language's labels, and `story_points:` set from the heuristic. Content hygiene
-applies. In tree mode, a Story under a **new** Feature has no Feature id yet: name it
-`<epicId>-f<n>-us<m>-<slug>.md` and set `parent_id: "pending:<epicId>-f<n>"` (the Feature draft's
-filename stem). CREATE replaces the placeholder with the real id.
+to the chosen value), the 7 body sections in canonical
+order using that language's labels. Content hygiene applies.
 
 **Plain-language sub-pass:** Read
 `../generate-plain-language-documentation/references/integration-notes.md` § decompose-backlog; run a
@@ -101,48 +72,39 @@ is pt-BR).
 ### 4. ENRICH
 
 Tighten each draft to the team format: WHAT not HOW, ASCII diagrams, de-dup (each fact once),
-story-point justification with the per-driver MAX. The enriched body IS the exact Azure description.
+story-point justification with the per-driver MAX. The enriched body IS the exact tracker description.
 
 **Plain-language sub-pass:** Read
 `../generate-plain-language-documentation/references/integration-notes.md` § decompose-backlog; polish
 narrative paragraphs inside sections (not emoji headings; not story-point driver tables).
 Glossary-verify via `../generate-plain-language-documentation/references/assets/tech-glossary-en-pt-br.json`
 when locale is pt-BR.
-**── GATE 2 —** show the final bodies (in tree mode: each Feature followed by its Stories, with
-points), then ask the `publish-items` approval gate with the drafts as `--artifact`s (see the harness skill's approval protocol). One approval covers the whole batch while the drafts are
-unchanged; say so when you ask.
+**── GATE 2 —** show the final drafts with `harness workflow show --artifact <draft>` and ask
+`harness decision present --gate publish-items` with every draft as `--artifact` before any tracker
+write.
 
 ### 5. CREATE
 
-Per `../../common/providers.md` and `../../references/azure-mechanics.md`, create **top-down**:
-
-1. *Tree mode:* each new Feature (`workItemType: "Feature"`, Markdown description), linked to the
-   Epic with `type: "parent"`. Read it back, then rewrite every `parent_id: "pending:<stem>"` that
-   points at it to the real id and rename the Feature draft with its id.
-2. Each Story with Markdown, its points field set from `story_points`, and its **Feature** as the
-   immediate parent.
-
-Azure DevOps uses native work-item types; Linear uses the `agile:user-story` label. If a Feature
-create fails, stop before creating any Story under it.
+Per `../../common/providers.md`, create each item with `tracker_create_work_item` (`kind:
+"user_story"`, Markdown description — the approved draft's body word for word — and `parentRef` its
+Feature). The tracker's adapter maps the kind and any labels.
 
 ### 6. VERIFY (structural)
 
-Read each created item back; assert the immediate parent, the Epic→Feature→Story chain, and (for
-Stories) that the points field holds the draft's `story_points`.
-Reconcile frontmatter with the assigned id (rename file, set `provider` and `provider_id`). A failed
+Read each created item back; assert the immediate parent and the Epic→Feature→Story chain.
+Reconcile frontmatter with the assigned id (set `provider` and `provider_id`; the draft keeps the
+name `harness document path` gave it). A failed
 assertion STOPS the run.
 
 ### 7. AUDIT (content + coverage)
 
-Run `audit-checklist.md`: retrieve each item FRESH from Azure; check fidelity, build the
-parent-requirement → Story coverage map (in tree mode, Epic slice → Feature → Story; flag orphans
-and scope creep at both levels), confirm DoR. Emit the coverage
+Run `audit-checklist.md`: retrieve each item FRESH from the tracker; check fidelity, build the
+parent-requirement → Story coverage map (flag orphans and scope creep), confirm DoR. Emit the coverage
 report. Any gap STOPS and reports — no silent patching.
 
 ## Operating rules
 
-- Two hard gates (after DECOMPOSE, after ENRICH), in both modes. Never write to the artifacts path or
-  Azure without the matching approval. The harness approval hook enforces GATE 2 for Azure writes.
-- Tree mode is one run: no stop between the Feature level and the Story level.
-- Every Azure-mutating step is followed by a read-back assertion.
+- Two hard gates (after DECOMPOSE, after ENRICH). Never write to the tracker without the matching
+  approval.
+- Every tracker-mutating step is followed by a read-back assertion.
 - If the host repo keeps a session artifacts path, write a checkpoint after CREATE and after AUDIT.

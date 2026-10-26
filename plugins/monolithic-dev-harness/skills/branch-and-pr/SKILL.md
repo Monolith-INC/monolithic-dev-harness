@@ -1,6 +1,6 @@
 ---
 name: branch-and-pr
-description: Create the Story branch and, after review passes, push it and open a draft pull request linked to the Story, on the repository host the settings select (Azure Repos or GitHub). Use at the start of implement-story (branch) and at the end of the review stage (push and PR).
+description: Create the Story branch and, after review passes and only when the user wants one, push it and open a draft pull request linked to the Story, on the repository host the settings select (Azure Repos or GitHub). Use at the start of implement-story (branch) and at the end of the review stage (push and PR).
 ---
 
 # Branch and pull request
@@ -10,9 +10,10 @@ tools, which work the same on Azure Repos and GitHub (`scm.name` in `.harness/se
 
 ## Branch
 
-Branch creation belongs to implementation after the user has reviewed the plan and a tracker item
-exists. Do not create a branch or start a session during bootstrap, discovery, or ideation. If a
-decision or approval is needed, ask it as a menu ([human-decisions.md](../../references/human-decisions.md)):
+Branch creation is an optional delivery choice after the user has reviewed the plan. It is never a
+prerequisite for local implementation. Do not create a branch or start a session during bootstrap,
+discovery, or ideation. If the user did not choose branch-based delivery, skip this section and
+continue from the approved plan in the existing working copy. If a decision or approval is needed, ask it as a menu ([human-decisions.md](../../references/human-decisions.md)):
 a standard gate where one exists, which the harness presents through the host's best control and
 falls back to chat on its own.
 
@@ -28,10 +29,11 @@ falls back to chat on its own.
 
 ## Pull request (after review)
 
-Preconditions, all enforced by hooks:
+Open one only when the user asks for it: a pull request is their choice, never a step the workflow
+requires. Preconditions, all enforced by hooks:
 
-- the review stage recorded a `ready` verdict for HEAD (`draft-reviewed-prs`);
-- every applicable check passed for HEAD's tree (`draft-reviewed-prs`);
+- the review stage recorded a `ready` verdict for the code as it is now (`draft-reviewed-prs`);
+- every applicable check passed on the code as it is now (`draft-reviewed-prs`);
 - an approval covers this branch (`approval-required`): say in plain words what will be pushed and opened, then ask the `publish-branch` gate with `--value branch=<branch>` (the harness skill's approval protocol). It covers pushing that branch and opening its draft pull request.
 
 Then:

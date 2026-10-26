@@ -1,7 +1,7 @@
 {
   "name": "finish-feature-development",
   "version": "1.0.0",
-  "description": "Close an Active Feature stack with Feature→trunk PR after Stories merge into Feature.",
+  "description": "Close a Feature once its Stories are done: publish its closeout, then move it to done; with Git-based delivery, a Feature→trunk PR only when the user wants one.",
   "input_schema": {
     "type": "object",
     "properties": {
@@ -34,5 +34,9 @@
       }
     }
   },
-  "tools": []
+  "tools": [],
+  "stage": {
+    "name": "finish-feature-development",
+    "workflow": "skills/finish-feature-development/references/stage-workflow.md"
+  }
 }

@@ -1,0 +1,11 @@
+{
+  "source_revision": "1571ba0",
+  "installed_path": "/home/bhave/.local/share/monolithic-dev-harness/marketplace/codex-marketplace/plugins/monolithic-dev-harness",
+  "verified_files": 376,
+  "mismatches": [],
+  "restart_required": true,
+  "doctor": "healthy: installation and repository configuration only",
+  "live_capture_checked": false,
+  "fresh_project": "/home/monolith/projects/monolithic-dev-harness/temp/test-001/project",
+  "next": "restart Desktop; add fresh project; run briefing directly in its workspace"
+}

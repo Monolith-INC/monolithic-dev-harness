@@ -13,17 +13,26 @@ _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-from spec_runtime import SPEC_KINDS
-
-from core.result import Err, Failure, Ok, Result, bind, fmap, recover
-from harness import gitstate, sessions, settings, state
-from harness.local_artifacts import approved_kinds_for, artifacts_dir
+from core.result import Err, Failure, Ok, Result, bind, fmap
+from harness import (
+    code_content,
+    settings,
+    state,
+    work_sessions,
+    workflow_requirements,
+)
 from host_adapters import select_adapter
 from host_adapters.hook_bridge import project_root_hint, should_emit_allow
 from integrations import branches, registry
-from integrations.contracts import LogicalState, TrackerOps, WorkItem
-from policy import CanonicalToolEvent, PolicyDecision
-from policy.commands import git_commands, is_code, writes_code
+from integrations.contracts import (
+    BUILDABLE_KINDS,
+    LogicalState,
+    TrackerOps,
+    WorkItem,
+    WorkItemKind,
+)
+from policy import CanonicalToolEvent, PolicyDecision, breakdown
+from policy.commands import escapes_checkout, git_commands, is_code, writes_code
 from policy.git_branch_guard import evaluate_git_branch_guard
 
 LOG_FILE = "/tmp/harness_hook_debug.log"
@@ -92,55 +101,123 @@ def run(client: str, input_data: dict[str, Any], project_root: str = "") -> int:
     event = CanonicalToolEvent(
         **{**event.__dict__, "branch": current_branch(project_root)}
     )
-    decision = evaluate_event(event)
+    decision = evaluate_event(event, _work_session(project_root, client, input_data))
     if decision.is_denied():
         log_debug(f"DENIED: {decision.reason}")
     emit_decision(client, decision)
     return 0
 
 
-def evaluate_event(event: CanonicalToolEvent) -> PolicyDecision:
+def _work_session(
+    project_root: str, client: str, payload: dict[str, Any]
+) -> str | None:
+    """The work session this host conversation is bound to, else the project's current one."""
+    from host_adapters import work_session_context
+
+    root = Path(project_root)
+    match work_session_context.for_payload(root, client, payload):
+        case Ok(bound):
+            return work_sessions.acting(root, bound)
+        case _:
+            return work_sessions.current(root)
+
+
+def evaluate_event(
+    event: CanonicalToolEvent, work_session_id: str | None = None
+) -> PolicyDecision:
     # The decision gate and work-session binding run once, in harness/hook.py, before this.
     command = event.command or ""
+    root = Path(event.workspace_root or ".")
     if event.kind == "shell":
-        branch_decision = evaluate_git_branch_guard(command, event.workspace_root)
-        if branch_decision.is_denied():
-            return branch_decision
-        checkout_decision = _validate_checkout_convention(command, event.workspace_root)
-        if checkout_decision.is_denied():
-            return checkout_decision
-        if _is_mutating_git(command) or writes_code(
-            command, event.workspace_root, _code_patterns(event.workspace_root)
+        delivery = settings.git_delivery(root)
+        if delivery:
+            branch_decision = evaluate_git_branch_guard(command, event.workspace_root)
+            if branch_decision.is_denied():
+                return branch_decision
+            checkout_decision = _validate_checkout_convention(
+                command, event.workspace_root
+            )
+            if checkout_decision.is_denied():
+                return checkout_decision
+        if writes_code(
+            command,
+            event.workspace_root,
+            code_content.patterns(root),
+            code_content.planning_folder(root),
         ):
-            return _evaluate_work_context(event)
+            code_decision = _evaluate_code_change(event, work_session_id)
+            if code_decision.is_denied():
+                return PolicyDecision.deny(
+                    f"{code_decision.reason}\n{_SHELL_WRITE_HINT}"
+                )
+        if delivery and _is_mutating_git(command):
+            return _evaluate_git_delivery(event, work_session_id)
         return PolicyDecision.allow()
 
     if event.tool_name == "tracker_transition_work_item":
         arguments = event.arguments or {}
         if arguments.get("state") == "done":
-            return _evaluate_completion(event, str(arguments.get("ref", "")))
+            return _evaluate_completion(
+                event, str(arguments.get("ref", "")), work_session_id
+            )
+        if arguments.get("state") == "in_progress":
+            return _evaluate_start(
+                event, str(arguments.get("ref", "")), work_session_id
+            )
+        return PolicyDecision.allow()
+
+    if event.tool_name == "tracker_create_work_item":
+        arguments = event.arguments or {}
+        parent = str(arguments.get("parentRef") or "")
+        if arguments.get("kind") == WorkItemKind.TASK.value and parent:
+            return _evaluate_tasks(event, parent, work_session_id)
         return PolicyDecision.allow()
 
     if event.kind == "edit" and _edits_code(event):
-        return _evaluate_work_context(event)
+        return _evaluate_code_change(event, work_session_id)
     return PolicyDecision.allow()
 
 
-def _code_patterns(project_root: str) -> list[str] | None:
-    """The settings' source and test globs: the files "spec before code" covers.
+_SHELL_WRITE_HINT = (
+    "If this command writes only planning documents or ticket drafts, name each file plainly in "
+    "the command (no shell variables bound more than once, loops or functions), or write it with "
+    "the file-editing tool: a write whose file cannot be read from the command counts as code."
+)
 
-    `None` (every file but git's and the harness's) when the settings name none or cannot be read.
+
+def _evaluate_code_change(
+    event: CanonicalToolEvent, work_session_id: str | None
+) -> PolicyDecision:
+    """Code changes wait for the execution stage's requirements in the workflow catalog.
+
+    Version control plays no part: the work session, the tracker, and the approvals decide.
     """
-    match settings.load(Path(project_root)):
-        case Ok(chosen):
-            patterns = [
-                pattern
-                for group in chosen.tests_required
-                for pattern in (*group.source, *group.tests)
-            ]
-            return patterns or None
-        case Err():
-            return None
+    root = Path(event.workspace_root or ".")
+    if _is_bootstrap_or_repair(event.command) or not _enforced(root):
+        return PolicyDecision.allow()
+    return _gate(root, work_session_id or work_sessions.current(root))[0]
+
+
+def _gate(
+    root: Path,
+    scope: str | None,
+    gate: workflow_requirements.Gate = workflow_requirements.CODE_CHANGE,
+    work_item: str | None = None,
+) -> tuple[PolicyDecision, workflow_requirements.Report | None]:
+    """The gate's decision and, when the catalog could be read, its report."""
+    match workflow_requirements.evaluate(root, scope, gate, work_item):
+        case Ok(report) if report.ready:
+            return PolicyDecision.allow(), report
+        case Ok(report):
+            return PolicyDecision.deny(workflow_requirements.refusal(report)), report
+        case Err(failure):
+            return (
+                PolicyDecision.deny(
+                    f"[harness] the workflow catalog cannot be read ({failure.message}); "
+                    f"{gate.action.lower()} stays blocked until the harness package is repaired."
+                ),
+                None,
+            )
 
 
 def _edits_code(event: CanonicalToolEvent) -> bool:
@@ -155,10 +232,17 @@ def _is_code_path(file_path: str, workspace_root: str) -> bool:
         try:
             relative = path.resolve().relative_to(root).as_posix()
         except ValueError:
-            return False
+            return escapes_checkout(file_path, root)
     else:
-        relative = path.as_posix()
-    return is_code(relative, _code_patterns(workspace_root))
+        try:
+            relative = (root / path).resolve().relative_to(root).as_posix()
+        except ValueError:
+            return escapes_checkout(file_path, root)
+    return is_code(
+        relative,
+        code_content.patterns(root),
+        planning=code_content.planning_folder(root),
+    )
 
 
 def _decision(result: Result[None]) -> PolicyDecision:
@@ -173,131 +257,44 @@ def _enforced(root: Path) -> bool:
     return state.tracking_mode(root) == "enforced"
 
 
-def _session_item(root: Path) -> Result[tuple[sessions.Session, TrackerOps, WorkItem]]:
-    """This checkout's active session, the tracker, and the session's work item as the tracker has it."""
-    return bind(
-        _active_session(root),
-        lambda session: bind(
-            registry.open_selected(root, settings.load(root)),
-            lambda ops: fmap(
-                ops.get_work_item(session.work_item),
-                lambda item: (session, ops, item),
-            ),
-        ),
-    )
-
-
-def _active_session(root: Path) -> Result[sessions.Session]:
-    match sessions.resolve(root):
-        case sessions.Bound(session) if session.phase == sessions.Phase.ACTIVE:
-            return Ok(session)
-        case sessions.Bound(session):
-            return Err(
-                _failure(
-                    f"session {session.id} for {session.work_item} is {session.phase.value}; resume it first"
-                )
-            )
-        case sessions.Unbound(reason) | sessions.Broken(reason):
-            return Err(
-                _failure(
-                    f"governed changes need an active session: {reason}. Start one with "
-                    "`harness session start <work item>` on the work item's branch."
-                )
-            )
-
-
-def _failure(message: str) -> Failure:
-    return Failure("workflow_policy", message)
-
-
-def _evaluate_work_context(event: CanonicalToolEvent) -> PolicyDecision:
+def _evaluate_git_delivery(
+    event: CanonicalToolEvent, work_session_id: str | None
+) -> PolicyDecision:
+    """With Git-based delivery, a commit or push carries code: the code-change requirements hold,
+    on a branch whose name carries the linked work item's key."""
     root = Path(event.workspace_root or ".")
-    if (
-        _is_bootstrap_or_repair(event.command)
-        or not _enforced(root)
-        or not _has_committed_head(root)
-    ):
+    if _is_bootstrap_or_repair(event.command) or not _enforced(root):
         return PolicyDecision.allow()
-    boundary = "push" in {
-        command[0] for command in git_commands(event.command or "") if command
-    }
-    return _decision(
-        bind(
-            _active_session(root),
-            lambda session: (
-                recover(
-                    _snapshot_ready(root.resolve(), session),
-                    lambda _: _live_ready(root),
+    decision, report = _gate(root, work_session_id or work_sessions.current(root))
+    if decision.is_denied() or report is None:
+        return decision
+    return _decision(_on_item_branch(root, event.branch, report.work_item))
+
+
+def _on_item_branch(root: Path, branch: str, work_item: str) -> Result[None]:
+    return bind(
+        settings.load(root),
+        lambda chosen: bind(
+            registry.selected(root, Ok(chosen)),
+            lambda active: bind(
+                branches.work_item_id(
+                    chosen.branch_template, active.manifest.ids.branch_key, branch
                 )
-                if session.readiness_verified_at and not boundary
-                else _live_ready(root)
+                if branch
+                else Err(Failure("workflow_policy", "HEAD is not on a branch")),
+                lambda key: (
+                    Ok(None)
+                    if key.upper() == work_item.upper()
+                    else Err(
+                        Failure(
+                            "workflow_policy",
+                            f"branch {branch} is for {key}, but the work session implements "
+                            f"{work_item}; commit and push on {work_item}'s branch",
+                        )
+                    )
+                ),
             ),
-        )
-    )
-
-
-def _has_committed_head(root: Path) -> bool:
-    """Session and evidence rules apply only when Git can identify a committed baseline."""
-    try:
-        gitstate.head_sha(root)
-        return True
-    except gitstate.GitError:
-        return False
-
-
-def _live_ready(root: Path) -> Result[None]:
-    return bind(
-        _session_item(root),
-        lambda found: _ready(root.resolve(), found[1], found[2]),
-    )
-
-
-def _snapshot_ready(root: Path, session: sessions.Session) -> Result[None]:
-    """Readiness pinned when the session started. Ordinary edits it covers never contact the
-    tracker; anything it does not cover (a spec published later) is checked live."""
-    match session.readiness_state:
-        case LogicalState.IN_PROGRESS.value:
-            return _has_spec(
-                root,
-                session.work_item,
-                {_artifact_kind(kind) for kind in session.readiness_artifacts},
-            )
-        case _:
-            return Err(
-                _failure(
-                    f"Work item {session.work_item} was not in progress when this session started."
-                )
-            )
-
-
-def _ready(root: Path, ops: TrackerOps, item: WorkItem) -> Result[None]:
-    if item.state != LogicalState.IN_PROGRESS:
-        return Err(
-            _failure(
-                f"Work item {item.key} must be in progress before code changes are allowed."
-            )
-        )
-    return bind(
-        ops.list_artifacts(item.id),
-        lambda found: _has_spec(
-            root, item.key, {_artifact_kind(artifact.kind) for artifact in found}
         ),
-    )
-
-
-def _has_spec(root: Path, key: str, kinds: set[str]) -> Result[None]:
-    local = set(map(_artifact_kind, approved_kinds_for(root, key)))
-    if SPEC_ARTIFACT_KINDS & (kinds | local):
-        return Ok(None)
-    folder = artifacts_dir(root)
-    where = (
-        "the tracker"
-        if folder is None
-        else f"the tracker or under {folder} (a note there counts once it is marked "
-        "`status: approved` and the user then approves it)"
-    )
-    return Err(
-        _failure(f"Work item {key} has no accepted specification artifact in {where}.")
     )
 
 
@@ -336,61 +333,154 @@ def _validate_checkout_convention(command: str, project_root: str) -> PolicyDeci
     )
 
 
-def _evaluate_completion(event: CanonicalToolEvent, ref: str) -> PolicyDecision:
+def _evaluate_completion(
+    event: CanonicalToolEvent, ref: str, work_session_id: str | None = None
+) -> PolicyDecision:
+    """A work item is done only when the workflow catalog's completion requirements hold.
+
+    A Breakdown Task closes once its Story holds its other Tasks; another Task closes inside the
+    work session that implements its Story or Bug; a Feature or Epic closes once its children
+    are; a Story or Bug needs what the route requires before it is done.
+    """
     root = Path(event.workspace_root or ".")
     if not _enforced(root):
         return PolicyDecision.allow()
-    return _decision(
-        bind(
-            _session_item(root),
-            lambda found: _complete(found[0], found[1], found[2], ref),
-        )
+    found = bind(
+        registry.open_selected(root, settings.load(root)),
+        lambda ops: bind(
+            ops.get_work_item(ref),
+            lambda item: fmap(
+                ops.list_artifacts(item.id), lambda artifacts: (ops, item, artifacts)
+            ),
+        ),
     )
+    match found:
+        case Err(failure):
+            return PolicyDecision.deny(failure.message)
+        case Ok((ops, item, artifacts)):
+            pass
+    if breakdown.is_breakdown(item):
+        return _decision(breakdown.closes(ops, item))
+    if item.kind is WorkItemKind.TASK:
+        return _task_completion(root, ops, item)
+    if item.kind in (WorkItemKind.FEATURE, WorkItemKind.EPIC):
+        return _container_completion(ops, item, artifacts)
+    scope = (
+        work_session_id
+        if _links(root, work_session_id, item)
+        else workflow_requirements.linked_session(root, item.key)
+    )
+    return _gate(root, scope, workflow_requirements.COMPLETION, item.key)[0]
 
 
-def _complete(
-    session: sessions.Session, ops: TrackerOps, item: WorkItem, ref: str
-) -> Result[None]:
-    if ref.strip().upper() not in {item.id.upper(), item.key.upper()}:
-        return Err(
-            _failure(
-                f"this checkout's session is for {item.key}; {ref} is completed from its own session."
-            )
-        )
+def _evaluate_start(
+    event: CanonicalToolEvent, ref: str, work_session_id: str | None
+) -> PolicyDecision:
+    """A Story or Bug moves to in progress only once the route's earlier steps for it are done:
+    refined, planned, broken into Tasks, and prepared."""
+    root = Path(event.workspace_root or ".")
+    if not _enforced(root):
+        return PolicyDecision.allow()
+    match _buildable(root, ref):
+        case Ok(None):
+            return PolicyDecision.allow()
+        case Ok(key):
+            scope = work_session_id or work_sessions.current(root)
+            return _gate(root, scope, workflow_requirements.STORY_START, key)[0]
+        case Err(failure):
+            return PolicyDecision.deny(failure.message)
+
+
+def _evaluate_tasks(
+    event: CanonicalToolEvent, parent: str, work_session_id: str | None
+) -> PolicyDecision:
+    """A Story's Tasks are created only from its approved implementation plan."""
+    root = Path(event.workspace_root or ".")
+    if not _enforced(root):
+        return PolicyDecision.allow()
+    match _buildable(root, parent):
+        case Ok(None):
+            return PolicyDecision.allow()
+        case Ok(key):
+            scope = work_session_id or work_sessions.current(root)
+            return _gate(root, scope, workflow_requirements.TASKS_PUBLISH, key)[0]
+        case Err(failure):
+            return PolicyDecision.deny(failure.message)
+
+
+def _buildable(root: Path, ref: str) -> Result[str | None]:
+    """The item's key when it is a Story or Bug; None for any other kind."""
     return bind(
-        ops.list_artifacts(item.id),
-        lambda found: _completion_evidence(
-            item, {_artifact_kind(a.kind) for a in found}
+        registry.open_selected(root, settings.load(root)),
+        lambda ops: fmap(
+            ops.get_work_item(ref),
+            lambda item: item.key if item.kind in BUILDABLE_KINDS else None,
         ),
     )
 
 
-def _completion_evidence(item: WorkItem, kinds: set[str]) -> Result[None]:
-    missing = {"resolution_report", "verification", "pull_request"} - kinds
-    return (
-        Err(
-            _failure(
-                f"Cannot mark {item.key} done; missing artifacts: {', '.join(sorted(missing))}."
+def _links(root: Path, work_session_id: str | None, item: WorkItem) -> bool:
+    match work_session_id and work_sessions.select(root, work_session_id):
+        case Ok(session):
+            return session.work_item.upper() in {item.key.upper(), item.id.upper()}
+        case _:
+            return False
+
+
+_CLOSED = frozenset({LogicalState.DONE, LogicalState.CANCELED})
+# A pull request is the user's choice, never a condition for closing.
+_CLOSEOUT = frozenset({"resolution_report", "verification"})
+
+
+def _container_completion(
+    ops: TrackerOps, item: WorkItem, artifacts: tuple
+) -> PolicyDecision:
+    """A Feature or Epic closes as codex-workflows' finish-feature-development closes it: every
+    child done or cancelled (each was held to its own completion rules), and its closeout
+    published, the resolution report and verification."""
+    match ops.list_children(item.id):
+        case Err(failure):
+            return PolicyDecision.deny(failure.message)
+        case Ok(children):
+            pass
+    still_open = [child.key for child in children if child.state not in _CLOSED]
+    held = {workflow_requirements.artifact_kind(a.kind) for a in artifacts}
+    missing = sorted(_CLOSEOUT - held)
+    match children, still_open, missing:
+        case (), _, _:
+            reason = f"{item.key} has no child work items to close it on"
+        case _, [_, *_], _:
+            reason = f"{', '.join(still_open)} under {item.key} not done yet"
+        case _, _, [_, *_]:
+            reason = (
+                f"publish its closeout first ({', '.join(missing)}; "
+                "`finish-feature-development` skill)"
             )
-        )
-        if missing
-        else Ok(None)
+        case _:
+            return PolicyDecision.allow()
+    return PolicyDecision.deny(
+        f"[harness] {item.key} is marked done only once its children are and its closeout is "
+        f"published: {reason}. This refusal is for you, not for the user."
     )
 
 
-def _artifact_kind(kind: str) -> str:
-    normalized = str(kind).strip().lower().replace("-", "_").replace(" ", "_")
-    return {
-        "pr": "pull_request",
-        "pullrequest": "pull_request",
-        "resolution": "resolution_report",
-        "verification_report": "verification",
-        "technical_specification": "tech_spec",
-    }.get(normalized, normalized)
-
-
-# The kinds write-spec produces, plus the generic `spec`, in the form `_artifact_kind` gives them.
-SPEC_ARTIFACT_KINDS = frozenset(map(_artifact_kind, (*SPEC_KINDS, "spec")))
+def _task_completion(root: Path, ops: TrackerOps, task: WorkItem) -> PolicyDecision:
+    """A Task is done inside the work session that implements its parent Story or Bug."""
+    match ops.get_work_item(task.parent_id) if task.parent_id else None:
+        case Ok(parent) if workflow_requirements.linked_session(
+            root, parent.key
+        ) or workflow_requirements.linked_session(root, parent.id):
+            return PolicyDecision.allow()
+        case Ok(parent):
+            owner = parent.key
+        case _:
+            owner = "its Story or Bug"
+    return PolicyDecision.deny(
+        f"[harness] Task {task.key} is marked done inside the work session that implements "
+        f"{owner}. This refusal is for you, not for the user: link that work session with "
+        "`harness work-session link --work-item <key>` (`start-ticket` skill), then mark the "
+        "Task done."
+    )
 
 
 def _is_mutating_git(command: str) -> bool:

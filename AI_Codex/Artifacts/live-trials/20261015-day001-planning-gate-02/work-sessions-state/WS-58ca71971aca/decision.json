@@ -1,0 +1,20 @@
+{
+  "allow_free_text": false,
+  "answer": "",
+  "approval": false,
+  "artifacts": [],
+  "details": [
+    "Stage a separate harness approval for this Story only; this choice does not publish it.",
+    "Keep the current planning drafts and publish no tracker items."
+  ],
+  "id": "HD-f5cc96ba1e21fae6",
+  "kind": "required",
+  "options": [
+    "Request approval",
+    "Stop here"
+  ],
+  "question": "Should I request an exception to publish the local Story before the full bundle review?",
+  "status": "pending",
+  "transport": "blocking",
+  "work_session_id": "WS-58ca71971aca"
+}

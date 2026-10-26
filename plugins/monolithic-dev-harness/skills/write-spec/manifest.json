@@ -11,7 +11,7 @@
       },
       "spec_kind": {
         "type": "string",
-        "description": "Template kind: rfc, adr, design-doc, tech-spec, srs, implementation-plan, bugfix-spec, api-contract."
+        "description": "Template kind: rfc, adr, design-doc, tech-spec, srs, bugfix-spec, api-contract."
       },
       "draft_content": {
         "type": "string",

@@ -1,11 +1,11 @@
 # Feature and Epic Fan-out
 
-Reference for `generate-breakdown-work-items` fan-out. Reuses the selected tracker destination and
-effective language. Invokes the per–User Story workflow once per child Story.
+Reference for `generate-breakdown-work-items` PHASE 5. Reuses intake
+`language`. Invokes the per–User Story workflow (PHASE 1–4) once per child Story.
 
 ## When to fan out
 
-After reference resolution, inspect the work item type:
+After intake confirmation, PHASE 1 resolves the work item type:
 
 | Type | Action |
 | --- | --- |
@@ -19,16 +19,14 @@ After reference resolution, inspect the work item type:
 **Identify every child User Story before processing any of them.** Build the full list, present
 a short inventory to the user, then start the loop.
 
-### Selected tracker
+### Tracker
 
-1. Load the Feature or Epic through the selected tracker adapter.
-2. Collect normalized child relationships.
-3. **Feature:** keep items whose normalized kind is User Story.
-4. **Epic:** for each child Feature, load children and collect User Stories. Never attach Tasks to
-   the Epic. Never treat Features as Stories.
-5. Use the provider's batch-read operation when it has one.
+1. `tracker_list_children` on the Feature or Epic.
+2. **Feature:** keep the children whose kind is `user_story` (or `bug`).
+3. **Epic:** for each child Feature, list its children and collect the Stories. Never attach
+   Tasks to the Epic. Never treat Features as Stories.
 
-### Artifacts / filesystem
+### Filesystem
 
 1. Feature file: find tickets with `parent_id_artifacts path` / `parent_id` pointing at this
    Feature, or Tickets under a known Feature id prefix.
@@ -39,17 +37,19 @@ If **zero** child Stories → STOP with a clear message (nothing to break down).
 
 ## Selection UX (optional)
 
-When more than one Story is found, process the full discovered set unless the user requested a
-narrower scope. Show that scope with the final review batch; ask only if the intended set is unclear.
+When more than one Story is found, present a **variant multi-select** of Story titles/ids
+(`all` Recommended when processing everything is the default judgment; `other…` last). Process
+only the selected set. Default to `all` if the user confirms without narrowing.
 
 ## Per-Story loop
 
 For each selected User Story, **in order**:
 
 1. Run PHASE 1 ingest for that Story (Feature body + Story body + verbatim ACs).
-2. Run PHASE 2 — save Implementation Plan (must succeed before Tasks).
-3. Draft Tasks and add them to the combined review batch, using the same selected tracker and
-   language. Publish after preflight and approval; do not re-prompt per Story.
+2. Run PHASE 2 — save the Implementation Plan and have it approved (`implementation-confirm`)
+   before any of its Tasks are drafted.
+3. Run PHASE 3–4 — draft the Story's Tasks, have them approved (`publish-items`) and create them,
+   using the same intake `language` (do not re-prompt).
 4. Record a per-Story result: `success` | `failed` + error message + `plan_path` / Task ids.
 
 ### Failure isolation
@@ -57,7 +57,7 @@ For each selected User Story, **in order**:
 - One Story's failure **must not** silently skip the remaining Stories.
 - On failure: log the error, mark that Story `failed`, **continue** with the next Story.
 - Do not abort the entire fan-out unless the user asks to stop, or a fatal shared fault occurs
-  (artifacts path unwritable, selected tracker authentication lost).
+  (artifacts path unwritable, the tracker unreachable).
 
 ## Final report
 
@@ -65,7 +65,7 @@ After the loop, print a table-like summary:
 
 ```text
 Fan-out complete for <Feature|Epic> <id/path>
-destination=<…> language=<…>
+language=<…>
 
 OK   <story> → plan=<path> tasks=<n>
 FAIL <story> → <error>

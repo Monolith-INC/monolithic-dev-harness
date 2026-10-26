@@ -82,7 +82,7 @@ class ProjectFixtureTests(unittest.TestCase):
                 "{project-root}/docs/planning",
                 (project / "_bmad/custom/config.toml").read_text(),
             )
-            self.assertTrue((project / ".harness/tracker/backlog").is_dir())
+            self.assertTrue((project / "Tickets/Ready").is_dir())
         finally:
             discarded = discard_test_project(project)
 

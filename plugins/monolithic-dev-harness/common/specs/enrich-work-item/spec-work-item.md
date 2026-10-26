@@ -1,12 +1,12 @@
 # Work Item Spec Blueprint
 
-Blank form for specs written to **`<artifacts>/Specs/`** before User Story, Bug, or Task tickets.
+Blank form for specs written to **the item's folder in the artifacts path** before User Story, Bug, or Task tickets.
 
 Source enricher: `../../workflows/enrichers/work-item-enricher.prompt.md`
 
 ## Artifacts filename
 
-`<parent-feature-id>-<kebab-slug>-spec.md` (or `task-<slug>-spec.md` for orphan tasks)
+`spec-<scope>.md`, from `harness document path --type spec` (see `references/document-layout.md`)
 
 ## Frontmatter
 

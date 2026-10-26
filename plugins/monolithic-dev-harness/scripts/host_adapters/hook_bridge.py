@@ -22,6 +22,7 @@ _SHELL_NAMES = frozenset(
         "run_shell_command",
         "exec_command",
         "functions.exec_command",
+        "functionsexec_command",
     }
 )
 _EDIT_NAMES = frozenset(
@@ -37,6 +38,8 @@ _EDIT_NAMES = frozenset(
         "delete_file",
         "search_replace",
         "apply_patch",
+        "functionsapply_patch",
+        "functions.apply_patch",
         "write_to_file",
         "replace_file_content",
         "multi_replace_file_content",
@@ -72,6 +75,7 @@ _PROJECT_ENV = {
     "claude": "CLAUDE_PROJECT_DIR",
     "cursor": "CURSOR_PROJECT_DIR",
     "codex": "CODEX_PROJECT_ROOT",
+    "zed": "ZED_WORKTREE_ROOT",
 }
 
 
@@ -195,9 +199,10 @@ def _paths(raw_name: str, arguments: dict[str, Any], cwd: str) -> tuple[str, ...
     patch = (
         tuple(
             str(Path(cwd) / path) if cwd and not Path(path).is_absolute() else path
-            for path in _patch_targets(str(arguments.get("command") or ""))
+            for field in ("command", "patch")
+            for path in _patch_targets(str(arguments.get(field) or ""))
         )
-        if raw_name == "apply_patch"
+        if raw_name in {"apply_patch", "functions.apply_patch", "functionsapply_patch"}
         else ()
     )
     return (*named, *patch)
@@ -248,6 +253,7 @@ def format_pre_tool(host: str, decision: Decision) -> str | None:
     from .claude_adapter import format_claude_decision
     from .codex_adapter import format_codex_decision
     from .cursor_adapter import format_cursor_decision
+    from .kimi_adapter import format_kimi_decision
 
     policy = (
         PolicyDecision.allow()
@@ -258,6 +264,7 @@ def format_pre_tool(host: str, decision: Decision) -> str | None:
         "claude": format_claude_decision,
         "cursor": format_cursor_decision,
         "codex": format_codex_decision,
+        "kimi": format_kimi_decision,
     }[host]
     return (
         json.dumps(formatter(policy))
@@ -288,9 +295,20 @@ def format_stop(reason: str) -> str:
 
 
 def format_prompt(host: str, notes: list[str]) -> str | None:
-    return (
-        json.dumps({"continue": True}) if host == "cursor" else "\n".join(notes) or None
-    )
+    match host, "\n".join(notes):
+        case "cursor", _:
+            return json.dumps({"continue": True})
+        case "codex", str() as context if context:
+            return json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "UserPromptSubmit",
+                        "additionalContext": context,
+                    }
+                }
+            )
+        case _, context:
+            return context or None
 
 
 def delegates_workflow_policy(host: str, event: str) -> bool:

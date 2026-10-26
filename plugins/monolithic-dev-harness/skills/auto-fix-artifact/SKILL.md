@@ -1,7 +1,7 @@
 ---
 name: auto-fix-artifact
 description: >
-  Validates an agile artifact (Epic, Feature, or User Story) and automatically fixes any issues found. Accepts an Azure workitem ID, artifacts path document, filesystem reference, or pasted string. If validation passes, outputs the report. If validation fails, it shows the report, asks for permission to fix, systematically corrects each problem based on the quality gate rules, and offers to save the corrected version back to Azure or the artifacts path.
+  Validates an agile artifact (Epic, Feature, or User Story) and automatically fixes any issues found. Accepts a tracker work-item id or link, artifacts path document, filesystem reference, or pasted string. If validation passes, outputs the report. If validation fails, it shows the report, asks for permission to fix, systematically corrects each problem based on the quality gate rules, and offers to save the corrected version back to the tracker or the artifacts path.
 license: MIT
 ---
 
@@ -12,24 +12,25 @@ Validates a single agile artifact and offers an auto-fix workflow if issues are 
 References (shared, in `../../references/`):
 - `decomposition-rules.md` — hierarchy, DoR, sizing, story-point heuristic.
 - `ticket-structure.md` — body sections, frontmatter constraints, content hygiene.
-- `azure-mechanics.md` — MCP calls, linking mechanics, rendering rules.
+- `tracker-contract.md` — the tracker gateway: every read and write goes through its `tracker_*`
+  tools, never a tracker's own tools.
 - `audit-checklist.md` — fidelity, coverage, DoR check definitions.
 
 References (from `validate-artifact` skill, in `../validate-artifact/references/`):
 - `validation-checks.md` — full check catalog per artifact type + category.
 - `report-format.md` — terminal output template + report template.
-- `../../common/contracts/validate-artifact/canonical-validation-report.md`: **read-only shape
-  contract** for validation reports (shared with `validate-artifact`). Do not edit; conform output to this template.
+- `../../common/contracts/validate-artifact/canonical-validation-report.md` — **read-only shape contract** for validation reports
+  (shared with `validate-artifact`). Do not edit; conform output to this template.
 
 ---
 
 ## PHASE 1 — INGEST AND VALIDATE
 
-**Input:** Azure work item ID, artifacts path document path, filesystem reference, or pasted string.
+**Input:** tracker work-item id or link, artifacts path document path, filesystem reference, or pasted string.
 
 1. **Ingest:** 
-   - Parse the input to determine its source (local file, azure, or raw text).
-   - If Azure ID: fetch via `tracker_get_work_item(ref=<id>) through `workflow-integrations``.
+   - Parse the input to determine its source (local file, tracker item, or raw text).
+   - If a tracker id or link: fetch it with `tracker_get_work_item(ref=<id>)`.
    - If file path: read the markdown file.
    - If pasted string: parse as raw text.
 2. **Validate:** Run the orchestrator critic (do not self-judge):
@@ -68,13 +69,17 @@ Systematically address each FAIL and WARN result:
 
 ### a) STRUCTURAL Fixes
 - **Frontmatter:** Add missing `type:` keys, remove invalid `status:` keys.
-- **Filename:** Suggest/apply filename renames to match `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+`.
-- **Body Sections:** Add missing required sections (e.g., `Contexto`, `Critérios de Aceite`, `Tarefas Técnicas`, etc.) with placeholder or derived content. 
+- **Filename:** Suggest/apply filename renames to match `^(\d+|tech-debt|bug|task|spike)-[a-z0-9-]+`.
+- **Body Sections:** Add the missing sections of the item type's template
+  (`../../common/templates/canonical-*.md`, in the draft's language) with content derived from the
+  item, keeping its original text in Original Description.
 
 ### b) HIERARCHY Fixes
-- A missing parent is not a defect for an Epic, Feature, or User Story; leave it alone. Only a Task needs a parent.
-- If a parent has the wrong type (for example a Story under an Epic), or a Task has none, ask the user for a valid parent ID or search Azure DevOps for one.
-- Create parent links in Azure only for the parent the user confirms.
+- A missing parent is not a defect for an Epic, Feature, or User Story; leave it alone. Only a Task
+  needs a parent.
+- If a parent has the wrong type (for example a Story under an Epic), or a Task has none, ask the
+  user for a valid parent id or find one with `tracker_search_work_items`.
+- Set parent links in the tracker only for the parent the user confirms.
 
 ### c) CONTENT Fixes
 - **Complexidade:** Add the `📊 Complexidade` section with default/inferred values for Escopo, Incerteza, etc.
@@ -91,14 +96,14 @@ Systematically address each FAIL and WARN result:
 ## PHASE 4 — OUTPUT & PERSIST
 
 1. **Review:** Output the corrected version of the artifact (or a diff) to the screen.
-2. **Prompt for Save:** Ask the user: *"The artifact has been corrected. Would you like to save this version?"* with options depending on the source:
-   - "Save to Azure DevOps" only when the configured gateway exposes a supported update operation.
-   - "Save to Artifacts/Artifacts" (if source was file/text, uses `write_to_file`/`replace_file_content`)
-   - "Discard"
+2. **Approve the save:** for a tracker item, write the corrected body as a draft, show it with
+   `harness workflow show --artifact <draft>`, and ask `harness decision present --gate
+   publish-items` with the draft as `--artifact`; on approval, write it with
+   `tracker_update_work_item` and read it back. For a local file, ask before overwriting it.
 3. **Persist Report:** Save the final validation report with `bin/agile-backlog-toolkit validate --file <path> --persist`, which writes to `.harness/backlog/reports/`.
 
 ---
 
 ## Guardrails
-- **User Consent:** Never overwrite Azure work items or local files without explicit user approval in Phase 4.
-- **Traceability:** When updating Azure, ensure a comment is added noting that the artifacts path applied automated quality fixes.
+- **User Consent:** Never overwrite a tracker item or a local file without its approval in Phase 4.
+- **Traceability:** When updating a tracker item, ensure a comment is added noting that the artifacts path applied automated quality fixes.

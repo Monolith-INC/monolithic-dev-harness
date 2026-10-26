@@ -10,5 +10,5 @@
     // each table is internally consistent: aligned in README, compact in docs
     "MD060": { "style": "consistent" }
   },
-  "globs": ["README.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "docs/**/*.md"]
+  "globs": ["README.md", "CONSTITUTION.md", "CHANGELOG.md", "THIRD_PARTY_NOTICES.md", "docs/**/*.md"]
 }

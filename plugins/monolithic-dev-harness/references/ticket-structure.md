@@ -3,10 +3,15 @@
 How each artifact draft is written so it passes the host contract and carries the exact body sent
 to a selected provider.
 
-## Draft location (configurable seam)
+## Draft location
 
-Default: `Tickets/Ready/` under the configured artifacts path. If the host organizes drafts elsewhere, adapt — this
-is a default, not a hard requirement.
+`Tickets/Ready/` at the project root, the folder the harness's local tracker keeps its items in
+(Constitution, Article 7).
+
+With the local tracker, creating the item turns its draft into the tracked ticket in the same file:
+the harness gives it its `provider_id`, the number its file name reserved, and keeps its front
+matter. Do not rename or edit the draft afterwards. With another tracker, record the returned
+identifier as below. Specs and plans go in the item's folder (`document-layout.md`).
 
 ## Frontmatter (hook-validated)
 
@@ -20,7 +25,7 @@ provider_id: "<provider identifier; omit before provider creation>"
 parent_id: "<immediate parent identifier; omit when the item has no parent>"
 story_points: <number>  # REQUIRED for User Story — the validator fails a draft without it
 effort_hours: <number>  # optional — estimated duration; omit when nobody has estimated it
-activity: Development   # optional — capacity activity bucket (Azure `Microsoft.VSTS.Common.Activity`)
+activity: Development   # optional — capacity activity bucket (the tracker's activity field, where it has one)
 iteration: <sprint-ref> # optional — used by capacity planning to scope a sprint
 language: pt-BR         # optional — en | pt-BR, default pt-BR; selects which section-label set
                          # the validator checks the body against (see Body sections below)
@@ -39,16 +44,20 @@ in `Tickets/`. Lifecycle lives in the selected provider, not in frontmatter.
 
 Regex: `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+`, all lowercase.
 
-Until a provider assigns the real id, prefix with the immediate parent id (for example,
-`6868-us1-...`). An item with no parent (an Epic, or a standalone Feature or Story) uses `draft-`
-(for example, `draft-login-oauth.md`). After creation, rename with the provider identifier and set
-`provider_id`.
+With the local tracker, the file name is the item's final one from the start:
+`<number>-<title-slug>.md`, from `harness document path --type ticket --new <type> --title "<title>"`
+(`document-layout.md`). The number is the one the item will get.
+
+With another tracker, until it assigns the real id, prefix with the immediate parent id (for
+example, `6868-us1-...`), or `draft-` for an item with no parent; after creation, rename it with the
+provider identifier and set `provider_id`.
 Provider identifiers and `parent_id` are strings. Legacy keys `azure_id`, `parent_feature`, and
 `parent_epic` are invalid.
 
 ## Body sections (order)
 
-The body is written once and becomes the provider description verbatim. Section labels follow the
+The body is written once and becomes the provider description verbatim: everything below the
+front matter, headings included, is the `description` sent to the tracker. Section labels follow the
 draft's `language:` frontmatter value — **the validator matches on the exact label for that
 language**, so pick one and set the frontmatter key accordingly; do not mix labels from both
 columns in one draft.
@@ -57,7 +66,7 @@ columns in one draft.
 |---|---|---|---|
 | 1 | 🎯 O quê | 🎯 What | What, as descriptive sentences, one idea per line. |
 | 2 | 💡 Por quê | 💡 Why | Why this Story exists. |
-| 3 | 📋 Comportamento esperado | 📋 Expected Behavior | Expected behavior; ASCII diagrams here (see azure-mechanics.md). |
+| 3 | 📋 Comportamento esperado | 📋 Expected Behavior | Expected behavior; ASCII diagrams here. |
 | 4 | ✅ Critérios de Aceite | ✅ Acceptance Criteria | Acceptance criteria as checkboxes. |
 | 5 | 🔧 Notas Técnicas | 🔧 Technical Notes | Technical notes; areas/modules, not invented implementation. |
 | 6 | 📊 Complexidade | 📊 Complexity | Story points + the per-driver MAX justification (decomposition-rules.md). |

@@ -1,0 +1,15 @@
+{
+  "previous_project": "/home/monolith/projects/monolithic-dev-harness/temp/test-000/project",
+  "previous_chat": "01a11d76-3a7a-77d3-917f-c18e6bced715",
+  "outcome": "partial: quota interruption; normal evidence writing failed; three native replies captured; no implementation",
+  "files": {
+    "previous-trial.tar.gz": {
+      "bytes": 683174,
+      "sha256": "476323e9b57c0e2907e9760db8945c607941eea38375142d889a6e1875b17468"
+    },
+    "previous-transcript.jsonl": {
+      "bytes": 1002331,
+      "sha256": "c8c924f66bd96efdd66c27b00f451997de708d2a9b9b53b92c75466e06b7c8c4"
+    }
+  }
+}

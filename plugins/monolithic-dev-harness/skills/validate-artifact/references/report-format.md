@@ -3,17 +3,17 @@
 ## Terminal output template
 
 ```
-Validating <type> — "<title>" [<source: artifacts path|azure>]
+Validating <type> — "<title>" [<source: artifacts path|tracker>]
 ============================================================
 
 STRUCTURAL
   [PASS]  frontmatter-type-present
   [FAIL]  frontmatter-status-absent — `status: active` found in frontmatter
-  [SKIP]  filename-regex — source is Azure, not a local draft
+  [SKIP]  filename-regex — source is the tracker, not a local draft
 
 HIERARCHY
   [PASS]  hierarchy-story-parent-is-feature — parent #6868 is Feature "Payment Flow"
-  [WARN]  hierarchy-skipped-no-azure-id — no provider_id in frontmatter, hierarchy checks skipped
+  [WARN]  hierarchy-skipped-no-provider-id — no provider_id in frontmatter, hierarchy checks skipped
 
 CONTENT
   [PASS]  content-complexidade-breakdown
@@ -25,9 +25,10 @@ DoR
   [PASS]  dor-title-clear
   [PASS]  dor-description-present
   [FAIL]  dor-story-points-set — story points not set
+  [FAIL]  dor-linked-to-feature — hierarchy-story-parent-is-feature failed
 
 ------------------------------------------------------------
-Summary: 6 passed · 3 failed · 2 warnings
+Summary: 5 passed · 4 failed · 2 warnings
 Outcome: FAIL
 ```
 
@@ -43,9 +44,9 @@ Rules:
 ---
 date: <YYYY-MM-DD>
 type: report
-artifact: <azure-id or artifacts path-filename>
+artifact: <tracker key or draft filename>
 artifact_type: <Epic|Feature|User Story>
-source: <artifacts path|azure>
+source: <artifacts path|tracker>
 outcome: <pass|fail>
 ---
 ```

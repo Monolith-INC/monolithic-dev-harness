@@ -11,7 +11,7 @@ Each check emits: `{ name, result: PASS|FAIL|WARN|SKIP, detail }`.
 |---|---|---|
 | `frontmatter-type-present` | `type:` key exists in frontmatter | FAIL if absent |
 | `frontmatter-status-absent` | `status:` key NOT present in frontmatter | FAIL if present |
-| `filename-regex` | Filename matches `^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+` | FAIL if no match |
+| `filename-regex` | Filename matches `^(\d+|tech-debt|bug|task|spike)-[a-z0-9-]+` | FAIL if no match |
 
 ### All sources — body sections
 
@@ -36,16 +36,16 @@ mixing labels from both columns fails the check the same as a missing section.
 
 ## b) HIERARCHY
 
-Requires the configured tracker through `workflow-integrations` (`tracker_get_work_item`). If `provider_id` is null and source is a local file, emit
-`WARN hierarchy-skipped-no-azure-id` and skip the entire category.
+Reads the tracker through `tracker_get_work_item`. If `provider_id` is null and source is a local
+file, emit `WARN hierarchy-skipped-no-provider-id` and skip the entire category.
 
 Failures are logged and validation continues to the next check.
 
 | Artifact | Assertion | Check name | Result |
 |---|---|---|---|
-| User Story | No parent, or a parent whose `WorkItemType == "Feature"` | `hierarchy-story-parent-is-feature` | FAIL if the parent is not a Feature; PASS with no parent |
-| Feature | No parent, or a parent whose `WorkItemType == "Epic"` | `hierarchy-feature-parent-is-epic` | FAIL if the parent is not an Epic; PASS with no parent |
-| Epic | No child items with `WorkItemType == "User Story"` | `hierarchy-epic-no-direct-stories` | FAIL if any direct Story children found |
+| User Story | its parent's kind is `feature` | `hierarchy-story-parent-is-feature` | FAIL if parent is Epic or missing |
+| Feature | its parent's kind is `epic` | `hierarchy-feature-parent-is-epic` | FAIL if missing or wrong type |
+| Epic | No child items of kind `user_story` | `hierarchy-epic-no-direct-stories` | FAIL if any direct Story children found |
 
 ## c) CONTENT
 
@@ -54,7 +54,7 @@ Failures are logged and validation continues to the next check.
 | Check | Condition | Result |
 |---|---|---|
 | `content-complexidade-breakdown` | Complexity section (`📊 Complexidade` / `📊 Complexity` per declared language) contains per-driver scores — keywords: Escopo/Scope, Incerteza/Uncertainty, Integrações/Integrations, Dados/Data, QA, Rollout | FAIL if absent |
-| `content-story-points-set` | Story points field > 0 (frontmatter `story_points` or Azure `Microsoft.VSTS.Scheduling.StoryPoints`) | FAIL if unset or 0 |
+| `content-story-points-set` | Story points field > 0 (frontmatter `story_points` or the tracker item's points) | FAIL if unset or 0 |
 | `content-effort-hours-plausible` | Declared `effort_hours` sits inside the reference band for its story points | SKIP if unestimated; WARN if outside the band or ≤ 0; never FAIL |
 | `content-descricao-original-present` | Original-description section (`📄 Descrição Original` / `📄 Original Description` per declared language) is non-empty | FAIL if empty |
 
@@ -74,3 +74,4 @@ Applied to all artifact types unless noted.
 | `dor-title-clear` | Title non-empty and word count > 5 | FAIL if not met |
 | `dor-description-present` | Body / description field non-empty | FAIL if not met |
 | `dor-story-points-set` *(User Story only)* | Story points > 0 | FAIL if not met |
+| `dor-linked-to-feature` *(User Story only)* | Reuses result of `hierarchy-story-parent-is-feature` — no extra MCP call | FAIL if that check failed or was skipped |

@@ -4,9 +4,212 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0-rc.9] - 2026-10-26
+
+### Fixed
+
+- Pending decisions re-presented through a fallback transport are bound to the current Codex
+  conversation, allowing its genuine human response to resolve the original question.
+
+### Qualification
+
+- RC8 installation and Desktop trials now include published-installer verification, structured
+  answer capture, and native reviewer evidence. Work-session approval, visible artifact review,
+  general effort enforcement, complete Claude workflow parity, and dedicated external-write/recovery
+  acceptance remain open. This is a release candidate, not a final parity release.
+
+## [0.7.0-rc.8] - 2026-10-25
 
 ### Added
+
+- Explicit user and private-project installation scopes in the existing curl installer,
+  all-scope removal, and ownership-aware `--purge` for installation reset and removal.
+- One installation adapter contract across Claude, Codex, Cursor, Kimi and Zed,
+  including native plans, preflight, verification, project discovery and unregister operations.
+- Private before/after installation journals, preserved unrelated settings across upgrades,
+  scoped registrations using the original shared package/CLI locations, and managed Git exclusions without silently untracking files.
+- Cross-host installation inventory and explicit, fingerprint-bound doctor repair selections.
+  Ambiguous legacy backups can be archived outside active configuration rather than deleted.
+
+### Changed
+
+- Native plugin and marketplace registrations are removed independently. Codex inspection uses
+  installed records, rather than mistaking available marketplace entries for installed plugins.
+- Installation stops before package publication when required runtime dependencies fail.
+  Existing foreign destinations, configuration collisions and tracked private-project files
+  are preserved with actionable failures.
+- Kimi uses its documented current configuration directory, inspects legacy locations, and
+  uses its explicit config-file option for project registration.
+
+### Qualification
+
+- Installation lifecycle coverage is separate from native model/workflow acceptance.
+  RC7 assignment evidence remains applicable to its recorded native trial only.
+- Desktop structured controls, general observed-effort enforcement, complete Claude workflow
+  parity and dedicated external-write/recovery acceptance remain unqualified.
+  This is a release candidate, not a final parity claim.
+
+## [0.7.0-rc.7] - 2026-10-24
+
+### Added
+
+- Shared JSON-RPC process message catalog and bus interface with generic ownership, revision,
+  duplicate-message and execution checks. Cancellation withdraws permission independently of
+  vendor stop notifications; main-agent reports and host observations remain distinct.
+- Standard `harness process list|status|cancel|report|assign` commands through the Codex adapter.
+  Command bodies acknowledge adapter-applied state without directly editing process records.
+
+- Shared immutable reviewer/worker assignments with exact owned-file checks, symlink rejection,
+  observed model matching and fail-closed tool authorization. Native question routing remains
+  separate while the Codex pre-tool guard covers every tool name.
+
+### Changed
+
+- Codex lifecycle translation now resides behind the adapter entry point. Shared harness policy
+  consumes generic process state; later reports cannot restore revoked subagent permissions.
+
+### Qualification
+
+- Native source trials proved cancellation independently of interruption callbacks. Assignment
+  integration has focused regression coverage; installed-candidate acceptance remains pending.
+- Reviewer role files no longer imply an independent read-only sandbox. Shared policy denies
+  reviewer writes and opaque shell/MCP operations; the main agent runs verification commands.
+- Actual reasoning effort, Desktop structured controls, complete workflow parity and dedicated
+  external-write/recovery acceptance remain unqualified. This is a candidate, not final parity.
+
+## [0.7.0-rc.6] - 2026-10-23
+
+### Fixed
+
+- Codex prompt notes use explicit UserPromptSubmit JSON. Plain diagnostic prefixes such as
+  `[harness]` are not emitted as JSON-looking text that the native parser rejects.
+
+### Qualification
+
+- RC5's real installed worker created a planning document and appended to it on a second turn
+  of the same child, with no failed worker hook callbacks. Native async decision capture recorded
+  the actual operator response. The prompt-output defect is corrected in this candidate.
+- Native interruption reported the child interrupted but emitted no observed Interrupt hook;
+  the adapter binding stayed active. Persisted cancellation revocation, Desktop controls,
+  assignment-specific permissions and complete Claude workflow parity remain unqualified.
+  This candidate is not a final fully functional release.
+
+## [0.7.0-rc.5] - 2026-10-23
+
+### Fixed
+
+- Codex child post-tool and prompt hooks emit the output schema for their actual event.
+  Child startup and delivery observations still cannot record human authority.
+- Neutral Codex pre-tool checks emit no permission override, matching the current official
+  parser contract; denied effects retain the explicit denial and reason.
+
+### Qualification
+
+- RC4 installed discovery initialized all three harness MCP servers. Its native async
+  question and later authorized operator response completed a session-bound harness decision.
+  Same-child follow-up binding recorded two completed turns. These are CLI protocol results;
+  full Desktop controls and complete workflow parity remain release gates.
+
+## [0.7.0-rc.4] - 2026-10-23
+
+### Added
+
+- Native Codex child identity and parent work-session checks from real lifecycle and tool hooks.
+  Completed child turns cannot replay their saved authority; authentic fresh follow-up turns
+  retain the same scope. Interrupted children remain revoked. Children cannot record human
+  answers or switch the root's work session. Existing opt-out and suspension behavior is preserved.
+- Codex question discovery from authentic root events, with native async candidates for initial
+  questions, exact pending-question adoption, and conversation-bound answer capture. Delivery
+  acknowledgement never grants approval.
+- Pinned official-source evidence and sanitized live protocol/hook trials. This candidate does
+  not claim full Desktop, assignment-level role/path enforcement or complete Claude parity.
+
+### Fixed
+
+- Codex installation and bootstrap preserve native question feature preferences instead of
+  enabling a Default-mode feature or rejecting an explicitly disabled setting.
+- Child test runners remain usable; harness controls and hook spoofing remain guarded.
+
+## [0.7.0-rc.3] - 2026-10-22
+
+### Added
+
+- Pull request review threads through the gateway: `scm_create_review_thread`,
+  `scm_update_thread_comment` and `scm_set_thread_status` (Azure Repos; other code hosts refuse
+  them). The `reply-pr` approval for a pull request covers all four review-thread writes on it
+  (ADR-0012).
+
+### Fixed
+
+- A conversation not linked to a work session acts in the project's current one, so a write the
+  user approved there is no longer denied while the gate reports the approval as given. The gate
+  reuses an answer only when the write check would accept it, never from an ended session, and a
+  command that would act in another conversation's session is refused with how to name it.
+- An approved document stays approved when its `status:` line changes: the answer check and the
+  publish check compare the same digest as the review step.
+- Azure DevOps descriptions and artifact markers stored HTML-escaped are read as written, and story
+  points kept under `fields` count, so refined items are recognized.
+- The shell scan behind `human-owned`, `generated-files` and `hook-entry`: it never raises (a
+  variable operand of `git apply` crashed the hook); loop and `case` headers, `[[ … ]]` tests and
+  assignment prefixes are shell syntax; inline Python that only reads is followed to no writes;
+  words after `cd … &&` are judged from the new directory, and a `.harness` outside the repository
+  is not the project's. `hook-entry` fires only when a command would run the hook, so staging,
+  committing or copying its source is allowed.
+
+## [0.7.0-rc.2] - 2026-10-16
+
+### Added
+
+- The workflow route: the order of every step, as data (`facts` and `route` in
+  `config/prepared-workflows.json`). `harness next` gives the one next step of the current work
+  session (skill, question or command), computed from the work items, the answers and the
+  documents; `harness begin` returns it too. The main-flow diagram is generated from the route.
+- Guards built from the route: a Story's Tasks need its approved plan; moving it to in progress
+  needs its Tasks and its preparation documents; code changes and completion need everything the
+  route does before them. Every refusal points to `harness next`.
+- A test walks every state reachable from six starting points and every answer, and replays the
+  2026-10-16 live run; another keeps tracker names out of agent-facing files.
+- A Task created under a Story gets the Story's sprint and assignee (Azure DevOps).
+- Setup proposes the branch naming the project already uses.
+
+### Changed
+
+- A reply in the user's own words closes a waiting question; it approves nothing. `harness next`
+  runs while a question waits.
+- A request that names no work item gets the `starting-point` question; the refined-item question
+  moved from `bmad-build` into the route.
+- The Breakdown Task closes once its Story holds its other Tasks, without a receipt.
+- Agent-facing skills work from the tracker gateway contract only; Azure DevOps notes moved to
+  `trackers/azure-devops/notes/`.
+- The agile-backlog-toolkit (0.12.1) and codex-workflows (0.5.26) skills are copied from their
+  sources and aligned only where they conflict with the harness contract; the untouched sources
+  are vendored under `vendor/agile-backlog-toolkit/` and `vendor/codex-workflows/`, each with a
+  `SOURCE-MANIFEST.md` listing the alignments.
+
+### Removed
+
+- `harness workflow checkpoint --next-action`; the checkpoint's stage comes from the route.
+- The `azure-devops` skill, the planning-completion receipt, and the catalog's separate
+  `routes`, `requirements` and `completion` lists.
+
+## [0.7.0-rc.1] - 2026-10-16
+
+### Added
+
+- `harness document path` names and places every document by its work item:
+  `<document-type>-<work-item-type>-<number>-<title-slug>.md` in the item's folder, nested
+  Epic → Feature → Story (`references/document-layout.md`). On the local tracker a draft reserves its
+  item's number, so nothing is renamed after creation.
+- Claude Code asks with its native question control by default (`--native-unavailable` opts out).
+- `tracker_update_work_item` changes the named fields of an existing work item (title,
+  description, story points, a Task's hours, assignee, sprint) through the gateway and reads it
+  back, for the local tracker, Azure DevOps and Linear.
+- Gates `refinement-split`, `approve-document`, `refined-start` and `idea-continue`.
+- `CONSTITUTION.md` records the settled rules for the workflow.
+
+- Planning-only Markdown edits in the configured artifacts folder no longer require an
+  implementation session. Verified Breakdown completion uses a bounded publication receipt;
+  ordinary implementation completion keeps its session and evidence requirements.
 
 - Optional, restartable onboarding and sessionless free mode. Preferences use safe defaults;
   missing language capture never blocks work. Required decisions and action approvals retain their
@@ -42,7 +245,76 @@ All notable changes to this project are documented here. The format follows
   or pull request) and do not expire: they hold until revoked, the work session ends, or that
   context changes. A typed `approve HB-…` keeps the short general window.
 
+### Fixed
+
+- `harness tracker publish` reads only the work session's last `implementation-confirm` answer:
+  a later **Revise** or **Stop here**, or an approval of different drafts, withdraws an earlier
+  approval, as it already did for code changes.
+- Draft critics evaluate each submitted draft once and retain findings without requesting
+  implementation approval. Reflection history survives revised submissions.
+- Codex presentation attempts native controls before chat; namespaced question tools are routed
+  by hooks and transcript recovery. Explicit unavailable controls retain graceful fallback.
+- Plan length is advisory; splitting is offered only for independently shippable goals.
+- Setup reports inaccessible Git metadata distinctly from an absent repository, without
+  automatically modifying global trust.
+
 ### Changed
+
+- Documents under review are `status: draft` and become `active` once accepted; an approval pins
+  the reviewed documents, their `status` line aside.
+- `harness begin` binds the conversation to its work session even with `--repo "$PWD"`; a begin
+  the hooks cannot read is refused with the plain form, instead of binding nothing.
+- Hardening ends with the approach shown and approved (`plan-checkpoint`).
+- A `find -exec sh -c '<script>'` is a write only when its script writes; a planning subfolder that
+  holds only documents is not code. Folder paths such as `docs/planning` are kept out of questions.
+- BMad build no longer asks about initiatives; `--new story` and `--host claude-code` are accepted.
+- Planning writes after `cd <dir> &&` are read in that folder, and an in-place editor's script is not
+  a file it edits; the standard Task titles Staging, Review and Breakdown pass the title check.
+- Onboarding (formerly "six-stage onboarding") is Discovery → Planning → Hardening → Refinement →
+  Preparation → Execution → Verify, with an optional idea route that may stop at a brief or spec.
+  The older route family (`investigate-request`, `prepare-artifacts`, `implement-approved-item`,
+  `resume-work`, `suspend-checks`) and its stages are removed.
+- Refinement runs the agile-backlog-toolkit skills against the selected tracker as their workflow
+  is written: each work item is approved before it is created (`refinement-split`,
+  `publish-items`), and each Story's implementation plan is shown and approved on its own with
+  `implementation-confirm` before its Tasks are proposed and approved.
+- A work session tracks the Epic, Feature or Story the user started from
+  (`harness work-session track`); linking a Story outside that item is refused.
+- `write-spec` writes only the technical spec kinds a Story still lacks; it no longer writes an
+  implementation plan.
+- `finish-feature-development` closes a Feature without Git-based delivery once every Story is
+  done. A Feature or Epic is done when every child is done or cancelled and it holds a resolution
+  report and verification evidence.
+- A pull request is never required to mark a Story, Feature or Epic done: opening one is the
+  user's choice, with or without Git-based delivery (`pull_request_linked` is removed).
+- Without source globs, documents and data in the planning folder (`.md`, `.json`, `.yaml`, ...)
+  are not code; scripts there still are.
+
+- **No harness decision depends on version control.** Code changes wait for the execution
+  stage's `requires` in `config/prepared-workflows.json`: the work session is linked to its Story or
+  Bug (`harness work-session link --work-item <key>`), the tracker holds that item in progress with
+  its Tasks parented to it, and an approved, unchanged implementation plan names it. Marking a
+  Story or Bug done waits for the verify stage's `completes`: tests with code, checks, guarded-path
+  evidence, a `ready` review, verification and resolution reports, and a pull request only with
+  Git-based delivery to a remote host. A Task closes inside its Story's work session. Refusals
+  name the next workflow step for the agent; `harness workflow requirements [--gate completion]`
+  shows the same state. Projects without commits are no longer exempt.
+- Check, review, and manual-check evidence is keyed to a digest of the code files on disk instead
+  of a Git tree or commit. `checks.py` drops `--staged` and `--head` and records nothing when a
+  check rewrites code. The project is found by its `.harness` folder, not by `.git`.
+- A work item's code baseline is recorded once per project, at its first link; relinking or a new
+  work session cannot hide changes. Check and review evidence, code baselines, and local tracker
+  records are human-owned. The workflow policy shares the hook's time budget, so a slow tracker
+  blocks instead of timing out into an allow. Without source or test globs, build and test output
+  folders are not code. With Git delivery, a pull request needs a clean working tree, and commits
+  and pushes need the code-change requirements on the linked item's branch (the branch-bound
+  session no longer grants them).
+- **Breaking:** `tests-with-code` and `guarded-paths` no longer refuse commits; they are completion
+  requirements. The protected-branch guard, branch naming convention, `history-preserved`,
+  `feature-branch`, the draft pull-request requirements, and the branch-bound session check for
+  commits and pushes now apply only with Git-based delivery (`git.delivery: true`, set with
+  `harness bootstrap --propose --git-delivery on`). Existing projects that rely on them must opt
+  in.
 
 - Replies to a pending question are matched loosely on every transport: a number, an ordinal, the
   label in any case or accents, a unique prefix, or a unique set of its words. A loose reply never
@@ -55,6 +327,11 @@ All notable changes to this project are documented here. The format follows
 - Discovery asks all open questions in one message with trade-offs and a recommendation, accepts
   answers in any form, re-checks scope after the answers, and never compresses a plan to fit the
   token budget. The approval summary lists every recorded decision instead of re-asking them.
+
+### Removed
+
+- `tracker-drafts.json`, `harness tracker publish` and the single approval of a whole preparation
+  bundle.
 
 ## [0.6.2] - 2026-10-06
 
@@ -83,8 +360,6 @@ All notable changes to this project are documented here. The format follows
 - The decision protocol explains recovery without repeated answers or suspension just for diagnosis.
 
 ## [0.6.0] - 2026-10-06
-
-### Added
 
 - Project work sessions: several tickets can be in flight in one project, each bound to its own
   host conversation, with `harness work-session` lifecycle commands (start, list, route, select,
@@ -663,7 +938,9 @@ First release.
   workflow.
 - **Documentation** under `docs/`, including seven architecture decision records.
 
-[Unreleased]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.2...HEAD
+[0.7.0-rc.3]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.2...v0.7.0-rc.3
+[0.7.0-rc.2]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.1...v0.7.0-rc.2
+[0.7.0-rc.1]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.2...v0.7.0-rc.1
 [0.6.2]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.6.1
 [0.6.0]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.5.4...v0.6.0
@@ -686,3 +963,10 @@ First release.
 [0.1.2]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.2
 [0.1.1]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.1
 [0.1.0]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.1.0
+
+[0.7.0-rc.6]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.5...v0.7.0-rc.6
+[0.7.0-rc.5]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.4...v0.7.0-rc.5
+[0.7.0-rc.4]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.7.0-rc.4
+
+[0.7.0-rc.7]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.6...v0.7.0-rc.7
+[0.7.0-rc.9]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.8...v0.7.0-rc.9

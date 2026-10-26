@@ -1,0 +1,16 @@
+{
+  "session_id": "01a1699b-cf45-7ef1-9285-2ff031a16c13",
+  "turn_id": "01a1699b-f296-76b2-bddf-18b474e4b4b7",
+  "agent_id": "01a1699b-f275-78b3-b7a4-6df0669a1a2f",
+  "agent_type": "default",
+  "transcript_path": "/fixture/codex-proof/home/sessions/2026/10/23/rollout-2026-10-23T13-33-10-01a1699b-f275-78b3-b7a4-6df0669a1a2f.jsonl",
+  "cwd": "/fixture/codex-proof/project",
+  "hook_event_name": "PreToolUse",
+  "model": "gpt-6.1-sol",
+  "permission_mode": "bypassPermissions",
+  "tool_name": "apply_patch",
+  "tool_input": {
+    "command": "*** Begin Patch\n*** Add File: /fixture/codex-proof/project/child-proof.txt\n+proof\n*** End Patch"
+  },
+  "tool_use_id": "exec-d1f27556-72a7-43bb-ad5f-fadc8e228bca"
+}

@@ -91,6 +91,9 @@ def _section_content(body: str, label: str) -> str:
     return match.group(1).strip() if match else ""
 
 
+STANDARD_TASK_TITLES = frozenset({"staging", "review", "breakdown"})
+
+
 def _word_count(text: str) -> int:
     return len([w for w in re.split(r"\s+", text.strip()) if w])
 
@@ -478,11 +481,17 @@ def validate_artifact(
     results.append(_effort_hours_check(record, state_dir))
 
     title_words = _word_count(record.title)
+    # The breakdown's default Tasks keep their short names (generate-breakdown-work-items).
+    standard_task = (
+        artifact_type == "Task" and record.title.strip().lower() in STANDARD_TASK_TITLES
+    )
     results.append(
         CheckResult(
             "dor-title-clear",
-            "PASS" if title_words > 5 else "FAIL",
-            f"{title_words} words" if title_words <= 5 else "",
+            "PASS" if title_words > 5 or standard_task else "FAIL",
+            "standard Task title"
+            if standard_task
+            else (f"{title_words} words" if title_words <= 5 else ""),
             "DoR",
         )
     )
