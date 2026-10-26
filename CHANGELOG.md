@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0-rc.9] - 2026-10-26
+
+### Fixed
+
+- Pending decisions re-presented through a fallback transport are bound to the current Codex
+  conversation, allowing its genuine human response to resolve the original question.
+
+### Qualification
+
+- RC8 installation and Desktop trials now include published-installer verification, structured
+  answer capture, and native reviewer evidence. Work-session approval, visible artifact review,
+  general effort enforcement, complete Claude workflow parity, and dedicated external-write/recovery
+  acceptance remain open. This is a release candidate, not a final parity release.
+
 ## [0.7.0-rc.8] - 2026-10-25
 
 ### Added
@@ -955,3 +969,4 @@ First release.
 [0.7.0-rc.4]: https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.7.0-rc.4
 
 [0.7.0-rc.7]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.6...v0.7.0-rc.7
+[0.7.0-rc.9]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.8...v0.7.0-rc.9
