@@ -43,7 +43,17 @@ from integrations.contracts import (
 LINK = "work_item_linked"
 TRACKER_FACTS = "execution-facts.json"
 # Failures that mean the tracker gave no answer at all, as opposed to an answer such as "not found".
-UNREACHABLE = frozenset({"provider_unavailable", "not_configured"})
+UNREACHABLE = frozenset(
+    {
+        "provider_unavailable",
+        "provider_exited",
+        "provider_closed",
+        "provider_timeout",
+        "provider_read_failed",
+        "gateway_unavailable",
+        "not_configured",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -243,7 +253,7 @@ class _Context:
             check = CHECKS.get(rid)
             if check is None:
                 facts[rid] = "the harness has no check for this requirement"
-            elif rid in remembered:
+            elif rid in remembered and check.lasting:
                 facts[rid] = None
             else:
                 try:
@@ -386,6 +396,27 @@ def _tasks(context: _Context) -> str | None:
 
 
 def _plan(context: _Context) -> str | None:
+    match context.session:
+        case work_sessions.Session(entry_item=str() as entry) if entry:
+            from harness import plan_review
+            from harness.workflow_evidence import history, option_id
+
+            match any(
+                record.get("gate") == "implementation-confirm"
+                and record.get("status") == "answered"
+                and option_id(record) == "approve"
+                for record in history(context.session)
+            ):
+                case False:
+                    return "Approve the implementation plan in this planning round before execution."
+                case True:
+                    return (
+                        None
+                        if plan_review.approved_source(context.repo, context.item)
+                        else "The approved implementation plan does not match the current work-item requirements; revalidate it before execution."
+                    )
+        case _:
+            pass
     if _approved_plan_note(context.repo, context.key):
         return None
     return (
@@ -542,7 +573,7 @@ CHECKS: dict[str, _Check] = {
     "code_changed": _Check(_code_changed),
     "story_done": _Check(_done),
     "tasks_parented": _Check(_tasks, lasting=True),
-    "plan_approved": _Check(_plan, lasting=True),
+    "plan_approved": _Check(_plan),
     "work_item_started": _Check(_started, lasting=True),
     "tests_with_code": _Check(_tests_with_code),
     "guarded_paths_verified": _Check(_guarded_paths),
@@ -587,8 +618,8 @@ def refusal(report: Report) -> str:
     if report.unreachable:
         return (
             f"[harness] {gate.action} waits until the tracker answers, and it gave no answer: "
-            f"{report.unreachable}. Retry once. If it still fails, tell the user the tracker is "
-            f"unreachable and that typing `harness suspend` releases the harness checks. {status}"
+            f"{report.unreachable}. Recover/reload the owning workflow-integrations gateway before another bounded read; "
+            f"do not start another provider or replay an uncertain write. Local status and lifecycle recovery remain available. {status}"
         )
     first, *rest = report.missing
     lines = [

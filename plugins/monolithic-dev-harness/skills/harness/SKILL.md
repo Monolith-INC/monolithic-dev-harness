@@ -34,7 +34,8 @@ Other states `begin` and `next` can return:
   chosen `--session` or `--new`.
 - `waiting_for_human`: the user has not answered the saved question; show it again with
   `harness decision fallback`.
-- `tracker_unreachable`: retry once; then tell the user the tracker is unreachable.
+- `tracker_unreachable`: recover or reload the owning `workflow-integrations` gateway before one
+  bounded read. Do not start another provider or replay a write with an uncertain outcome.
 - Paused work: ask the user before resuming; never restart it silently.
 
 Questions: every question goes through `harness decision present` (a gate by `--gate`, or a

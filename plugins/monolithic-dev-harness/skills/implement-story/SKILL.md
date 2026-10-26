@@ -61,6 +61,29 @@ prerequisite for local implementation.
 7. **Transition the Task** to done in the tracker, with its `move-item` approval. If the hook
    reports the plan or spec changed, show what changed and ask again.
 
+   Completion evidence must be a `verification` artifact linked to that Task. It names the Task key,
+   active work-session id, approved plan path and digest, exact plan step, deliverable paths and
+   SHA-256 digests, and checks or manual observations actually recorded. For example:
+
+   ```json
+   {
+     "task": "8150",
+     "work_session": "WS-...",
+     "plan": "artifacts/8150/implementation-plan.md",
+     "plan_digest": "<current document digest>",
+     "step": "Implement the serializer",
+     "deliverables": {"projects/app/lib/serializer.dart": "<current SHA-256>"},
+     "checks": ["flutter-test:serializer"],
+     "manual": []
+   }
+   ```
+
+   The named checks and manual observations must already exist in local verification state; a
+   self-authored claim alone does not verify them. Documentary Tasks can use deliverables that are
+   approved notes. Before accepting older completed Tasks, run
+   `harness workflow audit-completion --story <story-key>`; this reports gaps without changing
+   tracker state.
+
 ## 2. Story done
 
 1. `check` on HEAD with a clean tree: evidence for the exact tree that will be reviewed.

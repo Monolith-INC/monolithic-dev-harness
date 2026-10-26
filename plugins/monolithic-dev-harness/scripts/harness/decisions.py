@@ -13,7 +13,6 @@ from harness import commands, gates, questions, setup_reviews, state, workflow
 
 RELATIVE_PATH = Path(".harness/state/decision.json")
 HISTORY = "decision-history.json"
-HISTORY_KEPT = 50
 
 
 @dataclass(frozen=True)
@@ -247,7 +246,7 @@ def _archive_dismissal(path: Path, dismissed: dict[str, Any]) -> dict[str, Any]:
                     if item != dismissed
                 ),
                 dismissed,
-            ][-HISTORY_KEPT:]
+            ]
         },
     )
     state.write_json(path, dismissed)
@@ -432,6 +431,8 @@ def _prepared(
     kind: str | None,
     native_session_id: str,
 ) -> Result[dict]:
+    from harness.elicitation_store import binding
+
     return bind(
         require(
             not waiting(repo, scope),
@@ -468,6 +469,11 @@ def _prepared(
                 "native_session_id": native_session_id,
                 "allow_free_text": free_text,
                 "details": details,
+                **(
+                    {"elicitation": binding(repo, scope, question, options)}
+                    if binding(repo, scope, question, options)
+                    else {}
+                ),
                 **{
                     name: value
                     for name, value in (
@@ -628,6 +634,52 @@ def _resolve(
         raise ValueError("the human reply is empty")
     if source != current.get("transport"):
         raise ValueError("the answer arrived through a different interaction")
+    match current.get("gate"), current.get("work_session_id"):
+        case "implementation-confirm", str() as scope if (
+            questions.choice_label(answer).casefold() not in questions.DECLINE_LABELS
+        ):
+            from harness import plan_review, settings
+            from harness.workflow_evidence import gate_ready
+            from integrations import registry
+
+            match bind(
+                gate_ready(repo, scope, "implementation-confirm"),
+                lambda _: bind(
+                    registry.open_selected(repo, settings.load(repo)),
+                    lambda ops: plan_review.source_matches(
+                        repo,
+                        [name for name, _ in current.get("artifacts", ())],
+                        ops,
+                        scope,
+                    ),
+                ),
+            ):
+                case Err(failure):
+                    raise ValueError(failure.message)
+                case Ok():
+                    pass
+        case _:
+            pass
+    match current.get("gate"), current.get("work_session_id"):
+        case "plan-checkpoint", str() as scope:
+            from harness.workflow_evidence import gate_ready, option_id
+
+            match option_id(current | {"answer": answer}):
+                case "continue" | "stop":
+                    match gate_ready(
+                        repo,
+                        scope,
+                        "plan-checkpoint",
+                        tuple(name for name, _ in current.get("artifacts", ())),
+                    ):
+                        case Err(failure):
+                            raise ValueError(failure.message)
+                        case Ok():
+                            pass
+                case _:
+                    pass
+        case _:
+            pass
     if questions.choice_label(
         answer
     ).casefold() not in questions.DECLINE_LABELS and any(
@@ -643,10 +695,21 @@ def _resolve(
         "answer": answer,
         **({"own_words": True} if own_words else {}),
     }
+    match updated.get("elicitation"), updated.get("work_session_id"):
+        case dict(), str() as scope:
+            from harness.elicitation_store import capture
+
+            match capture(repo, scope, updated):
+                case Err(failure):
+                    raise ValueError(failure.message)
+                case Ok():
+                    pass
+        case _:
+            pass
     state.write_json(path, updated)
     history = path.with_name(HISTORY)
     earlier = (state.read_json(history) or {}).get("answers", [])
-    state.write_json(history, {"answers": [*earlier, updated][-HISTORY_KEPT:]})
+    state.write_json(history, {"answers": [*earlier, updated]})
     return updated
 
 
@@ -723,6 +786,8 @@ def approval_binds(record: dict[str, Any]) -> dict[str, Any] | None:
             bound: dict[str, Any] = {"artifacts": list(record.get("artifacts", ()))}
             if target:
                 bound["target"] = list(target)
+            if isinstance(record.get("values"), dict):
+                bound["values"] = record["values"]
             return bound
         case _:
             return None

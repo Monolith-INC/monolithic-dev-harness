@@ -51,6 +51,7 @@ COMMANDS = (
     "suspension",
     "onboarding",
     "mode",
+    "elicitation",
 )
 
 
@@ -76,6 +77,23 @@ def _control_parser(
 
 
 def add_parsers(sub: argparse._SubParsersAction) -> None:
+    chooser = sub.add_parser(
+        "elicitation",
+        help="resume source method selection, results, and hardening evidence",
+    )
+    chooser.add_argument(
+        "operation",
+        choices=("start", "status", "present", "result", "reopen", "hardening"),
+    )
+    chooser.add_argument("--repo", default=".")
+    chooser.add_argument("--session-id")
+    chooser.add_argument("--method-id", action="append")
+    chooser.add_argument("--recommendations", action="store_true")
+    chooser.add_argument("--artifact")
+    chooser.add_argument("--review-kind")
+    chooser.add_argument("--triage")
+    chooser.add_argument("--approach")
+    chooser.add_argument("--host", default=_default_decision_host())
     _control_parser(
         sub,
         "onboarding",
@@ -85,8 +103,10 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
         sub, "mode", "choose free or structured guidance; governance checks still apply"
     )
     plan_parser = sub.add_parser("plan", help="inspect a plan's size and scope signals")
-    plan_parser.add_argument("operation", choices=("check",))
-    plan_parser.add_argument("file")
+    plan_parser.add_argument("operation", choices=("check", "source"))
+    plan_parser.add_argument(
+        "file", help="plan file for check, or tracked item key for source"
+    )
     plan_parser.add_argument("--repo", default=".")
     begin_parser = sub.add_parser(
         "begin",
@@ -148,6 +168,7 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     workflow_parser.add_argument(
         "operation",
         choices=(
+            "audit-completion",
             "start",
             "render",
             "checkpoint",
@@ -166,6 +187,10 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
         ),
     )
     workflow_parser.add_argument("--repo", default=".")
+    # Read-only diagnostics are not workflow advancement.
+    workflow_parser.add_argument(
+        "--story", help="parent Story for the read-only task completion audit"
+    )
     workflow_parser.add_argument(
         "--session-id", help="save or load this project's independent work session"
     )
@@ -213,7 +238,11 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     decision_parser = sub.add_parser(
         "decision", help="present a host-adapted decision and wait for the human"
     )
-    decision_parser.add_argument("operation", choices=("present", "status", "fallback"))
+    decision_parser.add_argument(
+        "operation", choices=("present", "status", "fallback", "reuse")
+    )
+    decision_parser.add_argument("--from-session")
+    decision_parser.add_argument("--decision-id")
     decision_parser.add_argument("--repo", default=".")
     decision_parser.add_argument(
         "--session-id", help="scope the question to a project work session"
@@ -263,6 +292,13 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
 
 def run(args: argparse.Namespace) -> int:
     match args.command:
+        case "elicitation":
+            from harness import elicitation_cli
+
+            return elicitation_cli.command(args)
+        case _:
+            pass
+    match args.command:
         case "onboarding" | "mode":
             return print_result(
                 fmap(
@@ -270,6 +306,21 @@ def run(args: argparse.Namespace) -> int:
                         resolve_repo(args.repo), args.command, args.operation
                     ),
                     lambda value: json.dumps(value, ensure_ascii=False),
+                )
+            )
+        case "plan" if args.operation == "source":
+            from harness.workflow_evidence import item_digest
+
+            repo = resolve_repo(args.repo)
+            return print_result(
+                bind(
+                    registry.open_selected(repo, settings.load(repo)),
+                    lambda ops: fmap(
+                        ops.get_work_item(args.file),
+                        lambda item: json.dumps(
+                            {"item": item.key, "source_digest": item_digest(item)}
+                        ),
+                    ),
                 )
             )
         case "plan":
@@ -401,6 +452,20 @@ def suspension_command(args: argparse.Namespace) -> int:
 def decision_command(args: argparse.Namespace) -> int:
     repo = Path(args.repo).resolve()
     match args.operation:
+        case "reuse":
+            from harness.workflow_evidence import reuse_preference
+
+            return print_result(
+                fmap(
+                    reuse_preference(
+                        repo,
+                        args.session_id or "",
+                        args.from_session or "",
+                        args.decision_id or "",
+                    ),
+                    lambda value: json.dumps(value),
+                )
+            )
         case "status":
             print(decisions.status(repo, args.session_id))
             return 0
@@ -418,6 +483,15 @@ def decision_command(args: argparse.Namespace) -> int:
         ):
             return _fallback_decision(repo, args)
         case "present":
+            from harness.workflow_evidence import gate_ready
+
+            match gate_ready(
+                repo, args.session_id, args.gate or "", tuple(args.artifact or ())
+            ):
+                case Err(failure):
+                    return print_result(Err(failure))
+                case Ok():
+                    pass
             key = decisions.new_key()
             match bind(
                 _gate_values(repo, args),
@@ -477,7 +551,15 @@ def decision_command(args: argparse.Namespace) -> int:
                 ),
             )
             binds = (
-                {"bound": spec.bound, "target": list(spec.target or ())}
+                {
+                    "bound": spec.bound,
+                    "target": list(spec.target or ()),
+                    **(
+                        {"values": dict(pairs(args.value))}
+                        if spec.gate == "publish-items"
+                        else {}
+                    ),
+                }
                 if spec.approval
                 else None
             )
@@ -590,14 +672,52 @@ def _gate_values(repo: Path, args: argparse.Namespace) -> Result[dict[str, str]]
     approved plan is for, and that Story must be in the tracker: it comes from the plan, never
     from the agent."""
     values = dict(pairs(args.value))
+    if args.gate == "publish-items":
+        from core.result import require
+
+        items = tuple(
+            dict.fromkeys(
+                part.strip()
+                for part in values.get("items", "").split(",")
+                if part.strip()
+            )
+        )
+        count = (
+            int(values["count"])
+            if values.get("count", "").isascii() and values.get("count", "").isdecimal()
+            else -1
+        )
+        match require(
+            bool(items)
+            and len(items) == count
+            and all(
+                part.startswith("key:")
+                and part[4:]
+                or part.startswith("title:")
+                and part[6:]
+                for part in items
+            ),
+            "decision_invalid",
+            "publish-items needs a stable comma-separated item list using key:<existing-key> or title:<new-item-title>, with a matching count",
+        ):
+            case Err() as failure:
+                return failure
+            case Ok():
+                values["items"] = ",".join(items)
     if args.gate != "implementation-confirm":
         return Ok(values)
     return bind(
         plan_review.story(repo, list(args.artifact or ())),
         lambda key: bind(
             registry.open_selected(repo, settings.load(repo)),
-            lambda ops: fmap(
-                plan_review.tracked(ops, key), lambda _: {**values, "story": key}
+            lambda ops: bind(
+                plan_review.tracked(ops, key),
+                lambda _: fmap(
+                    plan_review.source_matches(
+                        repo, list(args.artifact or ()), ops, args.session_id
+                    ),
+                    lambda _: {**values, "story": key},
+                ),
             ),
         ),
     )
@@ -790,14 +910,22 @@ def _workflow_point(repo: Path, args: argparse.Namespace) -> Result[workflow.Wor
         workflow.load(repo, args.session_id),
         lambda current: bind(
             _workflow_artifacts(repo, args.artifact),
-            lambda artifacts: workflow.add_point(
-                current,
-                args.label or "",
-                _derived_stage(repo, args.session_id, current),
-                artifacts,
-                pairs(args.decision),
-                args.pending or "",
-                tuple(args.write_id or ()),
+            lambda artifacts: bind(
+                attempt(
+                    lambda: _derived_stage(repo, args.session_id, current),
+                    "route_unverified",
+                    "Cannot verify the route position; draft files remain saved",
+                    ValueError,
+                ),
+                lambda verified_stage: workflow.add_point(
+                    current,
+                    args.label or "",
+                    verified_stage,
+                    artifacts,
+                    pairs(args.decision),
+                    args.pending or "",
+                    tuple(args.write_id or ()),
+                ),
             ),
         ),
     )
@@ -808,7 +936,13 @@ def _derived_stage(
 ) -> str:
     """The stage the route puts the work session in; the agent never names it."""
     stage = route_facts.next_stage(repo, session_id)
-    return stage if stage in workflow.STAGES else current.current.stage
+    match stage:
+        case str() if stage in workflow.STAGES:
+            return stage
+        case _:
+            raise ValueError(
+                "Route position is unverified; recover the owning gateway and retry the checkpoint. Draft files remain saved."
+            )
 
 
 def _workflow_artifacts(
@@ -852,6 +986,21 @@ def _workflow_resume(
 
 def workflow_command(args: argparse.Namespace) -> int:
     repo = resolve_repo(args.repo)
+    match args.operation:
+        case "audit-completion":
+            from policy.task_evidence import audit
+
+            return print_result(
+                bind(
+                    registry.open_selected(repo, settings.load(repo)),
+                    lambda ops: fmap(
+                        audit(repo, ops, args.story or ""),
+                        lambda value: json.dumps(value),
+                    ),
+                )
+            )
+        case _:
+            pass
     if decisions.blocking(repo, args.session_id) and args.operation not in (
         "status",
         "requirements",

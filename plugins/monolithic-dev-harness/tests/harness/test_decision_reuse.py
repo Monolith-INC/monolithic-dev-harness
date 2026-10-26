@@ -103,10 +103,14 @@ def test_an_approval_is_reused_until_revoked(repo: Path) -> None:
         "--value",
         "count=3",
         "--value",
+        "items=key:A,key:B,key:C",
+        "--value",
         "tracker=Linear",
     )
     shown = present_gate(repo, *gate)
-    assert shown["question"] == "Publish these 3 work items to Linear?"
+    assert (
+        shown["question"] == "Publish these 3 work items (key:A,key:B,key:C) to Linear?"
+    )
     type_prompt(repo, "approve")
     assert state.active_approval(repo) is not None
     assert present_gate(repo, *gate)["state"] == "already_answered"

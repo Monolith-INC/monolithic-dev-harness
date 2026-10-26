@@ -206,7 +206,9 @@ class TestRequirements(Project):
             decision = self.edit()
         self.assertIn("server not running", report.unreachable)
         self.assertTrue(decision.is_denied())
-        self.assertIn("harness suspend", decision.reason)
+        self.assertIn(
+            "Recover/reload the owning workflow-integrations gateway", decision.reason
+        )
 
     def test_tracker_facts_are_reused_while_the_link_holds(self) -> None:
         self.link()
@@ -518,8 +520,8 @@ class TestCompletion(Verified):
         ).value.key
         self.assertIn("harness work-session link", self.done(other).reason)
 
-    def test_a_task_is_done_inside_its_storys_session(self) -> None:
-        self.assertFalse(self.done("TASK-0002").is_denied())
+    def test_a_task_needs_its_own_evidence_inside_its_storys_session(self) -> None:
+        self.assertIn("verification artifact", self.done("TASK-0002").reason)
         work_sessions.transition(self.root, self.session, "stop")
         self.assertIn("work session", self.done("TASK-0002").reason)
 

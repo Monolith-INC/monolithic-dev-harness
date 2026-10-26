@@ -187,9 +187,11 @@
     "light"
    ]
   },
-  "methods_chosen": {
-   "kind": "answer",
-   "gate": "planning-methods"
+  "methods_selected": {
+   "kind": "check",
+   "description": "A human has selected at least one planning method in the active round.",
+   "how": "resume the durable harness elicitation chooser and capture the selection",
+   "check": "methods_selected"
   },
   "approach_approved": {
    "kind": "answer",
@@ -242,6 +244,11 @@
     "not_reworked",
     "published_after_approach"
    ]
+  },
+  "methods_applied": {
+   "kind": "check",
+   "description": "Selected source methods have recorded human Apply or Reject decisions for unchanged result artifacts.",
+   "how": "resume harness elicitation status/present/result; preserve each actual human decision"
   }
  },
  "route": [
@@ -329,9 +336,23 @@
     "depth_light"
    ],
    "skill": "bmad-build",
-   "gate": "planning-methods",
+   "say": "Resume the durable harness elicitation chooser; only its captured human selection completes this step.",
    "done": [
-    "methods_chosen"
+    "methods_selected"
+   ]
+  },
+  {
+   "id": "method-application",
+   "stage": "planning",
+   "scope": "work",
+   "unless": [
+    "shaping_skipped",
+    "depth_light"
+   ],
+   "skill": "bmad-advanced-elicitation",
+   "say": "Resume the durable chooser and apply each selected source method; show each result and capture its Apply/Reject/Direction decision.",
+   "done": [
+    "methods_applied"
    ]
   },
   {

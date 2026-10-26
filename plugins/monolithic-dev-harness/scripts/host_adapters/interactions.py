@@ -278,6 +278,26 @@ def normalize_question(host: str, tool_input: dict[str, Any]) -> dict[str, Any]:
 def prompt_answer(
     host: str, prompt: str, pending: Pending
 ) -> tuple[str, str, str] | None:
+    match normalize_human_reply(host, prompt, pending):
+        case None:
+            return None
+        case reply:
+            return reply.decision_tuple()
+
+
+def normalize_human_reply(host: str, prompt: str, pending: Pending):
+    from harness.process_messages import HumanReply
+
+    match _prompt_answer(host, prompt, pending):
+        case (identifier, answer, transport):
+            return HumanReply(identifier, pending.question, answer, transport)
+        case None:
+            return None
+
+
+def _prompt_answer(
+    host: str, prompt: str, pending: Pending
+) -> tuple[str, str, str] | None:
     from harness.questions import authorizing_options, match_option
 
     # A typed message is the human's own reply whatever showed the question: a dismissed picker

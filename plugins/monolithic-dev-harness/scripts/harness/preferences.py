@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -62,6 +63,14 @@ def language() -> Result[str]:
 
 def language_for(repo: Path) -> Result[str]:
     """A confirmed project choice takes precedence over another project's user preference."""
+    match (
+        state.read_json(_conversation_path(repo, os.environ.get("CODEX_THREAD_ID", "")))
+        or {}
+    ).get("language"):
+        case "en" | "pt-br" as override:
+            return Ok(override)
+        case _:
+            pass
     match (state.read_json(repo / LANGUAGE_STATE) or {}).get("language"):
         case "en" | "pt-br" as chosen:
             return Ok(chosen)
@@ -80,6 +89,26 @@ def language_for(repo: Path) -> Result[str]:
 def language_confirmed(repo: Path) -> Result[bool]:
     chosen = state.read_json(repo / LANGUAGE_STATE)
     return Ok(bool(chosen and chosen.get("language") in LANGUAGES))
+
+
+def _conversation_path(repo: Path, conversation: str) -> Path:
+    return (
+        repo
+        / ".harness/state/host_sessions/preferences"
+        / (hashlib.sha256(conversation.encode()).hexdigest() + ".json")
+    )
+
+
+def observe_language(repo: Path, conversation: str, prompt: str) -> Result[str]:
+    match conversation, prompt.strip().casefold().rstrip(".!?"):
+        case str() as owner, "english please" | "in english please" if owner:
+            state.write_json(_conversation_path(repo, owner), {"language": "en"})
+            return Ok("en")
+        case str() as owner, "português por favor" | "em português por favor" if owner:
+            state.write_json(_conversation_path(repo, owner), {"language": "pt-br"})
+            return Ok("pt-br")
+        case _:
+            return Ok("")
 
 
 def set_language(chosen: str, repo: Path | None = None) -> Result[Path]:

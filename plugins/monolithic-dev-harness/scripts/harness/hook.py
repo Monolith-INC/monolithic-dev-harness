@@ -612,10 +612,13 @@ def _print_prompt(host: str, notes: list[str]) -> None:
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     prompt = hook_bridge.prompt_text(payload)
     repo = _workspace(payload, host)
+    from harness import preferences
     from host_adapters import native_session_id
 
+    preferences.observe_language(repo, native_session_id(host, payload) or "", prompt)
+
     match harness_controls.prompt_operation(
-        repo, prompt, native_session_id(host, payload) or ""
+        repo, prompt, native_session_id(host, payload) or "", host
     ):
         case "suspend" | "resume" as operation:
             harness_controls.prompt(

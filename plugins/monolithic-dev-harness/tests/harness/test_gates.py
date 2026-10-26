@@ -66,7 +66,12 @@ def test_slots_must_all_be_filled() -> None:
         gates.render("publish-items", "en", {"count": "3", "tracker": "{x}"}), Err
     )
     assert isinstance(
-        gates.render("publish-items", "en", {"count": "3", "tracker": "Linear"}), Ok
+        gates.render(
+            "publish-items",
+            "en",
+            {"count": "3", "items": "key:A, key:B, key:C", "tracker": "Linear"},
+        ),
+        Ok,
     )
 
 

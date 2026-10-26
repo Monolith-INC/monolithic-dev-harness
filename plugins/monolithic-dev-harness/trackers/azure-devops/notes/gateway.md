@@ -14,6 +14,11 @@ Never call `@azure-devops/mcp` tools directly, search for their host-specific na
 Azure MCP server, or substitute Azure CLI, `az login`, or a PAT. This keeps authentication and
 provider details behind the gateway.
 
+The host's `workflow-integrations` process owns the Azure MCP transport. Local CLI and hook readers
+use its private per-project Unix socket; they never start a second provider. The socket accepts only
+centrally allowlisted reads, checks same-user peer credentials and a protected owner record, and is
+mode 0600 inside a mode 0700 user directory. Restart or reload the host to recover a dead owner.
+
 The repository's `.harness/settings.json` is the source of organization, project, team, and
 repository selection (`tracker.values` and `scm.values`). Ask the user to configure missing values
 through the harness bootstrap or tracker onboarding flow. Do not infer an organization from the

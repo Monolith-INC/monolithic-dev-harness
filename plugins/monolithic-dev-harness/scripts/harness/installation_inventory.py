@@ -400,9 +400,36 @@ def _settings(host: str, path: Path, scope: str, kind: str) -> tuple[Component, 
                 if begin in text and end in text
             )
             registrations = _registrations(host, path, scope, value, kind)
-            return servers + (blocks or hooks) + registrations
+            conflicts = tuple(
+                _component(
+                    host,
+                    path,
+                    scope,
+                    "provider-conflict",
+                    f"private provider registered directly: {name}",
+                    (key, name),
+                    owned=False,
+                )
+                for key in ("mcpServers", "mcp_servers", "context_servers")
+                if "workflow-integrations" in value.get(key, {})
+                for name, record in value.get(key, {}).items()
+                if native_provider(record)
+            )
+            return servers + (blocks or hooks) + registrations + conflicts
         case _:
             raise ValueError("host settings must be an object")
+
+
+def native_provider(record: Any) -> bool:
+    match record:
+        case {"command": str() as command, **rest}:
+            return any(
+                str(word).startswith("@azure-devops/mcp")
+                or str(word).endswith("mcp-server-azuredevops")
+                for word in (command, *rest.get("args", ()))
+            )
+        case _:
+            return False
 
 
 def _hooks(host: str, path: Path, scope: str, hooks: Any) -> tuple[Component, ...]:
@@ -541,65 +568,88 @@ def findings(
             for other in inventory.components
         )
     )
-    return _scope_overlap(inventory) + tuple(
-        item
-        for item in (
+    return (
+        tuple(
             Finding(
-                "mixed-version" if len(versions) > 1 else "outdated-version",
-                "Installed versions differ"
-                if len(versions) > 1
-                else "Installed version differs from expectation",
-                stale,
-            )
-            if stale
-            else None,
-            Finding(
-                "duplicate-components",
-                "Potential overlapping harness components; select the installation to retain before removal",
-                duplicates,
-                tuple(
+                "private-provider-registration",
+                "This host also registers the provider privately owned by workflow-integrations. Select the exact local entry for removal; unrelated/global registrations are preserved.",
+                (item,),
+                (
                     Repair(
-                        "remove_entry" if item.selector else "remove_path",
+                        "remove_provider_conflict",
                         item,
-                        "remove selected duplicate component",
-                    )
-                    for item in duplicates
-                ),
+                        "remove the explicitly selected conflicting local provider entry",
+                    ),
+                )
+                if item.scope == "local"
+                else (),
             )
-            if duplicates
-            else None,
-            Finding(
-                "legacy-backups",
-                "Legacy backups may contain unrelated settings; inspect and archive explicitly",
-                tuple(item for item in inventory.components if item.kind == "backup"),
-                tuple(
-                    Repair(
-                        "archive_backup",
-                        item,
-                        "preserve the ambiguous backup outside active host configuration",
-                    )
-                    for item in inventory.components
-                    if item.kind == "backup"
-                ),
-            )
-            if any(item.kind == "backup" for item in inventory.components)
-            else None,
-            Finding(
-                "incomplete-installation",
-                "Installation stopped before completion; inspect the journal and rerun installation or scoped removal",
-                tuple(
-                    item
-                    for item in inventory.components
-                    if item.kind == "receipt" and item.detail != "receipt:installed"
-                ),
-            )
-            if any(
-                item.kind == "receipt" and item.detail != "receipt:installed"
-                for item in inventory.components
-            )
-            else None,
+            for item in inventory.components
+            if item.kind == "provider-conflict"
         )
-        if item is not None
+        + _scope_overlap(inventory)
+        + tuple(
+            item
+            for item in (
+                Finding(
+                    "mixed-version" if len(versions) > 1 else "outdated-version",
+                    "Installed versions differ"
+                    if len(versions) > 1
+                    else "Installed version differs from expectation",
+                    stale,
+                )
+                if stale
+                else None,
+                Finding(
+                    "duplicate-components",
+                    "Potential overlapping harness components; select the installation to retain before removal",
+                    duplicates,
+                    tuple(
+                        Repair(
+                            "remove_entry" if item.selector else "remove_path",
+                            item,
+                            "remove selected duplicate component",
+                        )
+                        for item in duplicates
+                    ),
+                )
+                if duplicates
+                else None,
+                Finding(
+                    "legacy-backups",
+                    "Legacy backups may contain unrelated settings; inspect and archive explicitly",
+                    tuple(
+                        item for item in inventory.components if item.kind == "backup"
+                    ),
+                    tuple(
+                        Repair(
+                            "archive_backup",
+                            item,
+                            "preserve the ambiguous backup outside active host configuration",
+                        )
+                        for item in inventory.components
+                        if item.kind == "backup"
+                    ),
+                )
+                if any(item.kind == "backup" for item in inventory.components)
+                else None,
+                Finding(
+                    "incomplete-installation",
+                    "Installation stopped before completion; inspect the journal and rerun installation or scoped removal",
+                    tuple(
+                        item
+                        for item in inventory.components
+                        if item.kind == "receipt" and item.detail != "receipt:installed"
+                    ),
+                )
+                if any(
+                    item.kind == "receipt" and item.detail != "receipt:installed"
+                    for item in inventory.components
+                )
+                else None,
+            )
+            if item is not None
+        )
     )
 
 

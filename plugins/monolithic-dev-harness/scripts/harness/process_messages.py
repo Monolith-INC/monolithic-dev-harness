@@ -17,6 +17,77 @@ from harness.process_assignment import Assignment, decode_assignment
 VERSION = 1
 
 
+@dataclass(frozen=True)
+class HumanReply:
+    """Host-normalized human input; authority remains in the verified caller context."""
+
+    presentation_id: str
+    question: str
+    answer: str
+    transport: str
+
+    def decision_tuple(self) -> tuple[str, str, str]:
+        return self.presentation_id, self.answer, self.transport
+
+
+# Sessionless integration reads share the catalog and bus interface, not process authority.
+INTEGRATION_READS = frozenset(
+    {
+        "tracker_describe",
+        "tracker_preflight",
+        "tracker_get_work_item",
+        "tracker_search_work_items",
+        "tracker_list_children",
+        "tracker_list_artifacts",
+        "workflow_tracking_status",
+    }
+)
+
+
+def integration_read(
+    project: str, operation: str, arguments: dict, event_id: str
+) -> dict:
+    return {
+        "jsonrpc": "2.0",
+        "id": event_id,
+        "method": "integration.read",
+        "params": {
+            "version": VERSION,
+            "project": project,
+            "operation": operation,
+            "arguments": arguments,
+        },
+    }
+
+
+def decode_integration_read(message: Any, project: str) -> Result[tuple[str, dict]]:
+    match message:
+        case {
+            "jsonrpc": "2.0",
+            "id": str() as identifier,
+            "method": "integration.read",
+            "params": {
+                "version": 1,
+                "project": str() as named,
+                "operation": str() as operation,
+                "arguments": dict() as arguments,
+            },
+        } if identifier and named == project:
+            match operation in INTEGRATION_READS:
+                case True:
+                    return Ok((operation, arguments))
+                case False:
+                    return err(
+                        "gateway_read_only",
+                        "Local gateway clients may only read; use the approved host gateway for writes.",
+                    )
+        case _:
+            return err(
+                "invalid_integration_message",
+                "Integration read does not match the project and central catalog.",
+            )
+
+
 class ProcessStatus(str, Enum):
     RUNNING = "running"
     COMPLETED = "completed"

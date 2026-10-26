@@ -111,6 +111,7 @@ skill; never guess a location.
 type: implementation-plan
 feature: <feature id or artifacts path>
 story: <story id or artifacts path>
+source_digest: <value from `harness plan source <story key>`>
 skill: generate-breakdown-work-items
 language: en   # or pt-BR
 status: draft
@@ -134,5 +135,8 @@ plan (`implementation-confirm`), then set `active`. The approval pins the plan's
 
 ### Approval
 
-The approval is required: no Task is drafted until the plan is approved as it reads now. Edits must
-still cover every AC.
+The approval is required: no Task is drafted until the plan is approved as it reads now. The plan
+must identify the current Story `source_digest` from `harness plan source <story key>`. Refinement
+publishes reviewed work-item content and verifies tracker readback before this plan can be approved.
+If source requirements change, refresh the digest and obtain approval again. Edits must still cover
+every AC.

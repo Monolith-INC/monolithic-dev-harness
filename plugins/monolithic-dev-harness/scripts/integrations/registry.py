@@ -538,6 +538,20 @@ def selected(
 
 
 def open_selected(repo: Path, settings: Result[Settings]) -> Result[TrackerOps]:
+    from . import gateway_client
+
+    return bind(
+        selected(repo, settings),
+        lambda active: (
+            gateway_client.open_selected(active, repo)
+            if active.manifest.connection.get("kind") == "mcp"
+            else open_tracker(active, repo)
+        ),
+    )
+
+
+def open_owned(repo: Path, settings: Result[Settings]) -> Result[TrackerOps]:
+    """Provider construction is owned by the host gateway, never a CLI/hook client."""
     return bind(selected(repo, settings), lambda active: open_tracker(active, repo))
 
 
