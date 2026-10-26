@@ -111,6 +111,33 @@ def test_chat_fallback_preserves_checked_approval_and_prevents_replay(
     assert state.active_approval(tmp_path) is None
 
 
+def test_fallback_rebinds_pending_answer_to_the_current_codex_chat(
+    tmp_path: Path, monkeypatch
+) -> None:
+    assert isinstance(
+        decisions.begin(
+            tmp_path,
+            "native-recovery",
+            "Confirm recovery?",
+            ("Yes", "No"),
+            "blocking",
+            native_session_id="original-root",
+        ),
+        Ok,
+    )
+    monkeypatch.setenv("CODEX_THREAD_ID", "recovery-root")
+
+    assert fallback(tmp_path, "--async-available").returncode == 0
+    assert decisions.record(tmp_path)["native_session_id"] == "recovery-root"
+    assert decisions.record(tmp_path)["answer"] == ""
+
+    native(tmp_path, "prompt", {"session_id": "original-root", "prompt": "Yes"})
+    assert decisions.waiting(tmp_path)
+    native(tmp_path, "prompt", {"session_id": "recovery-root", "prompt": "Yes"})
+    assert not decisions.waiting(tmp_path)
+    assert decisions.record(tmp_path)["answer"] == "Yes"
+
+
 def test_fallback_cannot_replace_or_answer_the_question(tmp_path: Path) -> None:
     assert isinstance(
         decisions.begin(tmp_path, "review", "Confirm?", ("Yes", "No"), "blocking"), Ok
