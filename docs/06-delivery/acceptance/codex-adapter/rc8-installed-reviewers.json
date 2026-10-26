@@ -1,0 +1,174 @@
+{
+  "classification": "actual_installed_desktop_native_custom_reviewers",
+  "release": "v0.7.0-rc.8",
+  "main_session_id": "01a17265-d5b4-7050-a1b3-3f9ea8c8e3fb",
+  "work_session_id": "WS-38698f60f8a0",
+  "roles": {
+    "mdh_thermo_review": "01a17274-4fc2-71d3-9467-05dc9770044a",
+    "mdh_thermo_quality": "01a17276-3ae5-7bf2-9c95-ee743f4eab99"
+  },
+  "process_records": [
+    {
+      "assignment": {
+        "effort": "medium",
+        "model": "gpt-6-sol",
+        "owned_paths": [],
+        "role": "reviewer"
+      },
+      "completed_executions": [
+        "01a17274-5014-7253-b33b-c48e99a2832c",
+        "01a17274-a5f3-7960-ad7f-1871e40fb682"
+      ],
+      "context": {
+        "adapter": "codex",
+        "owner_id": "01a17265-d5b4-7050-a1b3-3f9ea8c8e3fb",
+        "work_session_id": "WS-38698f60f8a0"
+      },
+      "events": [
+        [
+          "08cbb10a233a7d8e31bf53884f0b7226e9a151081507b2fcc566cde0a6436f8a",
+          "c3b67dbc2fed9a8218fa8b538831e46d84a62240dcfcb8a1a7cf9bc0c68f4372"
+        ],
+        [
+          "dd558e56d9683ae5c9d2fe076334e9d4982dd44e8b447edf5c0b526cf46b8c21",
+          "a1fd24f0161a4a5d922916eb81c50eb609fcfba7c929f906a4aec3948e4ccda5"
+        ],
+        [
+          "0b6ca49f9af80fa9c28ad43a98af92c74fbacc6cc7caf9b802ebca7960a86387",
+          "2bea7b6ac91259cde1dfd51bdba082ad807af63e2859c86e4056589e1660df13"
+        ],
+        [
+          "b7f41154ada91b787baa0e7ef3415545fe526f31d27707e79f12babf5897a0b1",
+          "83e09ec902e3a96fd1fcd0cb692230f63809d6ff395e4d16113edc8e38531bc0"
+        ],
+        [
+          "be7ef1d5182acf608a8a54d880fa1d401fb582587e4f2133cc6ab09cc821fc15",
+          "41b321b14ca5e3f4e1f016f0d73605750af7ddbbf078683187704ef1545421b0"
+        ]
+      ],
+      "execution_id": "01a17274-a5f3-7960-ad7f-1871e40fb682",
+      "process_id": "01a17274-4fc2-71d3-9467-05dc9770044a",
+      "reported_status": null,
+      "revision": 4,
+      "revoked": false,
+      "runtime_status": "completed",
+      "version": 1
+    },
+    {
+      "assignment": {
+        "effort": "medium",
+        "model": "gpt-6-sol",
+        "owned_paths": [],
+        "role": "reviewer"
+      },
+      "completed_executions": [
+        "01a17276-3b14-7042-a227-f98f709a01bd",
+        "01a17276-9146-7cd2-94e8-74d8833884d9"
+      ],
+      "context": {
+        "adapter": "codex",
+        "owner_id": "01a17265-d5b4-7050-a1b3-3f9ea8c8e3fb",
+        "work_session_id": "WS-38698f60f8a0"
+      },
+      "events": [
+        [
+          "cebfbe57ca99c90352abf1a479f57483ac68044f3c6dec3b2e10c36520411981",
+          "5dd0ebf431a5af1705a3425c311bd72da62745bad96af6ebc7ef78a6abf58065"
+        ],
+        [
+          "37430ddc93d3ef9f5ff5d341b8bd4e72aaaef97d379dcd9d91aba2f232ead73d",
+          "a240aa4ddffe1470ea70098585a8cd79c7384a5985be79c22d27c535291e09a7"
+        ],
+        [
+          "59a78a231d83f2ee44251bfdb1058a8edd149beeaf7d4daf7735d335df0e2460",
+          "73127e55f1d684d5cb488bc8305879520fe5640f7a91f4ef0258c9ddc402f450"
+        ],
+        [
+          "dada1dd6fb545e33d0e7d4ecfea60f479d827f24ec8a8ceb2e7871c782308167",
+          "cd280cf558cbad9959067d3d098dc8162fab76620afdc22f6ca0d6f094ecb22e"
+        ],
+        [
+          "4b0ce25218ad75bc3d81558f49a936bcb32100b3c93083a0417388df95826ddb",
+          "0e8166585d435009c6e3767580130c938afc9dccc83d2235a77678c8dbbffaa4"
+        ]
+      ],
+      "execution_id": "01a17276-9146-7cd2-94e8-74d8833884d9",
+      "process_id": "01a17276-3ae5-7bf2-9c95-ee743f4eab99",
+      "reported_status": null,
+      "revision": 4,
+      "revoked": false,
+      "runtime_status": "completed",
+      "version": 1
+    }
+  ],
+  "host_binding_records": [
+    {
+      "child_native_session": "01a17274-4fc2-71d3-9467-05dc9770044a",
+      "completed_turns": [
+        "01a17274-5014-7253-b33b-c48e99a2832c",
+        "01a17274-a5f3-7960-ad7f-1871e40fb682"
+      ],
+      "parent_native_session": "01a17265-d5b4-7050-a1b3-3f9ea8c8e3fb",
+      "project": "/fixture/rc8-desktop",
+      "status": "stopped",
+      "turn_id": "01a17274-a5f3-7960-ad7f-1871e40fb682",
+      "version": 2,
+      "work_session_id": "WS-38698f60f8a0"
+    },
+    {
+      "child_native_session": "01a17276-3ae5-7bf2-9c95-ee743f4eab99",
+      "completed_turns": [
+        "01a17276-3b14-7042-a227-f98f709a01bd",
+        "01a17276-9146-7cd2-94e8-74d8833884d9"
+      ],
+      "parent_native_session": "01a17265-d5b4-7050-a1b3-3f9ea8c8e3fb",
+      "project": "/fixture/rc8-desktop",
+      "status": "stopped",
+      "turn_id": "01a17276-9146-7cd2-94e8-74d8833884d9",
+      "version": 2,
+      "work_session_id": "WS-38698f60f8a0"
+    }
+  ],
+  "authentic_native_turn_contexts": [
+    {
+      "process_id": "01a17274-4fc2-71d3-9467-05dc9770044a",
+      "contexts": [
+        {
+          "model": "gpt-6-sol",
+          "effort": "medium",
+          "cwd": "/fixture/rc8-desktop",
+          "turn_id": "01a17274-5014-7253-b33b-c48e99a2832c"
+        },
+        {
+          "model": "gpt-6-sol",
+          "effort": "medium",
+          "cwd": "/fixture/rc8-desktop",
+          "turn_id": "01a17274-a5f3-7960-ad7f-1871e40fb682"
+        }
+      ]
+    },
+    {
+      "process_id": "01a17276-3ae5-7bf2-9c95-ee743f4eab99",
+      "contexts": [
+        {
+          "model": "gpt-6-sol",
+          "effort": "medium",
+          "cwd": "/fixture/rc8-desktop",
+          "turn_id": "01a17276-3b14-7042-a227-f98f709a01bd"
+        },
+        {
+          "model": "gpt-6-sol",
+          "effort": "medium",
+          "cwd": "/fixture/rc8-desktop",
+          "turn_id": "01a17276-9146-7cd2-94e8-74d8833884d9"
+        }
+      ]
+    }
+  ],
+  "limits": [
+    "Read-only tiny-document checkpoint, not full production review coverage.",
+    "First role could not read an external package rubric; its role permits scoped fallback. Main agent supplied rubric for the second role.",
+    "Native turn contexts attest these specific effective model/effort settings, not universal effort-policy enforcement.",
+    "Direct public work-session selection established the main native binding. No lifecycle or approval record was manually manufactured."
+  ]
+}

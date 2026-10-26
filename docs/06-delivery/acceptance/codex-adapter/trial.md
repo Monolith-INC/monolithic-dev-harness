@@ -135,18 +135,43 @@ work session was operator-seeded; this does not qualify full onboarding, human D
 all workflow families or external-write recovery. Requested effort and this trial's observed
 effort are distinct from a general runtime effort-enforcement guarantee.
 
+## RC8 Desktop structured-answer checkpoint
+
+RC8 is published from `e883695c69b2d8be97d3d5c18b41584ec2db6963`. Its public installer,
+archive checksums and installation lifecycle passed the
+[installation acceptance checks](../installation/rc8-source-trial.md).
+
+The operator opened a fresh Desktop chat in the disposable project
+`/tmp/mdh-rc8-desktop-9QUjpH/project`. All three project-configured MCP services returned
+actual responses. The integrations tracker-description operation correctly reported that the
+project was not bootstrapped. Cross-host doctor inventory also found pre-existing Claude
+registration overlap in another project and an unrelated legacy backup; no repair was applied.
+
+The native async question `Accept this acceptance outline?` offered `Accept` and `Revise`.
+The actual operator selected `Accept`; public decision status retained that exact answer,
+native session/call IDs, presentation `HD-a8d5817d7e140f55` and the `REVIEW.md` digest.
+[Authentic sanitized question, operator response and decision](rc8-installed-desktop.json)
+qualify Desktop structured domain-feedback capture. The decision had `approval: false` and
+no work-session scope. It does not qualify an external-effect approval or recovery. The file
+preview was queued, so visible artifact review remains separately unqualified.
+
+Ordinary setup next encountered the host's read-only `.git/info/exclude` boundary while
+preparing its setup proposal. No setup was applied or internal record changed to bypass it.
+Continuation must use the supported host permission mechanism for that narrowly scoped
+bootstrap operation and preserve genuine setup decisions.
+
 ## Remaining final release gates
 
-- Current Desktop surface and visible structured controls.
+- Work-session-scoped Desktop approval and verified visible artifact review. RC8's native
+  structured domain-feedback selection and answer capture passed the checkpoint above.
 - General reasoning-effort policy enforcement and any assignment operations outside the qualified tool paths.
 - Existing laws across every advertised Claude workflow family.
 - Genuine harness decision capture, reviewed content/scope binding, interruption/recovery and exactly-once scoped external write on a dedicated authorized fixture.
 
 A protocol pass or a green unit test does not clear these requirements. Preserve pending gates and report concrete blockers rather than describing a partial adapter as fully functional.
 
-The next qualification checkpoint needs actual Desktop rendering/capture using RC7.
-Model-facing status text or a
-model-written lifecycle receipt cannot supply that authority. The shared message channel now
+Model-facing status text or a model-written lifecycle receipt cannot supply human authority.
+The shared message channel now
 withdraws permission independently of native interruption callbacks, as the same-execution
 trial demonstrates. Termination of already-running operating-system processes remains unqualified.
 The remaining workflow families and a dedicated external-write/recovery fixture also need their

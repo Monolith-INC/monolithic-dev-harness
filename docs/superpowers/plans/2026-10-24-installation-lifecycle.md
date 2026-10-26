@@ -81,6 +81,6 @@ Files: `harness/cli.py`, installation inventory/cleanup executor and tests.
 ## Task 5: Delivery
 
 - [x] Update installer/API/runbook documentation and ownership/removal semantics, distinguishing package installation from project bootstrap.
-- [ ] Run focused checks for changed boundaries, one independent review, mandatory CI and release workflow. Do not repeat broad suites locally.
-- [ ] Publish the next candidate only after required CI; prove curl/source installation, repeat installation, scoped removal/purge and duplicate repair in disposable projects.
+- [x] Run focused checks for changed boundaries, independent inventory reviews, mandatory CI and release workflow. Do not repeat broad suites locally. Both reported inventory findings are closed; see the RC8 installation acceptance report.
+- [x] Publish the next candidate only after required CI; prove curl/source installation, repeat installation, scoped removal/purge and duplicate repair in disposable projects. RC8 is published; source lifecycle trials, repair contract tests and the published curl install/doctor/purge trial provide the recorded evidence.
 - [x] Preserve RC7 evidence and remaining native/Desktop/workflow/approval qualification gates. Do not call incomplete parity a final release.

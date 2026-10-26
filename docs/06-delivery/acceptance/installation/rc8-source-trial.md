@@ -1,14 +1,14 @@
 ---
-title: RC8 installation source acceptance
+title: RC8 installation acceptance
 status: active
 owner: monolithic-dev-harness maintainers
 last_reviewed: 2026-10-25
 ---
 
-# RC8 installation source acceptance
+# RC8 installation acceptance
 
-These are source-checkout trials in disposable homes and projects. They are not archive or
-Desktop acceptance, and do not supersede the Codex adapter's remaining qualification gates.
+Source, packaged and published-installer trials used disposable homes and projects. These
+results do not supersede the Codex adapter's remaining native/Desktop qualification gates.
 
 ## Storage and registration
 
@@ -46,6 +46,34 @@ to the actual user's Desktop or model profiles. The fixture was
   structured repair selection and shared-package lifetime.
 - Ruff, Markdown, repository integrity and version-source checks passed before commit.
 
-Mandatory CI and published-archive verification remain delivery gates. Full workflow parity,
-Desktop controls, reasoning-effort observation and external-write/recovery acceptance retain
-[their existing qualification status](../codex-adapter/trial.md).
+## Published candidate verification
+
+- Candidate: [v0.7.0-rc.8](https://github.com/Monolith-INC/monolithic-dev-harness/releases/tag/v0.7.0-rc.8).
+- Tagged commit: `e883695c69b2d8be97d3d5c18b41584ec2db6963`.
+- [Required CI](https://github.com/Monolith-INC/monolithic-dev-harness/actions/runs/40179552807)
+  and [release workflow](https://github.com/Monolith-INC/monolithic-dev-harness/actions/runs/40180307346)
+  completed successfully. This includes Python 3.12/3.13 suites, formatting/lint and
+  packaged installation/removal. The initial CI failure was corrected in the tagged commit:
+  five adapter factories needed formatting and the Claude CLI fixture needed its native profile
+  directory, which the real CLI creates but the stub did not.
+- The downloaded archive and installer passed their published `SHA256SUMS` checks.
+  Archive SHA-256: `3882d8cc11b1d25f62f79aba389f5b969a204c40d213dec966af412843daa0ad`.
+  Installer SHA-256: `23b5c2d5caf80cacc0bf4c999ec5f36548d70f904b32600616d7aa04c28b273f`.
+  The downloaded archive matches the locally tested build byte for byte.
+- Archive installation, doctor and all-scope purge passed in `/tmp/mdh-rc8-archive-H7ns5Y`.
+- The public GitHub release installer was fetched with curl and piped into Bash with
+  `--version 0.7.0-rc.8 --scope local --project <fixture> --host codex --yes`.
+  Download/checksum verification, installation, doctor and all-scope purge passed in
+  `/tmp/mdh-rc8-curl-v5BAB1`. This used the release download route, not `--source`.
+- No project package/command copy or user-wide Codex registration was created. Purge removed
+  the fixture's registration, shared package and CLI link.
+- The installed published doctor detected a deliberately seeded user/project MCP duplicate
+  in `/tmp/mdh-rc8-doctor-ohcgbvgj`. Selecting its user entry, previewing the selection digest
+  and applying that exact selection removed only the selected entry. The project registration
+  and unrelated settings were preserved. This is a controlled repair trial, not a claim that
+  the actual user's pre-existing configuration was repaired.
+
+Installation delivery is complete for this candidate. Full workflow parity, Desktop controls,
+reasoning-effort observation and external-write/recovery acceptance retain
+[their existing qualification status](../codex-adapter/trial.md). RC8 is a prerelease, not a
+final fully functional Codex parity release.
