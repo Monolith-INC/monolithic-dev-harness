@@ -742,12 +742,16 @@ def fallback(
     transport: str,
     *,
     work_session_id: str | None = None,
+    native_session_id: str = "",
 ) -> Result[dict[str, Any]]:
     """Move the same unanswered review to a simpler delivery method; never answer it."""
     return bind(
         _path(repo, work_session_id),
         lambda path: bind(
-            _fallback_record(state.read_json(path) or {}, transport),
+            fmap(
+                _fallback_record(state.read_json(path) or {}, transport),
+                lambda updated: _fallback_origin(updated, native_session_id),
+            ),
             lambda updated: fmap(
                 attempt(
                     lambda: state.write_json(path, updated),
@@ -759,6 +763,15 @@ def fallback(
             ),
         ),
     )
+
+
+def _fallback_origin(current: dict[str, Any], native_session_id: str) -> dict[str, Any]:
+    """The conversation re-presenting the saved menu owns its next human reply."""
+    match native_session_id:
+        case str() as session if session:
+            return {**current, "native_session_id": session}
+        case _:
+            return current
 
 
 def _fallback_record(current: dict[str, Any], transport: str) -> Result[dict[str, Any]]:

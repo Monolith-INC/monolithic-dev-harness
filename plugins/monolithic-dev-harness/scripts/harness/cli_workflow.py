@@ -756,7 +756,14 @@ def _show_fallback(
 ) -> int:
     return print_result(
         fmap(
-            decisions.fallback(repo, shown["transport"], work_session_id=pending.scope),
+            decisions.fallback(
+                repo,
+                shown["transport"],
+                work_session_id=pending.scope,
+                native_session_id={"codex": os.environ.get("CODEX_THREAD_ID", "")}.get(
+                    args.host, ""
+                ),
+            ),
             lambda _: json.dumps(
                 {**shown, "decision_id": pending.id, "state": "waiting_for_human"}
             ),
