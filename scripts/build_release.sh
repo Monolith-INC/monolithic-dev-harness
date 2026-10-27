@@ -74,6 +74,9 @@ for required in .claude-plugin/marketplace.json .cursor-plugin/marketplace.json 
     plugins/monolithic-dev-harness/references/codex-runtime.md \
     plugins/monolithic-dev-harness/bin/harness; do
   grep -qx "${NAME}/${required}" <<<"$contents" || { echo "archive is missing ${required}" >&2; exit 1; }
+  source_digest="$(git show "HEAD:${required}" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
+  payload_digest="$(tar -xOzf "${DIST}/${NAME}.tar.gz" "${NAME}/${required}" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
+  test "$source_digest" = "$payload_digest" || { echo "archive content differs from committed source: ${required}" >&2; exit 1; }
 done
 
 cd "$DIST"

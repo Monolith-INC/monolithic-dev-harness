@@ -100,10 +100,7 @@ class ProjectFacts:
             case "methods_selected":
                 from harness.elicitation_store import methods_selected
 
-                return (
-                    methods_selected(self.repo, self.session.id)
-                    or self.answer("planning-methods") is not None
-                )
+                return methods_selected(self.repo, self.session.id)
             case "entry_tracked":
                 return bool(self.session.entry_item)
             case "entry_refined_now":
