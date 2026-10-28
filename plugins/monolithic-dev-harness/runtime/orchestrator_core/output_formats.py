@@ -15,10 +15,17 @@ from .artifact_validator import (
 
 HEADING_RE = re.compile(r"^(#{1,3})\s+(.+)$", re.MULTILINE)
 BOLD_SECTION_RE = re.compile(r"^\*\*(.+?)\*\*\s*$", re.MULTILINE)
-SPEC_WIKILINK_RE = re.compile(r"\[\[spec-[a-z0-9-]+\]\]")
+# The generator writes `[[Specs/<spec-basename>]]`; a bare name and a `.md` suffix also resolve.
+SPEC_WIKILINK_RE = re.compile(r"\[\[(?:Specs/)?spec-[a-z0-9-]+(?:\.md)?\]\]")
 CHECKBOX_RE = re.compile(r"^- \[[ xX]\] ", re.MULTILINE)
 
-GENERATE_WORK_ITEM_SECTIONS = ("Requisitos", "Critérios de Aceite")
+GENERATE_WORK_ITEM_SECTIONS_BY_LANGUAGE = {
+    "pt-br": ("Requisitos", "Critérios de Aceite"),
+    "en": ("Requirements", "Acceptance Criteria"),
+}
+RAW_REQUIREMENT_HEADINGS = frozenset(
+    sections[0] for sections in GENERATE_WORK_ITEM_SECTIONS_BY_LANGUAGE.values()
+)
 
 ENRICH_EPIC_SECTIONS = (
     "🎯 Visão Estratégica",
@@ -127,23 +134,33 @@ def validate_generate_work_item_body(body: str) -> FormatValidationResult:
         errors.append("H1 title must be non-empty")
 
     if not SPEC_WIKILINK_RE.search(body):
-        errors.append("missing [[spec-<scope>]] wikilink to the item's spec")
+        errors.append("missing [[Specs/spec-<scope>]] wikilink to the item's spec")
 
     h2_labels = _extract_h2_headings(body)
-    for section in GENERATE_WORK_ITEM_SECTIONS:
+    languages = [
+        language
+        for language, sections in GENERATE_WORK_ITEM_SECTIONS_BY_LANGUAGE.items()
+        if sections[0] in h2_labels
+    ]
+    if len(languages) > 1:
+        errors.append("raw sections mix languages; use one locale's labels")
+    sections = GENERATE_WORK_ITEM_SECTIONS_BY_LANGUAGE[
+        languages[0] if languages else "pt-br"
+    ]
+    for section in sections:
         if section not in h2_labels:
             errors.append(f"missing section: ## {section}")
 
-    order_result = _sections_in_order(body, GENERATE_WORK_ITEM_SECTIONS)
+    order_result = _sections_in_order(body, sections)
     errors.extend(order_result.errors)
 
     for emoji_section in FORBIDDEN_GENERATE_EMOJI_SECTIONS:
         if emoji_section in h2_labels:
             errors.append(f"forbidden enricher section present: ## {emoji_section}")
 
-    ac_body = _section_content(body, "Critérios de Aceite")
+    ac_body = _section_content(body, sections[1])
     if ac_body and not CHECKBOX_RE.search(ac_body):
-        errors.append("Critérios de Aceite must use - [ ] checkbox items")
+        errors.append(f"{sections[1]} must use - [ ] checkbox items")
 
     return FormatValidationResult(ok=not errors, errors=errors)
 
