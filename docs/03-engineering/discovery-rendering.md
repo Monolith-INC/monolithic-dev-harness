@@ -50,4 +50,4 @@ successfully prepared result selects it. On Codex/Claude, a trusted pre/post she
 protected completion receipt then bind the conversation. Missing identities, failed calls,
 unarmed/stale output and replay cannot switch it. Host payload fixtures cover native questions
 and answer capture after selection; live-host replay remains required. See
-[recovery contracts](../02-design/specs/pr-36-recovery-contracts.md).
+[recovery contracts](../work-items/epic-0002-reduce-agent-friction/spec-epic-0002-reduce-agent-friction.md).

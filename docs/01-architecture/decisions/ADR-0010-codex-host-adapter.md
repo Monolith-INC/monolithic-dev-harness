@@ -48,8 +48,8 @@ separate facts. `permission_mode` does not establish collaboration mode. In the 
 async wire contract, post-tool `accepted:true` acknowledges delivery; the later operator input
 is a separate event. No timeout or delivery acknowledgement authorizes an effect.
 
-See the [current evidence and official source anchors](../../06-delivery/acceptance/codex-adapter/evidence.md)
-and [development trial](../../06-delivery/acceptance/codex-adapter/trial.md) for precise supported
+See the [current evidence and official source anchors](../../work-items/epic-0008-codex-host-adapter/acceptance/codex-adapter/evidence.md)
+and [development trial](../../work-items/epic-0008-codex-host-adapter/acceptance/codex-adapter/trial.md) for precise supported
 boundaries and remaining release requirements. Native protocol observations do not yet qualify
 a fully functional installed Desktop release.
 

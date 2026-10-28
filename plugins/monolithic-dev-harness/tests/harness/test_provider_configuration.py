@@ -50,7 +50,7 @@ def test_direct_provider_is_reported_without_claiming_ownership(tmp_path):
             }
         )
     )
-    components = inventory._settings("codex", config, "local", "mcp")
+    components = inventory._settings("codex", config, "local", "mcp", frozenset())
     assert any(
         finding.code == "private-provider-registration"
         for finding in inventory.findings(Inventory(components))

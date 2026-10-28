@@ -1,0 +1,48 @@
+{
+  "status": "prepared-not-run",
+  "source_commit": "789576cb78d2e39cc997d433bf46681f6bc58eb0",
+  "project": "/home/monolith/projects/monolithic-dev-harness/temp/test-002/project",
+  "settings_file": "docs/work-items/epic-0006-six-stage-onboarding-remediation/acceptance/six-stage-789576c/settings.json",
+  "settings_sha256": "4240cbd778f172340da8a5ade21e01042d6ec4732e8f03486b3d20e76b4d3187",
+  "fixture_settings": {
+    "schemaVersion": 1,
+    "tracker": {
+      "name": "local"
+    },
+    "scm": {
+      "name": "local"
+    },
+    "branch_template": "{key}-{slug}",
+    "artifacts_path": "docs/planning"
+  },
+  "plugin_marketplace": "mdh-acceptance-789576c",
+  "plugin_source_relative": ".agents/plugins/monolithic-dev-harness",
+  "plugin_manifest_sha256": "bc96df43aba2e3abc7c3d658da43c8f55f5d33ec30ee30187fa24ed52b2c7244",
+  "briefing_inside_project": "docs/planning/acceptance-briefing.md",
+  "result_inside_project": "docs/planning/acceptance-result.md",
+  "transcript_policy": "leave host transcript in its original host store; do not export full transcript",
+  "fixture_factory": "tools/project_fixture.py:create_test_project",
+  "fixture_creation": "Ok(/home/monolith/projects/monolithic-dev-harness/temp/test-002/project)",
+  "bootstrap_inspect": {
+    "status": "ready",
+    "bmad_runtime_ready": true,
+    "tracker": "local",
+    "scm": "local",
+    "tracker_storage_ready": true,
+    "workflow": "absent",
+    "pending_question": null,
+    "language": "en",
+    "language_confirmed": false,
+    "versioning": "deferred"
+  },
+  "project_plugin_enablement": ".codex/config.toml enables monolithic-dev-harness@mdh-acceptance-789576c",
+  "live_desktop_plugin_loading": "not yet verified; human must open/trust the fixture and verify local marketplace plugin is enabled",
+  "global_configuration": "not changed",
+  "permission_mode_changes": "none in this trial setup",
+  "briefing_sha256": "a9715b134a2ebba43428b9ae7d315bc248affb392a02423747783c7b6272c56a",
+  "plugin_code_file_sha256": "d6737a59ebc1941273572969767cf9f610d222e778cb7a51629566000f7c1eea",
+  "fixture_worktree_before_trial": [
+    "?? docs/planning/"
+  ],
+  "codex_shell_marketplace_probe": "repo-local marketplace was not listed by the current shell invocation; verify after opening and trusting the fixture in Desktop"
+}

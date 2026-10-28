@@ -39,9 +39,13 @@ BLOCKS = (
 def json_document(text: str) -> Any:
     return json.loads(
         re.sub(
-            r'("(?:\\.|[^"\\])*")|(/\*[\s\S]*?\*/|//[^\r\n]*)',
+            r'("(?:\\.|[^"\\])*")|(?<=[}\]0-9"el])\s*,\s*(?=[}\]])',
             lambda found: found.group(1) or "",
-            text,
+            re.sub(
+                r'("(?:\\.|[^"\\])*")|(/\*[\s\S]*?\*/|//[^\r\n]*)',
+                lambda found: found.group(1) or "",
+                text,
+            ),
         )
     )
 
@@ -131,7 +135,13 @@ def _host(host: str, context: InstallationContext) -> Inventory:
             ):
                 case Ok(locations):
                     results = tuple(
-                        _location(host, location.path, location.scope, location.kind)
+                        _location(
+                            host,
+                            location.path,
+                            location.scope,
+                            location.kind,
+                            adapter.hook_metadata,
+                        )
                         for location in locations
                     )
                     return Inventory(
@@ -170,10 +180,14 @@ def _project_scope(component: Component, context: InstallationContext) -> Compon
     )
 
 
-def _location(host: str, path: Path, scope: str, kind: str) -> Inventory:
+def _location(
+    host: str, path: Path, scope: str, kind: str, hook_metadata: frozenset[str]
+) -> Inventory:
     try:
         path.lstat()
-        return Inventory(_inspect(host, path, scope, kind), searched=(path,))
+        return Inventory(
+            _inspect(host, path, scope, kind, hook_metadata), searched=(path,)
+        )
     except FileNotFoundError:
         return Inventory(searched=(path,))
     except (OSError, ValueError, TypeError, AttributeError):
@@ -246,7 +260,13 @@ def _verified_target(target: Path) -> bool:
     )
 
 
-def _inspect(host: str, path: Path, scope: str, kind: str) -> tuple[Component, ...]:
+def _inspect(
+    host: str,
+    path: Path,
+    scope: str,
+    kind: str,
+    hook_metadata: frozenset[str] = frozenset(),
+) -> tuple[Component, ...]:
     match path.is_symlink(), path.is_dir(), kind:
         case True, _, _:
             return (
@@ -309,7 +329,7 @@ def _inspect(host: str, path: Path, scope: str, kind: str) -> tuple[Component, .
                 ),
             )
         case _:
-            return _settings(host, path, scope, kind)
+            return _settings(host, path, scope, kind, hook_metadata)
 
 
 def _inspect_asset(
@@ -348,7 +368,9 @@ def _owned(value: Any) -> bool:
             return False
 
 
-def _settings(host: str, path: Path, scope: str, kind: str) -> tuple[Component, ...]:
+def _settings(
+    host: str, path: Path, scope: str, kind: str, hook_metadata: frozenset[str]
+) -> tuple[Component, ...]:
     text = path.read_text()
     match kind:
         case "receipt":
@@ -386,7 +408,7 @@ def _settings(host: str, path: Path, scope: str, kind: str) -> tuple[Component, 
                 for name, record in value.get(key, {}).items()
                 if _owned(record)
             )
-            hooks = _hooks(host, path, scope, value.get("hooks", {}))
+            hooks = _hooks(host, path, scope, value.get("hooks", {}), hook_metadata)
             blocks = tuple(
                 _component(
                     host,
@@ -432,12 +454,15 @@ def native_provider(record: Any) -> bool:
             return False
 
 
-def _hooks(host: str, path: Path, scope: str, hooks: Any) -> tuple[Component, ...]:
+def _hooks(
+    host: str, path: Path, scope: str, hooks: Any, hook_metadata: frozenset[str]
+) -> tuple[Component, ...]:
     match hooks:
         case dict():
             return tuple(
                 component
                 for event, groups in hooks.items()
+                if event not in hook_metadata
                 for index, group in enumerate(groups)
                 for component in _hook_group(
                     host, path, scope, event, group, ("hooks", event, index)
