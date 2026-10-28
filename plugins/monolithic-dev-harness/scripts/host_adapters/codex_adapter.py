@@ -59,6 +59,7 @@ def subagents() -> SubagentOps:
 
 
 def installation():
+    """Codex installation adapter; `[hooks.state]` holds hook trust records."""
     from .installation_layouts import adapter
 
-    return adapter("codex")
+    return replace(adapter("codex"), hook_metadata=frozenset({"state"}))

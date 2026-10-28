@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Installation inventory reads Zed settings with JSONC trailing commas and ignores Codex hook trust
+  records under `[hooks.state]`, so harness components in those files are discovered instead of
+  failing the scan.
+
 ## [0.7.0-rc.9] - 2026-10-26
 
 ### Fixed

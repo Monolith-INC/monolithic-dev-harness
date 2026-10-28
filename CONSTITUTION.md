@@ -119,6 +119,13 @@ the body) in `Tickets/Ready`, `Tickets/InProgress` or `Tickets/Done`. A ticket w
   `spec-user-story-0001-show-to-do-and-done-task-counts-on-the-task-screen.md`.
 - A document carries its final name from the start; nothing is renamed once its item is created.
 - A document under review is `status: draft` and becomes `active` once accepted, as in the toolkit.
+- A proposal is an Epic with a `proposal` document at `status: draft`. It is accepted when the
+  proposal becomes `active` and its Epic is refined into child items; it is discarded by canceling
+  the Epic and deleting the proposal (owner, 2026-10-28).
+- In this repository, the numbered folders under `docs/` hold standing documents that describe the
+  product as it is; they are outside this article. Work-item documents live under
+  `docs/work-items/`, with acceptance evidence kept as captured in the item's `acceptance/<run>/`
+  folder (owner, 2026-10-28).
 - `harness document path` gives every path; the layout is
   `plugins/monolithic-dev-harness/references/document-layout.md` (owner, 2026-10-16).
 

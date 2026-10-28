@@ -4,6 +4,10 @@ __pycache__/
 .harness/state/
 dist/
 temp/
+.root-architect/
+.harness/knowledge/
+.superpowers/
+_bmad/
 
 # The plugin ships these. Keep them tracked even when a global gitignore excludes hooks/ or .mcp*.
 !plugins/monolithic-dev-harness/hooks/
@@ -11,5 +15,5 @@ temp/
 !plugins/monolithic-dev-harness/.mcp.json
 
 # Raw acceptance transcripts and archives stay local; their summaries are committed.
-docs/06-delivery/acceptance/**/*.jsonl
-docs/06-delivery/acceptance/**/*.tar.gz
+docs/work-items/**/acceptance/**/*.jsonl
+docs/work-items/**/acceptance/**/*.tar.gz
