@@ -27,11 +27,11 @@ MAX_MESSAGE = 16 * 1024 * 1024
 def address(repo: Path) -> Path:
     return (
         Path(tempfile.gettempdir())
-        / f"mdh-gateway-{os.getuid()}"
+        / f"mdh-{os.getuid()}"
         / (
             hashlib.sha256(
                 (str(repo.resolve()) + "\0" + _settings(repo)).encode()
-            ).hexdigest()[:40]
+            ).hexdigest()[:32]
             + ".sock"
         )
     )

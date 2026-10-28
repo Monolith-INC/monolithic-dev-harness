@@ -459,6 +459,7 @@ def _prepared(
             lambda _: {
                 "kind": _catalog_kind(gate, approval, kind),
                 "id": key,
+                "instance_id": secrets.token_hex(16),
                 "question": question,
                 "options": options,
                 "transport": transport,
@@ -497,6 +498,7 @@ def resolve(
     source: str,
     *,
     work_session_id: str | None = None,
+    human_reply_evidence: dict[str, Any] | None = None,
 ) -> Result[dict[str, Any]]:
     from harness import review_decisions
 
@@ -505,7 +507,7 @@ def resolve(
         lambda _: bind(
             _path(repo, work_session_id),
             lambda path: attempt(
-                lambda: _resolve(repo, path, key, answer, source),
+                lambda: _resolve(repo, path, key, answer, source, human_reply_evidence),
                 "decision_invalid",
                 "human answer",
                 OSError,
@@ -620,6 +622,7 @@ def _resolve(
     key: str,
     answer: str,
     source: str,
+    human_reply_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     current = state.read_json(path) or {}
     if current.get("status") != "pending" or current.get("id") != key:
@@ -693,6 +696,11 @@ def _resolve(
         **current,
         "status": "answered",
         "answer": answer,
+        **(
+            {"human_reply_evidence": human_reply_evidence}
+            if human_reply_evidence
+            else {}
+        ),
         **({"own_words": True} if own_words else {}),
     }
     match updated.get("elicitation"), updated.get("work_session_id"):
@@ -903,6 +911,19 @@ def fallback_command(command: str, cwd: Path) -> bool:
     match commands.harness_args(command, cwd):
         case ("decision", "fallback", *options):
             return _fallback_options(tuple(options))
+        case _:
+            return False
+
+
+def recovery_command(command: str, cwd: Path) -> bool:
+    """Only transcript-backed recovery with explicit scope options may pass a pending gate."""
+    match commands.harness_args(command, cwd):
+        case ("decision", "recover", *options):
+            return len(options) % 2 == 0 and all(
+                flag in ("--repo", "--session-id", "--host")
+                and not value.startswith("--")
+                for flag, value in zip(options[::2], options[1::2], strict=True)
+            )
         case _:
             return False
 

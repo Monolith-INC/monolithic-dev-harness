@@ -112,9 +112,28 @@ approving option unless it says "approve" itself; a number or the full label alw
 ambiguous reply, a question, or other conversation leaves the menu pending: answer it, then show
 the same menu again. Delivery, silence, timers, and default selections are never answers.
 
-The prompt and answer hooks record answers. There is no agent-facing command to record one; never
-forge a hook event or reconstruct an answer from assistant prose. `harness revoke`, `harness
+The prompt and answer hooks record answers. There is no command accepting an agent-supplied answer;
+never forge a hook event or reconstruct an answer from assistant prose. `harness revoke`, `harness
 suspend`, and typed `approve HB-…` keep working while a menu waits.
+
+### Relayed project-agent choices in Codex
+
+When a project agent relays a non-approving choice through its parent, the parent first runs
+`harness decision status --repo <project> --session-id <work-session>` to observe that exact pending
+record, then presents its unchanged native question and options. After the actual human replies,
+the root runs `harness decision recover --host codex --repo <project> --session-id <work-session>`.
+This command reads the current root's canonical Codex desktop session transcript under the OS
+account's `.codex/sessions`; caller-selected `CODEX_HOME`/`HOME` cannot redirect this source. Custom
+log locations are not supported by this recovery path. It accepts no answer or
+transcript path. It verifies the originating agent's parent relationship, the pending record shown
+before delivery (including its unique instance, descriptions and reviewed artifacts), the exact
+question/options, successful delivery and the subsequent actual user
+message. Unmatched evidence leaves the question pending. The record retains source session,
+question call and user-message IDs. The project agent then reads decision status and continues.
+
+Recovery cannot grant approvals, qualify native structured transport or import a choice into a
+different decision. It reuses the genuine recorded reply, so do not ask the human to repeat it.
+Missing native transcript evidence remains a concrete capture blocker.
 
 ### While a menu waits
 

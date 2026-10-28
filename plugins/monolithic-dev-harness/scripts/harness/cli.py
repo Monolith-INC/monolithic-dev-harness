@@ -728,7 +728,7 @@ def main(argv: list[str] | None = None) -> int:
     command_line = parser()
     args, extra = command_line.parse_known_args(argv)
     match args.command, extra:
-        case "workflow" | "process" as family, [*unknown] if unknown:
+        case "workflow" | "process" | "decision" as family, [*unknown] if unknown:
             command_line.error(
                 "unrecognized " + family + " arguments: " + " ".join(unknown)
             )
