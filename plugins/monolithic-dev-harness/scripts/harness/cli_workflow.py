@@ -239,7 +239,8 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
         "decision", help="present a host-adapted decision and wait for the human"
     )
     decision_parser.add_argument(
-        "operation", choices=("present", "status", "fallback", "reuse", "recover")
+        "operation",
+        choices=("present", "status", "fallback", "reuse", "recover", "repair"),
     )
     decision_parser.add_argument("--from-session")
     decision_parser.add_argument("--decision-id")
@@ -452,6 +453,10 @@ def suspension_command(args: argparse.Namespace) -> int:
 def decision_command(args: argparse.Namespace) -> int:
     repo = Path(args.repo).resolve()
     match args.operation:
+        case "repair":
+            return print_result(
+                fmap(decisions.repair(repo, args.session_id), json.dumps)
+            )
         case "recover" if args.host == "codex":
             from host_adapters.codex_relay import recover
 

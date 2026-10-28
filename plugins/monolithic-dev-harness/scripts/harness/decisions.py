@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import secrets
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -189,6 +190,71 @@ def waiting(repo: Path, work_session_id: str | None = None) -> bool:
                     return True
 
 
+def damaged(repo: Path, work_session_id: str | None) -> str | None | bool:
+    """The scope (None: project-wide) whose saved decision cannot be read as a question, or False.
+
+    A damaged record still holds work (`_waiting_at`); `repair` is the only way past it."""
+    from harness import work_sessions
+
+    first = work_sessions.acting(repo, work_session_id)
+    for scope in (first, None) if first else (None,):
+        match _path(repo, scope):
+            case Ok(path) if _damaged_at(path):
+                return scope
+            case _:
+                pass
+    return False
+
+
+def _damaged_at(path: Path) -> bool:
+    return path.exists() and not _readable(state.read_json(path))
+
+
+def _readable(value: dict[str, Any] | None) -> bool:
+    """Whether a saved record has what a question needs to be shown and answered."""
+    match value:
+        case {"id": str(), "question": str(), "options": list(), "status": str()}:
+            return True
+        case _:
+            return False
+
+
+def repair(repo: Path, work_session_id: str | None) -> Result[dict[str, Any]]:
+    """Move this scope's damaged decision record (its session's, else the project-wide one)
+    aside, bytes intact, so the workflow asks its question again.
+
+    It answers nothing and approves nothing; a scope with no damaged record is refused."""
+    match damaged(repo, work_session_id):
+        case False:
+            return err(
+                "decision_intact",
+                "no saved decision here is damaged: answer a pending one, or re-present it "
+                "with `harness decision fallback`",
+            )
+        case scope:
+            return bind(
+                _path(repo, scope),
+                lambda path: attempt(
+                    lambda: _set_aside(path, scope),
+                    "decision_invalid",
+                    "set the damaged decision aside",
+                    OSError,
+                ),
+            )
+
+
+def _set_aside(path: Path, scope: str | None) -> dict[str, Any]:
+    kept = path.with_name(
+        f"decision.damaged-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')}.json"
+    )
+    path.replace(kept)
+    return {
+        "repaired": scope or "project",
+        "kept": str(kept),
+        "next": "ask the workflow's next step again; the question is unanswered",
+    }
+
+
 def _waiting_at(path: Path) -> bool:
     return path.exists() and is_blocking(state.read_json(path) or {})
 
@@ -334,7 +400,7 @@ def pending(repo: Path, work_session_id: str | None = None) -> Pending | None:
     first = work_sessions.acting(repo, work_session_id)
     for scope in (first, None) if first else (None,):
         value = record(repo, scope)
-        if value and value.get("status") == "pending":
+        if _readable(value) and value.get("status") == "pending":
             return Pending.from_record(value, scope)
     if work_session_id is None:
         match _pending_sessions(repo):
@@ -911,6 +977,18 @@ def fallback_command(command: str, cwd: Path) -> bool:
     match commands.harness_args(command, cwd):
         case ("decision", "fallback", *options):
             return _fallback_options(tuple(options))
+        case _:
+            return False
+
+
+def repair_command(command: str, cwd: Path) -> bool:
+    """`decision repair` may pass the waiting gate: it refuses any record that is not damaged."""
+    match commands.harness_args(command, cwd):
+        case ("decision", "repair", *options):
+            return len(options) % 2 == 0 and all(
+                flag in ("--repo", "--session-id") and not value.startswith("--")
+                for flag, value in zip(options[::2], options[1::2], strict=True)
+            )
         case _:
             return False
 

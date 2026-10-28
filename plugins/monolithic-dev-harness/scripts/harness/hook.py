@@ -329,20 +329,36 @@ def _held(
         or decisions.show_command(call.command, Path(call.cwd or repo))
         or decisions.fallback_command(call.command, Path(call.cwd or repo))
         or decisions.recovery_command(call.command, Path(call.cwd or repo))
+        or decisions.repair_command(call.command, Path(call.cwd or repo))
         or work_session_context.recovery_allowed(repo, current, request)
     ):
         pending = decisions.pending(repo, current)
         return rules.Decision.deny(
             "decision-pending",
-            _pending_decision_guidance(repo, pending, host),
+            _pending_decision_guidance(repo, pending, host, current),
         )
     return None
 
 
 def _pending_decision_guidance(
-    repo: Path, pending: decisions.Pending | None, host: str
+    repo: Path, pending: decisions.Pending | None, host: str, current: str | None
 ) -> str:
     """Give the agent a valid recovery path without weakening the pending-decision gate."""
+    match pending, decisions.damaged(repo, current):
+        case None, str() | None as scope:
+            named = (
+                f" --session-id {shlex.quote(current or scope)}"
+                if current or scope
+                else ""
+            )
+            return (
+                "The saved decision cannot be read, so nobody can answer it. Run exactly "
+                f"`harness decision repair --repo {shlex.quote(str(repo.resolve()))}{named}`: it "
+                "keeps the damaged record and the workflow asks its question again. Nothing is "
+                "answered or approved by the repair."
+            )
+        case _:
+            pass
     session = (
         f" --session-id {shlex.quote(pending.scope)}"
         if pending is not None and pending.scope
@@ -890,7 +906,7 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             host,
             rules.Decision.deny(
                 "decision-pending",
-                _pending_decision_guidance(repo, pending, host),
+                _pending_decision_guidance(repo, pending, host, work_session_id),
             ),
         )
         return 0

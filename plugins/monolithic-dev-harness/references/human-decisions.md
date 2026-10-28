@@ -142,6 +142,11 @@ project for an unscoped one). Read-only inspection, `harness decision status`, `
 suspension status`, and `harness decision fallback` still run. For a Codex asynchronous control,
 use a returned interruptible wait only when observed. Without a wait tool, end the turn while the
 decision remains pending. Do not ask another question or do dependent work meanwhile.
+
+A saved decision that cannot be read (empty, malformed or missing its question) still blocks, and
+nobody can answer it. `harness decision repair --repo <project> --session-id <work-session>` moves
+it aside with its bytes intact, so the workflow asks the question again. The repair answers and
+approves nothing, and it refuses a readable decision.
 Onboarding status, skip, dismissal, restart and mode selection are recovery controls, not answers.
 They may discard optional onboarding prompts while preserving evidence, without granting approval.
 Known onboarding prompts can be cancelled when onboarding is skipped, dismissed or restarted.
