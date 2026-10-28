@@ -306,8 +306,13 @@ def _held(
     if not rules.is_write_class(call) or _diagnostic_read(call, repo):
         return None
     match context:
+        case Err() if work_session_context.relink_allowed(repo, request):
+            # relink_allowed already applied the pending-decision rule to this switch.
+            return None
         case Err(failure):
-            return rules.Decision.deny("work-session-context", failure.message)
+            return rules.Decision.deny(
+                "work-session-context", work_session_context.damaged(failure)
+            )
         case Ok(current):
             pass
     mismatch = work_session_context.mismatch(current, request)
@@ -866,7 +871,10 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     context = work_session_context.for_payload(repo, host, payload)
     if isinstance(context, Err):
         _emit_decision(
-            host, rules.Decision.deny("work-session-context", context.failure.message)
+            host,
+            rules.Decision.deny(
+                "work-session-context", work_session_context.damaged(context.failure)
+            ),
         )
         return 0
     work_session_id = context.value
