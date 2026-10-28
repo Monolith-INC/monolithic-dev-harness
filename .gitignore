@@ -5,6 +5,7 @@ __pycache__/
 dist/
 temp/
 .root-architect/
+.harness/knowledge/
 .superpowers/
 _bmad/
 
