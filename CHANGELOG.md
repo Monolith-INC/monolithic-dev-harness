@@ -10,6 +10,9 @@ All notable changes to this project are documented here. The format follows
 
 - Pending decisions re-presented through a fallback transport are bound to the current Codex
   conversation, allowing its genuine human response to resolve the original question.
+- Installation inventory reads Zed settings with JSONC trailing commas and ignores Codex hook trust
+  records under `[hooks.state]`, so harness components in those files are discovered instead of
+  failing the scan.
 
 ### Qualification
 

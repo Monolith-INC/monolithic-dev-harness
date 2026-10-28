@@ -1,6 +1,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 import harness.installation_inventory as inventory
 from harness.installation_inventory import findings, scan
 from host_adapters.installation_contract import (
@@ -177,3 +179,82 @@ def test_foreign_descriptions_and_environment_markers_are_not_ownership(tmp_path
     path.write_text(json.dumps(original))
     assert not scan(InstallationContext(tmp_path)).components
     assert json.loads(path.read_text()) == original
+
+
+@pytest.mark.parametrize(
+    ("hook_metadata", "discovered"),
+    ((frozenset({"state"}), True), (frozenset(), False)),
+    ids=("declared", "undeclared"),
+)
+def test_adapter_hook_metadata_is_not_read_as_event_groups(
+    tmp_path, monkeypatch, hook_metadata, discovered
+):
+    settings = tmp_path / "settings.json"
+    settings.write_text(
+        json.dumps(
+            {
+                "hooks": {
+                    "PreToolUse": [
+                        {
+                            "matcher": ".*",
+                            "hooks": [
+                                {
+                                    "command": "sh /opt/monolithic-dev-harness"
+                                    "/scripts/harness/hook.py"
+                                }
+                            ],
+                        }
+                    ],
+                    "state": {"trusted": {"trusted_hash": "sha256:example"}},
+                }
+            }
+        )
+    )
+    monkeypatch.setattr(inventory, "ADAPTERS", {"fake": "fake"})
+    monkeypatch.setattr(
+        inventory,
+        "adapter_for",
+        lambda host: __import__("core.result", fromlist=["Ok"]).Ok(
+            InstallationAdapter(
+                "fake",
+                lambda _: (Location(settings, "user", "settings"),),
+                hook_metadata=hook_metadata,
+            )
+        ),
+    )
+    result = scan(InstallationContext(tmp_path))
+    assert (
+        tuple((component.kind, component.selector) for component in result.components),
+        bool(result.errors),
+    ) == (
+        ((("hook", ("hooks", "PreToolUse", 0)),), False) if discovered else ((), True)
+    )
+
+
+def test_zed_jsonc_trailing_commas_preserve_servers_and_string_contents(tmp_path):
+    (tmp_path / ".config/zed").mkdir(parents=True)
+    (tmp_path / ".config/zed/settings.json").write_text(
+        '{"context_servers": {'
+        '"workflow-integrations": {"command": "sh",'
+        '"args": ["/opt/monolithic-dev-harness/bin/harness-python",],},},'
+        '"kept": "https://example.com/,} // /* \\"quoted\\"",'
+        '"nested": [true, false, null, 1, {"value": "x",},],'
+        "/* trailing comment */}"
+    )
+    assert scan(InstallationContext(tmp_path)).errors == ()
+    assert tuple(
+        (component.host, component.kind, component.selector)
+        for component in scan(InstallationContext(tmp_path)).components
+    ) == (("zed", "mcp", ("context_servers", "workflow-integrations")),)
+    assert (
+        inventory.json_document((tmp_path / ".config/zed/settings.json").read_text())[
+            "kept"
+        ]
+        == 'https://example.com/,} // /* "quoted"'
+    )
+
+
+@pytest.mark.parametrize("text", ("{,}", "[,]", "[1,,]", '{"key":,}', "[true false,]"))
+def test_jsonc_trailing_comma_support_still_rejects_invalid_documents(text):
+    with pytest.raises(json.JSONDecodeError):
+        inventory.json_document(text)
