@@ -214,8 +214,13 @@ def test_external_symlink_needs_code_context(tmp_path, absolute, patterns):
     assert writes_code(f"echo x > {path}", root, patterns, "docs/planning")
 
 
-@pytest.mark.parametrize("linked,denied", [("S1", False), ("OTHER", True)])
-def test_task_completion_follows_its_storys_work_session(tmp_path, linked, denied):
+@pytest.mark.parametrize(
+    "linked,reason",
+    [("S1", "needs a verification artifact"), ("OTHER", "is marked done inside")],
+)
+def test_task_completion_follows_its_storys_work_session(tmp_path, linked, reason):
+    """Inside its Story's session a Task still needs its own evidence; elsewhere it is refused
+    for the session."""
     from scripts.policy import CanonicalToolEvent
 
     parent, item = (
@@ -246,7 +251,8 @@ def test_task_completion_follows_its_storys_work_session(tmp_path, linked, denie
         patch.object(hook_runtime.settings, "load", return_value={}),
     ):
         assert (
-            hook_runtime._evaluate_completion(
+            reason
+            in hook_runtime._evaluate_completion(
                 CanonicalToolEvent(
                     client="codex",
                     tool_name="update",
@@ -254,11 +260,10 @@ def test_task_completion_follows_its_storys_work_session(tmp_path, linked, denie
                     workspace_root=str(tmp_path),
                 ),
                 item.id,
-            ).is_denied()
-            is denied
+            ).reason
         )
     opened.assert_called_once()
-    ops.list_artifacts.assert_called_once_with(item.id)
+    ops.list_artifacts.assert_called_with(item.id)
 
 
 @pytest.mark.parametrize(

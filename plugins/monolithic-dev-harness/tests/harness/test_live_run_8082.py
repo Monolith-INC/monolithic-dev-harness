@@ -15,6 +15,7 @@ import pytest
 from core.result import Ok
 from harness import (
     documents,
+    elicitation_store,
     gates,
     route_facts,
     rules,
@@ -22,6 +23,7 @@ from harness import (
     state,
     work_sessions,
 )
+from harness.elicitation import SelectionState
 from integrations import registry
 from integrations.contracts import WorkItemKind
 from policy.commands import writes_code
@@ -91,6 +93,15 @@ def test_next_names_each_step_of_a_draft_story_in_order(project: Path) -> None:
     _answer(session, "planning-depth", "standard")
     assert _next(project, session)["step"] == "planning-methods"
     _answer(session, "planning-methods", "shortlist")
+    # Only the chooser's captured selection completes the step, then each method is applied.
+    assert _next(project, session)["step"] == "planning-methods"
+    elicitation_store.save(
+        project, session.id, SelectionState(selected=("1",), phase="apply")
+    )
+    assert _next(project, session)["step"] == "method-application"
+    elicitation_store.save(
+        project, session.id, SelectionState(selected=("1",), phase="hardening")
+    )
     step = _next(project, session)
     assert step["step"] == "approach"
     assert (
