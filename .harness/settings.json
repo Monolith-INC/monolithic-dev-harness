@@ -1,0 +1,19 @@
+{
+  "schemaVersion": 1,
+  "tracker": {
+    "name": "local",
+    "values": {}
+  },
+  "scm": {
+    "name": "github",
+    "values": {
+      "owner": "Monolith-INC",
+      "repo": "monolithic-dev-harness"
+    }
+  },
+  "branch_template": "feature/{key}-{slug}",
+  "artifacts_path": "docs/work-items",
+  "git": {
+    "base_branch": "main"
+  }
+}

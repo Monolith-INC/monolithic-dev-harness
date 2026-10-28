@@ -193,8 +193,8 @@ Complete control the wider workflow.
 
 Installation and bootstrap preserve Codex question feature preferences. The adapter discovers
 actual native question delivery at the host boundary; feature flags alone do not prove a permitted
-approval interface. See the [Codex qualification evidence](docs/06-delivery/acceptance/codex-adapter/evidence.md)
-and [trial report](docs/06-delivery/acceptance/codex-adapter/trial.md) for the candidate's verified behavior and remaining release requirements.
+approval interface. See the [Codex qualification evidence](docs/work-items/epic-0008-codex-host-adapter/acceptance/codex-adapter/evidence.md)
+and [trial report](docs/work-items/epic-0008-codex-host-adapter/acceptance/codex-adapter/trial.md) for the candidate's verified behavior and remaining release requirements.
 
 ## How it works
 

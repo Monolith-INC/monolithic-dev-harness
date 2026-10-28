@@ -9,7 +9,7 @@ last_reviewed: 2026-10-24
 
 ## Context
 
-The [unified model adapter contract proposal](proposals/2026-10-24-unified-model-adapter-contract.md)
+The [unified model adapter contract proposal](../work-items/epic-0011-unified-model-adapter-contract/proposal-epic-0011-unified-model-adapter-contract.md)
 records the owner's direction for future adapter evolution. It remains proposed; the ongoing
 release uses existing shared contracts without a product-wide migration.
 
@@ -173,7 +173,7 @@ A real isolated CLI trial on 2026-10-24 observed a successful subagent file writ
 cancellation request, a main-agent interruption report, and a denied subsequent write by the
 same subagent. The generic record retained `revoked: true`, distinguished the main-agent report
 from its last host observation, and the file remained unchanged after cancellation. See the
-[native evidence](../06-delivery/acceptance/codex-adapter/process-bus-native-trial.json).
+[native evidence](../work-items/epic-0008-codex-host-adapter/acceptance/codex-adapter/process-bus-native-trial.json).
 
 This controls subsequent guarded effects. It does not retroactively stop an already-running OS
 command. Desktop controls, native observation delivery beyond the verified channel, other adapter

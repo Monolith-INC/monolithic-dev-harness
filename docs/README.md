@@ -67,17 +67,25 @@ docs/
 |   |-- roadmap.md
 |   |-- release-process.md
 |   |-- changelog.md
-|   |-- tech-debt.md
-|   `-- checkpoints/
-|       `-- pr-16-rework.md
+|   `-- tech-debt.md
 |-- 07-guides/
 |   |-- onboarding.md
 |   |-- user-guide.md
 |   `-- troubleshooting.md
-`-- assets/
-    `-- diagrams/
-        `-- harness-main-flow.svg
+|-- assets/
+|   `-- diagrams/
+|       `-- harness-main-flow.svg
+`-- work-items/
+    `-- epic-0008-codex-host-adapter/
+        |-- design-doc-epic-0008-codex-host-adapter.md
+        |-- implementation-plan-epic-0008-codex-host-adapter.md
+        `-- acceptance/
 ```
+
+The numbered folders are standing documents: they describe the product as it is. Everything written
+for one piece of work (specs, plans, checkpoints, audits, proposals, acceptance evidence) lives in
+`work-items/`, in the folder of the ticket it belongs to in `../Tickets/`, named as the
+[constitution](../CONSTITUTION.md) (Article 8a) requires.
 
 ## Canonical source hierarchy
 

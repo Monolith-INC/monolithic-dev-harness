@@ -71,7 +71,7 @@ Installation and `harness bootstrap` preserve Codex feature preferences, includi
 root tool events; this feature flag does not disable the separately observed async transport.
 A prepared native candidate does not count as delivered or answered. Typed recovery preserves the
 same pending decision when no permitted native control is available. See the
-[qualification evidence](../06-delivery/acceptance/codex-adapter/evidence.md).
+[qualification evidence](../work-items/epic-0008-codex-host-adapter/acceptance/codex-adapter/evidence.md).
 
 ## Health Checks
 
