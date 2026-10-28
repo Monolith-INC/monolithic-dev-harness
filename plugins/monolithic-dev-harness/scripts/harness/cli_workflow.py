@@ -296,6 +296,10 @@ def run(args: argparse.Namespace) -> int:
         case "elicitation":
             from harness import elicitation_cli
 
+            project = Path(args.repo).resolve()
+            for name in ("artifact", "triage", "approach"):
+                if getattr(args, name):
+                    setattr(args, name, _project_relative(project, getattr(args, name)))
             return elicitation_cli.command(args)
         case _:
             pass
@@ -365,9 +369,25 @@ def _current_as_json(project: Path, session: work_sessions.Session) -> dict:
 
 
 def _with_current_session(args: argparse.Namespace) -> argparse.Namespace:
-    """Nobody has to name the work session: an unnamed one is the project's current session."""
-    args.session_id = work_sessions.acting(Path(args.repo).resolve(), args.session_id)
+    """Nobody has to name the work session: an unnamed one is the project's current session.
+    Each `--artifact` inside the project is named one way, relative to it, so evidence recorded
+    under one spelling is found under any other."""
+    project = Path(args.repo).resolve()
+    args.session_id = work_sessions.acting(project, args.session_id)
+    if getattr(args, "artifact", None):
+        args.artifact = [_project_relative(project, name) for name in args.artifact]
     return args
+
+
+def _project_relative(project: Path, name: str) -> str:
+    """A path inside the project, relative and normalized; anything else is left for its
+    command to refuse."""
+    target = (project / name).resolve()
+    return (
+        target.relative_to(project).as_posix()
+        if name and target.is_relative_to(project) and target != project
+        else name
+    )
 
 
 def work_session_command(args: argparse.Namespace) -> int:

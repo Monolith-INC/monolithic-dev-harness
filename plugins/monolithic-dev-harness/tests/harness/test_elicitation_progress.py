@@ -147,3 +147,41 @@ def test_real_prepared_choice_records_selection_once_and_preserves_pending(
     )
     assert elicitation.load(tmp_path, current.id).value.phase == "choose"
     assert elicitation.load(tmp_path, current.id).value.selected == ("1",)
+
+
+def test_hardening_gaps_name_what_keeps_the_approach_waiting(tmp_path):
+    from core.result import Ok
+    from harness import elicitation_store, work_sessions
+
+    current = work_sessions.create(tmp_path, "Review approach").value
+    for name in ("review.md", "triage.md", "approach.md"):
+        (tmp_path / name).write_text(name)
+
+    def gaps(*approaches: str) -> tuple[str, ...]:
+        return elicitation_store.hardening_gaps(tmp_path, current, "light", approaches)
+
+    assert gaps("approach.md") == ("readiness review missing",)
+    assert isinstance(
+        elicitation_store.record_hardening(
+            tmp_path, current.id, "readiness", "review.md", "triage.md", "approach.md"
+        ),
+        Ok,
+    )
+    assert gaps("approach.md") == ()
+    assert gaps("other.md") == (
+        "readiness review is recorded for approach.md, not other.md",
+    )
+    (tmp_path / "review.md").write_text("changed")
+    assert gaps("approach.md") == ("readiness review changed since it was recorded",)
+
+
+def test_artifact_spellings_inside_the_project_name_one_file(tmp_path):
+    from harness.cli_workflow import _project_relative
+
+    project = tmp_path.resolve()
+    (project / "docs").mkdir()
+    for spelling in ("docs/a.md", "./docs/a.md", str(project / "docs" / "a.md")):
+        assert _project_relative(project, spelling) == "docs/a.md"
+    outside = str(tmp_path.parent / "elsewhere.md")
+    assert _project_relative(project, outside) == outside
+    assert _project_relative(project, "../elsewhere.md") == "../elsewhere.md"

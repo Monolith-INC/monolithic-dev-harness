@@ -195,18 +195,20 @@ def _ready(repo, session, gate, route, route_facts, artifacts) -> Result[None]:
             pass
     match gate:
         case "plan-checkpoint":
-            from harness.elicitation_store import hardening_ready
+            from harness.elicitation_store import hardening_gaps
 
-            match hardening_ready(
+            match hardening_gaps(
                 repo, session, facts.answer("planning-depth") or "", artifacts
             ):
-                case False:
+                case ():
+                    pass
+                case gaps:
                     return err(
                         "hardening_incomplete",
-                        "Complete each selected method's human Apply/Reject decision and preserve the chosen depth's review outputs/triage for this approach before its approval.",
+                        "This approach is not ready for approval: "
+                        + "; ".join(gaps)
+                        + ".",
                     )
-                case True:
-                    pass
         case _:
             pass
     match gate, session.entry_item:

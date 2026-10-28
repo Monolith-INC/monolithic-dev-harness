@@ -474,26 +474,55 @@ def methods_selected(repo, scope) -> bool:
 def hardening_ready(
     repo, session, depth: str, approaches: tuple[str, ...] = ()
 ) -> bool:
+    return not hardening_gaps(repo, session, depth, approaches)
+
+
+def hardening_gaps(
+    repo, session, depth: str, approaches: tuple[str, ...] = ()
+) -> tuple[str, ...]:
+    """What still keeps this approach from its approval: unapplied methods, and each required
+    review that is missing, recorded for another approach, or changed since it was recorded."""
     required = (
-        {"readiness"}
-        | (
-            {"risks", "edge_cases", "input_reconciliation", "technical_choices"}
+        ("readiness",)
+        + (
+            ("risks", "edge_cases", "input_reconciliation", "technical_choices")
             if depth != "light"
-            else set()
+            else ()
         )
-        | (
-            {"adversarial", "assumptions", "source_preservation", "verification_gap"}
+        + (
+            ("adversarial", "assumptions", "source_preservation", "verification_gap")
             if depth == "hardcore"
-            else set()
+            else ()
         )
     )
-    saved = state.read_json(_path(repo, session.id)) or {}
-    return (depth == "light" or methods_complete(repo, session.id)) and required <= {
-        review["kind"]
-        for review in saved.get("reviews", ())
-        if review.get("approach") in approaches
-        and _artifact(repo, review.get("artifact", "")) == Ok(review.get("digest"))
-        and _artifact(repo, review.get("triage", "")) == Ok(review.get("triage_digest"))
-        and _artifact(repo, review.get("approach", ""))
-        == Ok(review.get("approach_digest"))
-    }
+    reviews = tuple((state.read_json(_path(repo, session.id)) or {}).get("reviews", ()))
+
+    def current(review: dict) -> bool:
+        return (
+            _artifact(repo, review.get("artifact", "")) == Ok(review.get("digest"))
+            and _artifact(repo, review.get("triage", ""))
+            == Ok(review.get("triage_digest"))
+            and _artifact(repo, review.get("approach", ""))
+            == Ok(review.get("approach_digest"))
+        )
+
+    def gap(kind: str) -> str | None:
+        mine = [r for r in reviews if r.get("kind") == kind]
+        here = [r for r in mine if r.get("approach") in approaches]
+        if any(current(r) for r in here):
+            return None
+        if here:
+            return f"{kind} review changed since it was recorded"
+        if mine:
+            recorded = ", ".join(sorted({str(r.get("approach")) for r in mine}))
+            return f"{kind} review is recorded for {recorded}, not {', '.join(approaches) or 'no --artifact'}"
+        return f"{kind} review missing"
+
+    return tuple(
+        (
+            ()
+            if depth == "light" or methods_complete(repo, session.id)
+            else ("selected methods still need their Apply/Reject decisions",)
+        )
+        + tuple(found for kind in required if (found := gap(kind)))
+    )
