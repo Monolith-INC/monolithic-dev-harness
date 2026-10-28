@@ -22,18 +22,22 @@ from harness.process_bus import IntegrationReadBus
 from harness.process_messages import Context
 
 MAX_MESSAGE = 16 * 1024 * 1024
+# AF_UNIX paths are limited to 108 bytes on Linux, including the terminating NUL.
+MAX_SOCKET_PATH = 107
+
+
+def identity(repo: Path) -> str:
+    """The project and configuration a gateway serves; independent of any process environment."""
+    return hashlib.sha256(
+        (str(repo.resolve()) + "\0" + _settings(repo)).encode()
+    ).hexdigest()[:32]
 
 
 def address(repo: Path) -> Path:
+    """Where a new owner listens. Clients read the owner record instead of recomputing this, so a
+    different temporary directory in their environment cannot hide the owner."""
     return (
-        Path(tempfile.gettempdir())
-        / f"mdh-{os.getuid()}"
-        / (
-            hashlib.sha256(
-                (str(repo.resolve()) + "\0" + _settings(repo)).encode()
-            ).hexdigest()[:32]
-            + ".sock"
-        )
+        Path(tempfile.gettempdir()) / f"mdh-{os.getuid()}" / (identity(repo) + ".sock")
     )
 
 
@@ -54,7 +58,7 @@ def private(path: Path) -> bool:
 
 
 def owner_record(repo: Path) -> Path:
-    return repo / ".harness/state/gateway-owners" / (address(repo).stem + ".json")
+    return repo / ".harness/state/gateway-owners" / (identity(repo) + ".json")
 
 
 @contextmanager
@@ -62,7 +66,13 @@ def serve(repo: Path, read: Callable[[str, dict], Result]) -> Iterator[Path]:
     """Effect boundary: owns listener/thread/socket cleanup; a duplicate owner fails closed."""
     location = address(repo)
     proof = owner_record(repo)
+    if len(os.fsencode(location)) > MAX_SOCKET_PATH:
+        raise OSError(
+            f"The gateway socket path {location} is longer than a Unix socket allows; start "
+            "the gateway with a shorter TMPDIR. No provider was started."
+        )
     location.parent.mkdir(mode=0o700, exist_ok=True)
+    proof.parent.mkdir(parents=True, exist_ok=True)
     match private(location.parent):
         case False:
             raise PermissionError(
@@ -97,7 +107,9 @@ def serve(repo: Path, read: Callable[[str, dict], Result]) -> Iterator[Path]:
                 case _:
                     return
 
-    with location.with_suffix(".lock").open("a+") as owner:
+    # The lock sits beside the owner record, so owners with different temporary directories
+    # still exclude each other.
+    with proof.with_suffix(".lock").open("a+") as owner:
         try:
             fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as failure:

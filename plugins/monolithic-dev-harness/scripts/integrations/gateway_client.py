@@ -40,9 +40,13 @@ def call(repo: Path, operation: str, arguments: Mapping[str, Any]) -> Result[Any
 
 
 def _exchange(repo: Path, operation: str, arguments: dict) -> dict:
-    from .gateway_endpoint import MAX_MESSAGE, address, owner_record, private
+    from .gateway_endpoint import MAX_MESSAGE, owner_record, private
 
-    target = address(repo)
+    match state.read_json(owner_record(repo)):
+        case {"endpoint": str() as recorded}:
+            target = Path(recorded)
+        case _:
+            raise FileNotFoundError("No gateway owner is recorded for this project")
     match private(target.parent) and private(target):
         case False:
             raise PermissionError("Gateway endpoint is not private")

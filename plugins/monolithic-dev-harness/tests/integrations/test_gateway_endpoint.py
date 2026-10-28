@@ -120,3 +120,59 @@ def test_multiple_cli_reads_reuse_the_real_provider_pid(tmp_path):
         )
         assert replies[0] == replies[1]
         assert replies[0]["pid"] != os.getpid()
+
+
+def test_clients_find_the_owner_whatever_their_temporary_directory(
+    tmp_path, monkeypatch
+):
+    import shutil
+    import tempfile
+
+    import pytest
+
+    from integrations.gateway_client import call
+    from integrations.gateway_endpoint import serve
+
+    write_settings(tmp_path)
+    roots = tuple(tempfile.mkdtemp(prefix="g") for _ in range(2))
+    try:
+        monkeypatch.setattr(tempfile, "tempdir", roots[0])
+        with serve(tmp_path, lambda operation, args: Ok({"owner": True})):
+            monkeypatch.setattr(tempfile, "tempdir", roots[1])
+            assert call(tmp_path, "tracker_get_work_item", {"ref": "1"}) == Ok(
+                {"owner": True}
+            )
+            reply = subprocess.check_output(
+                [
+                    sys.executable,
+                    "-c",
+                    "import json,sys; from pathlib import Path; from integrations.gateway_client import call; print(json.dumps(call(Path(sys.argv[1]), 'tracker_get_work_item', {'ref':'1'}).value))",
+                    str(tmp_path),
+                ],
+                env={**os.environ, "TMPDIR": roots[1]},
+            )
+            assert json.loads(reply) == {"owner": True}
+            with (
+                pytest.raises(OSError, match="Another workflow-integrations gateway"),
+                serve(tmp_path, lambda operation, args: Ok({"owner": False})),
+            ):
+                pass
+    finally:
+        for root in roots:
+            shutil.rmtree(root, ignore_errors=True)
+
+
+def test_an_overlong_socket_path_is_refused_before_listening(tmp_path, monkeypatch):
+    import tempfile
+
+    import pytest
+
+    from integrations.gateway_endpoint import serve
+
+    write_settings(tmp_path)
+    monkeypatch.setattr(tempfile, "tempdir", str(tmp_path / ("x" * 120)))
+    with (
+        pytest.raises(OSError, match="shorter TMPDIR"),
+        serve(tmp_path, lambda operation, args: Ok({})),
+    ):
+        pass
