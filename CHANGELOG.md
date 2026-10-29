@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0-rc.10] - 2026-10-28
 
 ### Fixed
 
@@ -26,6 +26,11 @@ All notable changes to this project are documented here. The format follows
   and a Feature or Story may stand alone.
 - Artifact paths are named one way, relative to the project, and an approach that is not ready for
   approval is told exactly which evidence is missing or stale.
+
+### Qualification
+
+- Approval capture through a relayed project-agent conversation (audit H3) is unproven; this
+  candidate's live trial must reach a real approval. This is a release candidate.
 
 ## [0.7.0-rc.9] - 2026-10-26
 
@@ -993,3 +998,4 @@ First release.
 
 [0.7.0-rc.7]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.6...v0.7.0-rc.7
 [0.7.0-rc.9]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.8...v0.7.0-rc.9
+[0.7.0-rc.10]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.9...v0.7.0-rc.10
