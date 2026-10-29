@@ -12,6 +12,9 @@ import pytest
 from core.result import Ok
 from harness import decisions, state
 
+# The plugin's own launcher: a bare `harness` is recognized only when it is installed on PATH.
+HARNESS = str(Path(__file__).resolve().parents[2] / "bin" / "harness")
+
 CLI = Path(__file__).resolve().parents[2] / "scripts/harness/cli.py"
 PARENT = "11111111-1111-4111-8111-111111111111"
 CHILD = "22222222-2222-4222-8222-222222222222"
@@ -303,7 +306,7 @@ def test_recovery_is_reachable_while_a_choice_waits(tmp_path):
         {
             "tool_name": "exec_command",
             "tool_input": {
-                "cmd": f"harness decision recover --host codex --repo {tmp_path / 'project'}",
+                "cmd": f"{HARNESS} decision recover --host codex --repo {tmp_path / 'project'}",
             },
         },
     )
