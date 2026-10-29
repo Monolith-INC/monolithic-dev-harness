@@ -18,6 +18,8 @@ All notable changes to this project are documented here. The format follows
 - Uninstall never refuses: it removes every entry its installation receipt records, by key, even
   when a host rewrote the config without the block markers or someone edited the entry, and keeps
   everything else. Each file it touches is first copied into a dated backup folder it reports.
+- A question the user dismisses without choosing (Claude Code's "[No preference]") is no answer:
+  it stays pending and keeps holding work, instead of being recorded as the user's own words.
 
 ## [0.7.0-rc.10] - 2026-10-28
 

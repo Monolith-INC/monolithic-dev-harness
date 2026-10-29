@@ -29,6 +29,15 @@ from host_adapters.interactions import present
 
 MAX_QUESTION_WORDS = 50
 MAX_DESCRIPTION_WORDS = 25
+# What a host returns when the user dismisses its question without choosing (Claude Code's
+# AskUserQuestion). It is no answer: the question stays pending.
+NO_CHOICE = frozenset({"[no preference]"})
+
+
+def no_choice(answer: str) -> bool:
+    return answer.strip().casefold() in NO_CHOICE
+
+
 APPROVE_LABELS = frozenset({"approve", "aprovar", "aprovo"})
 # Answers that approve nothing, so a changed artifact never blocks them.
 DECLINE_LABELS = frozenset(
