@@ -309,8 +309,81 @@ def _restore_toml(text: str, record: dict) -> str:
                     return text.replace(BEGIN + actual + END, old_block)
                 case False:
                     raise ValueError("owned TOML block changed")
+        case 0, 0:
+            return _remove_owned_tables(text, original, record["after"])
         case _:
             raise ValueError("owned TOML block changed")
+
+
+def _remove_owned_tables(text: str, original: str, after: str) -> str:
+    """A host that rewrites its config (Codex does) drops the block markers. Remove the tables the
+    installation added, by their keys, when they still hold what it wrote and nothing else moves."""
+    import tomllib
+
+    current = tomllib.loads(text)
+    owned = _added_tables(
+        tomllib.loads(original),
+        tomllib.loads(after.replace(BEGIN, "").replace(END, "")),
+    )
+    written = tomllib.loads(after.replace(BEGIN, "").replace(END, ""))
+    if not owned or not all(
+        _subset(_at(current, key), _at(written, key)) for key in owned
+    ):
+        raise ValueError("owned TOML block changed")
+    kept, header = [], ()
+    for line in text.splitlines(keepends=True):
+        stripped = line.strip()
+        if stripped.startswith("[") and not stripped.startswith("[["):
+            header = _header(stripped)
+        if not any(header[: len(key)] == key for key in owned):
+            kept.append(line)
+    result = "".join(kept)
+    expected = _without(current, owned)
+    if tomllib.loads(result) != expected:
+        raise ValueError("owned TOML block changed")
+    return result
+
+
+def _added_tables(before: dict, after: dict, prefix: tuple = ()) -> tuple[tuple, ...]:
+    return tuple(
+        found
+        for key, value in after.items()
+        for found in (
+            ((*prefix, key),)
+            if key not in before
+            else _added_tables(before[key], value, (*prefix, key))
+            if isinstance(value, dict) and isinstance(before[key], dict)
+            else ()
+        )
+    )
+
+
+def _at(value: dict, key: tuple) -> Any:
+    for part in key:
+        value = value.get(part, {}) if isinstance(value, dict) else {}
+    return value
+
+
+def _without(value: dict, owned: tuple[tuple, ...]) -> dict:
+    return {
+        name: _without(item, tuple(key[1:] for key in owned if key[0] == name))
+        if isinstance(item, dict)
+        and any(key[0] == name and len(key) > 1 for key in owned)
+        else item
+        for name, item in value.items()
+        if (name,) not in owned
+    }
+
+
+def _header(line: str) -> tuple:
+    """The key path of a `[table]` header line, read with the TOML parser itself."""
+    import tomllib
+
+    path, value = (), tomllib.loads(line.split("#", 1)[0].strip() + "\n")
+    while isinstance(value, dict) and len(value) == 1:
+        ((name, value),) = value.items()
+        path = (*path, name)
+    return path
 
 
 def _restore(record: dict) -> tuple[Path, str | None]:
