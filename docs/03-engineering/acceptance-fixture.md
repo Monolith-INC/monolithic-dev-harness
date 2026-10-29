@@ -2,7 +2,7 @@
 title: Acceptance Fixture
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-10-02
+last_reviewed: 2026-10-29
 ---
 
 # Live-trial project fixture
@@ -14,34 +14,43 @@ and regular project workflows do not depend on it.
 harness. It is a small Flutter task-list app with project context, product intent, an unresolved
 opportunity, current design notes, architecture, and test instructions.
 
-For an app-based test run, pass a complete `.harness/settings.json` configuration to the test-only
-factory in `tools/project_fixture.py`; `tools/test-project-config.example.json` is a starting
-example. It validates the JSON against the harness settings schema,
-creates a fresh numbered copy under `temp/test-000/project` in the source checkout (or the next
-unused number), applies the configuration, initializes a selected local tracker through the
-harness setup path, prepares the bundled `_bmad/` setup for configured trials before committing
-the starting files, and returns `Ok(project_path)`. Unconfigured first-run trials leave setup absent.
-Missing, unreadable, malformed, and invalid
-configurations return `Err` with a specific error. Starting a new fixture first removes abandoned
-test-run copies created by this helper. Call `discard_test_project(project_path)` when the test ends.
-This factory is not used by ordinary harness setup.
+`tools/project_fixture.py` prepares and drives a trial in three steps:
 
-Interactive agents receive the fixture's absolute path in a fresh briefing and target it for every
-file operation and command. A launcher working-directory option is not a prerequisite, and its
-absence must not cause a manual handoff to the human. Record shared-host isolation limitations.
-Keep evidence outside the disposable root and discard the marked copy when the run ends.
-
-```python
-from tools.project_fixture import create_test_project, discard_test_project
-from core.result import Err, Ok
-
-match create_test_project("/path/to/test-settings.json"):
-    case Ok(project_path):
-        # Point the test host at project_path, then discard it when the run ends.
-        ...
-    case Err(failure):
-        print(failure.code, failure.message)
+```bash
+python3 tools/project_fixture.py create
 ```
+
+Copies the template into `temp/test-NNN/project` (the next unused number) and installs the harness
+into that copy for Claude Code and Codex: this checkout's source, or a published release with
+`--version X.Y.Z`. `--host` picks other hosts; `--settings <file>` starts from a complete
+`.harness/settings.json` (`tools/test-project-config.example.json` is an example) instead of a
+first-run, unconfigured project. The install, the host configuration homes and the `harness`
+command live in the trial folder beside the copy, so your own installs and host settings are never
+touched. It prints the copy's path.
+
+```bash
+python3 tools/project_fixture.py run temp/test-000/project --runtime claude --briefing briefing.md
+```
+
+Starts the agent in the copy with the briefing as its first message. Headless, Claude Code may edit
+files and run only the harness and read-only commands; Codex keeps its workspace sandbox. When the
+harness waits for the human, `run` prints the question and exits with status 3. Answer it, as the
+person or as the coordinating agent relaying the person's words, with:
+
+```bash
+python3 tools/project_fixture.py answer temp/test-000/project "Investigate first"
+```
+
+That resumes the same session with the reply as the user's next message, and stops again at the
+next question. Add `--interactive` to `run` to open the host's own session in the copy instead,
+where the person answers. The transcript accumulates in the trial folder's `transcript.jsonl`.
+
+```bash
+python3 tools/project_fixture.py discard temp/test-000/project
+```
+
+Removes the copy and its trial folder. The same steps are available from Python as
+`create_test_project`, `start_run`, `answer` and `discard_test_project`.
 
 Never run the harness or edit files in the canonical template. Create a disposable, initialized
 copy with the starting profile and per-run settings you need:

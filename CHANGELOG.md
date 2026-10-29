@@ -6,6 +6,12 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- `tools/project_fixture.py` creates a test-project copy in `temp/` with the harness installed in
+  isolation (this checkout or `--version`), and runs a headless Claude Code or Codex trial that
+  stops at each question and resumes with `answer`, or opens an interactive session.
+
 ### Fixed
 
 - The local tracker always uses the project's own `Tickets/`, and exclusions are written only into
