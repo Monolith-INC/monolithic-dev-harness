@@ -175,7 +175,7 @@ def _project_scope(component: Component, context: InstallationContext) -> Compon
                 default=None,
             ),
         )
-        if component.scope == "local"
+        if component.scope == "local" and component.project is None
         else component
     )
 
@@ -525,18 +525,25 @@ def _registrations(
     host: str, path: Path, scope: str, value: dict, kind: str
 ) -> tuple[Component, ...]:
     nested = tuple(
-        _component(
-            host,
-            path,
-            scope,
-            "registration",
-            f"plugin-installed:{name}"
-            if path.name.startswith("installed")
-            else f"plugin-enabled:{name}",
-            ("plugins", name),
-        )
-        for name in value.get("plugins", {})
+        component
+        for name, entries in value.get("plugins", {}).items()
         if name in (MARKER, f"{MARKER}@{MARKER}")
+        for component in (
+            _installed_entries(host, path, scope, name, entries)
+            if path.name.startswith("installed") and isinstance(entries, list)
+            else (
+                _component(
+                    host,
+                    path,
+                    scope,
+                    "registration",
+                    f"plugin-installed:{name}"
+                    if path.name.startswith("installed")
+                    else f"plugin-enabled:{name}",
+                    ("plugins", name),
+                ),
+            )
+        )
     )
     root = (
         (
@@ -560,6 +567,35 @@ def _registrations(
         if name == f"{MARKER}@{MARKER}"
     )
     return nested + root + enabled
+
+
+def _installed_entries(
+    host: str, path: Path, scope: str, name: str, entries: list
+) -> tuple[Component, ...]:
+    """Claude keeps every scope's installation in the user's file; each entry says its own scope
+    and, for a project one, its project."""
+    from dataclasses import replace
+
+    return tuple(
+        replace(
+            _component(
+                host,
+                path,
+                "local" if project else scope,
+                "registration",
+                f"plugin-installed:{name}",
+                ("plugins", name, index),
+                version=entry.get("version") if isinstance(entry, dict) else None,
+            ),
+            project=Path(project) if project else None,
+        )
+        for index, entry in enumerate(entries)
+        for project in (
+            entry.get("projectPath")
+            if isinstance(entry, dict) and entry.get("scope") in ("local", "project")
+            else None,
+        )
+    )
 
 
 def findings(
