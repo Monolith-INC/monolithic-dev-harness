@@ -194,7 +194,8 @@ def test_a_headless_run_stops_at_the_question_and_resumes_with_the_reply(copy):
         for line in (copy.parent / "calls.jsonl").read_text().splitlines()
     ]
     assert calls[0][-1] == "Implement DAY-001."
-    assert calls[1][calls[1].index("--resume") + 1 :] == ["s-1", "Yes"]
+    # The session goes to `--resume` as an option; only the reply follows the end of options.
+    assert calls[1][calls[1].index("--resume") + 1 :] == ["s-1", "--", "Yes"]
     assert "bypassPermissions" not in calls[0]
 
 

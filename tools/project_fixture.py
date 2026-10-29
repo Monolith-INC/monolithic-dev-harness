@@ -232,7 +232,7 @@ def _headless(project: Path, runtime: str, command: list[str]) -> Result[dict]:
 def _first_command(runtime: str, briefing: str) -> list[str]:
     match runtime:
         case "claude":
-            return [*_claude(), briefing]
+            return [*_claude(), "--", briefing]
         case _:
             return [*_codex(), briefing]
 
@@ -240,7 +240,7 @@ def _first_command(runtime: str, briefing: str) -> list[str]:
 def _resume_command(runtime: str, session: str, reply: str) -> list[str]:
     match runtime:
         case "claude":
-            return [*_claude(), "--resume", session, reply]
+            return [*_claude(), "--resume", session, "--", reply]
         case _:
             return [*_codex(), "resume", session, reply]
 
@@ -254,9 +254,9 @@ def _claude() -> list[str]:
         "--verbose",
         "--permission-mode",
         "acceptEdits",
+        # Comma-separated in one argument: as separate words the list would swallow what follows.
         "--allowedTools",
-        *CLAUDE_ALLOWED,
-        "--",
+        ",".join(CLAUDE_ALLOWED),
     ]
 
 
