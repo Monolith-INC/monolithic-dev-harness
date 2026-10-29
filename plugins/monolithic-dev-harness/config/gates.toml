@@ -265,8 +265,8 @@ recommended = "approve"
 id = "approve"
 label.en = "Approve"
 label.pt-br = "Aprovar"
-detail.en = "Create them as reviewed. Changing the drafts needs a new approval."
-detail.pt-br = "Criar como revisados. Mudar os rascunhos exige nova aprovação."
+detail.en = "Write them to the tracker as reviewed: new items are created, existing ones updated. Changing the drafts needs a new approval."
+detail.pt-br = "Gravar no rastreador como revisados: itens novos são criados e os existentes, atualizados. Mudar os rascunhos exige nova aprovação."
 
 [[gate.option]]
 id = "not-now"

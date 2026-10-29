@@ -258,3 +258,32 @@ def test_zed_jsonc_trailing_commas_preserve_servers_and_string_contents(tmp_path
 def test_jsonc_trailing_comma_support_still_rejects_invalid_documents(text):
     with pytest.raises(json.JSONDecodeError):
         inventory.json_document(text)
+
+
+def test_claude_project_installations_in_the_users_file_are_local(tmp_path):
+    (tmp_path / ".claude/plugins").mkdir(parents=True)
+    (tmp_path / ".claude/plugins/installed_plugins.json").write_text(
+        json.dumps(
+            {
+                "version": 2,
+                "plugins": {
+                    "monolithic-dev-harness@monolithic-dev-harness": [
+                        {"scope": "local", "projectPath": "/work/app", "version": "1"},
+                        {"scope": "user", "version": "2"},
+                    ]
+                },
+            }
+        )
+    )
+    assert tuple(
+        (component.scope, component.project, component.selector)
+        for component in scan(InstallationContext(tmp_path)).components
+        if component.kind == "registration"
+    ) == (
+        (
+            "local",
+            Path("/work/app"),
+            ("plugins", "monolithic-dev-harness@monolithic-dev-harness", 0),
+        ),
+        ("user", None, ("plugins", "monolithic-dev-harness@monolithic-dev-harness", 1)),
+    )

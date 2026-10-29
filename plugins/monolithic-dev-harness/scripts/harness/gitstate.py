@@ -103,3 +103,33 @@ def branch_paths(repo: Path, base_branch: str) -> list[str]:
             )
         )
     return []
+
+
+def own_exclude(project: Path) -> Path | None:
+    """The project's own `.git/info/exclude`, only when the project is the root of its own
+    repository. A project without one, or inside another repository, has none: the harness never
+    writes into a repository that is not the project's."""
+    try:
+        result = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(project),
+                "rev-parse",
+                "--path-format=absolute",
+                "--show-toplevel",
+                "--git-path",
+                "info/exclude",
+            ],
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=TIMEOUT_SECONDS,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return None
+    match result.returncode, result.stdout.splitlines():
+        case 0, [top, exclude] if Path(top).resolve() == project.resolve():
+            return Path(exclude)
+        case _:
+            return None

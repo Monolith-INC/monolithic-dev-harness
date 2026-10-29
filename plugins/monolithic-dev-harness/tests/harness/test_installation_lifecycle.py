@@ -234,9 +234,15 @@ def test_foreign_setting_between_user_upgrades_and_host_union_survive(
         '# BEGIN monolithic-dev-harness\n[[hooks]]\nevent="Stop"\ncommand="sh /opt/monolithic-dev-harness/scripts/harness/hook.py"\n# END monolithic-dev-harness\n'
     )
     assert isinstance(record_user(PLUGIN, ("kimi",)), Ok)
-    assert isinstance(uninstall("user", ()), Ok)
+    removed = uninstall("user", ())
+    assert isinstance(removed, Ok)
     assert json.loads(paths[0].read_text()) == {"theme": "keep"}
     assert not paths[1].exists()
+    # The backup of the touched configs lives outside the harness home, which is gone.
+    from harness.installation_scope import _user_root
+
+    assert not _user_root().exists()
+    assert not removed.value["backup"].is_relative_to(_user_root())
 
 
 def test_interrupted_user_install_can_remove_owned_effects_without_losing_foreign(
@@ -512,3 +518,31 @@ def test_independent_projects_are_not_duplicate_registrations(tmp_path, monkeypa
         for component in inventory.components
         if component.scope == "local"
     } == {first, second}
+
+
+def test_uninstall_removes_entries_a_host_rewrote_and_backs_them_up(tmp_path):
+    from harness.installation_lifecycle import uninstall
+
+    project = tmp_path / "project"
+    project.mkdir()
+    assert isinstance(install_local(project, PLUGIN, ("codex",)), Ok)
+    config = project / ".codex/config.toml"
+    # Codex rewrites the file without the markers, and someone edits a harness entry.
+    rewritten = (
+        config.read_text()
+        .replace("# BEGIN monolithic-dev-harness\n", "")
+        .replace("# END monolithic-dev-harness\n", "")
+        .replace(
+            '[mcp_servers."workflow-integrations"]',
+            '[mcp_servers."workflow-integrations"]\ntimeout = 9',
+        )
+    )
+    config.write_text(rewritten)
+    removed = uninstall("local", (project,))
+    assert isinstance(removed, Ok), removed
+    assert "workflow-integrations" not in (
+        config.read_text() if config.exists() else ""
+    )
+    backup = removed.value["backup"]
+    copied = backup / config.resolve().relative_to(config.resolve().anchor)
+    assert copied.read_text() == rewritten

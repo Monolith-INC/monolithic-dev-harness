@@ -693,6 +693,11 @@ def _resolve(
     current = state.read_json(path) or {}
     if current.get("status") != "pending" or current.get("id") != key:
         raise ValueError("this answer does not belong to the pending decision")
+    if questions.no_choice(answer):
+        raise ValueError(
+            "the user chose no option, so the question is still waiting. Do not act on it: "
+            "present the same question again, or end the turn and wait for their answer"
+        )
     answer = questions.match_option(answer, tuple(current.get("options", ()))) or answer
     # A reply in the user's own words closes the question too: it chose none of the options, so
     # it approves nothing, and the agent acts on what it says. A question never stays stuck.

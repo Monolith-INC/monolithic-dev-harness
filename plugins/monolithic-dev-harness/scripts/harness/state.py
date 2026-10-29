@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import json
 import re
-import subprocess
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -31,21 +30,11 @@ def state_dir(repo: Path) -> Path:
 
 
 def ensure_local_exclude(repo: Path) -> tuple[str, ...]:
-    """Keep clone-local records out of Git, including before repository bootstrap."""
-    try:
-        result = subprocess.run(
-            ["git", "-C", str(repo), "rev-parse", "--git-path", "info/exclude"],
-            capture_output=True,
-            text=True,
-            check=False,
-            timeout=10,
-        )
-    except (OSError, subprocess.TimeoutExpired):
-        return ()
-    match result.returncode, result.stdout.strip():
-        case 0, str() as location if location:
-            path = Path(location)
-            resolved = path if path.is_absolute() else repo / path
+    """Keep local-only records out of the project's own repository, when it has one."""
+    from harness.gitstate import own_exclude
+
+    match own_exclude(repo):
+        case Path() as resolved:
             lines = (
                 resolved.read_text(encoding="utf-8").splitlines()
                 if resolved.exists()
@@ -61,7 +50,7 @@ def ensure_local_exclude(repo: Path) -> tuple[str, ...]:
                         "\n".join([*lines, *added]) + "\n", encoding="utf-8"
                     )
                     return added
-        case _:
+        case None:
             return ()
 
 

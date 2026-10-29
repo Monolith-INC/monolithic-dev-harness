@@ -4,6 +4,34 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `tools/project_fixture.py` creates a test-project copy in `temp/` with the harness installed in
+  isolation (this checkout or `--version`), and runs a headless Claude Code or Codex trial that
+  stops at each question and resumes with `answer`, or opens an interactive session.
+
+### Fixed
+
+- The local tracker always uses the project's own `Tickets/`, and exclusions are written only into
+  the project's own repository. An unversioned project inside another repository no longer reads
+  or writes that repository's files.
+- Project installs link the shared `references/` and `common/` folders beside the skills, so skill
+  links to them resolve.
+- Claude project installations listed in the user's plugin file count as project installations;
+  user removal no longer aborts on them.
+- Uninstall never refuses: it removes every entry its installation receipt records, by key, even
+  when a host rewrote the config without the block markers or someone edited the entry, and keeps
+  everything else. Each file it touches is first copied into a dated backup folder it reports.
+- One approval publishes a whole batch: a reviewed draft that the tracker turns into its item in
+  place (writing the new id into the same file) no longer voids the approval for the rest.
+- An item renamed during refinement keeps its documents folder and names; its next documents no
+  longer land in a second folder beside the first.
+- The publish approval says items are written as reviewed, created or updated, not only created.
+- A question the user dismisses without choosing (Claude Code's "[No preference]") is no answer:
+  it stays pending and keeps holding work, instead of being recorded as the user's own words.
+
 ## [0.7.0-rc.10] - 2026-10-28
 
 ### Fixed

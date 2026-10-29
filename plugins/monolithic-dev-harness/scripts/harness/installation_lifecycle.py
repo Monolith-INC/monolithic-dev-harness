@@ -74,7 +74,9 @@ def discover_projects(projects: tuple[Path, ...]) -> Result[tuple[Path, ...]]:
 
 def uninstall(
     scope: str, projects: tuple[Path, ...], purge: bool = False
-) -> Result[tuple[Path, ...]]:
+) -> Result[dict]:
+    """Remove the installation. Every entry its receipts record is removed, however it was
+    rewritten or edited since; the files it touches are backed up first."""
     match scope:
         case "all":
             return bind(
@@ -103,9 +105,7 @@ def uninstall(
             )
 
 
-def _uninstall_all(
-    scope: str, projects: tuple[Path, ...], purge: bool
-) -> tuple[Path, ...]:
+def _uninstall_all(scope: str, projects: tuple[Path, ...], purge: bool) -> dict:
     from dataclasses import replace
 
     from harness.installation_cleanup import plan_cleanup
@@ -179,6 +179,9 @@ def _uninstall_all(
                 else ()
             )
             # Every file rewrite, receipt and native command has been prepared before effects.
+            backup = _backup(
+                (*(path for path, _ in restore), *(path for path, _ in writes))
+            )
             tuple(_native_effect(command) for command in commands)
             tuple(_remove(path, text) for path, text in restore)
             tuple(_atomic(path, text) for path, text in writes)
@@ -214,11 +217,39 @@ def _uninstall_all(
                     for component in inventory.components
                 )
             )
-            return tuple(
-                dict.fromkeys(
-                    (*restored_paths, *(path for path, _ in writes), *removals)
-                )
-            )
+            return {
+                "changed": tuple(
+                    dict.fromkeys(
+                        (*restored_paths, *(path for path, _ in writes), *removals)
+                    )
+                ),
+                "backup": backup,
+            }
+
+
+def _backup(paths: tuple[Path, ...]) -> Path | None:
+    """Copy every file removal will rewrite or delete, at its own path under one dated folder, so an
+    edit the user made to a harness entry is never lost."""
+    from datetime import UTC, datetime
+
+    files = tuple(
+        dict.fromkeys(
+            path for path in paths if path.is_file() and not path.is_symlink()
+        )
+    )
+    if not files:
+        return None
+    # Beside the recovery copies, outside the harness home that uninstall removes.
+    folder = (
+        Path.home()
+        / ".local/state/monolithic-dev-harness/uninstall-backups"
+        / datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    )
+    for path in files:
+        target = folder / path.resolve().relative_to(path.resolve().anchor)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(path, target)
+    return folder
 
 
 def _native_effect(command: tuple[str, ...]) -> tuple[str, ...]:
