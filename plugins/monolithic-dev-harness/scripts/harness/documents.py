@@ -45,9 +45,25 @@ def document_name(document_type: str, scope_name: str) -> str:
 
 
 def item_path(artifacts: Path, chain: tuple[WorkItem, ...], document_type: str) -> Path:
-    """The document's path, `chain` running from the top-most parent down to its item."""
-    folder = artifacts.joinpath(*(scope(item) for item in chain))
-    return folder / document_name(document_type, scope(chain[-1]))
+    """The document's path, `chain` running from the top-most parent down to its item. An item
+    whose folder exists keeps it, and its documents keep that name, even after a rename."""
+    folder = artifacts
+    for item in chain:
+        folder = folder / _existing_scope(folder, item)
+    return folder / document_name(document_type, folder.name)
+
+
+def _existing_scope(parent: Path, item: WorkItem) -> str:
+    kind = item.kind.value.replace("_", "-")
+    number = key_number(item.key or item.id)
+    return next(
+        (
+            found.name
+            for found in sorted(parent.glob(f"{kind}-{number}-*"))
+            if found.is_dir()
+        ),
+        scope(item),
+    )
 
 
 def lineage(ops: TrackerOps, key: str) -> Result[tuple[WorkItem, ...]]:
