@@ -14,6 +14,8 @@ from core.result import Err, Ok, Result, attempt
 from host_adapters.installation_contract import ProjectAsset
 
 MARKER = "monolithic-dev-harness"
+# What `_restore` returns for a path the installation no longer owns: leave it as it is.
+UNCHANGED = "\0unchanged"
 BEGIN = "# BEGIN monolithic-dev-harness\n"
 END = "# END monolithic-dev-harness\n"
 _ABSENT = object()
@@ -275,73 +277,72 @@ def _owned_reference(value: Any) -> bool:
             return False
 
 
-def _subset(current: Any, expected: Any) -> bool:
-    return (
-        current == expected
-        or isinstance(current, dict)
-        and isinstance(expected, dict)
-        and all(
-            key in expected and _subset(value, expected[key])
-            for key, value in current.items()
-        )
-    )
-
-
 def _restore_toml(text: str, record: dict) -> str:
-    import tomllib
-
+    """The config without the installation's entries. The receipt names them, so they are removed
+    by key however the host rewrote the file; uninstall never refuses (a backup is kept)."""
     original = record["before"] or ""
     match text.count(BEGIN), text.count(END):
-        case 0, 0 if _revert(
-            tomllib.loads(text), tomllib.loads(original), tomllib.loads(record["after"])
-        ) == tomllib.loads(text):
-            return text
         case 1, 1 if text.index(BEGIN) < text.index(END):
             actual = text.split(BEGIN, 1)[1].split(END, 1)[0]
-            expected = record["after"].split(BEGIN, 1)[1].split(END, 1)[0]
-            match _subset(tomllib.loads(actual), tomllib.loads(expected)):
-                case True:
-                    old_block = (
-                        BEGIN + original.split(BEGIN, 1)[1].split(END, 1)[0] + END
-                        if BEGIN in original
-                        else ""
-                    )
-                    return text.replace(BEGIN + actual + END, old_block)
-                case False:
-                    raise ValueError("owned TOML block changed")
-        case 0, 0:
-            return _remove_owned_tables(text, original, record["after"])
+            old_block = (
+                BEGIN + original.split(BEGIN, 1)[1].split(END, 1)[0] + END
+                if BEGIN in original
+                else ""
+            )
+            return text.replace(BEGIN + actual + END, old_block)
         case _:
-            raise ValueError("owned TOML block changed")
+            return _remove_owned_tables(
+                text.replace(BEGIN, "").replace(END, ""), original, record["after"]
+            )
 
 
 def _remove_owned_tables(text: str, original: str, after: str) -> str:
-    """A host that rewrites its config (Codex does) drops the block markers. Remove the tables the
-    installation added, by their keys, when they still hold what it wrote and nothing else moves."""
+    """Remove each table and key the installation added, by its key path. A host that rewrites its
+    config (Codex does) drops the block markers and reorders it; an edited entry is still the
+    installation's. Text that cannot be cut cleanly falls back to the config before installation."""
     import tomllib
 
-    current = tomllib.loads(text)
     owned = _added_tables(
         tomllib.loads(original),
         tomllib.loads(after.replace(BEGIN, "").replace(END, "")),
     )
-    written = tomllib.loads(after.replace(BEGIN, "").replace(END, ""))
-    if not owned or not all(
-        _subset(_at(current, key), _at(written, key)) for key in owned
-    ):
-        raise ValueError("owned TOML block changed")
-    kept, header = [], ()
+    try:
+        current = tomllib.loads(text)
+    except tomllib.TOMLDecodeError:
+        return original
+    kept, header, dropping = [], (), False
     for line in text.splitlines(keepends=True):
         stripped = line.strip()
-        if stripped.startswith("[") and not stripped.startswith("[["):
+        if stripped.startswith("[["):
+            header, dropping = (), False
+        elif stripped.startswith("["):
             header = _header(stripped)
-        if not any(header[: len(key)] == key for key in owned):
+            dropping = _owned(header, owned)
+        elif "=" in stripped and not stripped.startswith("#"):
+            key = _assignment(stripped.split("#", 1)[0].strip())
+            if key is not None:
+                dropping = _owned((*header, *key), owned)
+        if not dropping:
             kept.append(line)
     result = "".join(kept)
-    expected = _without(current, owned)
-    if tomllib.loads(result) != expected:
-        raise ValueError("owned TOML block changed")
-    return result
+    try:
+        return result if tomllib.loads(result) == _without(current, owned) else original
+    except tomllib.TOMLDecodeError:
+        return original
+
+
+def _owned(path: tuple, owned: tuple[tuple, ...]) -> bool:
+    return any(path[: len(key)] == key for key in owned)
+
+
+def _assignment(line: str) -> tuple | None:
+    """The key path a `key = value` line assigns, or None for a continuation line."""
+    import tomllib
+
+    try:
+        return _header_path(tomllib.loads(line + "\n"))
+    except tomllib.TOMLDecodeError:
+        return None
 
 
 def _added_tables(before: dict, after: dict, prefix: tuple = ()) -> tuple[tuple, ...]:
@@ -356,12 +357,6 @@ def _added_tables(before: dict, after: dict, prefix: tuple = ()) -> tuple[tuple,
             else ()
         )
     )
-
-
-def _at(value: dict, key: tuple) -> Any:
-    for part in key:
-        value = value.get(part, {}) if isinstance(value, dict) else {}
-    return value
 
 
 def _without(value: dict, owned: tuple[tuple, ...]) -> dict:
@@ -379,7 +374,11 @@ def _header(line: str) -> tuple:
     """The key path of a `[table]` header line, read with the TOML parser itself."""
     import tomllib
 
-    path, value = (), tomllib.loads(line.split("#", 1)[0].strip() + "\n")
+    return _header_path(tomllib.loads(line.split("#", 1)[0].strip() + "\n"))
+
+
+def _header_path(value: dict) -> tuple:
+    path = ()
     while isinstance(value, dict) and len(value) == 1:
         ((name, value),) = value.items()
         path = (*path, name)
@@ -390,18 +389,20 @@ def _restore(record: dict) -> tuple[Path, str | None]:
     path = Path(record["path"])
     match record["kind"]:
         case "symlink":
-            match (
-                path.is_symlink() and str(path.readlink()) == record["target"],
-                path.exists() or path.is_symlink(),
-            ):
-                case (True, _) | (False, False):
+            match path.is_symlink(), path.exists():
+                case True, _:
+                    return path, None  # the installation's link, wherever it points now
+                case False, False:
                     return path, None
-                case _:
-                    raise ValueError(f"owned link changed: {path}")
+                case False, True:
+                    return (
+                        path,
+                        UNCHANGED,
+                    )  # someone put their own file here; it is not ours
         case _:
             match path.is_symlink():
                 case True:
-                    raise ValueError(f"owned file was replaced by a symlink: {path}")
+                    return path, UNCHANGED  # replaced by someone's link; it is not ours
                 case False:
                     pass
             current = _read(path)
@@ -424,11 +425,15 @@ def _restore(record: dict) -> tuple[Path, str | None]:
                 case text if path.suffix == ".toml" and BEGIN in record["after"]:
                     return path, _restore_toml(text, record)
                 case _:
-                    raise ValueError(f"owned file changed: {path}")
+                    return path, record[
+                        "before"
+                    ]  # edited since; the backup keeps the edit
 
 
 def _remove(path: Path, text: str | None) -> Path:
     match text:
+        case str() if text == UNCHANGED:
+            return path
         case None:
             path.unlink(missing_ok=True)
             return path

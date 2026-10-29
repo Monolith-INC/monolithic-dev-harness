@@ -1,10 +1,8 @@
-"""Uninstall still finds the harness's tables after a host rewrites its config without markers."""
+"""Uninstall removes the harness's entries however a host rewrote or someone edited its config."""
 
 from __future__ import annotations
 
 import tomllib
-
-import pytest
 
 from harness.installation_files import BEGIN, END, _restore_toml
 
@@ -37,7 +35,13 @@ def test_a_table_the_user_added_since_is_kept() -> None:
     assert "workflow-integrations" not in restored["mcp_servers"]
 
 
-def test_an_edited_harness_table_is_refused() -> None:
+def test_an_edited_harness_table_is_still_removed() -> None:
     edited = REWRITTEN.replace('command = "sh"', 'command = "sh"\ntimeout = 9')
-    with pytest.raises(ValueError, match="owned TOML block changed"):
-        _restore_toml(edited, RECORD)
+    assert tomllib.loads(_restore_toml(edited, RECORD)) == tomllib.loads(BEFORE)
+
+
+def test_a_dotted_harness_key_outside_its_table_is_removed() -> None:
+    dotted = REWRITTEN + "\n[mcp_servers]\nworkflow-integrations.timeout = 9\n"
+    assert "workflow-integrations" not in tomllib.loads(
+        _restore_toml(dotted, RECORD)
+    ).get("mcp_servers", {})

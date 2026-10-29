@@ -15,8 +15,9 @@ All notable changes to this project are documented here. The format follows
   links to them resolve.
 - Claude project installations listed in the user's plugin file count as project installations;
   user removal no longer aborts on them.
-- Uninstall removes the harness's tables from a host config that was rewritten without the block
-  markers, keeping tables added since and refusing edited ones.
+- Uninstall never refuses: it removes every entry its installation receipt records, by key, even
+  when a host rewrote the config without the block markers or someone edited the entry, and keeps
+  everything else. Each file it touches is first copied into a dated backup folder it reports.
 
 ## [0.7.0-rc.10] - 2026-10-28
 

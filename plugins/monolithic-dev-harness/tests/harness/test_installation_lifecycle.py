@@ -512,3 +512,31 @@ def test_independent_projects_are_not_duplicate_registrations(tmp_path, monkeypa
         for component in inventory.components
         if component.scope == "local"
     } == {first, second}
+
+
+def test_uninstall_removes_entries_a_host_rewrote_and_backs_them_up(tmp_path):
+    from harness.installation_lifecycle import uninstall
+
+    project = tmp_path / "project"
+    project.mkdir()
+    assert isinstance(install_local(project, PLUGIN, ("codex",)), Ok)
+    config = project / ".codex/config.toml"
+    # Codex rewrites the file without the markers, and someone edits a harness entry.
+    rewritten = (
+        config.read_text()
+        .replace("# BEGIN monolithic-dev-harness\n", "")
+        .replace("# END monolithic-dev-harness\n", "")
+        .replace(
+            '[mcp_servers."workflow-integrations"]',
+            '[mcp_servers."workflow-integrations"]\ntimeout = 9',
+        )
+    )
+    config.write_text(rewritten)
+    removed = uninstall("local", (project,))
+    assert isinstance(removed, Ok), removed
+    assert "workflow-integrations" not in (
+        config.read_text() if config.exists() else ""
+    )
+    backup = removed.value["backup"]
+    copied = backup / config.resolve().relative_to(config.resolve().anchor)
+    assert copied.read_text() == rewritten
