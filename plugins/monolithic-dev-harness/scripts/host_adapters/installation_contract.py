@@ -69,7 +69,9 @@ class Inventory:
 class Repair:
     """One action that fixes a finding by removing or archiving a component."""
 
-    action: Literal["remove_entry", "remove_path", "archive_backup"]
+    action: Literal[
+        "remove_entry", "remove_path", "archive_backup", "remove_provider_conflict"
+    ]
     component: Component
     reason: str
 

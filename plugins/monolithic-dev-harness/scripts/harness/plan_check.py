@@ -8,6 +8,8 @@ from core.result import Result, attempt, fmap
 
 def inspect(text: str) -> dict:
     return {
+        "scope": "advisory_only",
+        "validated_acceptance_coverage": False,
         "words": len(text.split()),
         "estimated_tokens": (len(text.encode("utf-8")) + 3) // 4,
         "token_method": "UTF-8 bytes / 4 estimate; not a model tokenizer",

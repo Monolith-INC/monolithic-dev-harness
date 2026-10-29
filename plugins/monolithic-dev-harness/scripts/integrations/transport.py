@@ -21,9 +21,10 @@ from functools import lru_cache
 from itertools import accumulate, chain
 from typing import Any
 
-from core.result import Err, Failure, Ok, Result, attempt, bind, err, value_or
+from core.result import Err, Failure, Ok, Result, attempt, bind, err
 
 from .contracts import Transport
+from .provider_process import close, diagnostic_summary, launch
 
 PROTOCOL_VERSION = "2024-11-05"
 CLIENT_INFO = {"name": "monolithic-dev-harness", "version": "1.0.0"}
@@ -138,14 +139,9 @@ def process_exchange(
     def exchange(request: Mapping[str, Any]) -> Result[Mapping[str, Any]]:
         return bind(
             attempt(
-                lambda: subprocess.Popen(
-                    [
-                        os.path.expandvars(command),
-                        *(os.path.expandvars(arg) for arg in args),
-                    ],
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.DEVNULL,
+                lambda: launch(
+                    os.path.expandvars(command),
+                    tuple(os.path.expandvars(arg) for arg in args),
                 ),
                 "provider_unavailable",
                 "could not start the provider",
@@ -166,11 +162,21 @@ class _PersistentExchange:
         self._timeout = timeout
         self._process: subprocess.Popen[bytes] | None = None
         self._lock = threading.Lock()
+        self._failure: Failure | None = None
         atexit.register(self.close)
 
     def __call__(self, request: Mapping[str, Any]) -> Result[Mapping[str, Any]]:
         with self._lock:
-            return self._exchange(request)
+            match self._failure:
+                case Failure() as failure:
+                    return Err(failure)
+                case None:
+                    match self._exchange(request):
+                        case Err(failure) as result:
+                            self._failure = failure
+                            return result
+                        case Ok() as result:
+                            return result
 
     def _exchange(self, request: Mapping[str, Any]) -> Result[Mapping[str, Any]]:
         deadline = time.monotonic() + self._timeout
@@ -185,14 +191,9 @@ class _PersistentExchange:
 
     def _start(self, deadline: float) -> Result[subprocess.Popen[bytes]]:
         started = attempt(
-            lambda: subprocess.Popen(
-                [
-                    os.path.expandvars(self._command),
-                    *(os.path.expandvars(arg) for arg in self._args),
-                ],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.DEVNULL,
+            lambda: launch(
+                os.path.expandvars(self._command),
+                tuple(os.path.expandvars(arg) for arg in self._args),
             ),
             "provider_unavailable",
             "could not start the provider",
@@ -284,10 +285,21 @@ def _initialize(process: subprocess.Popen[bytes], deadline: float) -> Result[Non
     return bind(
         _send(process, initialize),
         lambda _: bind(
-            _receive(process, 1, deadline),
-            lambda _: _send(process, initialized),
+            _receive(process, 1, deadline, "initialize"),
+            lambda response: _initialized(process, response, initialized),
         ),
     )
+
+
+def _initialized(process, response, initialized) -> Result:
+    match response:
+        case {"result": dict()}:
+            return _send(process, initialized)
+        case _:
+            return err(
+                "provider_protocol_error",
+                "Provider rejected or malformed initialization; recover the owning gateway before another read.",
+            )
 
 
 def _send(process: subprocess.Popen[bytes], payload: Mapping[str, Any]) -> Result[None]:
@@ -305,7 +317,10 @@ def _send(process: subprocess.Popen[bytes], payload: Mapping[str, Any]) -> Resul
 
 
 def _receive(
-    process: subprocess.Popen[bytes], expected: int, deadline: float
+    process: subprocess.Popen[bytes],
+    expected: int,
+    deadline: float,
+    phase: str = "tool response",
 ) -> Result[Mapping[str, Any]]:
     """The next reply carrying `expected` as its id; other lines are skipped until the deadline.
 
@@ -318,22 +333,46 @@ def _receive(
     )
     lines = chain.from_iterable(complete for complete, _ in buffers)
     replies = (_json_or(line.decode(errors="replace"), lambda: None) for line in lines)
-    match next(
-        (
-            reply
-            for reply in replies
-            if isinstance(reply, dict) and reply.get("id") == expected
+    match attempt(
+        lambda: next(
+            (
+                reply
+                for reply in replies
+                if isinstance(reply, dict) and reply.get("id") == expected
+            ),
+            None,
         ),
-        None,
+        "provider_read_failed",
+        f"Could not read provider during {phase}",
+        OSError,
+        ValueError,
     ):
-        case None:
+        case Ok(None):
+            return _no_reply(process, deadline, phase)
+        case Ok(reply):
+            return Ok(reply)
+        case Err() as failure:
+            return failure
+
+
+def _no_reply(process: subprocess.Popen, deadline: float, phase: str) -> Result:
+    match process.poll(), time.monotonic() >= deadline:
+        case int() as status, _:
+            return err(
+                "provider_exited",
+                f"Provider exited ({status}) during {phase}; {diagnostic_summary(process)}. Reload the owning gateway before another read.",
+            )
+        case None, True:
             return err(
                 "provider_timeout",
-                "the provider did not answer in time",
+                f"Provider deadline elapsed during {phase}; {diagnostic_summary(process)}. Recover/reload the owning gateway before another read; do not replay an uncertain write.",
                 retryable=True,
             )
-        case reply:
-            return Ok(reply)
+        case _:
+            return err(
+                "provider_closed",
+                f"Provider stream closed during {phase}; recover the owning gateway.",
+            )
 
 
 def _split(buffer: bytes) -> tuple[tuple[bytes, ...], bytes]:
@@ -345,39 +384,15 @@ def _split(buffer: bytes) -> tuple[tuple[bytes, ...], bytes]:
 def _chunk(process: subprocess.Popen[bytes], remaining: float) -> bytes:
     """Whatever the server has written, waiting at most `remaining` seconds; empty at the deadline or its end."""
     stream = process.stdout
-    ready = attempt(
-        lambda: select.select([stream], [], [], max(remaining, 0))[0],
-        "unreadable",
-        "read",
-        OSError,
-        ValueError,
-        TypeError,
-    )
-    match ready:
-        case Ok([_, *_]) if remaining > 0:
-            return value_or(
-                attempt(
-                    lambda: os.read(stream.fileno(), 65536),
-                    "unreadable",
-                    "read",
-                    OSError,
-                ),
-                b"",
-            )  # type: ignore[union-attr]
+    match select.select([stream], [], [], max(remaining, 0))[0]:
+        case [_, *_] if remaining > 0:
+            return os.read(stream.fileno(), 65536)
         case _:
             return b""
 
 
 def _stop(process: subprocess.Popen[bytes]) -> None:
-    with suppress(OSError):
-        process.kill()
-    with suppress(OSError, subprocess.TimeoutExpired):
-        process.wait(timeout=1)
-    tuple(
-        _close(stream)
-        for stream in (process.stdin, process.stdout, process.stderr)
-        if stream is not None
-    )
+    close(process)
 
 
 def _close(stream: Any) -> None:

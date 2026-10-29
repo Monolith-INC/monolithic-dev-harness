@@ -110,10 +110,14 @@ BodyFormat = Literal[
 
 
 def _detect_body_format(body: str) -> BodyFormat:
-    from .output_formats import ENRICH_EPIC_SECTIONS, ENRICH_FEATURE_SECTIONS
+    from .output_formats import (
+        ENRICH_EPIC_SECTIONS,
+        ENRICH_FEATURE_SECTIONS,
+        RAW_REQUIREMENT_HEADINGS,
+    )
 
     h2 = _extract_h2_headings(body)
-    if "Requisitos" in h2:
+    if RAW_REQUIREMENT_HEADINGS.intersection(h2):
         return "raw_generate"
     all_story_sections = {
         section
@@ -301,6 +305,16 @@ def validate_artifact(
             name="body-raw-generate-format",
             fmt_result=validate_generate_work_item_body(record.body),
         )
+    elif body_format == "unknown":
+        results.append(
+            CheckResult(
+                "body-format-unknown",
+                "FAIL",
+                "neither a raw draft (## Requisitos / ## Requirements) nor an enriched "
+                f"{artifact_type} body; write one of those formats",
+                "STRUCTURAL",
+            )
+        )
     elif artifact_type == "User Story":
         if body_format == "enriched_story":
             from .output_formats import (
@@ -422,7 +436,7 @@ def validate_artifact(
             )
         )
 
-    if artifact_type == "User Story" and body_format != "raw_generate":
+    if artifact_type == "User Story" and body_format not in ("raw_generate", "unknown"):
         complexidade = _section_content(record.body, section_labels["complexity"])
         drivers_ok = complexidade and all(d in complexidade for d in complexity_drivers)
         results.append(
@@ -504,7 +518,7 @@ def validate_artifact(
         )
     )
     if artifact_type in {"User Story", "Task"}:
-        if body_format == "raw_generate":
+        if body_format in ("raw_generate", "unknown"):
             results.append(
                 CheckResult(
                     "dor-story-points-set",

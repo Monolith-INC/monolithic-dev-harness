@@ -2,7 +2,7 @@
 
 ## RULES
 
-- No intermediate approvals.
+- Ask only the captured gates required for planning and hardening. Do not invent extra approvals.
 - **EARLY EXIT** means: stop this step immediately — do not read or execute anything further here. Read and fully follow the target file instead. Return here ONLY if a later step explicitly says to loop back.
 
 ## INSTRUCTIONS
@@ -17,7 +17,9 @@
 ### Planning depth — after discovery, before drafting
 
 Persist the discovery digest and Code Map first. Reuse a depth already selected for this work;
-otherwise present `harness decision present --gate planning-depth`. This is a working preference,
+otherwise present `harness decision present --gate planning-depth`. To reuse an earlier depth, run
+`harness decision reuse --from-session <session> --decision-id <answered-depth-id>`; only a same-Story
+planning-depth preference can be referenced. This is a working preference,
 not approval to implement. Explain the recommendation using the discovered risks and ticket.
 
 - **Light:** draft from discovery, self-review, and focused checks for consequential gaps.
@@ -26,15 +28,24 @@ not approval to implement. Explain the recommendation using the discovered risks
 - **Hardcore:** Standard plus adversarial reviewers, assumption and security audits where relevant,
   source-preservation and verification-gap checks; interview only for unresolved consequential gaps.
 
-For Standard or Hardcore present `harness decision present --gate planning-methods`:
+For Standard or Hardcore start the durable chooser with `harness elicitation start --method-id <id>`
+(repeat the flag for a shortlist) or `--recommendations`, then use `harness elicitation present`.
+Use `harness elicitation status` after interruption and `harness elicitation reopen` if the user
+changes a completed choice. It preserves selections and requires a fresh human reply. The chooser
+stores each answer with its question, option set, session round and artifact digest. Do not rebuild
+selection state from chat text or overwrite a pending decision. For legacy non-planning use,
+`harness decision present --gate planning-methods` retains the short formal menu:
 contextual shortlist, full catalog, or agent recommendations. Use `bmad-advanced-elicitation`:
 select categories from discovery and hand-pick five complementary methods with reasons. Follow its
 paginated decision protocol: no more than three options per native decision, preserve ordered
 multi-selection, and retain Reshuffle, full-catalog browsing, recommendation review, and Proceed.
 Never replace these controls with a prose menu. Agent recommendations present a proposed selection
-for the user to choose or revise; never silently run every method. Run chosen methods on the
-discovered approach before writing the plan. Save accepted decisions incrementally and return here
-when complete.
+for the user to choose or revise; never silently run every method. For each method, show its output
+and call `harness elicitation result --artifact <review-file>`; only the captured Apply or Reject
+answer records the result. Save accepted decisions incrementally. Record depth-specific review,
+triage and approach files with `harness elicitation hardening --review-kind <kind> --artifact
+<review> --triage <file> --approach <file>`. The plan-checkpoint approval waits until these files
+still match the current approach.
 Native controls come first; delivery/capture failure uses the same decision's supported fallback,
 then a faithful chat menu. Neither failed delivery nor dismissal is an answer. Suspension does
 not remove the preference for native controls. Never require a session to communicate.

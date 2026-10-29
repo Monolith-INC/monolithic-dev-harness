@@ -1,12 +1,18 @@
 """Human-owned lifecycle controls use their own channel, independent of pending decisions."""
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from core.result import Ok
+from core.result import Ok, Result, err
 from harness import questions, state
+from harness.process_messages import HumanReply
 from host_adapters import hook_bridge, native_session_id
-from host_adapters.interactions import normalize_question, question_transport
+from host_adapters.interactions import (
+    normalize_human_reply,
+    normalize_question,
+    question_transport,
+)
 
 QUESTIONS = frozenset(
     {
@@ -24,6 +30,43 @@ CHOICES = {
     "free mode": "free",
     "modo livre": "free",
 }
+
+
+@dataclass(frozen=True)
+class ControlRecord:
+    presentation_id: str
+    question: str
+    options: tuple[str, ...]
+    conversation: str
+    transport: str
+    status: str
+
+
+@dataclass(frozen=True)
+class ControlTransition:
+    operation: str
+    answer: str
+    status: str = "answered"
+
+
+def reduce_control(
+    record: ControlRecord, reply: HumanReply, conversation: str
+) -> Result[ControlTransition]:
+    match record, reply:
+        case ControlRecord(status="pending"), HumanReply() if (
+            record.conversation == conversation
+            and record.presentation_id == reply.presentation_id
+            and record.question == reply.question
+            and record.transport == reply.transport
+            and reply.answer in record.options
+            and operation(reply.answer) is not None
+        ):
+            return Ok(ControlTransition(operation(reply.answer), reply.answer))
+        case _:
+            return err(
+                "control_reply_mismatch",
+                "The reply must match this pending lifecycle control and conversation.",
+            )
 
 
 def operation(reply: str) -> str | None:
@@ -143,10 +186,14 @@ def _supersede(repo: Path, conversation: str) -> tuple[object, ...]:
     )
 
 
-def prompt_operation(repo: Path, reply: str, conversation: str = "") -> str | None:
+def prompt_operation(
+    repo: Path, reply: str, conversation: str = "", host: str = "codex"
+) -> str | None:
+    from harness.decisions import Pending
+
     return operation(reply) or next(
         (
-            operation(options[int(reply.strip()) - 1])
+            transition.value.operation
             for path in sorted(
                 (repo / ".harness/state/control-questions").glob("*.json"),
                 key=lambda file: file.stat().st_mtime_ns,
@@ -154,15 +201,42 @@ def prompt_operation(repo: Path, reply: str, conversation: str = "") -> str | No
             )
             for record in (state.read_json(path) or {},)
             if record.get("status") == "pending"
-            and record.get("transport") == "chat"
+            and record.get("transport") in {"chat", "async", "blocking"}
             and record.get("conversation", "") == conversation
-            for options in (
-                tuple(
-                    option["label"]
-                    for option in record["input"]["questions"][0]["options"]
+            if not reply.strip().isdigit() or reply.strip().isascii()
+            for question in record["input"]["questions"]
+            for captured in (
+                normalize_human_reply(
+                    host,
+                    reply,
+                    Pending(
+                        id=path.stem,
+                        question=question["question"],
+                        options=tuple(
+                            option["label"] for option in question["options"]
+                        ),
+                        transport=record["transport"],
+                        approval=False,
+                        scope=None,
+                    ),
                 ),
             )
-            if reply.strip() in {"1", "2", "3"} and int(reply.strip()) <= len(options)
+            if captured is not None
+            for transition in (
+                reduce_control(
+                    ControlRecord(
+                        path.stem,
+                        question["question"],
+                        tuple(option["label"] for option in question["options"]),
+                        record.get("conversation", ""),
+                        record["transport"],
+                        record["status"],
+                    ),
+                    captured,
+                    conversation,
+                ),
+            )
+            if isinstance(transition, Ok)
         ),
         None,
     )

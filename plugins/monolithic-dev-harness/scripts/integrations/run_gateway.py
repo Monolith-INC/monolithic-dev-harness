@@ -11,7 +11,11 @@ if str(SCRIPTS) not in sys.path:
     sys.path.insert(0, str(SCRIPTS))
 
 from harness import project_paths  # noqa: E402
-from integrations.gateway import process_message  # noqa: E402
+from integrations.gateway import (
+    handle_call,  # noqa: E402
+    process_message,  # noqa: E402
+)
+from integrations.gateway_endpoint import serve  # noqa: E402
 
 
 def project_root() -> Path:
@@ -29,8 +33,11 @@ def project_root() -> Path:
 
 def main() -> None:
     root = project_root()
-    replies = (process_message(line, root) for line in sys.stdin if line.strip())
-    tuple(print(reply, flush=True) for reply in replies if reply)
+    with serve(
+        root, lambda operation, arguments: handle_call(operation, arguments, root)
+    ):
+        replies = (process_message(line, root) for line in sys.stdin if line.strip())
+        tuple(print(reply, flush=True) for reply in replies if reply)
 
 
 if __name__ == "__main__":

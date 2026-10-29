@@ -11,6 +11,21 @@ All notable changes to this project are documented here. The format follows
 - Installation inventory reads Zed settings with JSONC trailing commas and ignores Codex hook trust
   records under `[hooks.state]`, so harness components in those files are discovered instead of
   failing the scan.
+- One workflow-integrations gateway owns the tracker provider per project; CLI and hook reads go
+  through its private socket, a second owner fails closed, and no client starts its own provider.
+  Clients find the owner through its record, whatever their temporary directory.
+- Async replies count only when they match the staged question and conversation. Planning-method
+  choices survive interruption, and each method needs a captured Apply/Reject decision.
+- Approvals are bound to what was reviewed: a plan to its Story's current text, a publication to
+  its named item list. A Task is done only with its own verification evidence.
+- In Codex, a parent conversation can recover a relayed non-approving choice from its transcript
+  with `harness decision recover`; approvals are never relayed.
+- A damaged host-session link is repaired by `harness work-session select|resume`, and a damaged
+  decision record by `harness decision repair`; neither answers or approves anything.
+- Raw work-item drafts validate in English and Portuguese, with the generator's `[[Specs/…]]` link,
+  and a Feature or Story may stand alone.
+- Artifact paths are named one way, relative to the project, and an approach that is not ready for
+  approval is told exactly which evidence is missing or stale.
 
 ## [0.7.0-rc.9] - 2026-10-26
 

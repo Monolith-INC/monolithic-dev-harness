@@ -286,6 +286,7 @@ _OWNED_FILES = (
     (".harness", "state", "setup-cancelled.json"),
 )
 _OWNED_DIRS = (
+    (".harness", "state", "gateway-owners"),
     (".harness", "state", "approvals"),
     (".harness", "state", "manual"),
     (".harness", "state", "asked"),

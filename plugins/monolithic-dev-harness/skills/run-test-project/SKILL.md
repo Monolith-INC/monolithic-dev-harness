@@ -59,6 +59,21 @@ for follow-up. Do not run `codex exec`, a background shell trial, or a nonintera
 the human selects `--no-interactive` or explicitly requests a headless/CLI run.
 Do not create a separate chat unless requested.
 
+For a Codex project-agent choice, the parent reads the exact pending record with the installed
+`harness decision status --repo <fixture> --session-id <work-session>` before presenting the
+unchanged native question and options. After the genuine human reply, the parent runs
+`harness decision recover --host codex --repo <fixture> --session-id <work-session>` and forwards
+the resulting status to the project agent. Recovery uses native session transcripts, not the
+parent's paraphrase. It handles non-approving choices only; actual host capture remains necessary
+for approvals. Never re-ask a captured answer or synthesize a hook event to move past a checkpoint.
+
+Before launching, compare the stopping checkpoint with the approval gates the route will reach
+(`publish-items`, `plan-checkpoint` approvals, `implementation-confirm`). When the trial would pass
+one, tell the human first that a relayed reply cannot approve: they must answer that gate in the
+project agent's own conversation, where its hooks capture the reply. If they cannot open that
+conversation, move the stopping checkpoint to just before the first approval, and record that choice
+in the briefing. Never start a trial the human cannot finish through a supported approval path.
+
 Assign a general-purpose coding model of a tier compatible with the scenario, defaulting to the
 economical coding tier: **gpt-6-luna with low reasoning effort** for Codex. Use the human's specified model,
 tier and effort when provided. Pass those choices explicitly to the launcher and sub-agent briefing;

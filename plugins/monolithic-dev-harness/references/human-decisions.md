@@ -7,6 +7,12 @@ The harness asks the human in only two shapes. Use the shape that fits; never in
 | **Menu** | One choice with up to three options: a route, a plan checkpoint, an approval | `harness decision present` | Decision record; the answer is reused while the content is unchanged |
 | **Question batch** | Several open questions that investigation could not settle | One chat message, then end the turn | Answers go into the plan and its memlog |
 
+The host adapter normalizes a delayed native reply only when its presentation id, exact question,
+options, conversation and transport match the pending record. This applies to lifecycle controls as
+well as work decisions. Tool acceptance is not the human answer, and model-authored hook JSON is
+never replayed as one. After dismissal or a delivery error, preserve the staged choice and use its
+typed fallback or recovery control.
+
 Never ask the questions of a batch one at a time, and never ask a menu question in your own words.
 
 A skill's own catalog (elicitation methods, party rooms, review findings to triage) is shown the way
@@ -38,7 +44,7 @@ harness decision present --repo <project> --host <host> \
 | `plan-checkpoint` | The discovery plan is ready (`--artifact` the plan) |
 | `refinement-split` | A proposed split of an Epic, Feature or Story is ready (`--artifact` the outline); no write |
 | `harness-controls` | The user wants to suspend, resume, or use free mode |
-| `publish-items` (`--value count= --value tracker=`), `move-item` (`--value item= --value status= --value ref=`), `approve-spec`, `implementation-confirm`, `approve-document`, `publish-branch` (`--value branch=`), `reply-pr` (`--value pr=`), `pause-tracking` | Approvals; see the harness skill's approval protocol. `publish-items`, `implementation-confirm` and `approve-document` require the files shown first: run `harness workflow show`, put its output in your reply, run `harness decision status` (the host records a reply only once another tool runs), then ask |
+| `publish-items` (`--value count= --value items= --value tracker=`), `move-item` (`--value item= --value status= --value ref=`), `approve-spec`, `implementation-confirm`, `approve-document`, `publish-branch` (`--value branch=`), `reply-pr` (`--value pr=`), `pause-tracking` | Approvals; see the harness skill's approval protocol. `publish-items` lists the exact `key:<existing-key>` and/or `title:<new-item-title>` identities in `items`, matching `count`, so generated tracker keys can be verified after creation. `publish-items`, `implementation-confirm` and `approve-document` require the files shown first: run `harness workflow show`, put its output in your reply, run `harness decision status` (the host records a reply only once another tool runs), then ask |
 
 - Never pass a session id: the harness asks in the project's current work session, or
   project-wide when there is none. Asking never requires a session to exist.
@@ -106,9 +112,28 @@ approving option unless it says "approve" itself; a number or the full label alw
 ambiguous reply, a question, or other conversation leaves the menu pending: answer it, then show
 the same menu again. Delivery, silence, timers, and default selections are never answers.
 
-The prompt and answer hooks record answers. There is no agent-facing command to record one; never
-forge a hook event or reconstruct an answer from assistant prose. `harness revoke`, `harness
+The prompt and answer hooks record answers. There is no command accepting an agent-supplied answer;
+never forge a hook event or reconstruct an answer from assistant prose. `harness revoke`, `harness
 suspend`, and typed `approve HB-…` keep working while a menu waits.
+
+### Relayed project-agent choices in Codex
+
+When a project agent relays a non-approving choice through its parent, the parent first runs
+`harness decision status --repo <project> --session-id <work-session>` to observe that exact pending
+record, then presents its unchanged native question and options. After the actual human replies,
+the root runs `harness decision recover --host codex --repo <project> --session-id <work-session>`.
+This command reads the current root's canonical Codex desktop session transcript under the OS
+account's `.codex/sessions`; caller-selected `CODEX_HOME`/`HOME` cannot redirect this source. Custom
+log locations are not supported by this recovery path. It accepts no answer or
+transcript path. It verifies the originating agent's parent relationship, the pending record shown
+before delivery (including its unique instance, descriptions and reviewed artifacts), the exact
+question/options, successful delivery and the subsequent actual user
+message. Unmatched evidence leaves the question pending. The record retains source session,
+question call and user-message IDs. The project agent then reads decision status and continues.
+
+Recovery cannot grant approvals, qualify native structured transport or import a choice into a
+different decision. It reuses the genuine recorded reply, so do not ask the human to repeat it.
+Missing native transcript evidence remains a concrete capture blocker.
 
 ### While a menu waits
 
@@ -117,6 +142,11 @@ project for an unscoped one). Read-only inspection, `harness decision status`, `
 suspension status`, and `harness decision fallback` still run. For a Codex asynchronous control,
 use a returned interruptible wait only when observed. Without a wait tool, end the turn while the
 decision remains pending. Do not ask another question or do dependent work meanwhile.
+
+A saved decision that cannot be read (empty, malformed or missing its question) still blocks, and
+nobody can answer it. `harness decision repair --repo <project> --session-id <work-session>` moves
+it aside with its bytes intact, so the workflow asks the question again. The repair answers and
+approves nothing, and it refuses a readable decision.
 Onboarding status, skip, dismissal, restart and mode selection are recovery controls, not answers.
 They may discard optional onboarding prompts while preserving evidence, without granting approval.
 Known onboarding prompts can be cancelled when onboarding is skipped, dismissed or restarted.

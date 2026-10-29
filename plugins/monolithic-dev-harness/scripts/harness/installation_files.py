@@ -444,7 +444,7 @@ def _repair_writes(repairs: tuple) -> tuple[tuple[Path, str], ...]:
         dict.fromkeys(
             repair.component.path
             for repair in repairs
-            if repair.action == "remove_entry"
+            if repair.action in {"remove_entry", "remove_provider_conflict"}
         )
     )
     return tuple(
@@ -458,7 +458,8 @@ def _repair_writes(repairs: tuple) -> tuple[tuple[Path, str], ...]:
                         dict.fromkeys(
                             repair.component.selector
                             for repair in repairs
-                            if repair.action == "remove_entry"
+                            if repair.action
+                            in {"remove_entry", "remove_provider_conflict"}
                             and repair.component.path == path
                         )
                     ),
@@ -475,6 +476,39 @@ def _require_ok(result):
             return value
         case Err(failure):
             raise ValueError(f"{failure.code}: {failure.message}")
+
+
+def _backup_conflict(repair, context) -> Path:
+    source = repair.component.path
+    root = next(
+        root.resolve()
+        for root in context.projects
+        if source.resolve().is_relative_to(root.resolve())
+    )
+    folder = root / ".harness/repair-backups"
+    folder.mkdir(parents=True, exist_ok=True, mode=0o700)
+    match folder.resolve().is_relative_to(root):
+        case False:
+            raise ValueError("Repair backup directory escapes the selected project")
+        case True:
+            pass
+    target = folder / f"{repair.component.digest}-{source.name}"
+    match target.exists():
+        case False:
+            with target.open("xb") as backup:
+                backup.write(source.read_bytes())
+        case True:
+            match (
+                hashlib.sha256(target.read_bytes()).hexdigest()
+                == repair.component.digest
+            ):
+                case False:
+                    raise ValueError(
+                        "Repair backup does not match the original fingerprint"
+                    )
+                case True:
+                    pass
+    return target
 
 
 def apply_repairs(repairs: tuple, context) -> Result[tuple[Path, ...]]:
@@ -495,10 +529,21 @@ def _apply_repairs(repairs: tuple, context) -> tuple[Path, ...]:
     current = scan(context)
     match all(
         repair.component in current.components
-        and repair.action in ("remove_entry", "remove_path", "archive_backup")
+        and repair.action
+        in ("remove_entry", "remove_path", "archive_backup", "remove_provider_conflict")
         and (
             repair.component.owned
             or (repair.action == "archive_backup" and repair.component.kind == "backup")
+            or (
+                repair.action == "remove_provider_conflict"
+                and repair.component.kind == "provider-conflict"
+                and repair.component.scope == "local"
+                and bool(repair.component.selector)
+                and any(
+                    repair.component.path.resolve().is_relative_to(root.resolve())
+                    for root in context.projects
+                )
+            )
         )
         and _fingerprint(repair.component)
         and _safe_removal(repair.component.path, context)
@@ -506,6 +551,11 @@ def _apply_repairs(repairs: tuple, context) -> tuple[Path, ...]:
     ):
         case True:
             writes = _repair_writes(repairs)
+            tuple(
+                _backup_conflict(repair, context)
+                for repair in repairs
+                if repair.action == "remove_provider_conflict"
+            )
             archives = tuple(
                 (repair.component.path, _archive_destination(repair.component, context))
                 for repair in repairs

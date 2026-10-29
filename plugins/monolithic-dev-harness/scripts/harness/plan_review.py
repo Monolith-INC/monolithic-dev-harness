@@ -12,7 +12,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from core.result import Ok, Result, bind, err
-from harness import local_artifacts, refined
+from harness import local_artifacts, refined, work_sessions
 from harness.workflow_requirements import artifact_kind
 from integrations.contracts import BUILDABLE_KINDS, TrackerOps
 
@@ -48,6 +48,48 @@ def tracked(ops: TrackerOps, key: str) -> Result[None]:
                 f"{key} is a {item.kind.value}; a plan is approved for a Story or Bug",
             )
         ),
+    )
+
+
+def source_matches(
+    repo: Path, names: list[str], ops: TrackerOps, scope: str | None = None
+) -> Result[None]:
+    from harness.workflow_evidence import item_digest
+
+    match names, scope or work_sessions.current(repo):
+        case [name], scope if scope:
+            match local_artifacts.note((repo / name).resolve()):
+                case local_artifacts.Note() as note if len(note.work_items) == 1:
+                    return bind(
+                        ops.get_work_item(note.work_items[0]),
+                        lambda item: (
+                            Ok(None)
+                            if note.frontmatter.get("source_digest")
+                            == item_digest(item)
+                            else err(
+                                "plan_source_changed",
+                                "The plan must name source_digest for the current verified work-item requirements; regenerate or revalidate it after enrichment before approval.",
+                            )
+                        ),
+                    )
+                case _:
+                    return err("plan_invalid", "Plan must name exactly one work item")
+        case _:
+            return Ok(None)
+
+
+def approved_source(repo: Path, item) -> bool:
+    from harness import state
+    from harness.workflow_evidence import item_digest
+
+    return any(
+        note.digest in digests
+        and note.kind == "implementation-plan"
+        and item.key in note.work_items
+        and note.frontmatter.get("source_digest") == item_digest(item)
+        for path, digests in state.pinned_notes(repo).items()
+        for note in (local_artifacts.note(Path(path)),)
+        if note is not None
     )
 
 

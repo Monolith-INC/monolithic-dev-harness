@@ -20,6 +20,29 @@ FIXTURE = Path(__file__).resolve().parents[2] / (
     "tests/backlog/fixtures/6869-login-form-validation.md"
 )
 
+ENGLISH_RAW_STORY = """\
+---
+date: 2026-10-27
+type: ticket
+work_item_type: User Story
+provider: local
+language: en
+tags: [ticket, user-story, task-list]
+---
+# Display Active and Completed Task Counts
+[[Specs/spec-user-story-0001-show-both-task-counts.md]]
+
+## Requirements
+
+- Show the number of active tasks and the number of completed tasks.
+- Count every task, including tasks hidden by the current search or status filter.
+
+## Acceptance Criteria
+
+- [ ] Display the active and completed totals from the full task list on the task screen.
+- [ ] Update both totals when a task is marked complete or active.
+"""
+
 RAW_GENERATE_STORY = """\
 ---
 date: 2026-07-08
@@ -95,6 +118,33 @@ class TestArtifactValidator(unittest.TestCase):
         self.assertEqual(outcome_from_results(results), "PASS")
         names = [r.name for r in results if r.result == "FAIL"]
         self.assertNotIn("body-section-missing: 🎯 O quê", names)
+
+    def test_english_raw_standalone_story_passes(self) -> None:
+        """The generator's English draft, unmodified: Specs/ link, English labels, no parent."""
+        record = ingest_from_text(
+            ENGLISH_RAW_STORY, filename="draft-display-active-and-completed-task-counts"
+        )
+        results = validate_artifact(record)
+        self.assertEqual(
+            outcome_from_results(results),
+            "PASS",
+            [(r.name, r.detail) for r in results if r.result == "FAIL"],
+        )
+
+    def test_mixed_language_raw_sections_fail(self) -> None:
+        text = ENGLISH_RAW_STORY.replace(
+            "## Acceptance Criteria", "## Critérios de Aceite"
+        )
+        results = validate_artifact(ingest_from_text(text, filename="draft-mixed"))
+        self.assertEqual(outcome_from_results(results), "FAIL")
+
+    def test_an_unknown_body_gets_one_diagnostic(self) -> None:
+        text = ENGLISH_RAW_STORY.replace("## Requirements", "## Notes").replace(
+            "## Acceptance Criteria", "## Checks"
+        )
+        results = validate_artifact(ingest_from_text(text, filename="draft-unknown"))
+        failed = [r.name for r in results if r.result == "FAIL"]
+        self.assertEqual(failed, ["body-format-unknown"])
 
     def _hierarchy(self, results):
         return next(r for r in results if r.name == "hierarchy-story-parent-is-feature")

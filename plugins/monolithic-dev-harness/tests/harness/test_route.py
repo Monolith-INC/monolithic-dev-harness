@@ -240,6 +240,7 @@ def test_the_8082_run_goes_through_every_stage_in_order() -> None:
         "starting-item",
         "discovery",
         "planning-methods",
+        "method-application",
         "approach",
         "hardening",
         "refine-entry",

@@ -470,7 +470,22 @@ def _task_completion(root: Path, ops: TrackerOps, task: WorkItem) -> PolicyDecis
         case Ok(parent) if workflow_requirements.linked_session(
             root, parent.key
         ) or workflow_requirements.linked_session(root, parent.id):
-            return PolicyDecision.allow()
+            from policy.task_evidence import completion
+
+            return _decision(
+                fmap(
+                    completion(
+                        root,
+                        ops,
+                        task,
+                        parent,
+                        workflow_requirements.linked_session(root, parent.key)
+                        or workflow_requirements.linked_session(root, parent.id)
+                        or "",
+                    ),
+                    lambda _: None,
+                )
+            )
         case Ok(parent):
             owner = parent.key
         case _:

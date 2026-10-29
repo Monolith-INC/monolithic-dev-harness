@@ -110,6 +110,16 @@ def _installation_host(report: Report, host: str, result: Result[bool]) -> str:
 
 
 def doctor(args: argparse.Namespace) -> int:
+    match getattr(args, "runtime_status", False):
+        case True:
+            print(
+                json.dumps(
+                    runtime_status(project_paths.root(Path(args.repo))), indent=2
+                )
+            )
+            return 0
+        case False:
+            pass
     match (
         getattr(args, "installations", False),
         getattr(args, "json", False),
@@ -182,6 +192,26 @@ def doctor(args: argparse.Namespace) -> int:
         else f"{report.failures} problem(s) found"
     )
     return 0 if report.failures == 0 else 1
+
+
+def runtime_status(repo: Path) -> dict:
+    from harness import onboarding, work_sessions
+
+    return {
+        "scope": "configuration_and_local_state_only",
+        "configuration": settings.describe(settings.load(repo)),
+        "gateway_reachability": "unverified; use the existing gateway for a bounded read",
+        "native_question_capture": "unverified; requires an actual matched human reply",
+        "checks": state.harness_mode(repo),
+        "work_mode": onboarding.mode(repo),
+        "tracking": state.tracking_mode(repo),
+        "sessions": [
+            work_sessions.as_json(session)
+            for result in (work_sessions.list_sessions(repo),)
+            if isinstance(result, Ok)
+            for session in result.value
+        ],
+    }
 
 
 def _repository(report: Report, repo: Path, args: argparse.Namespace) -> None:
@@ -466,27 +496,21 @@ def tracker_command(args: argparse.Namespace) -> int:
 
 
 def _tracker_preflight(repo: Path) -> int:
-    def checked(active: registry.Active) -> Result[readiness.Readiness]:
+    from integrations import gateway_client
+
+    def checked(active: registry.Active) -> Result[dict]:
         match active.manifest.connection.get("kind"):
             case "mcp":
-                command, arguments = registry.connection_command(
-                    active.manifest, active.values, repo
-                )
-                return readiness.check(
-                    active,
-                    transport.mcp(
-                        command,
-                        arguments,
-                        float(active.manifest.connection.get("timeout", 30)),
-                    ),
-                )
+                return gateway_client.call(repo, "tracker_preflight", {})
             case _:
-                return readiness.check(active, transport.unavailable("no server"))
+                return fmap(
+                    readiness.check(active, transport.unavailable("no server")), asdict
+                )
 
     match bind(registry.selected(repo, settings.load(repo)), checked):
         case Ok(result):
-            print(json.dumps(asdict(result), indent=2, sort_keys=True))
-            return 0 if result.ready else 1
+            print(json.dumps(result, indent=2, sort_keys=True))
+            return 0 if result["ready"] else 1
         case Err(failure):
             print(failure.message, file=sys.stderr)
             return 2
@@ -594,6 +618,11 @@ def parser() -> argparse.ArgumentParser:
     )
     doc.add_argument("--repo", default=".")
     doc.add_argument(
+        "--runtime-status",
+        action="store_true",
+        help="report separate local modes and unverified runtime dimensions without starting any provider",
+    )
+    doc.add_argument(
         "--installations",
         action="store_true",
         help="inventory all supported hosts and show explicit repair selections",
@@ -699,7 +728,7 @@ def main(argv: list[str] | None = None) -> int:
     command_line = parser()
     args, extra = command_line.parse_known_args(argv)
     match args.command, extra:
-        case "workflow" | "process" as family, [*unknown] if unknown:
+        case "workflow" | "process" | "decision" as family, [*unknown] if unknown:
             command_line.error(
                 "unrecognized " + family + " arguments: " + " ".join(unknown)
             )

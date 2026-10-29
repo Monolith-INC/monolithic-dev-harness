@@ -103,12 +103,15 @@ If `parent_id` is null where a parent is required: emit `WARN hierarchy-skipped-
 this entire category.
 
 **User Story:**
-1. `tracker_get_work_item(ref=artifact.parent_id)`. Assert its kind is `feature`.
-2. Check `hierarchy-story-parent-is-feature` — FAIL if parent is Epic or missing.
+1. When the artifact has a parent: `tracker_get_work_item(ref=artifact.parent_id)`; assert its kind
+   is `feature`.
+2. Check `hierarchy-story-parent-is-feature` — PASS with no parent (a Story may stand alone); FAIL
+   if the parent is not a Feature.
 
 **Feature:**
-1. `tracker_get_work_item(ref=artifact.parent_id)`. Assert its kind is `epic`.
-2. Check `hierarchy-feature-parent-is-epic` — FAIL if missing or wrong type.
+1. When the artifact has a parent: `tracker_get_work_item(ref=artifact.parent_id)`; assert its kind
+   is `epic`.
+2. Check `hierarchy-feature-parent-is-epic` — PASS with no parent; FAIL if the parent is not an Epic.
 
 **Epic:**
 1. Fetch children with `tracker_list_children`.
@@ -140,8 +143,6 @@ continue. Do not abort the run.
 - `dor-title-clear` — assert title non-empty and word count > 5. FAIL if not met.
 - `dor-description-present` — assert body / description non-empty. FAIL if not met.
 - `dor-story-points-set` *(User Story only)* — assert `story_points > 0`. FAIL if not met.
-- `dor-linked-to-feature` *(User Story only)* — reuse result of `hierarchy-story-parent-is-feature`;
-  no extra MCP call. FAIL if that check failed or was skipped.
 
 ---
 

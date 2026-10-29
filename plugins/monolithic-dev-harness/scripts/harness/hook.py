@@ -306,8 +306,13 @@ def _held(
     if not rules.is_write_class(call) or _diagnostic_read(call, repo):
         return None
     match context:
+        case Err() if work_session_context.relink_allowed(repo, request):
+            # relink_allowed already applied the pending-decision rule to this switch.
+            return None
         case Err(failure):
-            return rules.Decision.deny("work-session-context", failure.message)
+            return rules.Decision.deny(
+                "work-session-context", work_session_context.damaged(failure)
+            )
         case Ok(current):
             pass
     mismatch = work_session_context.mismatch(current, request)
@@ -323,20 +328,37 @@ def _held(
         or decisions.next_command(call.command, Path(call.cwd or repo))
         or decisions.show_command(call.command, Path(call.cwd or repo))
         or decisions.fallback_command(call.command, Path(call.cwd or repo))
+        or decisions.recovery_command(call.command, Path(call.cwd or repo))
+        or decisions.repair_command(call.command, Path(call.cwd or repo))
         or work_session_context.recovery_allowed(repo, current, request)
     ):
         pending = decisions.pending(repo, current)
         return rules.Decision.deny(
             "decision-pending",
-            _pending_decision_guidance(repo, pending, host),
+            _pending_decision_guidance(repo, pending, host, current),
         )
     return None
 
 
 def _pending_decision_guidance(
-    repo: Path, pending: decisions.Pending | None, host: str
+    repo: Path, pending: decisions.Pending | None, host: str, current: str | None
 ) -> str:
     """Give the agent a valid recovery path without weakening the pending-decision gate."""
+    match pending, decisions.damaged(repo, current):
+        case None, str() | None as scope:
+            named = (
+                f" --session-id {shlex.quote(current or scope)}"
+                if current or scope
+                else ""
+            )
+            return (
+                "The saved decision cannot be read, so nobody can answer it. Run exactly "
+                f"`harness decision repair --repo {shlex.quote(str(repo.resolve()))}{named}`: it "
+                "keeps the damaged record and the workflow asks its question again. Nothing is "
+                "answered or approved by the repair."
+            )
+        case _:
+            pass
     session = (
         f" --session-id {shlex.quote(pending.scope)}"
         if pending is not None and pending.scope
@@ -612,10 +634,13 @@ def _print_prompt(host: str, notes: list[str]) -> None:
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     prompt = hook_bridge.prompt_text(payload)
     repo = _workspace(payload, host)
+    from harness import preferences
     from host_adapters import native_session_id
 
+    preferences.observe_language(repo, native_session_id(host, payload) or "", prompt)
+
     match harness_controls.prompt_operation(
-        repo, prompt, native_session_id(host, payload) or ""
+        repo, prompt, native_session_id(host, payload) or "", host
     ):
         case "suspend" | "resume" as operation:
             harness_controls.prompt(
@@ -862,7 +887,10 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     context = work_session_context.for_payload(repo, host, payload)
     if isinstance(context, Err):
         _emit_decision(
-            host, rules.Decision.deny("work-session-context", context.failure.message)
+            host,
+            rules.Decision.deny(
+                "work-session-context", work_session_context.damaged(context.failure)
+            ),
         )
         return 0
     work_session_id = context.value
@@ -878,7 +906,7 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             host,
             rules.Decision.deny(
                 "decision-pending",
-                _pending_decision_guidance(repo, pending, host),
+                _pending_decision_guidance(repo, pending, host, work_session_id),
             ),
         )
         return 0

@@ -17,7 +17,9 @@ register the provider server separately in a host or launch an extra copy for a 
 - A timeout or `Transport closed` does not establish that OAuth is invalid.
 - Stop after a failed gateway call; repeated retries can leave provider processes waiting for OAuth
   callbacks.
-- Reload the host before retrying once through `workflow-integrations`.
+- Reload the host to re-establish the gateway owner before another bounded read. Failed owners are
+  terminal until recovery; local clients never spawn another OAuth/provider process. Do not replay
+  a write whose result is uncertain; reconcile it with a read first.
 - If investigating a process, establish that its owning gateway client is gone before terminating
   it. A process count or process name alone does not prove staleness.
 

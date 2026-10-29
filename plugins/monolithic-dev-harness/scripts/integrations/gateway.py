@@ -54,6 +54,7 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
             (),
             {},
         ),
+        ("tracker_preflight", "Check read-only tracker publication readiness.", (), {}),
         ("tracker_get_work_item", "Retrieve one work item.", ("ref",), {"ref": STRING}),
         (
             "tracker_search_work_items",
@@ -255,8 +256,29 @@ def handle_call(name: str, args: Mapping[str, Any], root: Path) -> Result[Any]:
             _known(name),
             lambda tool: validate(tool["inputSchema"], dict(args), "arguments"),
         ),
-        lambda checked: _route(name, checked, root, loaded),
+        lambda checked: bind(
+            _route(name, checked, root, loaded),
+            lambda value: _publication(root, name, value),
+        ),
     )
+
+
+def _publication(root: Path, name: str, value: Any) -> Result[Any]:
+    from harness.workflow_evidence import record_publication
+
+    match name:
+        case "tracker_create_work_item" | "tracker_update_work_item":
+            return bind(
+                attempt(
+                    lambda: record_publication(root, value),
+                    "publication_unrecorded",
+                    "Write read back, but progress receipt could not be saved; reconcile before retrying.",
+                    OSError,
+                ),
+                lambda result: fmap(result, lambda _: value),
+            )
+        case _:
+            return Ok(value)
 
 
 def _known(name: str) -> Result[Mapping[str, Any]]:
@@ -271,6 +293,7 @@ def _known(name: str) -> Result[Mapping[str, Any]]:
 READ_ONLY_OPERATIONS = frozenset(
     {
         "tracker_describe",
+        "tracker_preflight",
         "tracker_get_work_item",
         "tracker_search_work_items",
         "tracker_list_children",
@@ -302,11 +325,20 @@ def _route(
                 registry.selected(root, loaded),
                 lambda active: plain(active.manifest.document),
             )
+        case "tracker" if name == "tracker_preflight":
+            from . import readiness
+
+            return bind(
+                registry.selected(root, loaded),
+                lambda active: fmap(
+                    readiness.check(active, registry._transport(active, root)), plain
+                ),
+            )
         case "tracker":
             return bind(
                 _tracking_on(root),
                 lambda _: bind(
-                    registry.open_selected(root, loaded),
+                    registry.open_owned(root, loaded),
                     lambda ops: _tracker_call(name, args, ops),
                 ),
             )
@@ -377,7 +409,31 @@ def _tracker_call(name: str, args: Mapping[str, Any], ops: TrackerOps) -> Result
             args["ref"], args["url"], args.get("type", "pull_request")
         ),
     }
-    return fmap(calls[name](), plain)
+    return bind(
+        calls[name](), lambda value: _verified_item_write(name, value, ops, args)
+    )
+
+
+def _verified_item_write(name, value, ops, args) -> Result[Any]:
+    match name:
+        case (
+            "tracker_create_work_item"
+            | "tracker_update_work_item"
+            | "tracker_transition_work_item"
+        ):
+            return bind(
+                ops.get_work_item(value.id),
+                lambda readback: (
+                    Ok(plain(readback))
+                    if readback == value
+                    else err(
+                        "write_readback_mismatch",
+                        "The tracker readback differs from the write result; reconcile it before retrying.",
+                    )
+                ),
+            )
+        case _:
+            return Ok(plain(value))
 
 
 def _changes(args: Mapping[str, Any]) -> WorkItemChanges:

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import secrets
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -13,7 +14,6 @@ from harness import commands, gates, questions, setup_reviews, state, workflow
 
 RELATIVE_PATH = Path(".harness/state/decision.json")
 HISTORY = "decision-history.json"
-HISTORY_KEPT = 50
 
 
 @dataclass(frozen=True)
@@ -190,6 +190,71 @@ def waiting(repo: Path, work_session_id: str | None = None) -> bool:
                     return True
 
 
+def damaged(repo: Path, work_session_id: str | None) -> str | None | bool:
+    """The scope (None: project-wide) whose saved decision cannot be read as a question, or False.
+
+    A damaged record still holds work (`_waiting_at`); `repair` is the only way past it."""
+    from harness import work_sessions
+
+    first = work_sessions.acting(repo, work_session_id)
+    for scope in (first, None) if first else (None,):
+        match _path(repo, scope):
+            case Ok(path) if _damaged_at(path):
+                return scope
+            case _:
+                pass
+    return False
+
+
+def _damaged_at(path: Path) -> bool:
+    return path.exists() and not _readable(state.read_json(path))
+
+
+def _readable(value: dict[str, Any] | None) -> bool:
+    """Whether a saved record has what a question needs to be shown and answered."""
+    match value:
+        case {"id": str(), "question": str(), "options": list(), "status": str()}:
+            return True
+        case _:
+            return False
+
+
+def repair(repo: Path, work_session_id: str | None) -> Result[dict[str, Any]]:
+    """Move this scope's damaged decision record (its session's, else the project-wide one)
+    aside, bytes intact, so the workflow asks its question again.
+
+    It answers nothing and approves nothing; a scope with no damaged record is refused."""
+    match damaged(repo, work_session_id):
+        case False:
+            return err(
+                "decision_intact",
+                "no saved decision here is damaged: answer a pending one, or re-present it "
+                "with `harness decision fallback`",
+            )
+        case scope:
+            return bind(
+                _path(repo, scope),
+                lambda path: attempt(
+                    lambda: _set_aside(path, scope),
+                    "decision_invalid",
+                    "set the damaged decision aside",
+                    OSError,
+                ),
+            )
+
+
+def _set_aside(path: Path, scope: str | None) -> dict[str, Any]:
+    kept = path.with_name(
+        f"decision.damaged-{datetime.now(UTC).strftime('%Y%m%dT%H%M%S%fZ')}.json"
+    )
+    path.replace(kept)
+    return {
+        "repaired": scope or "project",
+        "kept": str(kept),
+        "next": "ask the workflow's next step again; the question is unanswered",
+    }
+
+
 def _waiting_at(path: Path) -> bool:
     return path.exists() and is_blocking(state.read_json(path) or {})
 
@@ -247,7 +312,7 @@ def _archive_dismissal(path: Path, dismissed: dict[str, Any]) -> dict[str, Any]:
                     if item != dismissed
                 ),
                 dismissed,
-            ][-HISTORY_KEPT:]
+            ]
         },
     )
     state.write_json(path, dismissed)
@@ -335,7 +400,7 @@ def pending(repo: Path, work_session_id: str | None = None) -> Pending | None:
     first = work_sessions.acting(repo, work_session_id)
     for scope in (first, None) if first else (None,):
         value = record(repo, scope)
-        if value and value.get("status") == "pending":
+        if _readable(value) and value.get("status") == "pending":
             return Pending.from_record(value, scope)
     if work_session_id is None:
         match _pending_sessions(repo):
@@ -432,6 +497,8 @@ def _prepared(
     kind: str | None,
     native_session_id: str,
 ) -> Result[dict]:
+    from harness.elicitation_store import binding
+
     return bind(
         require(
             not waiting(repo, scope),
@@ -458,6 +525,7 @@ def _prepared(
             lambda _: {
                 "kind": _catalog_kind(gate, approval, kind),
                 "id": key,
+                "instance_id": secrets.token_hex(16),
                 "question": question,
                 "options": options,
                 "transport": transport,
@@ -468,6 +536,11 @@ def _prepared(
                 "native_session_id": native_session_id,
                 "allow_free_text": free_text,
                 "details": details,
+                **(
+                    {"elicitation": binding(repo, scope, question, options)}
+                    if binding(repo, scope, question, options)
+                    else {}
+                ),
                 **{
                     name: value
                     for name, value in (
@@ -491,6 +564,7 @@ def resolve(
     source: str,
     *,
     work_session_id: str | None = None,
+    human_reply_evidence: dict[str, Any] | None = None,
 ) -> Result[dict[str, Any]]:
     from harness import review_decisions
 
@@ -499,7 +573,7 @@ def resolve(
         lambda _: bind(
             _path(repo, work_session_id),
             lambda path: attempt(
-                lambda: _resolve(repo, path, key, answer, source),
+                lambda: _resolve(repo, path, key, answer, source, human_reply_evidence),
                 "decision_invalid",
                 "human answer",
                 OSError,
@@ -614,6 +688,7 @@ def _resolve(
     key: str,
     answer: str,
     source: str,
+    human_reply_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     current = state.read_json(path) or {}
     if current.get("status") != "pending" or current.get("id") != key:
@@ -628,6 +703,52 @@ def _resolve(
         raise ValueError("the human reply is empty")
     if source != current.get("transport"):
         raise ValueError("the answer arrived through a different interaction")
+    match current.get("gate"), current.get("work_session_id"):
+        case "implementation-confirm", str() as scope if (
+            questions.choice_label(answer).casefold() not in questions.DECLINE_LABELS
+        ):
+            from harness import plan_review, settings
+            from harness.workflow_evidence import gate_ready
+            from integrations import registry
+
+            match bind(
+                gate_ready(repo, scope, "implementation-confirm"),
+                lambda _: bind(
+                    registry.open_selected(repo, settings.load(repo)),
+                    lambda ops: plan_review.source_matches(
+                        repo,
+                        [name for name, _ in current.get("artifacts", ())],
+                        ops,
+                        scope,
+                    ),
+                ),
+            ):
+                case Err(failure):
+                    raise ValueError(failure.message)
+                case Ok():
+                    pass
+        case _:
+            pass
+    match current.get("gate"), current.get("work_session_id"):
+        case "plan-checkpoint", str() as scope:
+            from harness.workflow_evidence import gate_ready, option_id
+
+            match option_id(current | {"answer": answer}):
+                case "continue" | "stop":
+                    match gate_ready(
+                        repo,
+                        scope,
+                        "plan-checkpoint",
+                        tuple(name for name, _ in current.get("artifacts", ())),
+                    ):
+                        case Err(failure):
+                            raise ValueError(failure.message)
+                        case Ok():
+                            pass
+                case _:
+                    pass
+        case _:
+            pass
     if questions.choice_label(
         answer
     ).casefold() not in questions.DECLINE_LABELS and any(
@@ -641,12 +762,28 @@ def _resolve(
         **current,
         "status": "answered",
         "answer": answer,
+        **(
+            {"human_reply_evidence": human_reply_evidence}
+            if human_reply_evidence
+            else {}
+        ),
         **({"own_words": True} if own_words else {}),
     }
+    match updated.get("elicitation"), updated.get("work_session_id"):
+        case dict(), str() as scope:
+            from harness.elicitation_store import capture
+
+            match capture(repo, scope, updated):
+                case Err(failure):
+                    raise ValueError(failure.message)
+                case Ok():
+                    pass
+        case _:
+            pass
     state.write_json(path, updated)
     history = path.with_name(HISTORY)
     earlier = (state.read_json(history) or {}).get("answers", [])
-    state.write_json(history, {"answers": [*earlier, updated][-HISTORY_KEPT:]})
+    state.write_json(history, {"answers": [*earlier, updated]})
     return updated
 
 
@@ -723,6 +860,8 @@ def approval_binds(record: dict[str, Any]) -> dict[str, Any] | None:
             bound: dict[str, Any] = {"artifacts": list(record.get("artifacts", ()))}
             if target:
                 bound["target"] = list(target)
+            if isinstance(record.get("values"), dict):
+                bound["values"] = record["values"]
             return bound
         case _:
             return None
@@ -838,6 +977,31 @@ def fallback_command(command: str, cwd: Path) -> bool:
     match commands.harness_args(command, cwd):
         case ("decision", "fallback", *options):
             return _fallback_options(tuple(options))
+        case _:
+            return False
+
+
+def repair_command(command: str, cwd: Path) -> bool:
+    """`decision repair` may pass the waiting gate: it refuses any record that is not damaged."""
+    match commands.harness_args(command, cwd):
+        case ("decision", "repair", *options):
+            return len(options) % 2 == 0 and all(
+                flag in ("--repo", "--session-id") and not value.startswith("--")
+                for flag, value in zip(options[::2], options[1::2], strict=True)
+            )
+        case _:
+            return False
+
+
+def recovery_command(command: str, cwd: Path) -> bool:
+    """Only transcript-backed recovery with explicit scope options may pass a pending gate."""
+    match commands.harness_args(command, cwd):
+        case ("decision", "recover", *options):
+            return len(options) % 2 == 0 and all(
+                flag in ("--repo", "--session-id", "--host")
+                and not value.startswith("--")
+                for flag, value in zip(options[::2], options[1::2], strict=True)
+            )
         case _:
             return False
 

@@ -23,7 +23,6 @@ from harness import (
     route,
     settings,
     setup,
-    state,
     work_sessions,
     workflow_requirements,
 )
@@ -50,6 +49,8 @@ WORK_FACTS = frozenset(
         "approach_drafted",
         "stories_exist",
         "entry_done",
+        "methods_applied",
+        "methods_selected",
     }
 )
 STORY_FACTS = frozenset({"work_item_linked", *workflow_requirements.CHECKS})
@@ -92,6 +93,14 @@ class ProjectFacts:
         match fact:
             case "setup_ready":
                 return _setup_ready(self.repo)
+            case "methods_applied":
+                from harness.elicitation_store import methods_complete
+
+                return methods_complete(self.repo, self.session.id)
+            case "methods_selected":
+                from harness.elicitation_store import methods_selected
+
+                return methods_selected(self.repo, self.session.id)
             case "entry_tracked":
                 return bool(self.session.entry_item)
             case "entry_refined_now":
@@ -101,14 +110,64 @@ class ProjectFacts:
                 entry = self.entry()
                 return entry is not None and entry.kind in PARENT_KINDS
             case "any_published":
-                return any(gate == "publish-items" for gate in self._approvals())
+                from harness.workflow_evidence import publications
+
+                return bool(publications(self.session))
             case "published_after_approach":
-                order = self._approvals()
-                approved = [
-                    i for i, gate in enumerate(order) if gate == "plan-checkpoint"
-                ]
-                return bool(approved) and any(
-                    gate == "publish-items" for gate in order[approved[-1] + 1 :]
+                from harness.workflow_evidence import (
+                    history,
+                    item_digest,
+                    latest_approach,
+                    option_id,
+                    publications,
+                )
+
+                approach = latest_approach(self.session)
+                approval = next(
+                    (
+                        entry
+                        for entry in reversed(history(self.session))
+                        if entry.get("gate") == "publish-items"
+                        and entry.get("status") == "answered"
+                        and option_id(entry) == "approve"
+                    ),
+                    {},
+                )
+                receipts = tuple(
+                    receipt
+                    for receipt in publications(self.session)
+                    if receipt.get("approach_id") == approach
+                    and receipt.get("approval_id")
+                    == questions.approval_id(approval.get("id", ""))
+                )
+                approved = (approval.get("binds") or {}).get("values", {})
+                expected_items = tuple(
+                    part.strip()
+                    for part in approved.get("items", "").split(",")
+                    if part.strip()
+                )
+                expected = int(approved.get("count", 0))
+                matched = tuple(
+                    receipt
+                    for token in expected_items
+                    for receipt in receipts
+                    if token
+                    in (
+                        f"key:{receipt.get('item', '')}",
+                        f"title:{receipt.get('title', '')}",
+                    )
+                )
+                return bool(
+                    approach
+                    and expected > 0
+                    and len(expected_items) == expected
+                    and len(matched) == expected
+                    and len({receipt.get("item") for receipt in matched}) == expected
+                    and all(
+                        item_digest(self.item(receipt["item"]))
+                        == receipt.get("source_digest")
+                        for receipt in matched
+                    )
                 )
             case "approach_drafted":
                 return self._approach_drafted()
@@ -223,10 +282,14 @@ class ProjectFacts:
 
 
 def _answered(repo: Path, session: work_sessions.Session) -> list[tuple[str, str]]:
-    history = state.read_json(session.folder / decisions.HISTORY) or {}
+    from harness.workflow_evidence import history
+
     labels = _option_labels()
     found: list[tuple[str, str]] = []
-    for entry in history.get("answers", []):
+    for entry in history(session):
+        from harness.workflow_evidence import referenced
+
+        entry = referenced(repo, session, entry)
         gate = str(entry.get("gate") or "")
         if not gate or entry.get("status") != "answered":
             continue
@@ -316,8 +379,9 @@ def _next(
     except Unreachable as exc:
         return err(
             "tracker_unreachable",
-            f"the next step depends on the tracker, and it gave no answer: {exc}. Retry once; "
-            "if it still fails, tell the user the tracker is unreachable.",
+            f"the next step depends on the tracker, and it gave no answer: {exc}. "
+            "Recover/reload the owning workflow-integrations gateway before another bounded read; "
+            "do not start another provider or replay an uncertain write.",
         )
     return Ok(_payload(loaded, found, session, facts))
 

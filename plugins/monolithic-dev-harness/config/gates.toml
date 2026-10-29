@@ -253,8 +253,8 @@ detail.pt-br = "O plano fica travado e paramos por aqui."
 
 [[gate]]
 id = "publish-items"
-question.en = "Publish these {count} work items to {tracker}?"
-question.pt-br = "Publicar estes {count} itens de trabalho em {tracker}?"
+question.en = "Publish these {count} work items ({items}) to {tracker}?"
+question.pt-br = "Publicar estes {count} itens de trabalho ({items}) em {tracker}?"
 approval = true
 artifact = true
 shown = true

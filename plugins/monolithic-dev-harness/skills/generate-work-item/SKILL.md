@@ -41,7 +41,7 @@ Gather inputs **one at a time** via the host UI. Each step: brief purpose, requi
 | `title` | yes | Short work-item title |
 | `description` | yes | Problem statement or scope in the author's words |
 | `work_item_type` | yes | `epic` \| `feature` \| `user-story` \| `task` |
-| `parent` | when type ≠ epic | Parent id or tracker link (Epic→Feature, Feature→Story) |
+| `parent` | for a task | Parent id or tracker link (Epic→Feature, Feature→Story, Story→Task) |
 | `attachment` | no | Supporting doc URL or artifacts path |
 | `language` | no | `en` \| `pt-br`, default **pt-BR**. When omitted, follow the existing Locale rule (match
   `description`'s language) instead of forcing the default. |
@@ -50,15 +50,16 @@ Also accept flags from `/generate-work-item` or conversational inference (see Ex
 
 Normalize the Agile type and immediate parent:
 
-| Input | Work item type | Parent required |
+| Input | Work item type | Parent |
 | --- | --- | --- |
-| `epic` | Epic | no |
-| `feature` | Feature | Epic id |
-| `user-story` | User Story | Feature id |
-| `task` | Task | User Story id |
+| `epic` | Epic | none |
+| `feature` | Feature | optional; an Epic |
+| `user-story` | User Story | optional; a Feature |
+| `task` | Task | required; a User Story |
 
-If `parent` is missing when required: STOP and ask once. If parent type mismatches hierarchy: STOP
-and report (see `decomposition-rules.md`).
+A Feature or Story may stand alone: do not invent a parent or ask for one the user did not name. If
+a Task has no parent: STOP and ask once. If a parent's type mismatches the hierarchy: STOP and
+report (see `decomposition-rules.md`).
 
 Every tracker read and write goes through the harness gateway (`tracker_*` tools); never call a
 tracker's own tools. Ask `harness document path` for the spec's and the draft's paths
@@ -112,8 +113,12 @@ not modify):
 
 - `# <Title>`
 - `[[Specs/<spec-basename>]]` wikilink under the title
-- `## Requisitos` — requirement bullets (from `description`, parent context, attachment, research)
-- `## Critérios de Aceite` — `- [ ]` checkboxes, testable, infinitive verbs
+- `## Requisitos` (English: `## Requirements`) — requirement bullets (from `description`, parent
+  context, attachment, research)
+- `## Critérios de Aceite` (English: `## Acceptance Criteria`) — `- [ ]` checkboxes, testable,
+  infinitive verbs
+
+Use one locale's labels throughout; the validator reads both locales but refuses a mix.
 
 Path: the one `harness document path --type ticket --new <type> --title "<title>"` prints, in
 `Tickets/Ready/` at the project root — never the artifacts root.

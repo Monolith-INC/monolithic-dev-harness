@@ -7,12 +7,15 @@ Until it is bound it acts in the project's current work session, as a command wi
 session is refused, so a command and the hooks always read the same session's records.
 The startup adapter pairs trusted pre/post events and protected completion evidence before binding.
 The pending-decision guard runs first, so a pending question cannot be escaped by switching work.
+A damaged link refuses everything but an explicit switch, which keeps the damaged record and binds
+the conversation again (`relink_allowed`).
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -66,27 +69,34 @@ def bind_session(
             _bindable(project, work_session_id, operation),
             lambda session: fmap(
                 attempt(
-                    lambda: state.write_json(
-                        destination,
-                        {
-                            "version": VERSION,
-                            "host": host,
-                            "host_session_id": host_session_id,
-                            "work_session_id": session.id,
-                            "consumed_startups": list(
-                                dict.fromkeys(
-                                    (*consumed_startups(destination),)
-                                    + ((startup_receipt,) if startup_receipt else ())
-                                )
-                            ),
-                            **{
-                                key: value
-                                for key, value in (
-                                    ("startup_receipt", startup_receipt),
-                                )
-                                if value
+                    lambda: (
+                        _keep_damaged(project, host, host_session_id, destination)
+                        or state.write_json(
+                            destination,
+                            {
+                                "version": VERSION,
+                                "host": host,
+                                "host_session_id": host_session_id,
+                                "work_session_id": session.id,
+                                "consumed_startups": list(
+                                    dict.fromkeys(
+                                        (*consumed_startups(destination),)
+                                        + (
+                                            (startup_receipt,)
+                                            if startup_receipt
+                                            else ()
+                                        )
+                                    )
+                                ),
+                                **{
+                                    key: value
+                                    for key, value in (
+                                        ("startup_receipt", startup_receipt),
+                                    )
+                                    if value
+                                },
                             },
-                        },
+                        )
                     ),
                     "host_session_unwritable",
                     f"could not bind this {host} session to project work",
@@ -96,6 +106,19 @@ def bind_session(
             ),
         ),
     )
+
+
+def _keep_damaged(
+    project: Path, host: str, host_session_id: str, destination: Path
+) -> None:
+    """Move a link that cannot be resolved aside, so rebinding never destroys the evidence."""
+    if destination.exists() and isinstance(
+        _resolve_record(project, host, host_session_id, destination), Err
+    ):
+        stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+        destination.replace(
+            destination.with_name(f"{destination.stem}.damaged-{stamp}.json")
+        )
 
 
 def consumed_startups(source: Path) -> tuple[str, ...]:
@@ -227,6 +250,29 @@ def recovery_allowed(
             )
         case _:
             return False
+
+
+def relink_allowed(project: Path, request: tuple[str, str] | None) -> bool:
+    """Through a damaged link only an explicit switch runs: to any session when no question
+    waits, or into the one session whose own question waits, so a switch never escapes it."""
+    match request:
+        case (identifier, "select" | "resume"):
+            return not decisions.waiting(project) and (
+                not decisions.any_waiting(project)
+                or decisions.waiting(project, identifier)
+            )
+        case _:
+            return False
+
+
+def damaged(failure: Failure) -> str:
+    """The refusal for a damaged link, naming the switch that repairs it."""
+    return (
+        f"{failure.message}. Choose the work session this conversation continues with "
+        "`harness work-session select <id>`, or `harness work-session resume <id>` for a paused "
+        "or stopped one (`harness work-session list` shows them). The damaged link is kept "
+        "beside the new one; switching answers no question and grants no approval."
+    )
 
 
 def mismatch(current: str | None, request: tuple[str, str] | None) -> Failure | None:

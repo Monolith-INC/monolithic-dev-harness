@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Any, Protocol
@@ -16,12 +17,53 @@ from harness.process_messages import (
     ProcessStatus,
     Request,
     decode,
+    decode_integration_read,
     inspect_process,
     list_processes,
     rejection,
     reply,
     valid_context,
 )
+
+
+@dataclass(frozen=True)
+class ValueReceipt:
+    value: Any
+    event_id: str
+
+    def response(self) -> dict[str, Any]:
+        return reply(self.event_id, self.value)
+
+
+@dataclass(frozen=True)
+class IntegrationReadBus:
+    """The same request/exchange interface for authenticated, sessionless local reads."""
+
+    project: Path
+    read: Callable[[str, dict], Result[Any]]
+
+    def request(self, message: dict, context: Context) -> Result[ValueReceipt]:
+        return bind(
+            require(
+                context.adapter == "local" and bool(context.owner_id),
+                "invalid_integration_context",
+                "A verified local peer is required.",
+            ),
+            lambda _: bind(
+                decode_integration_read(message, str(self.project.resolve())),
+                lambda request: fmap(
+                    self.read(*request),
+                    lambda value: ValueReceipt(value, message["id"]),
+                ),
+            ),
+        )
+
+    def exchange(self, message: Any, context: Context) -> dict | None:
+        match self.request(message, context):
+            case Ok(receipt):
+                return receipt.response()
+            case Err(failure):
+                return rejection(message, failure)
 
 
 @dataclass(frozen=True)

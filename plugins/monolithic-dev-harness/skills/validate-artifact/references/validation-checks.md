@@ -43,8 +43,8 @@ Failures are logged and validation continues to the next check.
 
 | Artifact | Assertion | Check name | Result |
 |---|---|---|---|
-| User Story | its parent's kind is `feature` | `hierarchy-story-parent-is-feature` | FAIL if parent is Epic or missing |
-| Feature | its parent's kind is `epic` | `hierarchy-feature-parent-is-epic` | FAIL if missing or wrong type |
+| User Story | a parent, when it has one, is a `feature` | `hierarchy-story-parent-is-feature` | PASS with no parent; FAIL if the parent is not a Feature |
+| Feature | a parent, when it has one, is an `epic` | `hierarchy-feature-parent-is-epic` | PASS with no parent; FAIL if the parent is not an Epic |
 | Epic | No child items of kind `user_story` | `hierarchy-epic-no-direct-stories` | FAIL if any direct Story children found |
 
 ## c) CONTENT
@@ -74,4 +74,3 @@ Applied to all artifact types unless noted.
 | `dor-title-clear` | Title non-empty and word count > 5 | FAIL if not met |
 | `dor-description-present` | Body / description field non-empty | FAIL if not met |
 | `dor-story-points-set` *(User Story only)* | Story points > 0 | FAIL if not met |
-| `dor-linked-to-feature` *(User Story only)* | Reuses result of `hierarchy-story-parent-is-feature` — no extra MCP call | FAIL if that check failed or was skipped |

@@ -6,7 +6,8 @@ flowchart TD
   idea{{"Ideate: idea<br/>plan-initiative<br/>asks idea-continue<br/>only when idea chosen"}}
   idea_stop["Ideate: idea stop<br/>only when idea stopped<br/>ends the work"]
   discovery{{"Discovery: discovery<br/>bmad-build<br/>asks planning-depth<br/>skipped when shaping skipped"}}
-  planning_methods{{"Planning: planning methods<br/>bmad-build<br/>asks planning-methods<br/>skipped when shaping skipped or depth light"}}
+  planning_methods["Planning: planning methods<br/>bmad-build<br/>skipped when shaping skipped or depth light"]
+  method_application["Planning: method application<br/>bmad-advanced-elicitation<br/>skipped when shaping skipped or depth light"]
   approach["Planning: approach<br/>bmad-build<br/>skipped when shaping skipped"]
   hardening{{"Hardening: hardening<br/>bmad-build<br/>asks plan-checkpoint<br/>skipped when shaping skipped"}}
   create_entry{{"Refinement: create entry<br/>generate-work-item<br/>asks publish-items<br/>skipped when entry tracked"}}
@@ -34,7 +35,8 @@ flowchart TD
   idea --> idea_stop
   idea_stop --> discovery
   discovery --> planning_methods
-  planning_methods --> approach
+  planning_methods --> method_application
+  method_application --> approach
   approach --> hardening
   hardening --> create_entry
   create_entry --> refine_entry

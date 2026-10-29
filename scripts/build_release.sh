@@ -45,6 +45,15 @@ for required in .claude-plugin/marketplace.json .cursor-plugin/marketplace.json 
     plugins/monolithic-dev-harness/scripts/host_adapters/codex_process.py \
     plugins/monolithic-dev-harness/scripts/host_adapters/process_channel.py \
     plugins/monolithic-dev-harness/scripts/harness/process_messages.py \
+    plugins/monolithic-dev-harness/scripts/harness/elicitation.py \
+    plugins/monolithic-dev-harness/scripts/harness/elicitation_store.py \
+    plugins/monolithic-dev-harness/scripts/harness/elicitation_cli.py \
+    plugins/monolithic-dev-harness/scripts/harness/workflow_evidence.py \
+    plugins/monolithic-dev-harness/scripts/integrations/gateway_client.py \
+    plugins/monolithic-dev-harness/scripts/integrations/gateway_endpoint.py \
+    plugins/monolithic-dev-harness/scripts/integrations/provider_process.py \
+    plugins/monolithic-dev-harness/scripts/integrations/desktop_environment.py \
+    plugins/monolithic-dev-harness/scripts/policy/task_evidence.py \
     plugins/monolithic-dev-harness/scripts/harness/process_assignment.py \
     plugins/monolithic-dev-harness/scripts/harness/process_bus.py \
     plugins/monolithic-dev-harness/scripts/harness/process_store.py \
@@ -65,6 +74,9 @@ for required in .claude-plugin/marketplace.json .cursor-plugin/marketplace.json 
     plugins/monolithic-dev-harness/references/codex-runtime.md \
     plugins/monolithic-dev-harness/bin/harness; do
   grep -qx "${NAME}/${required}" <<<"$contents" || { echo "archive is missing ${required}" >&2; exit 1; }
+  source_digest="$(git show "HEAD:${required}" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
+  payload_digest="$(tar -xOzf "${DIST}/${NAME}.tar.gz" "${NAME}/${required}" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
+  test "$source_digest" = "$payload_digest" || { echo "archive content differs from committed source: ${required}" >&2; exit 1; }
 done
 
 cd "$DIST"
