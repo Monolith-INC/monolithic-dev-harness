@@ -4,6 +4,20 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- The local tracker always uses the project's own `Tickets/`, and exclusions are written only into
+  the project's own repository. An unversioned project inside another repository no longer reads
+  or writes that repository's files.
+- Project installs link the shared `references/` and `common/` folders beside the skills, so skill
+  links to them resolve.
+- Claude project installations listed in the user's plugin file count as project installations;
+  user removal no longer aborts on them.
+- Uninstall removes the harness's tables from a host config that was rewritten without the block
+  markers, keeping tables added since and refusing edited ones.
+
 ## [0.7.0-rc.10] - 2026-10-28
 
 ### Fixed
