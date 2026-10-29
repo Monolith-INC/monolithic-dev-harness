@@ -23,10 +23,13 @@ host's own session instead, where the person answers and approves each action.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[1]
@@ -45,8 +48,9 @@ HOSTS = ("claude", "codex", "cursor", "kimi", "zed")
 WAITING = 3
 RUN_RECORD = "run.json"
 TRANSCRIPT = "transcript.jsonl"
-# What a headless Claude Code run may do without asking: edit files in the copy, run the harness,
-# and read. Anything else is refused, as it would be for a user who declined it.
+# What a headless Claude Code run may do without asking: edit files in the copy, run the harness
+# and use its own servers (which check approvals themselves), and read. Anything else is refused,
+# as it would be for a user who declined it.
 CLAUDE_ALLOWED = (
     "Read",
     "Glob",
@@ -54,10 +58,17 @@ CLAUDE_ALLOWED = (
     "Edit",
     "Write",
     "Bash(harness:*)",
+    "Bash(agile-backlog-toolkit:*)",
     "Bash(ls:*)",
     "Bash(cat:*)",
     "Bash(git status:*)",
     "Bash(git diff:*)",
+    # The test project's own checks, which its plans run after each step.
+    "Bash(flutter:*)",
+    "Bash(dart:*)",
+    "mcp__workflow-integrations",
+    "mcp__workflow-orchestrator",
+    "mcp__backlog-orchestrator",
 )
 
 
@@ -190,6 +201,7 @@ def pending_question(project: Path) -> dict | None:
 def discard_test_project(project: str | Path) -> Result[Path]:
     """Remove a fixture created by this test-only tool, if its ownership marker is valid."""
     try:
+        shutil.rmtree(_short_temp(Path(project).resolve()), ignore_errors=True)
         return Ok(acceptance_trial.discard(str(project)))
     except (OSError, ValueError, json.JSONDecodeError) as failure:
         return err("fixture_discard_failed", str(failure))
@@ -304,7 +316,19 @@ def _environment(project: Path) -> dict[str, str]:
             if key not in acceptance_trial.HOST_CONTEXT_VARIABLES
         },
         **acceptance_trial.runner_environment(str(project)),
+        "TMPDIR": str(_short_temp(project)),
     }
+
+
+def _short_temp(project: Path) -> Path:
+    """A private temporary folder with a short path. The copy sits deep in the checkout, and the
+    harness's gateway socket lives under TMPDIR, where a Unix socket path must stay short."""
+    _, trial_root, _ = acceptance_trial._trial_metadata(str(project))
+    folder = Path(tempfile.gettempdir()) / (
+        "mdh-" + hashlib.sha256(str(trial_root).encode()).hexdigest()[:10]
+    )
+    folder.mkdir(mode=0o700, exist_ok=True)
+    return folder
 
 
 def _trust_for_codex(project: Path, codex_home: Path) -> None:
