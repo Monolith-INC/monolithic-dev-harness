@@ -135,3 +135,22 @@ def test_hook_merge_is_idempotent_and_preserves_foreign_handler(tmp_path):
     second = assets("codex", project, Path(__file__).parents[2]).value
     assert next(a.text for a in second if a.path == path) == text
     assert "foreign-check" in text
+
+
+def test_linked_skills_find_their_shared_documents(tmp_path: Path):
+    """A skill's `../../references/...` link resolves beside the skills a project install links."""
+    plugin = Path(__file__).parents[2]
+    project = tmp_path / "p"
+    project.mkdir()
+    links = {
+        asset.path: asset.target
+        for asset in assets("claude", project, plugin).value
+        if asset.kind == "symlink"
+    }
+    skill = project / ".claude/skills/harness"
+    assert links[skill] == plugin / "skills/harness"
+    shared = (skill / "../../references").resolve()
+    assert (
+        links[shared] / "human-decisions.md" == plugin / "references/human-decisions.md"
+    )
+    assert links[(skill / "../../common").resolve()] == plugin / "common"
