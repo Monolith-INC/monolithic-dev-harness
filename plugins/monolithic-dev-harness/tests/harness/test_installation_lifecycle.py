@@ -234,9 +234,15 @@ def test_foreign_setting_between_user_upgrades_and_host_union_survive(
         '# BEGIN monolithic-dev-harness\n[[hooks]]\nevent="Stop"\ncommand="sh /opt/monolithic-dev-harness/scripts/harness/hook.py"\n# END monolithic-dev-harness\n'
     )
     assert isinstance(record_user(PLUGIN, ("kimi",)), Ok)
-    assert isinstance(uninstall("user", ()), Ok)
+    removed = uninstall("user", ())
+    assert isinstance(removed, Ok)
     assert json.loads(paths[0].read_text()) == {"theme": "keep"}
     assert not paths[1].exists()
+    # The backup of the touched configs lives outside the harness home, which is gone.
+    from harness.installation_scope import _user_root
+
+    assert not _user_root().exists()
+    assert not removed.value["backup"].is_relative_to(_user_root())
 
 
 def test_interrupted_user_install_can_remove_owned_effects_without_losing_foreign(

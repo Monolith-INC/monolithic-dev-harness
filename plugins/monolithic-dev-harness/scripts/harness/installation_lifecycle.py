@@ -239,7 +239,12 @@ def _backup(paths: tuple[Path, ...]) -> Path | None:
     )
     if not files:
         return None
-    folder = _user_root() / "backups" / datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    # Beside the recovery copies, outside the harness home that uninstall removes.
+    folder = (
+        Path.home()
+        / ".local/state/monolithic-dev-harness/uninstall-backups"
+        / datetime.now(UTC).strftime("%Y%m%dT%H%M%S%fZ")
+    )
     for path in files:
         target = folder / path.resolve().relative_to(path.resolve().anchor)
         target.parent.mkdir(parents=True, exist_ok=True)
