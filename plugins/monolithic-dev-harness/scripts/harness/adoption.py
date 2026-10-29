@@ -40,7 +40,7 @@ ID_PATTERN = re.compile(r"HA-[A-F0-9]{10}")
 # Worktree creation and patch transfer scale with the repository, unlike the rules' quick queries.
 TRANSFER_TIMEOUT_SECONDS = 300
 # What adoption inventories and carries: everything except this clone's own harness records and
-# the local tracker's tickets, which every worktree reads from the main one.
+# the local tracker's tickets, which the recovery worktree reads from the source project.
 SCOPE = (
     "--",
     ".",
@@ -638,6 +638,9 @@ def _materialize(
     )
     _run(repo, "worktree", "add", "-b", branch, str(destination), base_commit)
     try:
+        pointer = destination / local_tracker.SHARED_WITH
+        pointer.parent.mkdir(parents=True, exist_ok=True)
+        pointer.write_text(str(repo.resolve()), encoding="utf-8")
         target_tree = _stage_transfer(repo, destination, report, patch)
         _ensure(
             _fingerprint(repo)["digest"] == expected,

@@ -168,25 +168,9 @@ def _write_asset(record: dict) -> Path:
 
 
 def _exclude_path(project: Path) -> Path | None:
-    match shutil.which("git"):
-        case None:
-            return None
-        case _:
-            result = subprocess.run(
-                (
-                    "git",
-                    "-C",
-                    str(project),
-                    "rev-parse",
-                    "--path-format=absolute",
-                    "--git-path",
-                    "info/exclude",
-                ),
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            return Path(result.stdout.strip()) if result.returncode == 0 else None
+    from harness.gitstate import own_exclude
+
+    return own_exclude(project)
 
 
 def _exclude_record(project: Path, paths: tuple[Path, ...]) -> dict | None:
