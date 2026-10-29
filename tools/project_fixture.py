@@ -161,7 +161,7 @@ def start_run(
             [runtime, briefing], cwd=project, env=_environment(project), check=False
         )
         return Ok({"state": "closed", "exit_code": completed.returncode})
-    return _headless(project, runtime, _first_command(runtime, briefing))
+    return _headless(project, runtime, _first_command(project, runtime, briefing))
 
 
 def answer(project: Path, reply: str) -> Result[dict]:
@@ -176,7 +176,7 @@ def answer(project: Path, reply: str) -> Result[dict]:
     return _headless(
         project,
         record["runtime"],
-        _resume_command(record["runtime"], record["session"], reply),
+        _resume_command(project, record["runtime"], record["session"], reply),
     )
 
 
@@ -241,23 +241,23 @@ def _headless(project: Path, runtime: str, command: list[str]) -> Result[dict]:
     )
 
 
-def _first_command(runtime: str, briefing: str) -> list[str]:
+def _first_command(project: Path, runtime: str, briefing: str) -> list[str]:
     match runtime:
         case "claude":
-            return [*_claude(), "--", briefing]
+            return [*_claude(project), "--", briefing]
         case _:
             return [*_codex(), briefing]
 
 
-def _resume_command(runtime: str, session: str, reply: str) -> list[str]:
+def _resume_command(project: Path, runtime: str, session: str, reply: str) -> list[str]:
     match runtime:
         case "claude":
-            return [*_claude(), "--resume", session, "--", reply]
+            return [*_claude(project), "--resume", session, "--", reply]
         case _:
             return [*_codex(), "resume", session, reply]
 
 
-def _claude() -> list[str]:
+def _claude(project: Path) -> list[str]:
     return [
         "claude",
         "-p",
@@ -268,8 +268,33 @@ def _claude() -> list[str]:
         "acceptEdits",
         # Comma-separated in one argument: as separate words the list would swallow what follows.
         "--allowedTools",
-        ",".join(CLAUDE_ALLOWED),
+        ",".join((*CLAUDE_ALLOWED, *_harness_scripts(project))),
     ]
+
+
+def _harness_scripts(project: Path) -> tuple[str, ...]:
+    """The harness's own scripts in this trial: its installed launcher, and BMAD's scripts in the
+    copy, by every path an agent writes them with."""
+    _, trial_root, _ = acceptance_trial._trial_metadata(str(project))
+    launcher = (
+        trial_root
+        / "harness-install/marketplace/plugins/monolithic-dev-harness/bin/harness-python"
+    )
+    python = Path(sys.executable).name
+    return (
+        f"Bash(sh {launcher}:*)",
+        f"Bash({launcher}:*)",
+        *(
+            f"Bash({interpreter} {scripts}:*)"
+            for interpreter in (
+                python,
+                "python3",
+                "/usr/local/bin/python3.12",
+                "python3.12",
+            )
+            for scripts in (f"{project}/_bmad/scripts/", "_bmad/scripts/")
+        ),
+    )
 
 
 def _codex() -> list[str]:
