@@ -559,3 +559,59 @@ def test_claude_code_is_read_as_claude(tmp_path: Path) -> None:
     assert (
         _claude_present(tmp_path, "--host", "claude-code")["tool"] == "AskUserQuestion"
     )
+
+
+def test_a_dismissed_claude_question_is_no_answer(tmp_path: Path) -> None:
+    """rc.10 trial: "[No preference]" was recorded as the user's own words and acted on."""
+    write_settings(tmp_path)
+    shown = json.loads(
+        subprocess.run(
+            [
+                str(CLI),
+                "decision",
+                "present",
+                "--repo",
+                str(tmp_path),
+                "--host",
+                "claude",
+                "--blocking-available",
+                "--question",
+                "How should we fix where work items are saved?",
+                "--option",
+                "Set it up here",
+                "--option",
+                "Fix the tool",
+            ],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    )
+    asked = {"questions": shown["questions"]}
+    claude_hook(
+        tmp_path,
+        "ask",
+        {"tool_name": "AskUserQuestion", "tool_use_id": "toolu_d", "tool_input": asked},
+    )
+    dismissed = {
+        **asked,
+        "answers": {shown["questions"][0]["question"]: "[No preference]"},
+    }
+    note = claude_hook(
+        tmp_path,
+        "answer",
+        {
+            "tool_name": "AskUserQuestion",
+            "tool_use_id": "toolu_d",
+            "tool_input": dismissed,
+            "tool_response": dismissed,
+        },
+    )
+    assert "chose no option" in note
+    assert decisions.pending(tmp_path) is not None
+    assert "decision-pending" in claude_hook(
+        tmp_path,
+        "pre-tool",
+        {"tool_name": "Bash", "tool_input": {"command": "touch notes.txt"}},
+    )

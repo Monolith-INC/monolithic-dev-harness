@@ -76,6 +76,28 @@ def test_a_story_without_a_parent_sits_at_the_top(tmp_path: Path) -> None:
     )
 
 
+def test_a_renamed_item_keeps_its_documents_folder(tmp_path: Path) -> None:
+    """rc.10 trial: refinement retitled the Story, and its next document landed in a new folder
+    beside the old one. Documents keep the name they started with (Article 8a)."""
+    from dataclasses import replace
+
+    before = WorkItem(
+        "STORY-0001",
+        "STORY-0001",
+        "Show both task counts",
+        WorkItemKind.USER_STORY,
+        LogicalState.BACKLOG,
+    )
+    first = documents.item_path(tmp_path, (before,), "approach")
+    first.parent.mkdir(parents=True)
+    renamed = replace(
+        before, title="Show active and completed task counts on the task screen"
+    )
+    assert documents.item_path(tmp_path, (renamed,), "implementation-plan") == (
+        first.parent / "implementation-plan-user-story-0001-show-both-task-counts.md"
+    )
+
+
 def test_a_parent_loop_is_refused() -> None:
     loop = WorkItem(
         "STORY-0001",

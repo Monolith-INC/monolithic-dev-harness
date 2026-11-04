@@ -178,6 +178,11 @@ def _server_owned(record: dict) -> bool:
     )
 
 
+# Skills link their shared documents as `../../references/...` and `../../common/...`, so these
+# sit beside the linked skills, where the same relative paths find them.
+SHARED_FOLDERS = ("references", "common")
+
+
 def _links(
     project: Path, plugin: Path, base: str, include_agents: bool = True
 ) -> tuple[ProjectAsset, ...]:
@@ -186,6 +191,10 @@ def _links(
         for kind in (("skills", "agents") if include_agents else ("skills",))
         for source in sorted((plugin / kind).iterdir())
         if source.is_dir() or source.suffix in (".md", ".toml")
+    ) + tuple(
+        ProjectAsset(project / base / name, "symlink", target=plugin / name)
+        for name in SHARED_FOLDERS
+        if (plugin / name).is_dir()
     )
 
 

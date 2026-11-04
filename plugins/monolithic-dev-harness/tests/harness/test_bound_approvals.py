@@ -281,6 +281,72 @@ def test_a_work_item_is_written_as_the_draft_the_user_approved(tmp_path: Path) -
     assert "approval-required" in create("Changed.")
 
 
+def test_one_approval_publishes_a_batch_whose_drafts_become_items_in_place(
+    tmp_path: Path,
+) -> None:
+    """rc.10 trial: creating the first Task wrote its id into its own draft file, which voided
+    the approval for the other five. A draft that became an item this approval created, its body
+    unchanged, still counts as reviewed; any other change still voids the approval."""
+    first, _ = project(tmp_path)
+    ready = tmp_path / "Tickets" / "Ready"
+    ready.mkdir(parents=True)
+    bodies = ("## 🎯 What\n\nCount tasks.\n", "## 🎯 What\n\nShow counts.\n")
+    for number, text in enumerate(bodies, start=2):
+        (ready / f"000{number}-task.md").write_text(
+            f"---\ntype: ticket\nwork_item_type: Task\n---\n\n{text}"
+        )
+    approve(
+        tmp_path,
+        first,
+        "native-a",
+        "publish-items",
+        "--value",
+        "count=2",
+        "--value",
+        "items=title:Count,title:Show",
+        "--value",
+        "tracker=Local tracker",
+        "--artifact",
+        "Tickets/Ready/0002-task.md",
+        "--artifact",
+        "Tickets/Ready/0003-task.md",
+    )
+
+    def create(description: str) -> str:
+        return native(
+            tmp_path,
+            "pre-tool",
+            {
+                "tool_name": GATEWAY + "tracker_create_work_item",
+                "tool_input": {
+                    "kind": "task",
+                    "title": "T",
+                    "description": description,
+                },
+                "session_id": "native-a",
+            },
+        )
+
+    ((_, approval),) = state.open_approvals(tmp_path, first)
+    # The first create: the tracker writes the new id into the same file, and the gateway
+    # records that this approval created TASK-0002.
+    (ready / "0002-task.md").write_text(
+        f'---\ntype: ticket\nwork_item_type: Task\nprovider_id: "TASK-0002"\n---\n\n{bodies[0]}'
+    )
+    session = work_sessions.select(tmp_path, first).value
+    state.write_json(
+        session.folder / "publications" / "first.json",
+        {"verified": True, "item": "TASK-0002", "approval_id": approval["id"]},
+    )
+    assert "deny" not in create(bodies[1].strip())
+
+    # An item this approval did not create still voids it.
+    (ready / "0002-task.md").write_text(
+        f'---\ntype: ticket\nwork_item_type: Task\nprovider_id: "TASK-0009"\n---\n\n{bodies[0]}'
+    )
+    assert "approval-required" in create(bodies[1].strip())
+
+
 THREAD_WRITES = {
     "scm_create_review_thread": {
         "filePath": "/lib/a.dart",

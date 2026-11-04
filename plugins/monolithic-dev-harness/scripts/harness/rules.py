@@ -839,17 +839,44 @@ def _pushed_branches(args: list[str], where: Path) -> tuple[str, ...]:
         return ("",)
 
 
-def _context_unchanged(repo: Path, binds: dict[str, Any]) -> bool:
-    """Every reviewed file reads as it did. A reviewed draft in `Tickets/` that is gone became its
-    item (the toolkit renames a draft once the item exists); its approved body is still held."""
+def _context_unchanged(
+    repo: Path, binds: dict[str, Any], approval_id: str = ""
+) -> bool:
+    """Every reviewed file reads as it did. A reviewed draft in `Tickets/` that became its item
+    still counts as reviewed: the toolkit renames the draft, or writes the new item's id into the
+    same file. It is then gone, or an item this approval created (the gateway's receipt says so)
+    whose body is still the approved one. One approval can publish a whole batch."""
     tickets = local_tracker.storage_root(repo).resolve()
+    bodies = set(binds.get("bodies", ()))
     for name, digest in binds.get("artifacts", ()):
         path = repo / str(name)
-        if not path.exists() and path.resolve().is_relative_to(tickets):
+        if path.resolve().is_relative_to(tickets) and (
+            not path.exists() or _published_as_approved(repo, path, bodies, approval_id)
+        ):
             continue
         if workflow.file_digest(path) != Ok(digest):
             return False
     return True
+
+
+def _published_as_approved(
+    repo: Path, path: Path, bodies: set[str], approval_id: str
+) -> bool:
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    key = str(local_tracker.parse_frontmatter(text)[0].get("provider_id") or "")
+    return (
+        bool(key and approval_id)
+        and local_tracker.body_digest(text) in bodies
+        and any(
+            receipt.get("approval_id") == approval_id and receipt.get("item") == key
+            for receipt_path in work_sessions.root(repo).glob("*/publications/*.json")
+            for receipt in (state.read_json(receipt_path) or {},)
+            if receipt.get("verified") is True
+        )
+    )
 
 
 def _covers(record: dict[str, Any], target: Target) -> bool:
@@ -880,7 +907,9 @@ def covering_approval(
     for path, record in state.open_approvals(repo, work_session_id):
         if not all(_covers(record, target) for target in targets):
             continue
-        if _context_unchanged(repo, record.get("binds") or {}):
+        if _context_unchanged(
+            repo, record.get("binds") or {}, str(record.get("id", ""))
+        ):
             return (path, record), False
         stale = True
     return None, stale
@@ -901,7 +930,9 @@ def _approved_body(repo: Path, work_session_id: str | None, body: str) -> bool:
     digest = hashlib.sha256(body.strip().encode("utf-8")).hexdigest()
     return not work_sessions.ended(repo, work_session_id) and any(
         digest in (record.get("binds") or {}).get("bodies", ())
-        and _context_unchanged(repo, record.get("binds") or {})
+        and _context_unchanged(
+            repo, record.get("binds") or {}, str(record.get("id", ""))
+        )
         for _, record in state.open_approvals(repo, work_session_id)
     )
 

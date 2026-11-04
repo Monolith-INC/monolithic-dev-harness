@@ -226,7 +226,11 @@ def _native_commands(
                                 "monolithic-dev-harness@monolithic-dev-harness",
                             ),
                         )
-                        if any(_installed_harness(item) for item in installed)
+                        if any(
+                            _installed_harness(item)
+                            and item.get("scope", "user") == "user"
+                            for item in installed
+                        )
                         else ()
                     ) + (
                         (

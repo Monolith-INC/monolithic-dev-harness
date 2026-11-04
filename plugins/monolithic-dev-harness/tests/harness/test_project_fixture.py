@@ -1,137 +1,177 @@
+"""The test-project fixture: a fresh copy in the checkout's `temp/`, with a release candidate's
+own installer run for that copy only."""
+
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
-import tempfile
-import unittest
 from pathlib import Path
+
+import pytest
 
 REPOSITORY = Path(__file__).resolve().parents[4]
 sys.path.insert(0, str(REPOSITORY))
 
 from core.result import Err, Ok  # noqa: E402
-from tools.project_fixture import (  # noqa: E402
-    create_test_project,
-    discard_test_project,
-)
+from tools import project_fixture  # noqa: E402
 
 
-class ProjectFixtureTests(unittest.TestCase):
-    def test_missing_configuration_returns_error(self):
-        with tempfile.TemporaryDirectory() as directory:
-            result = create_test_project(Path(directory) / "missing.json")
-
-        self.assertIsInstance(result, Err)
-        self.assertEqual(result.failure.code, "missing_configuration")
-
-    def test_invalid_json_returns_error(self):
-        with tempfile.TemporaryDirectory() as directory:
-            configuration = Path(directory) / "settings.json"
-            configuration.write_text("{", encoding="utf-8")
-
-            result = create_test_project(configuration)
-
-        self.assertIsInstance(result, Err)
-        self.assertEqual(result.failure.code, "invalid_configuration_json")
-
-    def test_non_object_json_returns_error(self):
-        with tempfile.TemporaryDirectory() as directory:
-            configuration = Path(directory) / "settings.json"
-            configuration.write_text("[]", encoding="utf-8")
-
-            result = create_test_project(configuration)
-
-        self.assertIsInstance(result, Err)
-        self.assertEqual(result.failure.code, "invalid_configuration")
-
-    def test_schema_invalid_configuration_returns_validation_error(self):
-        with tempfile.TemporaryDirectory() as directory:
-            configuration = Path(directory) / "settings.json"
-            configuration.write_text(json.dumps({"tracker": {"name": "local"}}))
-
-            result = create_test_project(configuration)
-
-        self.assertIsInstance(result, Err)
-        self.assertEqual(result.failure.code, "invalid_settings")
-
-    def test_valid_configuration_creates_configured_copy_that_can_be_discarded(self):
-        settings = {
-            "schemaVersion": 1,
-            "tracker": {"name": "local"},
-            "scm": {"name": "local"},
-            "branch_template": "{key}-{slug}",
-            "artifacts_path": "docs/planning",
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            configuration = Path(directory) / "settings.json"
-            configuration.write_text(json.dumps(settings), encoding="utf-8")
-
-            result = create_test_project(configuration)
-
-        self.assertIsInstance(result, Ok)
-        project = result.value
-        try:
-            self.assertEqual(project.parent.parent, REPOSITORY / "temp")
-            self.assertTrue(project.parent.name.startswith("test-"))
-            applied = json.loads((project / ".harness/settings.json").read_text())
-            self.assertEqual(applied, settings)
-            self.assertTrue((project / "README.md").is_file())
-            self.assertTrue((project / "_bmad/config.toml").is_file())
-            self.assertTrue((project / "_bmad/scripts").is_dir())
-            self.assertIn(
-                "{project-root}/docs/planning",
-                (project / "_bmad/custom/config.toml").read_text(),
-            )
-            self.assertTrue((project / "Tickets/Ready").is_dir())
-        finally:
-            discarded = discard_test_project(project)
-
-        self.assertIsInstance(discarded, Ok)
-        self.assertFalse(project.parent.exists())
-
-    def test_new_fixture_removes_abandoned_test_run_copies(self):
-        from acceptance_trial import MARKER_NAME, RUN_PREFIX, prepare
-
-        abandoned = prepare(root_prefix=RUN_PREFIX, kind="run")
-        marker_path = abandoned.parent / MARKER_NAME
-        marker = json.loads(marker_path.read_text(encoding="utf-8"))
-        marker["process_id"] = 2**30
-        marker_path.write_text(json.dumps(marker), encoding="utf-8")
-        configuration = {
-            "schemaVersion": 1,
-            "tracker": {"name": "local"},
-            "scm": {"name": "local"},
-            "branch_template": "{key}-{slug}",
-        }
-
-        with tempfile.TemporaryDirectory() as directory:
-            config_path = Path(directory) / "settings.json"
-            config_path.write_text(json.dumps(configuration), encoding="utf-8")
-            result = create_test_project(config_path)
-
-        self.assertIsInstance(result, Ok)
-        self.assertFalse(abandoned.parent.exists())
-        discard_test_project(result.value)
-
-    def test_each_call_returns_a_fresh_copy(self):
-        settings = {
-            "schemaVersion": 1,
-            "tracker": {"name": "local"},
-            "scm": {"name": "local"},
-            "branch_template": "{key}-{slug}",
-        }
-        with tempfile.TemporaryDirectory() as directory:
-            configuration = Path(directory) / "settings.json"
-            configuration.write_text(json.dumps(settings), encoding="utf-8")
-            first = create_test_project(configuration)
-            second = create_test_project(configuration)
-
-        self.assertIsInstance(first, Ok)
-        self.assertIsInstance(second, Ok)
-        self.assertNotEqual(first.value, second.value)
-        discard_test_project(first.value)
-        discard_test_project(second.value)
+@pytest.fixture
+def trials(tmp_path, monkeypatch):
+    folder = tmp_path / "temp"
+    monkeypatch.setattr(project_fixture, "TRIALS", folder)
+    return folder
 
 
-if __name__ == "__main__":
-    unittest.main()
+def test_copy_lands_in_the_next_numbered_folder_under_temp(trials):
+    (trials / "test-001").mkdir(parents=True)
+
+    project = project_fixture.copy_template()
+
+    assert project == trials / "test-002"
+    assert (project / "backlog" / "DAY-001-task-counts.md").is_file()
+    assert not (project / ".harness").exists()
+    log = subprocess.run(
+        ["git", "log", "--format=%s"], cwd=project, capture_output=True, text=True
+    )
+    assert log.stdout.strip() == "Starting project"
+
+
+def test_newest_candidate_skips_finals_and_drafts():
+    releases = [
+        {"tag_name": "v0.7.0-rc.12", "prerelease": True, "draft": True},
+        {"tag_name": "v0.6.0", "prerelease": False},
+        {"tag_name": "v0.7.0-rc.11", "prerelease": True},
+        {"tag_name": "v0.7.0-rc.10", "prerelease": True},
+    ]
+
+    assert project_fixture.latest_candidate(releases) == "0.7.0-rc.11"
+    assert project_fixture.latest_candidate([{"tag_name": "v1.0.0"}]) is None
+
+
+def test_installs_the_release_installer_for_the_copy_only(
+    trials, tmp_path, monkeypatch
+):
+    installer = tmp_path / "install.sh"
+    installer.write_text("#!/bin/bash\n", encoding="utf-8")
+    monkeypatch.setattr(
+        project_fixture,
+        "_github",
+        lambda path: '[{"tag_name": "v0.7.0-rc.11", "prerelease": true}]',
+    )
+    monkeypatch.setattr(
+        project_fixture, "_download_installer", lambda version: Ok(installer)
+    )
+    calls = []
+    real_run = subprocess.run
+
+    def run(command, **options):
+        match command:
+            case ["bash", *_]:
+                calls.append(command)
+                return subprocess.CompletedProcess(command, 0)
+            case _:
+                return real_run(command, **options)
+
+    monkeypatch.setattr(project_fixture.subprocess, "run", run)
+
+    result = project_fixture.create_test_project(hosts=("claude", "codex"))
+
+    assert isinstance(result, Ok)
+    project = result.value
+    assert project.parent == trials
+    assert [command[command.index("--host") + 1] for command in calls] == [
+        "claude",
+        "codex",
+    ]
+    for command in calls:
+        assert command[1] == str(installer)
+        assert command[command.index("--scope") + 1] == "local"
+        assert command[command.index("--project") + 1] == str(project)
+        assert command[command.index("--version") + 1] == "0.7.0-rc.11"
+
+
+def test_a_given_version_is_installed_without_a_lookup(monkeypatch):
+    monkeypatch.setattr(
+        project_fixture, "_github", lambda path: pytest.fail("looked up releases")
+    )
+
+    assert project_fixture._version("v0.7.0-rc.9") == Ok("0.7.0-rc.9")
+
+
+def test_no_candidate_asks_for_a_version(monkeypatch):
+    monkeypatch.setattr(project_fixture, "_github", lambda path: "[]")
+
+    result = project_fixture.create_test_project()
+
+    assert isinstance(result, Err)
+    assert result.failure.code == "no_candidate"
+
+
+def test_a_failed_install_names_its_log(trials, tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        project_fixture,
+        "_download_installer",
+        lambda version: Ok(tmp_path / "install.sh"),
+    )
+    real_run = subprocess.run
+    monkeypatch.setattr(
+        project_fixture.subprocess,
+        "run",
+        lambda command, **options: (
+            subprocess.CompletedProcess(command, 1)
+            if command[0] == "bash"
+            else real_run(command, **options)
+        ),
+    )
+
+    result = project_fixture.create_test_project(
+        version="0.7.0-rc.11", hosts=("codex",)
+    )
+
+    assert isinstance(result, Err)
+    assert result.failure.code == "install_failed"
+    assert "test-001-install.log" in result.failure.message
+
+
+def test_installer_is_fetched_by_its_release_asset(monkeypatch):
+    monkeypatch.setattr(
+        project_fixture,
+        "_github",
+        lambda path: (
+            '{"assets": [{"name": "x.tar.gz", "id": 1}, {"name": "install.sh", "id": 7}]}'
+        ),
+    )
+    fetched = []
+    monkeypatch.setattr(
+        project_fixture,
+        "_github_bytes",
+        lambda path: fetched.append(path) or b"#!/bin/bash\n",
+    )
+
+    result = project_fixture._download_installer("0.7.0-rc.11")
+
+    assert isinstance(result, Ok)
+    assert result.value.read_bytes() == b"#!/bin/bash\n"
+    assert fetched == [f"repos/{project_fixture.GITHUB}/releases/assets/7"]
+
+
+def test_claude_in_the_copy_skips_the_checkouts_instruction_files(trials):
+    project = trials / "test-001"
+    (project / ".claude").mkdir(parents=True)
+    (project / ".claude" / "settings.local.json").write_text(
+        '{"hooks": {"Stop": []}}', encoding="utf-8"
+    )
+
+    project_fixture.seal_from_harness(project)
+
+    settings = json.loads(
+        (project / ".claude" / "settings.local.json").read_text(encoding="utf-8")
+    )
+    assert settings["hooks"] == {"Stop": []}
+    assert f"{project_fixture.REPOSITORY}/AGENTS.md" in settings["claudeMdExcludes"]
+    assert f"{trials}/CLAUDE.md" in settings["claudeMdExcludes"]
+    assert not any(
+        entry.startswith(f"{project}/") for entry in settings["claudeMdExcludes"]
+    )

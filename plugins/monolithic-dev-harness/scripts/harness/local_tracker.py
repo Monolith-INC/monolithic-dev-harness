@@ -28,7 +28,6 @@ from pathlib import Path
 from typing import Any
 
 from core.result import Result, attempt
-from harness import gitstate
 from integrations.contracts import Manifest
 
 _RUNTIME_DIR = Path(__file__).resolve().parents[2] / "runtime"
@@ -66,17 +65,19 @@ _RECORD_ONLY = frozenset({"key", "id", "kind", "state", "description", "parentId
 Record = dict[str, Any]
 
 
+# A checkout made for another project's work (adoption's recovery worktree) names that project here.
+SHARED_WITH = Path(".harness/state/tracker-project")
+
+
 def storage_root(repo: Path) -> Path:
-    """Use one `Tickets/` for every linked worktree of a clone."""
-    try:
-        common = Path(
-            gitstate.git(
-                repo, "rev-parse", "--path-format=absolute", "--git-common-dir"
-            )
-        )
-    except gitstate.GitError:
-        return repo / ROOT
-    return (common.parent if common.name == ".git" else repo) / ROOT
+    """The project's own `Tickets/`, whether or not the project is versioned, or the `Tickets/` of
+    the project this checkout was made for."""
+    pointer = repo / SHARED_WITH
+    return (
+        Path(pointer.read_text(encoding="utf-8").strip()) / ROOT
+        if pointer.is_file()
+        else repo / ROOT
+    )
 
 
 def capacity_file(repo: Path, sprint: str) -> Path:
