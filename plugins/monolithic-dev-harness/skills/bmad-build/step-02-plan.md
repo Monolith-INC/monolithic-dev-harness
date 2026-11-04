@@ -92,8 +92,10 @@ changes once and reuse them.
 When hardening is done, have the approach approved before refinement: show it with
 `harness workflow show --artifact {plan_file}`, put that output in your reply, then ask
 `harness decision present --gate plan-checkpoint --artifact {plan_file}`. Never end the turn with
-the approach unasked. **Approve and continue** goes on to refinement; **Deepen** runs more
-hardening and asks again; **Approve and stop** saves the approved approach and pauses.
+the approach unasked. **Approve** approves the approach as it reads now and goes on to
+refinement; **Change or deepen** takes the user's changes or runs more hardening, then shows the
+updated approach and asks again; **Approve and stop** approves it and pauses. Never edit the
+approach after it is approved: a change goes back to the user as the full updated text.
 
 Follow [the onboarding contract](../../references/onboarding.md). The hardened approach
 is the input to the Refinement stage, which runs the agile-backlog-toolkit skills against the

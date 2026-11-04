@@ -240,3 +240,10 @@ file outside it still is.
 
 Full suites (backlog, plugin, installer scripts), `ruff check`, `ruff format --check`,
 `check_repo.py`, markdownlint. Then handoff steps 4–6: trial setup, DAY-001 rerun, thermos review.
+
+> [!NOTE] Update, 2026-11-04
+> `publish-items` is no longer unchanged here. The rc.11 live trial needed three publish approvals
+> for one Story (create, enrich, validate). A work session now refines an Epic, Feature or Story
+> draft until it passes `validate-artifact` before asking, and the harness refuses the question for
+> an unfinished draft. `plan-checkpoint` became an approval bound to the plan as shown. See
+> CHANGELOG, Unreleased.

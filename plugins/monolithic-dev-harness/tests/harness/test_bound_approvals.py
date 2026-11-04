@@ -9,6 +9,7 @@ from pathlib import Path
 from harness import state, work_sessions
 from tests.harness.test_approval_scope import WRITE, project
 from tests.harness.test_decisions import CLI, native
+from tests.harness.test_plan_review import REFINED
 
 
 def approve(repo: Path, session: str, native_id: str, gate: str, *args: str) -> dict:
@@ -232,13 +233,16 @@ def test_a_work_item_is_written_as_the_draft_the_user_approved(tmp_path: Path) -
     first, _ = project(tmp_path)
     ready = tmp_path / "Tickets" / "Ready"
     ready.mkdir(parents=True)
-    body = "## 🎯 What\n\nShow both counts.\n"
-    for name, text in (
-        ("draft-one.md", body),
-        ("draft-two.md", "## 🎯 What\n\nOther.\n"),
-    ):
+    # In a work session only finished drafts are put to the user.
+    body = REFINED
+    other = REFINED.replace(
+        "explains what a reset removes", "explains what an export keeps"
+    )
+    for name, text in (("draft-one.md", body), ("draft-two.md", other)):
         (ready / name).write_text(
-            f"---\ntype: ticket\nwork_item_type: User Story\n---\n\n{text}"
+            "---\ntype: ticket\nwork_item_type: User Story\n"
+            "title: Explain what a settings reset removes\nstory_points: 2\n---\n\n"
+            + text
         )
     approve(
         tmp_path,
@@ -276,7 +280,7 @@ def test_a_work_item_is_written_as_the_draft_the_user_approved(tmp_path: Path) -
     assert "approved draft" in create("Show both counts, in my own words.")
     # Creating the first item replaced its draft; the second draft is still approved as it was.
     (ready / "draft-one.md").unlink()
-    assert "deny" not in create("## 🎯 What\n\nOther.")
+    assert "deny" not in create(other)
     (ready / "draft-two.md").write_text("---\ntype: ticket\n---\n\nChanged.\n")
     assert "approval-required" in create("Changed.")
 

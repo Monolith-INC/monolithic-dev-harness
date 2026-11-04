@@ -11,6 +11,7 @@ from __future__ import annotations
 import html
 import sys
 from collections.abc import Mapping
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -87,4 +88,61 @@ def check(item: WorkItem) -> Result[None]:
         + "; ".join(failed)
         + "). Refine it first: enrich-work-item writes it in its type's template, keeping the "
         "draft as Original Description, and the user approves the new text.",
+    )
+
+
+# The item types a work session refines before publishing (Constitution, Article 3). A Task is a
+# Story's breakdown, approved with its plan, so its draft is not held to a template here.
+_REFINED_DRAFTS = frozenset({"Epic", "Feature", "User Story"})
+
+
+def draft_failures(text: str) -> list[str]:
+    """What keeps a work-item draft from passing `validate-artifact`, in its better language.
+
+    Empty when the draft passes, or when it is not an Epic, Feature or Story draft at all."""
+    from orchestrator_core.ingest import ingest_from_text
+
+    record = ingest_from_text(text)
+    if record.type not in _REFINED_DRAFTS or not (
+        record.frontmatter.get("work_item_type") or record.frontmatter.get("type")
+    ):
+        return []
+    found = [
+        []
+        if outcome_from_results(
+            results := validate_artifact(
+                replace(
+                    record, frontmatter={**record.frontmatter, "language": language}
+                )
+            )
+        )
+        == "PASS"
+        else critiques_from_results(results)
+        for language in ("en", "pt-br")
+    ]
+    return [] if not all(found) else min(found, key=len)
+
+
+def check_drafts(repo: Path, artifacts: list[str]) -> Result[None]:
+    """Ok when every Epic, Feature or Story draft among `artifacts` is refined.
+
+    A work session shows the user each item once, finished: the draft is written in its type's
+    template and passes `validate-artifact` before anyone is asked to publish it, so nothing is
+    rewritten after the approval."""
+    failing = tuple(
+        (name, failures)
+        for name in artifacts
+        if (path := repo / name).is_file() and path.suffix == ".md"
+        if (failures := draft_failures(path.read_text(encoding="utf-8")))
+    )
+    return (
+        Ok(None)
+        if not failing
+        else err(
+            "draft_not_refined",
+            "Finish the draft before asking to publish it: "
+            + "; ".join(f"{name} ({', '.join(failures)})" for name, failures in failing)
+            + ". Write it in its type's template with enrich-work-item, keeping the draft as "
+            "Original Description, until it passes validate-artifact; then show it and ask once.",
+        )
     )

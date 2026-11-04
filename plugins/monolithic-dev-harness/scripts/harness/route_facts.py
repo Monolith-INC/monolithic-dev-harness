@@ -305,7 +305,7 @@ def _option_labels() -> dict[str, dict[str, str]]:
                 gate.id: {
                     label.strip().casefold(): option.id
                     for option in gate.options
-                    for label in option.label.values()
+                    for label in (*option.label.values(), *option.former)
                 }
                 for gate in catalog.values()
             }

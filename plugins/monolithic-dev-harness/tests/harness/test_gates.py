@@ -81,6 +81,22 @@ def test_the_project_language_picks_the_wording(tmp_path: Path, monkeypatch) -> 
     write_settings(tmp_path)
     assert isinstance(preferences.set_language("pt-br", tmp_path), Ok)
     (tmp_path / "plan.md").write_text("plano")
+    # An approval is asked only about what was shown in full.
+    subprocess.run(
+        [
+            str(CLI),
+            "workflow",
+            "show",
+            "--repo",
+            str(tmp_path),
+            "--artifact",
+            "plan.md",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=True,
+    )
     result = subprocess.run(
         [
             str(CLI),
@@ -102,7 +118,7 @@ def test_the_project_language_picks_the_wording(tmp_path: Path, monkeypatch) -> 
     )
     menu = json.loads(result.stdout)["menu"].splitlines()
     assert menu[0] == "**O plano está pronto. Como você quer seguir?**"
-    assert menu[3].startswith("2. **Aprofundar (Recomendado)**")
+    assert menu[3].startswith("2. **Mudar ou aprofundar (Recomendado)**")
 
 
 def test_a_gate_brings_its_own_wording() -> None:

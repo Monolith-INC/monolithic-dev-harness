@@ -4,6 +4,18 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- A work session shows each Epic, Feature or Story once, finished, and asks once: its draft is
+  written in its type's template and passes `validate-artifact` before the publish question, which
+  the harness now refuses for an unfinished draft. A requested change comes back as the full updated
+  draft to approve again. The rc.11 trial needed three publish approvals for one Story.
+- The plan question is an approval tied to the plan as shown. Its options are **Approve**,
+  **Change or deepen** and **Approve and stop**, and none says the plan "locks"; a change to the plan
+  comes back for approval. Answers given under the old labels still count.
+
 ## [0.7.0-rc.11] - 2026-11-04
 
 ### Added

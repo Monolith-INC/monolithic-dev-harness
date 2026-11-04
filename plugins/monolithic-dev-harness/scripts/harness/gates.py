@@ -27,6 +27,8 @@ class Option:
     id: str
     label: dict[str, str]
     detail: dict[str, str]
+    # Labels the option had before, so answers recorded under them still name it.
+    former: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -90,6 +92,7 @@ def _gate(entry: dict[str, Any], languages: tuple[str, ...]) -> Result[Gate]:
             str(option.get("id", "")),
             dict(option.get("label", {})),
             dict(option.get("detail", {})),
+            tuple(str(label) for label in option.get("former", ())),
         )
         for option in entry.get("option", ())
     )
