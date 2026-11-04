@@ -73,11 +73,13 @@ def create_test_project(
 
 
 def seal_from_harness(project: Path) -> Path:
-    """Keep Claude Code in the copy from loading the harness checkout's own instruction files.
+    """Keep what belongs to the tester, not to a user's project, out of Claude Code in the copy.
 
     Claude Code reads CLAUDE.md and AGENTS.md from every folder above the project, and the copy
-    sits inside this checkout, so the harness's own rules would reach the test agent. The copy's
-    local Claude settings exclude those files, for headless and interactive sessions alike.
+    sits inside this checkout, so the harness's own rules would reach the test agent. It also
+    loads the tester's own plugins, whose hooks can block the harness. The copy's local Claude
+    settings exclude those files and turn those plugins off, for headless and interactive
+    sessions alike.
     """
     settings_path = project / ".claude" / "settings.local.json"
     settings = (
@@ -93,9 +95,37 @@ def seal_from_harness(project: Path) -> Path:
     settings["claudeMdExcludes"] = sorted(
         {*settings.get("claudeMdExcludes", []), *excluded}
     )
+    settings["enabledPlugins"] = {
+        **settings.get("enabledPlugins", {}),
+        **{plugin: False for plugin in tester_plugins(project)},
+    }
     settings_path.parent.mkdir(exist_ok=True)
     settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
     return settings_path
+
+
+def tester_plugins(project: Path) -> tuple[str, ...]:
+    """The Claude Code plugins enabled in the copy other than the harness itself."""
+    try:
+        listed = json.loads(
+            subprocess.run(
+                ["claude", "plugin", "list", "--json"],
+                cwd=project,
+                capture_output=True,
+                text=True,
+                check=True,
+                timeout=120,
+            ).stdout
+        )
+    except (OSError, TypeError, ValueError, subprocess.SubprocessError):
+        return ()
+    return tuple(
+        str(plugin["id"])
+        for plugin in listed
+        if isinstance(plugin, dict)
+        and plugin.get("enabled")
+        and not str(plugin.get("id", "")).startswith("monolithic-dev-harness@")
+    )
 
 
 def copy_template() -> Path:
