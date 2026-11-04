@@ -25,3 +25,6 @@ interactive test: bootstrap, then the main workflow with a `backlog/` ticket (us
 - `scripts/check_repo.py`: passed.
 - Live lookup of the newest candidate against GitHub returned `0.7.0-rc.10`.
 - Not run: a real install from a downloaded release into a copy.
+- `test-project-template/ideas.md` and its copy `ideas.md`: the "First harness trial" section now
+  describes the new process and no longer points at `AI_Codex/Artifacts/live-trials/`. Markdown
+  lint and `scripts/check_repo.py` passed.
