@@ -132,3 +132,25 @@ def test_a_failed_install_names_its_log(trials, tmp_path, monkeypatch):
     assert isinstance(result, Err)
     assert result.failure.code == "install_failed"
     assert "test-001-install.log" in result.failure.message
+
+
+def test_installer_is_fetched_by_its_release_asset(monkeypatch):
+    monkeypatch.setattr(
+        project_fixture,
+        "_github",
+        lambda path: (
+            '{"assets": [{"name": "x.tar.gz", "id": 1}, {"name": "install.sh", "id": 7}]}'
+        ),
+    )
+    fetched = []
+    monkeypatch.setattr(
+        project_fixture,
+        "_github_bytes",
+        lambda path: fetched.append(path) or b"#!/bin/bash\n",
+    )
+
+    result = project_fixture._download_installer("0.7.0-rc.11")
+
+    assert isinstance(result, Ok)
+    assert result.value.read_bytes() == b"#!/bin/bash\n"
+    assert fetched == [f"repos/{project_fixture.GITHUB}/releases/assets/7"]

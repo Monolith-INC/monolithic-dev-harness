@@ -141,34 +141,29 @@ def _version(version: str | None) -> Result[str]:
 
 
 def _download_installer(version: str) -> Result[Path]:
-    """The `install.sh` attached to release `version`, as the README tells a user to fetch it."""
+    """The `install.sh` attached to release `version`, fetched through GitHub's REST API as the
+    installer itself fetches release files."""
     target = Path(tempfile.mkdtemp(prefix="mdh-installer-")) / "install.sh"
     try:
-        match shutil.which("gh"):
+        release = json.loads(_github(f"repos/{GITHUB}/releases/tags/v{version}"))
+        asset = next(
+            (
+                item["id"]
+                for item in release.get("assets", [])
+                if item.get("name") == "install.sh"
+            ),
+            None,
+        )
+        match asset:
             case None:
+                return err(
+                    "installer_download_failed", f"release v{version} has no install.sh"
+                )
+            case identifier:
                 target.write_bytes(
-                    _fetch(
-                        f"https://github.com/{GITHUB}/releases/download/v{version}/install.sh"
-                    )
+                    _github_bytes(f"repos/{GITHUB}/releases/assets/{identifier}")
                 )
-            case gh:
-                subprocess.run(
-                    [
-                        gh,
-                        "release",
-                        "download",
-                        f"v{version}",
-                        "--repo",
-                        GITHUB,
-                        "--pattern",
-                        "install.sh",
-                        "--output",
-                        str(target),
-                    ],
-                    check=True,
-                    capture_output=True,
-                )
-    except (OSError, subprocess.SubprocessError) as failure:
+    except (OSError, ValueError, subprocess.SubprocessError) as failure:
         return err(
             "installer_download_failed",
             f"could not download install.sh for v{version}: {failure}",
@@ -177,18 +172,26 @@ def _download_installer(version: str) -> Result[Path]:
 
 
 def _github(path: str) -> str:
+    return _github_bytes(path, "application/vnd.github+json").decode("utf-8")
+
+
+def _github_bytes(path: str, accept: str = "application/octet-stream") -> bytes:
     match shutil.which("gh"):
         case None:
-            return _fetch(f"https://api.github.com/{path}").decode("utf-8")
+            return _fetch(f"https://api.github.com/{path}", accept)
         case gh:
             return subprocess.run(
-                [gh, "api", path], check=True, capture_output=True, text=True
+                [gh, "api", "-H", f"Accept: {accept}", path],
+                check=True,
+                capture_output=True,
             ).stdout
 
 
-def _fetch(url: str) -> bytes:
+def _fetch(url: str, accept: str) -> bytes:
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
-    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    headers = {"Accept": accept} | (
+        {"Authorization": f"Bearer {token}"} if token else {}
+    )
     with urllib.request.urlopen(
         urllib.request.Request(url, headers=headers)
     ) as response:
