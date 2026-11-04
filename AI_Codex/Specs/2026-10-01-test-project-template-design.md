@@ -31,6 +31,12 @@ The default trial exercises technical discovery: inspect the actual project, ide
 
 ## Trial lifecycle
 
+> [!WARNING] DEPRECATED
+> This lifecycle, `scripts/acceptance_trial.py` and the `AI_Codex/Artifacts/live-trials/` record
+> were replaced on 2026-11-04. `tools/project_fixture.py` now copies the template to the harness
+> folder's `temp/test-NNN/` and installs the newest release candidate there; see
+> `docs/03-engineering/acceptance-fixture.md` and the `run-test-project` skill.
+
 1. `scripts/acceptance_trial.py prepare` copies the canonical template to a unique temporary
    directory, initializes Git in the copy, and records one local baseline commit.
 2. The maintainer points the selected coding host at that copy. The source template remains

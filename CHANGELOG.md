@@ -8,9 +8,14 @@ All notable changes to this project are documented here. The format follows
 
 ### Added
 
-- `tools/project_fixture.py` creates a test-project copy in `temp/` with the harness installed in
-  isolation (this checkout or `--version`), and runs a headless Claude Code or Codex trial that
-  stops at each question and resumes with `answer`, or opens an interactive session.
+- `tools/project_fixture.py` copies the test project to `temp/test-NNN/` and installs the newest
+  release candidate (or `--version`) into that copy with the release's own `install.sh`. The
+  `run-test-project` skill is cut down to these steps plus a headless or interactive run.
+
+### Removed
+
+- `scripts/acceptance_trial.py`, its private trial folders, evidence records and transcript
+  summaries, and `tools/test-project-config.example.json`.
 
 ### Fixed
 

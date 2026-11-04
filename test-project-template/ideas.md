@@ -29,17 +29,17 @@ handlers.
 
 ## First harness trial
 
-Use the short, ready backlog request in `backlog/`. Start from a fresh disposable
-copy and follow the harness's normal first-run path with the relevant skill. Run one child agent using
-the least costly suitable model and medium reasoning when the host allows those choices. Give it the
-actual skill and only the project, the selected request, and the basic safety boundary: work only in
-the disposable copy, make no remote writes, and stop at a human approval point or when blocked. Do
-not coach the agent through the technical answer or add special workflow steps.
+Prepare a fresh copy with `tools/project_fixture.py` in the harness folder: it copies this project
+into the harness folder's `temp/` and installs the newest release candidate there. Bootstrap the
+harness, then start the main workflow with `backlog/DAY-001-task-counts.md`; the later tickets are
+for broader tests. Run the test agent headless, or as an interactive subagent when the interactions
+need testing. Give it only the project, the selected ticket, and the basic safety boundary: work
+only in the copy, make no remote writes, and stop at a human approval point or when blocked. Do not
+coach the agent through the technical answer or add special workflow steps.
 
-The supervising agent should observe without steering. Record the step, what happened, the evidence,
-and any recovery in `AI_Codex/Artifacts/live-trials/`. If the agent asks for a product decision,
-answer only when the trial brief already contains the answer; otherwise record the pause as expected
-behavior. Do not resume the older idea brainstorming run.
+The supervising agent should observe without steering. If the agent asks for a product decision,
+answer only when the request already contains the answer; otherwise note the pause as expected
+behavior. When the test ends, report what happened and the evidence for it.
 
 ## Observable outcomes
 
