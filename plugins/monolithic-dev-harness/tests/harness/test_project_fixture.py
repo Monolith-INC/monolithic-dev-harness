@@ -157,7 +157,10 @@ def test_installer_is_fetched_by_its_release_asset(monkeypatch):
     assert fetched == [f"repos/{project_fixture.GITHUB}/releases/assets/7"]
 
 
-def test_claude_in_the_copy_skips_the_checkouts_instruction_files(trials):
+def test_claude_in_the_copy_skips_the_checkouts_instruction_files(trials, monkeypatch):
+    monkeypatch.setattr(
+        project_fixture, "tester_plugins", lambda project: ("agent-continuity@synced",)
+    )
     project = trials / "test-001"
     (project / ".claude").mkdir(parents=True)
     (project / ".claude" / "settings.local.json").write_text(
@@ -170,8 +173,26 @@ def test_claude_in_the_copy_skips_the_checkouts_instruction_files(trials):
         (project / ".claude" / "settings.local.json").read_text(encoding="utf-8")
     )
     assert settings["hooks"] == {"Stop": []}
+    assert settings["enabledPlugins"] == {"agent-continuity@synced": False}
     assert f"{project_fixture.REPOSITORY}/AGENTS.md" in settings["claudeMdExcludes"]
     assert f"{trials}/CLAUDE.md" in settings["claudeMdExcludes"]
     assert not any(
         entry.startswith(f"{project}/") for entry in settings["claudeMdExcludes"]
     )
+
+
+def test_tester_plugins_leave_the_harness_on(tmp_path, monkeypatch):
+    listed = json.dumps(
+        [
+            {"id": "agent-continuity@synced", "enabled": True},
+            {"id": "design@synced", "enabled": False},
+            {"id": "monolithic-dev-harness@monolithic-dev-harness", "enabled": True},
+        ]
+    )
+    monkeypatch.setattr(
+        project_fixture.subprocess,
+        "run",
+        lambda command, **options: subprocess.CompletedProcess(command, 0, listed),
+    )
+
+    assert project_fixture.tester_plugins(tmp_path) == ("agent-continuity@synced",)

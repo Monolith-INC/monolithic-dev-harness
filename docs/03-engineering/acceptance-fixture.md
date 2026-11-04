@@ -27,7 +27,8 @@ The helper:
    host (default: Claude Code and Codex), so the harness is installed for the copy only.
 4. For Claude Code, adds `claudeMdExcludes` to the copy's `.claude/settings.local.json` so the
    harness checkout's own `AGENTS.md`, `CLAUDE.md` and rules, which Claude Code would load from the
-   copy's parent folders, never reach the test agent. Codex stops at the copy's own Git root.
+   copy's parent folders, never reach the test agent, and turns off the tester's own Claude Code
+   plugins in the copy, whose hooks could block the harness. Codex stops at the copy's own Git root.
 5. Prints the copy's path. The installer's output is in `temp/test-NNN-install.log`.
 
 Bootstrapping and the workflow are the test itself; the `run-test-project` skill describes how to
