@@ -3,6 +3,7 @@ own installer run for that copy only."""
 
 from __future__ import annotations
 
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -154,3 +155,23 @@ def test_installer_is_fetched_by_its_release_asset(monkeypatch):
     assert isinstance(result, Ok)
     assert result.value.read_bytes() == b"#!/bin/bash\n"
     assert fetched == [f"repos/{project_fixture.GITHUB}/releases/assets/7"]
+
+
+def test_claude_in_the_copy_skips_the_checkouts_instruction_files(trials):
+    project = trials / "test-001"
+    (project / ".claude").mkdir(parents=True)
+    (project / ".claude" / "settings.local.json").write_text(
+        '{"hooks": {"Stop": []}}', encoding="utf-8"
+    )
+
+    project_fixture.seal_from_harness(project)
+
+    settings = json.loads(
+        (project / ".claude" / "settings.local.json").read_text(encoding="utf-8")
+    )
+    assert settings["hooks"] == {"Stop": []}
+    assert f"{project_fixture.REPOSITORY}/AGENTS.md" in settings["claudeMdExcludes"]
+    assert f"{trials}/CLAUDE.md" in settings["claudeMdExcludes"]
+    assert not any(
+        entry.startswith(f"{project}/") for entry in settings["claudeMdExcludes"]
+    )

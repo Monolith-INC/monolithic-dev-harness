@@ -25,7 +25,10 @@ The helper:
 2. Finds the newest release candidate on GitHub, unless `--version` names one.
 3. Downloads that release's `install.sh` and runs it with `--scope local --project <copy>` for each
    host (default: Claude Code and Codex), so the harness is installed for the copy only.
-4. Prints the copy's path. The installer's output is in `temp/test-NNN-install.log`.
+4. For Claude Code, adds `claudeMdExcludes` to the copy's `.claude/settings.local.json` so the
+   harness checkout's own `AGENTS.md`, `CLAUDE.md` and rules, which Claude Code would load from the
+   copy's parent folders, never reach the test agent. Codex stops at the copy's own Git root.
+5. Prints the copy's path. The installer's output is in `temp/test-NNN-install.log`.
 
 Bootstrapping and the workflow are the test itself; the `run-test-project` skill describes how to
 run it, headless or interactive. `temp/` is ignored by Git; clear old copies by hand.

@@ -7,7 +7,9 @@ This module is for test runs only. Regular harness setup must not depend on it.
 It copies `test-project-template/` to the next unused `temp/test-NNN/` in this checkout, starts a
 Git repository there, and installs the harness into that copy only, the way a user would: it
 downloads the release's own `install.sh` from GitHub and runs it with `--scope local`. Without
-`--version` it picks the newest release candidate. It prints the copy's path; bootstrapping and
+`--version` it picks the newest release candidate. For Claude Code it then excludes this
+checkout's own instruction files (`AGENTS.md` and the like), which Claude Code would otherwise
+load from the copy's parent folders. It prints the copy's path; bootstrapping and
 the workflow are left to the trial. Old copies are cleared from `temp/` by hand.
 """
 
@@ -29,6 +31,15 @@ TEMPLATE = REPOSITORY / "test-project-template"
 TRIALS = REPOSITORY / "temp"
 GITHUB = "Monolith-INC/monolithic-dev-harness"
 HOSTS = ("claude", "codex", "cursor", "kimi", "zed")
+# Instruction files Claude Code loads from a project's parent folders.
+INSTRUCTION_FILES = (
+    "CLAUDE.md",
+    "CLAUDE.local.md",
+    "AGENTS.md",
+    ".claude/CLAUDE.md",
+    ".claude/AGENTS.md",
+    ".claude/rules/**",
+)
 
 sys.path.insert(0, str(REPOSITORY / "plugins" / "monolithic-dev-harness" / "scripts"))
 
@@ -53,7 +64,38 @@ def create_test_project(
         project = copy_template()
     except (OSError, subprocess.SubprocessError) as failure:
         return err("copy_failed", f"could not copy the test project: {failure}")
-    return install(project, installer, chosen, hosts)
+    match install(project, installer, chosen, hosts):
+        case Ok() if "claude" in hosts:
+            seal_from_harness(project)
+            return Ok(project)
+        case result:
+            return result
+
+
+def seal_from_harness(project: Path) -> Path:
+    """Keep Claude Code in the copy from loading the harness checkout's own instruction files.
+
+    Claude Code reads CLAUDE.md and AGENTS.md from every folder above the project, and the copy
+    sits inside this checkout, so the harness's own rules would reach the test agent. The copy's
+    local Claude settings exclude those files, for headless and interactive sessions alike.
+    """
+    settings_path = project / ".claude" / "settings.local.json"
+    settings = (
+        json.loads(settings_path.read_text(encoding="utf-8"))
+        if settings_path.is_file()
+        else {}
+    )
+    excluded = [
+        f"{folder}/{name}"
+        for folder in (project.parent, REPOSITORY)
+        for name in INSTRUCTION_FILES
+    ]
+    settings["claudeMdExcludes"] = sorted(
+        {*settings.get("claudeMdExcludes", []), *excluded}
+    )
+    settings_path.parent.mkdir(exist_ok=True)
+    settings_path.write_text(json.dumps(settings, indent=2) + "\n", encoding="utf-8")
+    return settings_path
 
 
 def copy_template() -> Path:

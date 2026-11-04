@@ -23,7 +23,9 @@ plugins/monolithic-dev-harness/bin/harness-python tools/project_fixture.py
 ```
 
 It copies the template to the next unused `temp/test-NNN/`, then downloads the newest candidate's
-`install.sh` from GitHub and runs it for that copy only (`--scope local`). It prints the copy's path.
+`install.sh` from GitHub and runs it for that copy only (`--scope local`). It also stops Claude
+Code in the copy from loading the harness folder's own `AGENTS.md` and `CLAUDE.md`, so the test agent
+sees only what a user's project has. It prints the copy's path.
 Pass `--version X.Y.Z-rc.N` to install a given release, and `--host` (repeatable) to choose hosts;
 the default is Claude Code and Codex. If the lookup fails, it says so; pass `--version`, or install
 by hand with the README's instructions.
