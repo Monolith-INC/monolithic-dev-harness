@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0-rc.11] - 2026-11-04
 
 ### Added
 
@@ -19,6 +19,8 @@ All notable changes to this project are documented here. The format follows
 
 ### Fixed
 
+- The test-project fixture fetches a release's `install.sh` through GitHub's REST API, and keeps
+  the harness checkout's own `AGENTS.md` and `CLAUDE.md` out of the copy's Claude Code sessions.
 - The local tracker always uses the project's own `Tickets/`, and exclusions are written only into
   the project's own repository. An unversioned project inside another repository no longer reads
   or writes that repository's files.
@@ -36,6 +38,11 @@ All notable changes to this project are documented here. The format follows
 - The publish approval says items are written as reviewed, created or updated, not only created.
 - A question the user dismisses without choosing (Claude Code's "[No preference]") is no answer:
   it stays pending and keeps holding work, instead of being recorded as the user's own words.
+
+### Qualification
+
+- Approval capture through a relayed project-agent conversation (audit H3) is still unproven; this
+  candidate's live trial must reach a real approval. This is a release candidate.
 
 ## [0.7.0-rc.10] - 2026-10-28
 
@@ -1032,3 +1039,4 @@ First release.
 [0.7.0-rc.7]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.6...v0.7.0-rc.7
 [0.7.0-rc.9]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.8...v0.7.0-rc.9
 [0.7.0-rc.10]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.9...v0.7.0-rc.10
+[0.7.0-rc.11]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.10...v0.7.0-rc.11
