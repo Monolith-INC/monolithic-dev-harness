@@ -1,479 +1,205 @@
-"""Create, install and drive disposable copies of the acceptance-test project.
+"""Prepare a fresh copy of the test project with a published harness release installed.
 
 This module is for test runs only. Regular harness setup must not depend on it.
 
-    project_fixture.py create [--settings FILE] [--version X.Y.Z] [--host claude|codex|...]
-    project_fixture.py run PROJECT --runtime claude|codex --briefing FILE [--interactive]
-    project_fixture.py answer PROJECT "<the human's reply>"
-    project_fixture.py discard PROJECT
+    project_fixture.py [--version X.Y.Z-rc.N] [--host claude|codex|...]
 
-`create` copies the test project into this checkout's `temp/` and installs the harness into that
-copy: this checkout's source, or a published release with `--version`. The install, the host
-configuration homes and the `harness` command all live in the copy's trial folder, so the user's
-own installs and host settings are never touched.
-
-`run` starts the agent in the copy with the briefing as its first message. Headless, the agent
-keeps its host's normal limits: Claude Code may edit files and run only the allowed commands below;
-Codex stays in its workspace sandbox. When the harness waits for the human, `run` prints the
-question and exits with WAITING; `answer` resumes the same session with the reply as the user's
-message, so a person or a coordinating agent relays the questions. `--interactive` opens the
-host's own session instead, where the person answers and approves each action.
+It copies `test-project-template/` to the next unused `temp/test-NNN/` in this checkout, starts a
+Git repository there, and installs the harness into that copy only, the way a user would: it
+downloads the release's own `install.sh` from GitHub and runs it with `--scope local`. Without
+`--version` it picks the newest release candidate. It prints the copy's path; bootstrapping and
+the workflow are left to the trial. Old copies are cleared from `temp/` by hand.
 """
 
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import os
 import shutil
 import subprocess
 import sys
 import tempfile
+import urllib.request
+from itertools import count
 from pathlib import Path
 
 REPOSITORY = Path(__file__).resolve().parents[1]
-PLUGIN_SCRIPTS = REPOSITORY / "plugins" / "monolithic-dev-harness" / "scripts"
+TEMPLATE = REPOSITORY / "test-project-template"
+TRIALS = REPOSITORY / "temp"
+GITHUB = "Monolith-INC/monolithic-dev-harness"
+HOSTS = ("claude", "codex", "cursor", "kimi", "zed")
 
-sys.path.insert(0, str(PLUGIN_SCRIPTS))
-sys.path.insert(0, str(REPOSITORY / "scripts"))
-
-import acceptance_trial  # noqa: E402
+sys.path.insert(0, str(REPOSITORY / "plugins" / "monolithic-dev-harness" / "scripts"))
 
 from core.result import Err, Ok, Result, err  # noqa: E402
-from harness import settings as harness_settings  # noqa: E402
-
-HOSTS = ("claude", "codex", "cursor", "kimi", "zed")
-# Exit status of `run` and `answer` while the harness waits for the human.
-WAITING = 3
-RUN_RECORD = "run.json"
-TRANSCRIPT = "transcript.jsonl"
-# What a headless Claude Code run may do without asking: edit files in the copy, run the harness
-# and use its own servers (which check approvals themselves), and read. Anything else is refused,
-# as it would be for a user who declined it.
-CLAUDE_ALLOWED = (
-    "Read",
-    "Glob",
-    "Grep",
-    "Edit",
-    "Write",
-    "Bash(harness:*)",
-    "Bash(agile-backlog-toolkit:*)",
-    "Bash(ls:*)",
-    "Bash(cat:*)",
-    "Bash(git status:*)",
-    "Bash(git diff:*)",
-    # The test project's own checks, which its plans run after each step.
-    "Bash(flutter:*)",
-    "Bash(dart:*)",
-    "mcp__workflow-integrations",
-    "mcp__workflow-orchestrator",
-    "mcp__backlog-orchestrator",
-)
 
 
 def create_test_project(
-    configuration_file: str | Path | None = None,
-    *,
-    version: str | None = None,
-    hosts: tuple[str, ...] = ("claude", "codex"),
+    version: str | None = None, hosts: tuple[str, ...] = ("claude", "codex")
 ) -> Result[Path]:
-    """A fresh test-project copy in `temp/` with the harness installed for `hosts`.
-
-    The configuration file, when given, holds one complete `.harness/settings.json` value; without
-    it the copy starts unconfigured, as a new user's project does.
-    """
-    match _settings(configuration_file):
+    """A fresh copy in `temp/` with release `version`, or the newest candidate, installed."""
+    match _version(version):
         case Err() as failure:
             return failure
-        case Ok(raw):
+        case Ok(chosen):
+            pass
+    match _download_installer(chosen):
+        case Err() as failure:
+            return failure
+        case Ok(installer):
             pass
     try:
-        acceptance_trial.cleanup_abandoned_runs()
-        project = acceptance_trial.prepare(
-            profile="unconfigured", overrides=raw, in_checkout=True
-        )
-    except (OSError, ValueError, RuntimeError, subprocess.SubprocessError) as failure:
-        return err(
-            "fixture_creation_failed",
-            f"could not create the test project: {failure}",
-            retryable=True,
-        )
-    match install(project, version, hosts):
-        case Err() as failure:
-            acceptance_trial.discard(str(project))
-            return failure
-        case Ok():
-            return Ok(project)
+        project = copy_template()
+    except (OSError, subprocess.SubprocessError) as failure:
+        return err("copy_failed", f"could not copy the test project: {failure}")
+    return install(project, installer, chosen, hosts)
 
 
-def install(project: Path, version: str | None, hosts: tuple[str, ...]) -> Result[Path]:
-    """Install the harness into the copy for each host, inside the trial's own folders."""
-    _, trial_root, _ = acceptance_trial._trial_metadata(str(project))
-    log = trial_root / "installer.log"
-    source = ("--version", version) if version else ("--source", str(REPOSITORY))
-    environment = _environment(project)
-    if "codex" in hosts:
-        _trust_for_codex(project, Path(environment["CODEX_HOME"]))
+def copy_template() -> Path:
+    """Copy the template to the next unused `temp/test-NNN` and commit it as the starting point."""
+    TRIALS.mkdir(exist_ok=True)
+    project = next(
+        TRIALS / f"test-{number:03d}"
+        for number in count(1)
+        if not (TRIALS / f"test-{number:03d}").exists()
+    )
+    shutil.copytree(TEMPLATE, project)
+    for arguments in (
+        ("init", "--quiet"),
+        ("config", "user.name", "Acceptance Trial"),
+        ("config", "user.email", "acceptance-trial@localhost"),
+        ("add", "--all"),
+        ("commit", "--quiet", "-m", "Starting project"),
+    ):
+        subprocess.run(["git", *arguments], cwd=project, check=True)
+    return project
+
+
+def install(
+    project: Path, installer: Path, version: str, hosts: tuple[str, ...]
+) -> Result[Path]:
+    """Run the release's installer for the copy only, once per host."""
+    log = project.parent / f"{project.name}-install.log"
     with log.open("w", encoding="utf-8") as output:
         for host in hosts:
             completed = subprocess.run(
                 [
                     "bash",
-                    str(REPOSITORY / "install.sh"),
+                    str(installer),
                     "--scope",
                     "local",
                     "--project",
                     str(project),
                     "--host",
                     host,
-                    *source,
+                    "--version",
+                    version,
                     "--yes",
                 ],
                 cwd=project,
-                env=environment,
                 stdout=output,
                 stderr=subprocess.STDOUT,
                 check=False,
             )
             if completed.returncode != 0:
                 return err(
-                    "install_failed",
-                    f"installing the harness for {host} failed; see {log}",
+                    "install_failed", f"installing {version} for {host} failed; see {log}"
                 )
-    return Ok(log)
+    return Ok(project)
 
 
-def start_run(
-    project: Path, runtime: str, briefing: str, *, interactive: bool = False
-) -> Result[dict]:
-    """Start the agent in the copy with the briefing as its first message."""
-    match runtime:
-        case "claude" | "codex":
-            pass
-        case _:
-            return err(
-                "unsupported_runtime",
-                f"{runtime} has no headless run here yet; use claude or codex",
-            )
-    if interactive:
-        completed = subprocess.run(
-            [runtime, briefing], cwd=project, env=_environment(project), check=False
-        )
-        return Ok({"state": "closed", "exit_code": completed.returncode})
-    return _headless(project, runtime, _first_command(project, runtime, briefing))
-
-
-def answer(project: Path, reply: str) -> Result[dict]:
-    """Resume the headless session with the human's reply as their next message."""
-    _, trial_root, _ = acceptance_trial._trial_metadata(str(project))
-    record_path = trial_root / RUN_RECORD
-    if not record_path.is_file():
-        return err(
-            "no_run", "this copy has no headless run to answer; start one with run"
-        )
-    record = json.loads(record_path.read_text(encoding="utf-8"))
-    return _headless(
-        project,
-        record["runtime"],
-        _resume_command(project, record["runtime"], record["session"], reply),
-    )
-
-
-def pending_question(project: Path) -> dict | None:
-    """The question the harness waits on in the copy, read from its own records."""
-    for path in sorted((project / ".harness" / "state").rglob("decision.json")):
-        try:
-            record = json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            continue
-        if isinstance(record, dict) and record.get("status") == "pending":
-            return {
-                "id": record.get("id"),
-                "question": record.get("question"),
-                "options": record.get("options", []),
-                "details": record.get("details", []),
-                "approval": bool(record.get("approval")),
-            }
-    return None
-
-
-def discard_test_project(project: str | Path) -> Result[Path]:
-    """Remove a fixture created by this test-only tool, if its ownership marker is valid."""
-    try:
-        shutil.rmtree(_short_temp(Path(project).resolve()), ignore_errors=True)
-        return Ok(acceptance_trial.discard(str(project)))
-    except (OSError, ValueError, json.JSONDecodeError) as failure:
-        return err("fixture_discard_failed", str(failure))
-
-
-def _headless(project: Path, runtime: str, command: list[str]) -> Result[dict]:
-    _, trial_root, _ = acceptance_trial._trial_metadata(str(project))
-    transcript = trial_root / TRANSCRIPT
-    completed = subprocess.run(
-        command,
-        cwd=project,
-        env=_environment(project),
-        stdin=subprocess.DEVNULL,
-        capture_output=True,
-        text=True,
-        check=False,
-    )
-    with transcript.open("a", encoding="utf-8") as output:
-        output.write(completed.stdout)
-    events = tuple(_events(completed.stdout))
-    session = _session(runtime, events)
-    if session:
-        (trial_root / RUN_RECORD).write_text(
-            json.dumps({"runtime": runtime, "session": session}), encoding="utf-8"
-        )
-    question = pending_question(project)
-    return Ok(
-        {
-            "state": "waiting_for_human" if question else "finished",
-            "question": question,
-            "last_message": _last_message(runtime, events),
-            "exit_code": completed.returncode,
-            "session": session,
-            "transcript": str(transcript),
-            "stderr": completed.stderr[-2000:],
-        }
-    )
-
-
-def _first_command(project: Path, runtime: str, briefing: str) -> list[str]:
-    match runtime:
-        case "claude":
-            return [*_claude(project), "--", briefing]
-        case _:
-            return [*_codex(), briefing]
-
-
-def _resume_command(project: Path, runtime: str, session: str, reply: str) -> list[str]:
-    match runtime:
-        case "claude":
-            return [*_claude(project), "--resume", session, "--", reply]
-        case _:
-            return [*_codex(), "resume", session, reply]
-
-
-def _claude(project: Path) -> list[str]:
-    return [
-        "claude",
-        "-p",
-        "--output-format",
-        "stream-json",
-        "--verbose",
-        "--permission-mode",
-        "acceptEdits",
-        # Comma-separated in one argument: as separate words the list would swallow what follows.
-        "--allowedTools",
-        ",".join((*CLAUDE_ALLOWED, *_harness_scripts(project))),
-    ]
-
-
-def _harness_scripts(project: Path) -> tuple[str, ...]:
-    """The harness's own scripts in this trial: its installed launcher, and BMAD's scripts in the
-    copy, by every path an agent writes them with."""
-    _, trial_root, _ = acceptance_trial._trial_metadata(str(project))
-    launcher = (
-        trial_root
-        / "harness-install/marketplace/plugins/monolithic-dev-harness/bin/harness-python"
-    )
-    python = Path(sys.executable).name
-    return (
-        f"Bash(sh {launcher}:*)",
-        f"Bash({launcher}:*)",
-        *(
-            f"Bash({interpreter} {scripts}:*)"
-            for interpreter in (
-                python,
-                "python3",
-                "/usr/local/bin/python3.12",
-                "python3.12",
-            )
-            for scripts in (f"{project}/_bmad/scripts/", "_bmad/scripts/")
-        ),
-    )
-
-
-def _codex() -> list[str]:
-    return ["codex", "exec", "--json", "--sandbox", "workspace-write"]
-
-
-def _events(stdout: str):
-    for line in stdout.splitlines():
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            continue
-        if isinstance(event, dict):
-            yield event
-
-
-def _session(runtime: str, events: tuple[dict, ...]) -> str:
-    key = "session_id" if runtime == "claude" else "thread_id"
+def latest_candidate(releases: list[dict]) -> str | None:
+    """The newest published release candidate in GitHub's newest-first release list."""
     return next(
-        (str(event[key]) for event in events if isinstance(event.get(key), str)), ""
+        (
+            str(release["tag_name"]).removeprefix("v")
+            for release in releases
+            if release.get("prerelease") and not release.get("draft")
+        ),
+        None,
     )
 
 
-def _last_message(runtime: str, events: tuple[dict, ...]) -> str:
-    for event in reversed(events):
-        match runtime, event:
-            case "claude", {"type": "result", "result": str() as text}:
-                return text
-            case "codex", {
-                "type": "item.completed",
-                "item": {"type": "agent_message", "text": str() as text},
-            }:
-                return text
-            case _:
-                pass
-    return ""
-
-
-def _environment(project: Path) -> dict[str, str]:
-    return {
-        **{
-            key: value
-            for key, value in os.environ.items()
-            if key not in acceptance_trial.HOST_CONTEXT_VARIABLES
-        },
-        **acceptance_trial.runner_environment(str(project)),
-        "TMPDIR": str(_short_temp(project)),
-    }
-
-
-def _short_temp(project: Path) -> Path:
-    """A private temporary folder with a short path. The copy sits deep in the checkout, and the
-    harness's gateway socket lives under TMPDIR, where a Unix socket path must stay short."""
-    _, trial_root, _ = acceptance_trial._trial_metadata(str(project))
-    folder = Path(tempfile.gettempdir()) / (
-        "mdh-" + hashlib.sha256(str(trial_root).encode()).hexdigest()[:10]
-    )
-    folder.mkdir(mode=0o700, exist_ok=True)
-    return folder
-
-
-def _trust_for_codex(project: Path, codex_home: Path) -> None:
-    """Codex loads a project's own configuration only for a trusted project."""
-    config = codex_home / "config.toml"
-    entry = f'[projects."{project}"]\ntrust_level = "trusted"\n'
-    existing = config.read_text(encoding="utf-8") if config.is_file() else ""
-    if entry not in existing:
-        config.write_text(
-            existing + ("\n" if existing else "") + entry, encoding="utf-8"
-        )
-
-
-def _settings(configuration_file: str | Path | None) -> Result[dict | None]:
-    if configuration_file is None:
-        return Ok(None)
-    configuration = Path(configuration_file).expanduser()
-    if not configuration.is_file():
-        return err(
-            "missing_configuration",
-            f"project configuration file does not exist: {configuration}",
-        )
+def _version(version: str | None) -> Result[str]:
+    if version:
+        return Ok(version.removeprefix("v"))
     try:
-        raw = json.loads(configuration.read_text(encoding="utf-8"))
-    except json.JSONDecodeError as failure:
+        releases = json.loads(_github(f"repos/{GITHUB}/releases?per_page=30"))
+    except (OSError, ValueError, subprocess.SubprocessError) as failure:
         return err(
-            "invalid_configuration_json",
-            f"project configuration is not valid JSON: {failure}",
+            "release_lookup_failed",
+            f"could not list releases ({failure}); pass --version to install one by hand",
         )
-    except OSError as failure:
+    chosen = latest_candidate(releases if isinstance(releases, list) else [])
+    return (
+        Ok(chosen)
+        if chosen
+        else err("no_candidate", "no release candidate is published; pass --version")
+    )
+
+
+def _download_installer(version: str) -> Result[Path]:
+    """The `install.sh` attached to release `version`, as the README tells a user to fetch it."""
+    target = Path(tempfile.mkdtemp(prefix="mdh-installer-")) / "install.sh"
+    try:
+        match shutil.which("gh"):
+            case None:
+                target.write_bytes(
+                    _fetch(
+                        f"https://github.com/{GITHUB}/releases/download/v{version}/install.sh"
+                    )
+                )
+            case gh:
+                subprocess.run(
+                    [gh, "release", "download", f"v{version}", "--repo", GITHUB,
+                     "--pattern", "install.sh", "--output", str(target)],
+                    check=True,
+                    capture_output=True,
+                )
+    except (OSError, subprocess.SubprocessError) as failure:
         return err(
-            "configuration_unreadable",
-            f"project configuration could not be read: {failure}",
+            "installer_download_failed",
+            f"could not download install.sh for v{version}: {failure}",
         )
-    match raw:
-        case dict():
-            match harness_settings.parse(raw):
-                case Err() as failure:
-                    return failure
-                case Ok():
-                    return Ok(raw)
-        case _:
-            return err(
-                "invalid_configuration", "project configuration must be a JSON object"
-            )
+    return Ok(target)
+
+
+def _github(path: str) -> str:
+    match shutil.which("gh"):
+        case None:
+            return _fetch(f"https://api.github.com/{path}").decode("utf-8")
+        case gh:
+            return subprocess.run(
+                [gh, "api", path], check=True, capture_output=True, text=True
+            ).stdout
+
+
+def _fetch(url: str) -> bytes:
+    token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    with urllib.request.urlopen(urllib.request.Request(url, headers=headers)) as response:
+        return response.read()
 
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    commands = parser.add_subparsers(dest="operation", required=True)
-    create = commands.add_parser(
-        "create", help="copy the test project and install the harness"
+    parser.add_argument(
+        "--version", help="release to install (default: the newest release candidate)"
     )
-    create.add_argument(
-        "--settings", help="a complete .harness/settings.json to start from"
-    )
-    create.add_argument(
-        "--version", help="install this published release instead of this checkout"
-    )
-    create.add_argument(
+    parser.add_argument(
         "--host",
         action="append",
         choices=HOSTS,
         help="host to install for; repeat for several (default: claude and codex)",
     )
-    run = commands.add_parser("run", help="start the agent in a copy")
-    run.add_argument("project")
-    run.add_argument("--runtime", required=True, choices=("claude", "codex"))
-    run.add_argument("--briefing", required=True, help="file holding the first message")
-    run.add_argument(
-        "--interactive",
-        action="store_true",
-        help="open the host's own session, where the person answers",
-    )
-    reply = commands.add_parser(
-        "answer", help="resume a headless run with the human's reply"
-    )
-    reply.add_argument("project")
-    reply.add_argument("reply")
-    discard = commands.add_parser("discard", help="remove a copy and its trial folder")
-    discard.add_argument("project")
     args = parser.parse_args(argv)
-    match args.operation:
-        case "create":
-            result = create_test_project(
-                args.settings,
-                version=args.version,
-                hosts=tuple(args.host or ("claude", "codex")),
-            )
-            return _report(_as_record(result, "project"))
-        case "run":
-            return _report(
-                start_run(
-                    Path(args.project).resolve(),
-                    args.runtime,
-                    Path(args.briefing).read_text(encoding="utf-8"),
-                    interactive=args.interactive,
-                )
-            )
-        case "answer":
-            return _report(answer(Path(args.project).resolve(), args.reply))
-        case _:
-            return _report(_as_record(discard_test_project(args.project), "removed"))
-
-
-def _as_record(result: Result[Path], name: str) -> Result[dict]:
-    match result:
-        case Ok(path):
-            return Ok({name: str(path)})
-        case failed:
-            return failed
-
-
-def _report(result: Result[dict]) -> int:
-    match result:
-        case Ok(value):
-            print(json.dumps(value, ensure_ascii=False, indent=2))
-            return WAITING if value.get("state") == "waiting_for_human" else 0
+    match create_test_project(args.version, tuple(args.host or ("claude", "codex"))):
+        case Ok(project):
+            print(project)
+            return 0
         case Err(failure):
             print(json.dumps(failure.to_dict(), ensure_ascii=False), file=sys.stderr)
             return 1
