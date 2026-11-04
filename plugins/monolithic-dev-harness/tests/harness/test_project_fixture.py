@@ -49,7 +49,9 @@ def test_newest_candidate_skips_finals_and_drafts():
     assert project_fixture.latest_candidate([{"tag_name": "v1.0.0"}]) is None
 
 
-def test_installs_the_release_installer_for_the_copy_only(trials, tmp_path, monkeypatch):
+def test_installs_the_release_installer_for_the_copy_only(
+    trials, tmp_path, monkeypatch
+):
     installer = tmp_path / "install.sh"
     installer.write_text("#!/bin/bash\n", encoding="utf-8")
     monkeypatch.setattr(
@@ -57,7 +59,9 @@ def test_installs_the_release_installer_for_the_copy_only(trials, tmp_path, monk
         "_github",
         lambda path: '[{"tag_name": "v0.7.0-rc.11", "prerelease": true}]',
     )
-    monkeypatch.setattr(project_fixture, "_download_installer", lambda version: Ok(installer))
+    monkeypatch.setattr(
+        project_fixture, "_download_installer", lambda version: Ok(installer)
+    )
     calls = []
     real_run = subprocess.run
 
@@ -76,7 +80,10 @@ def test_installs_the_release_installer_for_the_copy_only(trials, tmp_path, monk
     assert isinstance(result, Ok)
     project = result.value
     assert project.parent == trials
-    assert [command[command.index("--host") + 1] for command in calls] == ["claude", "codex"]
+    assert [command[command.index("--host") + 1] for command in calls] == [
+        "claude",
+        "codex",
+    ]
     for command in calls:
         assert command[1] == str(installer)
         assert command[command.index("--scope") + 1] == "local"
@@ -103,18 +110,24 @@ def test_no_candidate_asks_for_a_version(monkeypatch):
 
 def test_a_failed_install_names_its_log(trials, tmp_path, monkeypatch):
     monkeypatch.setattr(
-        project_fixture, "_download_installer", lambda version: Ok(tmp_path / "install.sh")
+        project_fixture,
+        "_download_installer",
+        lambda version: Ok(tmp_path / "install.sh"),
     )
     real_run = subprocess.run
     monkeypatch.setattr(
         project_fixture.subprocess,
         "run",
-        lambda command, **options: subprocess.CompletedProcess(command, 1)
-        if command[0] == "bash"
-        else real_run(command, **options),
+        lambda command, **options: (
+            subprocess.CompletedProcess(command, 1)
+            if command[0] == "bash"
+            else real_run(command, **options)
+        ),
     )
 
-    result = project_fixture.create_test_project(version="0.7.0-rc.11", hosts=("codex",))
+    result = project_fixture.create_test_project(
+        version="0.7.0-rc.11", hosts=("codex",)
+    )
 
     assert isinstance(result, Err)
     assert result.failure.code == "install_failed"

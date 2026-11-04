@@ -104,7 +104,8 @@ def install(
             )
             if completed.returncode != 0:
                 return err(
-                    "install_failed", f"installing {version} for {host} failed; see {log}"
+                    "install_failed",
+                    f"installing {version} for {host} failed; see {log}",
                 )
     return Ok(project)
 
@@ -152,8 +153,18 @@ def _download_installer(version: str) -> Result[Path]:
                 )
             case gh:
                 subprocess.run(
-                    [gh, "release", "download", f"v{version}", "--repo", GITHUB,
-                     "--pattern", "install.sh", "--output", str(target)],
+                    [
+                        gh,
+                        "release",
+                        "download",
+                        f"v{version}",
+                        "--repo",
+                        GITHUB,
+                        "--pattern",
+                        "install.sh",
+                        "--output",
+                        str(target),
+                    ],
                     check=True,
                     capture_output=True,
                 )
@@ -178,7 +189,9 @@ def _github(path: str) -> str:
 def _fetch(url: str) -> bytes:
     token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
     headers = {"Authorization": f"Bearer {token}"} if token else {}
-    with urllib.request.urlopen(urllib.request.Request(url, headers=headers)) as response:
+    with urllib.request.urlopen(
+        urllib.request.Request(url, headers=headers)
+    ) as response:
         return response.read()
 
 
