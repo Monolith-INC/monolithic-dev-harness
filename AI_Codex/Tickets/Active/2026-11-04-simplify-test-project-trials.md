@@ -36,7 +36,8 @@ interactive test: bootstrap, then the main workflow with a `backlog/` ticket (us
 - `refined.check_drafts` + `decision present --gate publish-items` refuse an unfinished Epic,
   Feature or Story draft in a work session; `create-entry` and `generate-work-item` refine first.
 - `plan-checkpoint` is an approval (`binds = "artifacts"`, shown first); options Approve /
-  Change or deepen / Approve and stop; former labels still map to their options.
+  Change or deepen / Approve and stop. Both approving options capture approval; previous labels
+  have no compatibility mapping (Constitution, Article 11).
 - Kept: the Story's implementation-plan approval and the Tasks' publish approval.
 - Verification: full suite 1889 passed before the fixture update; `test_publish_once.py` 7 passed;
   `test_bound_approvals.py` 10 passed; ruff, Markdown lint, repo and version checks pass.

@@ -148,5 +148,3 @@ def test_the_plan_question_is_an_approval_tied_to_the_plan() -> None:
     gate = catalog["plan-checkpoint"]
     assert gate.approval and gate.artifact and gate.binds == "artifacts"
     assert gate.options[0].label["en"] == "Approve"
-    # Answers given under the old wording still count.
-    assert "Approve and continue" in gate.options[0].former

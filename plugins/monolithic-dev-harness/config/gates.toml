@@ -236,7 +236,6 @@ recommended = "continue"
 id = "continue"
 label.en = "Approve"
 label.pt-br = "Aprovar"
-former = ["Approve and continue", "Aprovar e continuar"]
 detail.en = "You approve the plan as it reads now, and I draft the work items next. Any later change to it comes back to you."
 detail.pt-br = "Você aprova o plano como está, e eu rascunho os itens de trabalho em seguida. Qualquer mudança posterior volta para você."
 
@@ -244,7 +243,6 @@ detail.pt-br = "Você aprova o plano como está, e eu rascunho os itens de traba
 id = "deepen"
 label.en = "Change or deepen"
 label.pt-br = "Mudar ou aprofundar"
-former = ["Deepen", "Aprofundar"]
 detail.en = "Tell me what to change, or have reviews challenge the plan; I show you the updated plan to approve."
 detail.pt-br = "Diga o que mudar, ou peça revisões que questionem o plano; eu mostro o plano atualizado para você aprovar."
 

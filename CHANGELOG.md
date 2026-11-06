@@ -14,7 +14,7 @@ All notable changes to this project are documented here. The format follows
   draft to approve again. The rc.11 trial needed three publish approvals for one Story.
 - The plan question is an approval tied to the plan as shown. Its options are **Approve**,
   **Change or deepen** and **Approve and stop**, and none says the plan "locks"; a change to the plan
-  comes back for approval. Answers given under the old labels still count.
+  comes back for approval. Both approving options record approval in English and Portuguese.
 
 ## [0.7.0-rc.11] - 2026-11-04
 

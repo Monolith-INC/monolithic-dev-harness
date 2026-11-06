@@ -54,7 +54,7 @@ def option_id(entry: dict) -> str:
                     for gate in catalog.values()
                     if gate.id == entry.get("gate")
                     for option in gate.options
-                    for label in (*option.label.values(), *option.former)
+                    for label in option.label.values()
                     if questions.choice_label(label).casefold()
                     == questions.choice_label(str(entry.get("answer", ""))).casefold()
                 ),

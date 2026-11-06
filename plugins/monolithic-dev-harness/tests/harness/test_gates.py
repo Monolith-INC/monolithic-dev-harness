@@ -9,8 +9,8 @@ from pathlib import Path
 import pytest
 
 from core.result import Err, Ok
-from harness import gates, preferences, questions
-from tests.harness.test_decisions import CLI
+from harness import decisions, gates, preferences, questions, state
+from tests.harness.test_decisions import CLI, native
 from tests.settings_fixture import write_settings
 
 LANGUAGES, CATALOG = gates.load().value
@@ -186,3 +186,100 @@ def test_route_choices_are_required_answers_without_writes(
 
 def test_the_refined_question_names_any_entry_item() -> None:
     assert gates._slots(CATALOG["refined-start"], "en") == {"item"}
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+@pytest.mark.parametrize("option_id", ("continue", "deepen", "stop"))
+def test_plan_choice_captures_only_approving_answers(
+    tmp_path: Path, monkeypatch, language: str, option_id: str
+) -> None:
+    monkeypatch.setenv("HARNESS_USER_STATE_DIR", str(tmp_path / "preferences"))
+    write_settings(tmp_path)
+    assert isinstance(preferences.set_language(language, tmp_path), Ok)
+    (tmp_path / "plan.md").write_text("The reviewed approach.")
+    subprocess.run(
+        [
+            str(CLI),
+            "workflow",
+            "show",
+            "--repo",
+            str(tmp_path),
+            "--artifact",
+            "plan.md",
+        ],
+        capture_output=True,
+        timeout=30,
+        check=True,
+    )
+    subprocess.run(
+        [
+            str(CLI),
+            "decision",
+            "present",
+            "--repo",
+            str(tmp_path),
+            "--gate",
+            "plan-checkpoint",
+            "--artifact",
+            "plan.md",
+        ],
+        capture_output=True,
+        timeout=30,
+        check=True,
+    )
+    answer = next(
+        option.label[language]
+        for option in CATALOG["plan-checkpoint"].options
+        if option.id == option_id
+    )
+    rendered = gates.render("plan-checkpoint", language, {}).value
+    clicked = questions.approval(
+        {
+            "questions": [
+                {
+                    "question": rendered.question,
+                    "options": [{"label": label} for label in rendered.options],
+                }
+            ]
+        },
+        {"answers": {rendered.question: answer}},
+    )
+    assert (clicked is not None) == (option_id in {"continue", "stop"})
+    native(tmp_path, "prompt", {"prompt": answer})
+    assert not decisions.waiting(tmp_path)
+    approval = state.active_approval(tmp_path)
+    match option_id:
+        case "deepen":
+            assert approval is None
+        case "continue" | "stop":
+            assert approval is not None
+            assert approval[1]["binds"]["artifacts"]
+            assert "expires" not in approval[1]
+
+
+@pytest.mark.parametrize("language", LANGUAGES)
+def test_approve_and_stop_cannot_approve_a_changed_plan(
+    tmp_path: Path, language: str
+) -> None:
+    from harness import workflow
+
+    plan = tmp_path / "plan.md"
+    plan.write_text("Reviewed approach.")
+    rendered = gates.render("plan-checkpoint", language, {}).value
+    assert isinstance(
+        decisions.begin(
+            tmp_path,
+            "changed-plan",
+            rendered.question,
+            rendered.options,
+            "chat",
+            (("plan.md", workflow.file_digest(plan).value),),
+            approval=True,
+        ),
+        Ok,
+    )
+    plan.write_text("An unreviewed change.")
+    answer = CATALOG["plan-checkpoint"].options[2].label[language]
+    native(tmp_path, "prompt", {"prompt": answer})
+    assert decisions.waiting(tmp_path)
+    assert state.active_approval(tmp_path) is None
