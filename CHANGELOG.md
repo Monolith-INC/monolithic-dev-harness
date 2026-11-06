@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0-rc.12] - 2026-11-06
 
 ### Changed
 
@@ -15,6 +15,12 @@ All notable changes to this project are documented here. The format follows
 - The plan question is an approval tied to the plan as shown. Its options are **Approve**,
   **Change or deepen** and **Approve and stop**, and none says the plan "locks"; a change to the plan
   comes back for approval. Both approving options record approval in English and Portuguese.
+
+### Qualification
+
+- Live workflow qualification remains open, including approval capture through a relayed
+  project-agent conversation (audit H3). Automated approval regression coverage does not replace
+  that trial. This is a release candidate.
 
 ## [0.7.0-rc.11] - 2026-11-04
 
@@ -1052,3 +1058,5 @@ First release.
 [0.7.0-rc.9]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.8...v0.7.0-rc.9
 [0.7.0-rc.10]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.9...v0.7.0-rc.10
 [0.7.0-rc.11]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.10...v0.7.0-rc.11
+
+[0.7.0-rc.12]: https://github.com/Monolith-INC/monolithic-dev-harness/compare/v0.7.0-rc.11...v0.7.0-rc.12
