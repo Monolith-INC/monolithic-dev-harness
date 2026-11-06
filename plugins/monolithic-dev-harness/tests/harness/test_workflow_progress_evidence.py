@@ -20,7 +20,7 @@ def history(repo, current):
                     "id": "approach",
                     "gate": "plan-checkpoint",
                     "status": "answered",
-                    "answer": "Approve and continue",
+                    "answer": "Approve",
                 },
                 {
                     "id": "publish",
@@ -136,7 +136,7 @@ def test_rework_does_not_reuse_an_old_rounds_approach_or_depth(tmp_path):
                     "id": "approach-old",
                     "gate": "plan-checkpoint",
                     "status": "answered",
-                    "answer": "Approve and continue",
+                    "answer": "Approve",
                 },
                 {
                     "id": "rework-now",

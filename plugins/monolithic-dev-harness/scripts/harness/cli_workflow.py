@@ -22,6 +22,7 @@ from harness import (
     preferences,
     prepared_workflows,
     questions,
+    refined,
     review_decisions,
     route_facts,
     settings,
@@ -733,6 +734,13 @@ def _gate_values(repo: Path, args: argparse.Namespace) -> Result[dict[str, str]]
                 return failure
             case Ok():
                 values["items"] = ",".join(items)
+        # In a work session the user sees each item once, finished: no draft is put to them until
+        # it is refined, so nothing is rewritten and re-approved after they approve it.
+        match args.session_id and refined.check_drafts(repo, list(args.artifact or ())):
+            case Err() as failure:
+                return failure
+            case _:
+                pass
     if args.gate != "implementation-confirm":
         return Ok(values)
     return bind(

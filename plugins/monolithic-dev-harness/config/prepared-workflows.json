@@ -397,7 +397,7 @@
     "any_published",
     "published_after_approach"
    ],
-   "say": "Draft the item the work is for, show the draft, ask the gate, create it, read it back, then track it with the command.",
+   "say": "Draft the item the work is for with generate-work-item, then write the draft in its type's template with enrich-work-item, keeping it as Original Description, until it passes validate-artifact. Show the finished draft, ask the gate once, create the item, read it back, then track it with the command. If the user asks for changes, make them in the draft and show it again before asking.",
    "done": [
     "entry_tracked"
    ]

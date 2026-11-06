@@ -141,6 +141,12 @@ Present title, requirements, acceptance criteria, spec path, and draft path in c
 `harness decision present --gate publish-items` with the draft as `--artifact`. Silence is not
 approval.
 
+Inside a harness work session, an Epic, Feature or Story is published once, finished: write the
+draft in its type's template with `enrich-work-item` (keeping it as Original Description) until it
+passes `validate-artifact`, and only then show it and ask. The harness refuses to ask about a draft
+that is not refined yet. If the user asks for a change, make it in the draft and show the full
+draft again before asking.
+
 The destination is the selected tracker. Write nothing else unless the user asks for chat-only
 output.
 

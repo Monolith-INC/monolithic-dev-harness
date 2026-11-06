@@ -38,7 +38,9 @@ def no_choice(answer: str) -> bool:
     return answer.strip().casefold() in NO_CHOICE
 
 
-APPROVE_LABELS = frozenset({"approve", "aprovar", "aprovo"})
+APPROVE_LABELS = frozenset(
+    {"approve", "aprovar", "aprovo", "approve and stop", "aprovar e parar"}
+)
 # Answers that approve nothing, so a changed artifact never blocks them.
 DECLINE_LABELS = frozenset(
     {"revise", "stop", "not now", "revisar", "parar", "agora não"}

@@ -226,30 +226,32 @@ detail.pt-br = "Dar forma à ideia ou questioná-la antes de planejar o trabalho
 id = "plan-checkpoint"
 question.en = "The plan is ready. How do you want to proceed?"
 question.pt-br = "O plano está pronto. Como você quer seguir?"
-free_text = true
+approval = true
 artifact = true
+shown = true
+binds = "artifacts"
 recommended = "continue"
 
 [[gate.option]]
 id = "continue"
-label.en = "Approve and continue"
-label.pt-br = "Aprovar e continuar"
-detail.en = "The plan locks and I draft the work items next."
-detail.pt-br = "O plano fica travado e eu rascunho os itens de trabalho em seguida."
+label.en = "Approve"
+label.pt-br = "Aprovar"
+detail.en = "You approve the plan as it reads now, and I draft the work items next. Any later change to it comes back to you."
+detail.pt-br = "Você aprova o plano como está, e eu rascunho os itens de trabalho em seguida. Qualquer mudança posterior volta para você."
 
 [[gate.option]]
 id = "deepen"
-label.en = "Deepen"
-label.pt-br = "Aprofundar"
-detail.en = "Challenge the plan with reviews and other perspectives before approving."
-detail.pt-br = "Questionar o plano com revisões e outras perspectivas antes de aprovar."
+label.en = "Change or deepen"
+label.pt-br = "Mudar ou aprofundar"
+detail.en = "Tell me what to change, or have reviews challenge the plan; I show you the updated plan to approve."
+detail.pt-br = "Diga o que mudar, ou peça revisões que questionem o plano; eu mostro o plano atualizado para você aprovar."
 
 [[gate.option]]
 id = "stop"
 label.en = "Approve and stop"
 label.pt-br = "Aprovar e parar"
-detail.en = "The plan locks and we pause here."
-detail.pt-br = "O plano fica travado e paramos por aqui."
+detail.en = "You approve the plan as it reads now, and we pause here."
+detail.pt-br = "Você aprova o plano como está, e paramos por aqui."
 
 [[gate]]
 id = "publish-items"
