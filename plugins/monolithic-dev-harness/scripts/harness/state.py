@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -169,19 +170,28 @@ def approval_open(record: dict[str, Any]) -> bool:
             return False
 
 
-def open_approvals(
-    repo: Path, work_session_id: str | None = None
+def _open_where(
+    repo: Path, wanted: Callable[[dict[str, Any]], bool]
 ) -> list[tuple[Path, dict[str, Any]]]:
-    """Open approvals for exactly this work session (`None`: project-wide), newest first."""
     directory = state_dir(repo) / "approvals"
     found = [
         (path, record)
         for path in (directory.glob("*.json") if directory.is_dir() else ())
-        if (record := read_json(path))
-        and _scope(record) == work_session_id
-        and approval_open(record)
+        if (record := read_json(path)) and wanted(record) and approval_open(record)
     ]
     return sorted(found, key=lambda item: str(item[1].get("opened", "")), reverse=True)
+
+
+def open_approvals(
+    repo: Path, work_session_id: str | None = None
+) -> list[tuple[Path, dict[str, Any]]]:
+    """Open approvals for exactly this work session (`None`: project-wide), newest first."""
+    return _open_where(repo, lambda record: _scope(record) == work_session_id)
+
+
+def bound_approvals(repo: Path) -> list[tuple[Path, dict[str, Any]]]:
+    """Open approvals tied to reviewed content or a target, of any work session, newest first."""
+    return _open_where(repo, lambda record: bool(record.get("binds")))
 
 
 def active_approval(

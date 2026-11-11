@@ -71,6 +71,15 @@ def operations(call: rules.ToolCall, repo: Path) -> rules.Decision | None:
             )
 
 
+def acting_in(repo: Path, work_session_id: str | None) -> bool:
+    """Whether this work session is the active mode's: a conversation acting in it is in the mode."""
+    match modes.active(repo):
+        case modes.Active(session_id=identifier):
+            return work_session_id == identifier
+        case _:
+            return False
+
+
 def _gateway(call: rules.ToolCall) -> bool:
     return call.kind == "mcp" and call.server.endswith(GATEWAY_SERVER)
 

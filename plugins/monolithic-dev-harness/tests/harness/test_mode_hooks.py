@@ -6,13 +6,25 @@ does not list. The tests run in-process, with `modes.MODES_ROOT` pointed at fixt
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
 import pytest
 
 from core.result import Err, Ok
-from harness import decisions, hook, mode_hooks, modes, rules, state, work_sessions
+from harness import (
+    decisions,
+    hook,
+    mode_hooks,
+    modes,
+    rules,
+    settings,
+    state,
+    tracker_policy,
+    work_sessions,
+    workflow,
+)
 from host_adapters import hook_bridge, work_session_context
 from tests.harness.test_mode_session import entered
 from tests.harness.test_modes import with_fields, write_mode
@@ -706,6 +718,172 @@ def test_leaving_ends_a_mode_that_could_not_be_recovered(
     assert isinstance(modes.leave(repo), Ok)
 
     assert pre_tool_output(repo, UNLISTED_READ, capsys) == ""
+
+
+# an approval belongs to the content it approves: a replaced mode session does not lose it
+
+DRAFT = "drafts/vision.md"
+APPROVED_BODY = "# Vision\n\nThe approved text.\n"
+
+
+def draft_digest(project: Path) -> str:
+    match workflow.file_digest(project / DRAFT):
+        case Ok(digest):
+            return digest
+        case failure:
+            raise AssertionError(f"cannot read the draft: {failure!r}")
+
+
+def reviewed_draft(project: Path) -> dict:
+    """What the user reviewed: the draft file and the body it holds."""
+    path = project / DRAFT
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(APPROVED_BODY, encoding="utf-8")
+    return {
+        "artifacts": [[DRAFT, draft_digest(project)]],
+        "bodies": [hashlib.sha256(APPROVED_BODY.strip().encode()).hexdigest()],
+    }
+
+
+def approve_content(project: Path, session: str | None) -> None:
+    state.open_approval(
+        project,
+        "HB-CONTENT1",
+        20,
+        work_session_id=session,
+        binds=reviewed_draft(project),
+    )
+
+
+def body_decision(project: Path, session: str | None, body: str) -> rules.Decision:
+    call = rules.make_call(
+        "tracker_update_work_item",
+        {"description": body},
+        "plugin_monolithic-dev-harness_workflow-integrations",
+        kind="mcp",
+    )
+    loaded = settings.load(project)
+    return rules.rule_approval_required(
+        call, project, tracker_policy.build(project, loaded), session
+    )
+
+
+def test_an_approval_of_reviewed_content_survives_the_mode_session_being_replaced(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    approve_content(repo, active.session_id)
+    assert pre_tool_reason(repo, LISTED, capsys, "chat-a") is None
+    assert isinstance(work_sessions.transition(repo, active.session_id, "complete"), Ok)
+
+    still_approved = pre_tool_reason(repo, LISTED, capsys, "chat-a")
+
+    new = acting(repo, "chat-a")
+    assert new is not None and new != active.session_id
+    assert still_approved is None
+
+
+def test_content_that_changed_after_it_was_approved_is_still_refused_in_a_mode(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    approve_content(repo, active.session_id)
+    assert isinstance(work_sessions.transition(repo, active.session_id, "complete"), Ok)
+    (repo / DRAFT).write_text(APPROVED_BODY + "an edit nobody approved\n")
+
+    reason = pre_tool_reason(repo, LISTED, capsys, "chat-a")
+
+    assert reason is not None
+    assert "[harness approval-required]" in reason
+    assert "changed" in reason
+
+
+def test_an_approved_body_is_held_to_in_a_mode_whichever_session_is_running(
+    repo: Path,
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    approve_content(repo, active.session_id)
+    assert isinstance(work_sessions.transition(repo, active.session_id, "complete"), Ok)
+    new = modes.active(repo)
+    assert new is not None and new.session_id != active.session_id
+
+    assert body_decision(repo, new.session_id, APPROVED_BODY).allowed
+    different = body_decision(repo, new.session_id, APPROVED_BODY + "more")
+    assert not different.allowed
+    assert "no approved draft holds" in (different.reason or "")
+
+
+def test_a_general_window_is_still_its_own_sessions_inside_a_mode(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    approve(repo, "chat-a")
+    capsys.readouterr()
+    assert pre_tool_reason(repo, LISTED, capsys, "chat-a") is None
+    assert isinstance(work_sessions.transition(repo, active.session_id, "complete"), Ok)
+
+    reason = pre_tool_reason(repo, LISTED, capsys, "chat-a")
+
+    assert reason is not None
+    assert "[harness approval-required]" in reason
+
+
+def test_an_approval_typed_in_a_mode_is_the_mode_sessions_and_not_project_wide(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+
+    approve(repo, "chat-a")
+    capsys.readouterr()
+
+    ((_, record),) = state.open_approvals(repo, active.session_id)
+    assert record["work_session"] == active.session_id
+    assert state.open_approvals(repo, None) == []
+
+
+def test_an_approval_of_reviewed_content_covers_nothing_once_the_mode_is_left(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    approve_content(repo, active.session_id)
+    assert pre_tool_reason(repo, LISTED, capsys, "chat-a") is None
+    assert isinstance(modes.leave(repo), Ok)
+
+    reason = pre_tool_reason(repo, LISTED, capsys, "chat-a")
+
+    assert reason is not None
+    assert "[harness approval-required]" in reason
+
+
+def test_outside_a_mode_an_approval_stays_with_the_session_it_was_given_in(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    mine = move_current_elsewhere(repo)
+    choose(repo, "chat-a", mine.id)
+    approve_content(repo, mine.id)
+    assert pre_tool_reason(repo, LISTED, capsys, "chat-a") is None
+    assert isinstance(work_sessions.transition(repo, mine.id, "complete"), Ok)
+    successor = move_current_elsewhere(repo)
+    choose(repo, "chat-a", successor.id)
+
+    reason = pre_tool_reason(repo, LISTED, capsys, "chat-a")
+
+    assert reason is not None
+    assert "[harness approval-required]" in reason
+
+
+def test_an_approval_of_another_session_does_not_cover_a_conversation_outside_a_mode(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    mine = move_current_elsewhere(repo)
+    other = started(repo, "another conversation's work")
+    choose(repo, "chat-a", mine.id)
+    approve_content(repo, other.id)
+
+    reason = pre_tool_reason(repo, LISTED, capsys, "chat-a")
+
+    assert reason is not None
+    assert "[harness approval-required]" in reason
 
 
 # a conversation in a mode acts in the mode's session, so its commands do, and no message names it

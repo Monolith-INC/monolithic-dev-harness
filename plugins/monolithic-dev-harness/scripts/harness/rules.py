@@ -901,6 +901,26 @@ def _covers(record: dict[str, Any], target: Target) -> bool:
             return kind in ("tracker", "item", "content")
 
 
+def _approvals_for(
+    repo: Path, work_session_id: str | None
+) -> list[tuple[Path, dict[str, Any]]]:
+    """The open approvals a write in this work session can rely on, newest first.
+
+    Its own. Inside a mode, also every approval tied to reviewed content: it belongs to what it
+    approves, not to the mode's session, which a repair may have replaced since. A general window
+    is still the session's, and outside a mode nothing else counts.
+    """
+    own = state.open_approvals(repo, work_session_id)
+    if not mode_hooks.acting_in(repo, work_session_id):
+        return own
+    held = {path for path, _ in own}
+    return sorted(
+        [*own, *(item for item in state.bound_approvals(repo) if item[0] not in held)],
+        key=lambda item: str(item[1].get("opened", "")),
+        reverse=True,
+    )
+
+
 def covering_approval(
     call: ToolCall, repo: Path, work_session_id: str | None
 ) -> tuple[tuple[Path, dict[str, Any]] | None, bool]:
@@ -910,7 +930,7 @@ def covering_approval(
     if work_sessions.ended(repo, work_session_id):
         return None, False
     stale = False
-    for path, record in state.open_approvals(repo, work_session_id):
+    for path, record in _approvals_for(repo, work_session_id):
         if not all(_covers(record, target) for target in targets):
             continue
         if _context_unchanged(
@@ -939,7 +959,7 @@ def _approved_body(repo: Path, work_session_id: str | None, body: str) -> bool:
         and _context_unchanged(
             repo, record.get("binds") or {}, str(record.get("id", ""))
         )
-        for _, record in state.open_approvals(repo, work_session_id)
+        for _, record in _approvals_for(repo, work_session_id)
     )
 
 
