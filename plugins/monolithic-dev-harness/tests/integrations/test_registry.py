@@ -239,6 +239,19 @@ class RegistryTest(unittest.TestCase):
             registry.build(active, self.repo, FakeTransport({})).failure.message,
         )
 
+    def test_registry_refuses_optional_ops_the_manifest_does_not_declare(self) -> None:
+        folder = copy_tracker(
+            "local", self.onboarded / "quiet", name="quiet", optional=[]
+        )
+        trust.trust(self.repo, "quiet", folder, trust.digest(folder))
+        active = registry.resolve(
+            self.repo, settings({"name": "quiet", "source": "onboarded"})
+        )
+        self.assertIn(
+            "remove_artifact",
+            registry.build(active, self.repo, FakeTransport({})).failure.message,
+        )
+
 
 class ManifestFileTest(unittest.TestCase):
     def test_shipped_manifests_are_json_objects_with_schema_version_1(self) -> None:

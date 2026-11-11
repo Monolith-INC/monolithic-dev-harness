@@ -30,7 +30,8 @@
     "teams": "list_teams",
     "cycles": "list_cycles",
     "comments": "list_comments",
-    "comment": "save_comment"
+    "comment": "save_comment",
+    "comment_delete": "delete_comment"
   },
   "ids": {
     "pattern": "[A-Za-z][A-Za-z0-9]*-[1-9][0-9]*",
@@ -43,5 +44,6 @@
     "tools": ["save_*", "create_*", "update_*", "delete_*"]
   },
   "attachments": {"spec": "comment", "report": "comment", "pull_request": "comment"},
+  "optional": ["remove_artifact"],
   "text_format": "markdown"
 }

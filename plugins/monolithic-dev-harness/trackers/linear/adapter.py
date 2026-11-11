@@ -132,6 +132,11 @@ def adapter(context: AdapterContext) -> TrackerOps:
             lambda listing: _cycle_items(context, call, _pick(listing, ref)),
         ),
         records_hours=False,
+        optional={
+            "remove_artifact": lambda ref, artifact: fmap(
+                call("comment_delete", {"id": artifact.id}), lambda _: None
+            ),
+        },
     )
 
 

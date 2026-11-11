@@ -221,3 +221,22 @@ def test_revised_document_reads_back_revised(tracker: TrackerOps) -> None:
     assert isinstance(revised, Ok)
     (now,) = tracker.list_artifacts(story.key).value
     assert (now.id, now.content) == (published.id, "second")
+
+
+@pytest.mark.parametrize("name", ["local", "linear"])
+def test_removed_document_is_gone(name: str, tmp_path: Path) -> None:
+    tracker = (
+        ops("local", {}, repo=tmp_path)
+        if name == "local"
+        else ops("linear", LINEAR, FakeTransport(LinearWorkspace().answers))
+    )
+    _, story = _story_under_feature(tracker)
+    tracker.add_artifact(story.key, ArtifactDraft("spec", "Spec", "first", "1"))
+    (published,) = tracker.list_artifacts(story.key).value
+    assert isinstance(tracker.optional["remove_artifact"](story.key, published), Ok)
+    assert tracker.list_artifacts(story.key).value == ()
+
+
+def test_azure_offers_no_document_removal() -> None:
+    azure, _ = _azure()
+    assert dict(azure.optional) == {}

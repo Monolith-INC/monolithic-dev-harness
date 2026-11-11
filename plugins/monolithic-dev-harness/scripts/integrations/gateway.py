@@ -17,7 +17,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from core.result import Err, Ok, Result, attempt, bind, err, fmap, sequence
+from core.result import Err, Ok, Result, attempt, bind, err, fmap, sequence, value_or
 from core.schema import validate
 from harness import decisions, state
 from harness import settings as repo_settings
@@ -148,6 +148,13 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
                 "content": STRING,
                 "revision": STRING,
             },
+        ),
+        (
+            "tracker_remove_artifact",
+            "Remove a published artifact (artifactId from tracker_list_artifacts). Offered only "
+            "by trackers that can remove one.",
+            ("ref", "artifactId"),
+            {"ref": STRING, "artifactId": STRING},
         ),
         (
             "tracker_revise_artifact",
@@ -464,6 +471,9 @@ def _tracker_call(name: str, args: Mapping[str, Any], ops: TrackerOps) -> Result
             args["ref"], LogicalState(args["state"])
         ),
         "tracker_publish_artifact": lambda: _publish(ops, args),
+        "tracker_remove_artifact": lambda: _remove_artifact(
+            ops, args["ref"], args["artifactId"]
+        ),
         "tracker_revise_artifact": lambda: artifacts.revise(
             ops,
             args["ref"],
@@ -505,6 +515,23 @@ def _verified_item_write(name, value, ops, args) -> Result[Any]:
             )
         case _:
             return Ok(plain(value))
+
+
+def _remove_artifact(ops: TrackerOps, ref: str, artifact_id: str) -> Result[Any]:
+    remove = ops.optional.get("remove_artifact")
+    if remove is None:
+        return err(
+            "unsupported_capability", "this tracker cannot remove a published artifact"
+        )
+    return bind(
+        ops.list_artifacts(ref),
+        lambda found: next(
+            (remove(ref, artifact) for artifact in found if artifact.id == artifact_id),
+            err(
+                "artifact_not_found", f"{ref} has no published artifact {artifact_id!r}"
+            ),
+        ),
+    )
 
 
 def _comparable(item: WorkItem) -> WorkItem:
@@ -643,13 +670,26 @@ def _telemetry(operation: str, outcome: str, attempts: int, value: Any) -> Any:
 # --- the MCP protocol -------------------------------------------------------------------------
 
 
+# Tools for operations beyond the base surface, listed only when the selected tracker offers them.
+OPTIONAL_TOOLS = {"tracker_remove_artifact": "remove_artifact"}
+
+
 def tools_for(root: Path) -> list[Mapping[str, Any]]:
-    """Every tool, except the tracker's own while tracking is skipped."""
+    """Every tool, except the tracker's own while tracking is skipped, and an optional one the
+    selected tracker does not offer. Read from its manifest: no tracker is opened to list tools."""
     skipped = state.tracking_mode(root) != "enforced"
+    offered = value_or(
+        fmap(
+            registry.selected(root, repo_settings.load(root)),
+            lambda active: set(active.manifest.optional),
+        ),
+        set(),
+    )
     return [
         tool
         for tool in TOOLS
         if not (skipped and str(tool["name"]).startswith("tracker_"))
+        and OPTIONAL_TOOLS.get(str(tool["name"]), "") in offered | {""}
     ]
 
 

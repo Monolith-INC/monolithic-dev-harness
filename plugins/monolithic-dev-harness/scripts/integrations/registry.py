@@ -343,6 +343,7 @@ def _manifest(folder: Path, source: str, document: Mapping[str, Any]) -> Manifes
         ),
         text_format=str(document["text_format"]),
         document=MappingProxyType(dict(document)),
+        optional=tuple(map(str, document.get("optional", ()))),
     )
 
 
@@ -660,11 +661,19 @@ def _import(module_name: str, file: Path) -> Any:
 
 
 def _built(manifest: Manifest, ops: Any) -> Result[TrackerOps]:
-    return (
-        Ok(ops)
-        if isinstance(ops, TrackerOps)
-        else err(
+    if not isinstance(ops, TrackerOps):
+        return err(
             "invalid_tracker",
             f"{manifest.name}/{ADAPTER} adapter(context) did not return TrackerOps",
+        )
+    offered, declared = set(ops.optional), set(manifest.optional)
+    return (
+        Ok(ops)
+        if offered == declared
+        else err(
+            "invalid_tracker",
+            f"{manifest.name}: the adapter offers {sorted(offered) or 'nothing'} beyond the base "
+            f"surface, but tracker.json declares {sorted(declared) or 'nothing'}: "
+            + ", ".join(sorted(offered ^ declared)),
         )
     )

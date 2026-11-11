@@ -171,7 +171,9 @@ class GatewayTest(unittest.TestCase):
         )
 
     def test_revising_an_unknown_document_fails(self) -> None:
-        story = self.call("tracker_create_work_item", kind="user_story", title="S").value
+        story = self.call(
+            "tracker_create_work_item", kind="user_story", title="S"
+        ).value
         refused = self.call(
             "tracker_revise_artifact",
             ref=story["key"],
@@ -182,6 +184,35 @@ class GatewayTest(unittest.TestCase):
             content="x",
         )
         self.assertEqual(refused.failure.code, "artifact_not_found")
+
+    def test_tools_list_hides_removal_for_a_tracker_without_it(self) -> None:
+        from harness import state
+
+        state.set_tracking_mode(self.root, "enforced")
+        names = {tool["name"] for tool in gateway.tools_for(self.root)}
+        self.assertIn("tracker_remove_artifact", names)
+        write_settings(
+            self.root,
+            tracker={
+                "name": "azure-devops",
+                "values": {"organization": "o", "project": "p"},
+            },
+        )
+        names = {tool["name"] for tool in gateway.tools_for(self.root)}
+        self.assertNotIn("tracker_remove_artifact", names)
+        self.assertIn("tracker_revise_artifact", names)
+
+    def test_removing_on_a_tracker_without_it_is_unsupported(self) -> None:
+        write_settings(
+            self.root,
+            tracker={
+                "name": "azure-devops",
+                "values": {"organization": "o", "project": "p"},
+            },
+        )
+        refused = self.call("tracker_remove_artifact", ref="1", artifactId="9")
+        self.assertEqual(refused.failure.code, "unsupported_capability")
+        self.assertIn("cannot remove a published artifact", refused.failure.message)
 
     def test_arguments_are_checked_against_the_tool_schema(self) -> None:
         self.assertIn(

@@ -194,6 +194,8 @@ class Manifest:
     required_settings: tuple[str, ...]
     text_format: str
     document: Mapping[str, Any] = field(compare=False)
+    # Operations beyond the base surface this tracker offers (`TrackerOps.optional`).
+    optional: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -298,6 +300,10 @@ class TrackerOps:
     sprint_items: Callable[[str], Result[tuple[EstimableItem, ...]]]
     # Whether a Task's hours can be written (`update_work_item`) at all.
     records_hours: bool
+    # Operations beyond the base surface, offered only where the tracker has them natively
+    # (Article 14); the manifest's `optional` names the same ones. "remove_artifact":
+    # (ref, artifact) -> Result[None].
+    optional: Mapping[str, Callable[..., Result[Any]]] = EMPTY
 
 
 def _unsupported(operation: str) -> Callable[..., Result[Mapping[str, Any]]]:

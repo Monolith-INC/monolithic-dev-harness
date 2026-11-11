@@ -168,6 +168,9 @@ class LinearWorkspace:
                 if issue == args["issueId"]
             ],
             "save_comment": self.comment,
+            "delete_comment": lambda args: (
+                self.comments.pop(args["id"]) and {"ok": True}
+            ),
             "list_cycles": lambda args: [self.cycle],
         }
         self.cycle = {

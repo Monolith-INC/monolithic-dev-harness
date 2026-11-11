@@ -127,6 +127,12 @@ def adapter(context: AdapterContext) -> TrackerOps:
             ),
         ),
         records_hours=True,
+        optional={
+            "remove_artifact": lambda ref, artifact: bind(
+                _find(context, root, ref),
+                lambda found: _remove_artifact(root, found[1], artifact),
+            ),
+        },
     )
 
 
@@ -412,30 +418,53 @@ def _artifacts(
     )
 
 
+def _own_artifact(
+    root: Path, record: Mapping[str, Any], artifact: ArtifactRef
+) -> Result[Path]:
+    """The artifact's file, which must be one of this item's."""
+    path = root / artifact.id
+    folder = _artifact_folder(root, record).resolve()
+    return (
+        Ok(path)
+        if path.resolve().is_relative_to(folder) and path.is_file()
+        else err(
+            "artifact_not_found", f"{record['key']} has no artifact {artifact.id!r}"
+        )
+    )
+
+
+def _remove_artifact(
+    root: Path, record: Mapping[str, Any], artifact: ArtifactRef
+) -> Result[None]:
+    return bind(
+        _own_artifact(root, record, artifact),
+        lambda path: attempt(
+            path.unlink, "local_storage_error", f"could not remove {path.name}", OSError
+        ),
+    )
+
+
 def _revise_artifact(
     root: Path, record: Mapping[str, Any], artifact: ArtifactRef, draft: ArtifactDraft
 ) -> Result[ArtifactRef]:
     """Rewrite the artifact's file, which must be one of this item's."""
-    path = root / artifact.id
-    folder = _artifact_folder(root, record).resolve()
-    if not (path.resolve().is_relative_to(folder) and path.is_file()):
-        return err(
-            "artifact_not_found", f"{record['key']} has no artifact {artifact.id!r}"
-        )
-    return fmap(
-        attempt(
-            lambda: path.write_text(artifacts.encode(draft), encoding="utf-8"),
-            "local_storage_error",
-            f"could not write {path.name}",
-            OSError,
-        ),
-        lambda _: ArtifactRef(
-            artifact.id,
-            draft.kind,
-            draft.title,
-            draft.revision,
-            artifact.url,
-            draft.content,
+    return bind(
+        _own_artifact(root, record, artifact),
+        lambda path: fmap(
+            attempt(
+                lambda: path.write_text(artifacts.encode(draft), encoding="utf-8"),
+                "local_storage_error",
+                f"could not write {path.name}",
+                OSError,
+            ),
+            lambda _: ArtifactRef(
+                artifact.id,
+                draft.kind,
+                draft.title,
+                draft.revision,
+                artifact.url,
+                draft.content,
+            ),
         ),
     )
 

@@ -118,6 +118,11 @@
       }
     },
     "attachments": {"type": "object", "additionalProperties": {"$ref": "#/$defs/text"}},
+    "optional": {
+      "type": "array",
+      "items": {"enum": ["remove_artifact"]},
+      "description": "Operations beyond the base surface that this tracker offers, natively."
+    },
     "text_format": {"enum": ["markdown", "html", "plain"]}
   }
 }
