@@ -91,40 +91,81 @@ def publications(session: work_sessions.Session) -> tuple[dict, ...]:
 def record_publication(repo: Path, item: dict) -> Result[dict]:
     match work_sessions.list_sessions(repo):
         case Ok(sessions):
-            match tuple(
-                (session, approval)
-                for session in sessions
-                if session.status == work_sessions.Status.ACTIVE
-                for approval in (_publication_approval(repo, session),)
-                if approval
-            ):
-                case ((session, approval),):
-                    return Ok(
-                        state.write_json(
-                            session.folder / "publications" / f"{uuid4().hex}.json",
-                            {
-                                "verified": True,
-                                "work_session": session.id,
-                                "round": round_id(session),
-                                "item": item["key"],
-                                "title": item["title"],
-                                "source_digest": item_digest(item),
-                                "approach_id": _published_approach(session),
-                                "approval_id": approval,
-                            },
-                        )
-                    )
-                case _:
-                    return Ok({})  # Ambiguous owner never becomes a route fact.
+            return bind(
+                _owner(
+                    repo,
+                    tuple(
+                        session
+                        for session in sessions
+                        if session.status == work_sessions.Status.ACTIVE
+                    ),
+                ),
+                lambda owner: Ok(_receipt(*owner, item)) if owner else Ok({}),
+            )
         case Err() as failed:
             return failed
 
 
-def _publication_approval(repo: Path, session: work_sessions.Session) -> str:
+def _owner(
+    repo: Path, sessions: tuple[work_sessions.Session, ...]
+) -> Result[tuple[work_sessions.Session, str] | None]:
+    """The session whose approval covers this publication, with that approval's id; none when no
+    approval does.
+
+    A session that holds its own approval comes first. The mode's session, which borrows the
+    approvals of others (`modes.approvals_for`), owns the publication only when no session holds
+    its own. The gateway does not know which conversation wrote, so two candidates cannot be told
+    apart: that is said, never silently dropped.
+    """
+    for borrowing in (False, True):
+        match tuple(
+            (session, approval)
+            for session in sessions
+            if (approval := _publication_approval(repo, session, borrowing))
+        ):
+            case ():
+                continue
+            case (owner,):
+                return Ok(owner)
+            case _:
+                return err(
+                    "publication_unattributed",
+                    "The write was read back, but more than one work session holds an approval "
+                    "that could cover it, so its progress receipt was not saved; do not retry "
+                    "the write, and tell the user.",
+                )
+    return Ok(None)
+
+
+def _receipt(session: work_sessions.Session, approval: str, item: dict) -> None:
+    state.write_json(
+        session.folder / "publications" / f"{uuid4().hex}.json",
+        {
+            "verified": True,
+            "work_session": session.id,
+            "round": round_id(session),
+            "item": item["key"],
+            "title": item["title"],
+            "source_digest": item_digest(item),
+            "approach_id": _published_approach(session),
+            "approval_id": approval,
+        },
+    )
+
+
+def _publication_approval(
+    repo: Path, session: work_sessions.Session, borrowing: bool
+) -> str:
     """The id of the newest open approval a write in this session can rely on, when it is the
-    approval of an answered `publish-items`; else empty. Inside a mode the answer may be one of an
-    earlier session of the mode: the approval belongs to the content it approved."""
-    match modes.approvals_for(repo, session.id)[:1]:
+    approval of an answered `publish-items`; else empty. Its own, or with `borrowing` inside a
+    mode, also one of an earlier session of the mode: the approval belongs to the content it
+    approved."""
+    approvals = (
+        modes.approvals_for(repo, session.id)
+        if borrowing
+        else state.open_approvals(repo, session.id)
+    )
+    match approvals[:1]:
         case [(_, {"id": str() as approval, "work_session": str() as given})]:
             return (
                 approval

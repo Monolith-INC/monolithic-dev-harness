@@ -839,17 +839,19 @@ DOCUMENT_QUESTION = "Approve this document and save it?"
 DOCUMENT_OPTIONS = ("Approve", "Not now")
 
 
-def approved_publication(project: Path, session: str) -> str:
+def approved_publication(
+    project: Path, session: str, answer: str = PUBLISH_ANSWER
+) -> str:
     """The user approved publishing in this session: its answer, and the approval that answer opened,
     tied to the reviewed draft. Returns the approval's id."""
     folder = work_sessions.select(project, session).value.folder
-    approval = questions.approval_id(PUBLISH_ANSWER)
+    approval = questions.approval_id(answer)
     state.write_json(
         folder / decisions.HISTORY,
         {
             "answers": [
                 {
-                    "id": PUBLISH_ANSWER,
+                    "id": answer,
                     "gate": "publish-items",
                     "status": "answered",
                     "answer": "Approve (Recommended)",
@@ -923,6 +925,74 @@ def test_outside_a_mode_a_publication_receipt_never_borrows_an_approval_of_an_en
     assert receipts(repo, successor.id) == ()
 
 
+def test_an_ordinary_sessions_publication_receipt_is_kept_while_a_mode_is_active(
+    repo: Path,
+) -> None:
+    ordinary = started(repo, "ordinary story work")
+    approval = approved_publication(repo, ordinary.id)
+    active = entered(modes.enter(repo, "fixture"))
+
+    create_item(repo)
+
+    (receipt,) = receipts(repo, ordinary.id)
+    assert receipt["approval_id"] == approval
+    assert receipts(repo, active.session_id) == ()
+
+
+def test_a_mode_sessions_own_approval_records_its_receipt_beside_an_ordinary_session(
+    repo: Path,
+) -> None:
+    ordinary = started(repo, "ordinary story work")
+    active = entered(modes.enter(repo, "fixture"))
+    approval = approved_publication(repo, active.session_id)
+
+    create_item(repo)
+
+    (receipt,) = receipts(repo, active.session_id)
+    assert receipt["approval_id"] == approval
+    assert receipts(repo, ordinary.id) == ()
+
+
+def test_a_mode_and_an_ordinary_session_that_each_hold_an_approval_cannot_be_told_apart(
+    repo: Path,
+) -> None:
+    ordinary = started(repo, "ordinary story work")
+    approved_publication(repo, ordinary.id, "ordinary-publish")
+    active = entered(modes.enter(repo, "fixture"))
+    approved_publication(repo, active.session_id, "mode-publish")
+
+    created = integration_gateway.handle_call(
+        "tracker_create_work_item",
+        {"kind": "epic", "title": "Discovery Epic"},
+        repo,
+    )
+
+    assert isinstance(created, Err)
+    assert created.failure.code == "publication_unattributed"
+    assert receipts(repo, ordinary.id) == () == receipts(repo, active.session_id)
+
+
+def test_a_publication_no_session_can_be_told_to_own_says_so_in_one_line(
+    repo: Path,
+) -> None:
+    first = started(repo, "first conversation's work")
+    second = started(repo, "second conversation's work")
+    approved_publication(repo, first.id, "first-publish")
+    approved_publication(repo, second.id, "second-publish")
+
+    created = integration_gateway.handle_call(
+        "tracker_create_work_item",
+        {"kind": "epic", "title": "Discovery Epic"},
+        repo,
+    )
+
+    assert isinstance(created, Err)
+    assert created.failure.code == "publication_unattributed"
+    assert "\n" not in created.failure.message
+    assert "WS-" not in created.failure.message
+    assert receipts(repo, first.id) == () == receipts(repo, second.id)
+
+
 def test_a_publication_with_no_approval_anywhere_leaves_no_receipt_in_a_mode(
     repo: Path,
 ) -> None:
@@ -944,7 +1014,7 @@ def answered_document(project: Path, session: str) -> tuple[str, tuple]:
         {
             "answers": [
                 {
-                    "id": PUBLISH_ANSWER,
+                    "id": answer,
                     "gate": "approve-document",
                     "status": "answered",
                     "answer": "Approve",
