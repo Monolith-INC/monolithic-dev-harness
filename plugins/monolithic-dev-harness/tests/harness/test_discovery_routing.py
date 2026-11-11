@@ -7,6 +7,8 @@ The table is the routing of `modes/discovery/workflow.md`: the first row that ho
 from __future__ import annotations
 
 import json
+import threading
+import time
 from dataclasses import replace
 from pathlib import Path
 
@@ -433,4 +435,30 @@ def test_the_orientation_never_raises_when_reading_the_step_blows_up(
     assert oriented.text is not None
     assert "Current step: could not be read (" in oriented.text
     assert "the tracker fell over" in oriented.text
+    assert "Rules:\n" in oriented.text
+
+
+def test_the_orientation_does_not_wait_on_a_tracker_that_does_not_answer(
+    epic: Epic, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The host stops a prompt hook that runs too long, and with it the approvals the prompt
+    carries, so the step is read for a moment only."""
+    enter(epic)
+    release = threading.Event()
+    monkeypatch.setattr(mode_hooks, "STEP_WAIT_SECONDS", 0.05)
+    monkeypatch.setattr(routing, "current", lambda repo, active: release.wait(30))
+
+    started = time.monotonic()
+    oriented = mode_hooks.orient(epic.repo)
+    waited = time.monotonic() - started
+    release.set()
+
+    assert waited < 5
+    assert oriented.text is not None
+    (line,) = [
+        line for line in oriented.text.splitlines() if line.startswith("Current step")
+    ]
+    assert "could not be read" in line
+    assert "did not answer in time" in line
+    assert "harness modes step" in line
     assert "Rules:\n" in oriented.text

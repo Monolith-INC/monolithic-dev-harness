@@ -6,14 +6,18 @@
 
 from __future__ import annotations
 
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.result import Err, Ok, attempt
+from core.result import Err, Ok, Result, attempt, bind, err
 
 from . import modes, routing, rules
 
 GATEWAY_SERVER = "workflow-integrations"
+# The host stops a prompt hook that runs for more than a few seconds, and with it the approvals the
+# prompt carries. The step is read from the tracker, so a prompt waits for it only this long.
+STEP_WAIT_SECONDS = 4.0
 
 
 @dataclass(frozen=True)
@@ -62,17 +66,43 @@ def _oriented(repo: Path, active: modes.Active) -> Orientation:
 
 def _step(repo: Path, active: modes.Active) -> str:
     """The line saying where the mode's work stands, or one saying it could not be read. A mode
-    with no steps has none. Never raises: a tracker that does not answer costs the prompt a line,
-    not its approvals."""
+    with no steps has none. Never raises and never waits long: a tracker that does not answer
+    costs the prompt a line, not its approvals."""
     if not routing.routed(active.mode):
         return ""
-    match attempt(
-        lambda: routing.current(repo, active), "step_unread", "reading the step failed"
-    ):
-        case Ok(Ok(found)):
+    match _read_step(repo, active):
+        case Ok(found):
             return f"Current step: {routing.describe(found)}"
-        case Ok(Err(failure)) | Err(failure):
+        case Err(failure):
             return f"Current step: could not be read ({_one_line(failure.message)})."
+
+
+def _read_step(repo: Path, active: modes.Active) -> Result[routing.Step]:
+    """Read the step on a daemon thread that is waited for briefly, then left behind."""
+    outcome: list[Result[routing.Step]] = []
+    reader = threading.Thread(
+        target=lambda: outcome.append(
+            bind(
+                attempt(
+                    lambda: routing.current(repo, active),
+                    "step_unread",
+                    "reading the step failed",
+                ),
+                lambda read: read,
+            )
+        ),
+        daemon=True,
+    )
+    reader.start()
+    reader.join(STEP_WAIT_SECONDS)
+    return (
+        outcome[0]
+        if outcome
+        else err(
+            "step_slow",
+            "the tracker did not answer in time; run `harness modes step` to try again",
+        )
+    )
 
 
 def _one_line(message: str) -> str:
