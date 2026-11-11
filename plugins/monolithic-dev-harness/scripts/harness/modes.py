@@ -15,7 +15,7 @@ from typing import Any
 
 from core.result import Ok, Result, attempt, bind, err, fmap, sequence
 from core.schema import load_schema, validate
-from harness import state, work_sessions
+from harness import settings, state, work_sessions
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 MODES_ROOT = PLUGIN_ROOT / "modes"
@@ -165,12 +165,15 @@ class Active:
 def enter(repo: Path, name: str, root: str = "") -> Result[Active]:
     """Start a mode: a work session the human is never asked about, recorded as the active mode."""
     return bind(
-        load(name, MODES_ROOT),
-        lambda mode: bind(
-            _unentered(repo, mode.name),
-            lambda _: bind(
-                work_sessions.create(repo, f"{mode.name} mode"),
-                lambda session: _record_entry(repo, mode.name, session.id, root),
+        _governed(repo),
+        lambda _: bind(
+            load(name, MODES_ROOT),
+            lambda mode: bind(
+                _unentered(repo, mode.name),
+                lambda _: bind(
+                    work_sessions.create(repo, f"{mode.name} mode"),
+                    lambda session: _record_entry(repo, mode.name, session.id, root),
+                ),
             ),
         ),
     )
@@ -239,6 +242,17 @@ def _record(repo: Path) -> Active | None:
             return Active(mode, session_id, root, entered, touched)
         case _:
             return None
+
+
+def _governed(repo: Path) -> Result[None]:
+    """The mode hooks act only where the harness governs, so a mode entered elsewhere does nothing."""
+    if settings.governed(repo):
+        return Ok(None)
+    return err(
+        "not_governed",
+        f"the harness does not govern {repo}, so a mode would do nothing there; "
+        "run bootstrap to set the project up first",
+    )
 
 
 def _unentered(repo: Path, name: str) -> Result[None]:

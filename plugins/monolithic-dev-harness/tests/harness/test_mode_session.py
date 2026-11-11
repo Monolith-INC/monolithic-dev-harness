@@ -18,6 +18,7 @@ from tests.settings_fixture import write_settings
 def repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     project = tmp_path / "project"
     project.mkdir()
+    write_settings(project)
     modes_root = tmp_path / "modes"
     write_mode(modes_root, name="fixture", fields=VALID_FIELDS)
     monkeypatch.setattr(modes, "MODES_ROOT", modes_root)
@@ -83,6 +84,34 @@ def test_second_enter_is_refused_naming_the_active_mode(repo: Path) -> None:
 
     assert code == "mode_active"
     assert "fixture" in message
+
+
+def test_enter_is_refused_in_a_repository_the_harness_does_not_govern(
+    repo: Path, tmp_path: Path
+) -> None:
+    bare = tmp_path / "bare"
+    bare.mkdir()
+
+    code, message = refusal(modes.enter(bare, "fixture"))
+
+    assert code == "not_governed"
+    assert "bootstrap" in message
+    assert work_sessions.list_sessions(bare) == Ok(())
+    assert not state.mode_record(bare).exists()
+
+
+def test_cli_enter_is_refused_in_a_repository_the_harness_does_not_govern(
+    repo: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bare = tmp_path / "bare"
+    bare.mkdir()
+
+    assert cli.main(["modes", "enter", "fixture", "--repo", str(bare)]) == 2
+
+    report = json.loads(capsys.readouterr().err)
+    assert report["error"] == "not_governed"
+    assert "bootstrap" in report["message"]
+    assert not (bare / ".harness").exists()
 
 
 def test_leave_completes_the_session_and_clears_the_record(repo: Path) -> None:
@@ -191,7 +220,6 @@ def test_cli_never_prints_the_mode_session_id(
 def test_cli_from_a_project_subfolder_uses_the_project_root(
     repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
-    write_settings(repo)
     subfolder = repo / "plugins" / "x"
     subfolder.mkdir(parents=True)
     monkeypatch.chdir(subfolder)
