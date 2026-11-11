@@ -310,6 +310,14 @@ def _item(context: AdapterContext, record: Mapping[str, Any]) -> WorkItem:
         url=str(link or record.get("url") or ""),
         description=payloads.text(fields, DESCRIPTION),
         parent_id=payloads.text(fields, PARENT),
+        tags=tuple(
+            tag.strip() for tag in payloads.text(fields, TAGS).split(";") if tag.strip()
+        ),
+        priority=(
+            int(fields[PRIORITY])
+            if isinstance(fields.get(PRIORITY), int | float)
+            else None
+        ),
         provider_data=record,
     )
 
@@ -522,8 +530,59 @@ def _update(
         lambda fields: bind(
             payloads.number(ref, "work item"),
             lambda number: bind(
-                call("write", "update", {"id": number, "updates": _patch(fields)}),
-                lambda _: read(ref),
+                (
+                    call(
+                        "write",
+                        "update",
+                        {"id": number, "updates": _patch(_azure(fields))},
+                    )
+                    if fields
+                    else Ok(None)
+                ),
+                lambda _: bind(
+                    _reparent(call, read, ref, number, changes.parent),
+                    lambda _: read(ref),
+                ),
+            ),
+        ),
+    )
+
+
+def _azure(fields: Mapping[str, Any]) -> dict[str, Any]:
+    """Field values as Azure stores them: the tag list is one string, tags joined by "; "."""
+    return {
+        name: "; ".join(value) if name == TAGS else value
+        for name, value in fields.items()
+    }
+
+
+def _reparent(call, read, ref: str, number: int, parent: str | None) -> Result[None]:
+    """Move the item under `parent`: its old parent link, if any, is removed first, since an item
+    has one parent and Azure keeps the parent as a link rather than a field."""
+    if parent is None:
+        return Ok(None)
+    return bind(
+        read(ref),
+        lambda item: bind(
+            (
+                call("link", "unlink", {"id": number, "type": "parent"})
+                if item.parent_id
+                else Ok(None)
+            ),
+            lambda _: bind(
+                payloads.number(parent, "parent"),
+                lambda target: fmap(
+                    call(
+                        "link",
+                        "link",
+                        {
+                            "updates": [
+                                {"id": number, "linkToId": target, "type": "parent"}
+                            ]
+                        },
+                    ),
+                    lambda _: None,
+                ),
             ),
         ),
     )

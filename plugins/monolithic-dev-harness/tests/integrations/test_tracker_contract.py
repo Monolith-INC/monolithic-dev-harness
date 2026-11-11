@@ -12,9 +12,11 @@ import pytest
 from core.result import Err, Ok
 from integrations.contracts import TrackerOps, WorkItemChanges, WorkItemKind
 
-from .fakes import ops
+from .fakes import FakeTransport, ops
+from .trackers import AzureBoard
 
-ADAPTERS = ["local"]
+ADAPTERS = ["local", "azure-devops"]
+AZURE = {"organization": "o", "project": "proj"}
 
 
 @pytest.fixture(params=ADAPTERS)
@@ -22,6 +24,8 @@ def tracker(request, tmp_path: Path) -> TrackerOps:
     match request.param:
         case "local":
             return ops("local", {}, repo=tmp_path)
+        case "azure-devops":
+            return ops("azure-devops", AZURE, FakeTransport(AzureBoard().answers))
     raise AssertionError(request.param)
 
 
@@ -67,3 +71,42 @@ def test_reparent_under_a_forbidden_kind_is_refused(tmp_path: Path) -> None:
     refused = local.update_work_item(story.key, WorkItemChanges(parent=second.key))
     assert isinstance(refused, Err) and refused.failure.code == "invalid_parent"
     assert local.get_work_item(story.key).value == before
+
+
+def _azure() -> tuple[TrackerOps, FakeTransport]:
+    call = FakeTransport(AzureBoard().answers)
+    return ops("azure-devops", AZURE, call), call
+
+
+def test_azure_reparent_replaces_the_old_parent() -> None:
+    azure, call = _azure()
+    _, story = _story_under_feature(azure)
+    other = azure.create_work_item(WorkItemKind.FEATURE, "G", "g", "").value
+    azure.update_work_item(story.key, WorkItemChanges(parent=other.key))
+    sent = [
+        (a["action"], a.get("type") or a["updates"][0]["type"])
+        for a in call.sent("wit_work_item_link_write")
+    ]
+    assert sent == [("unlink", "parent"), ("link", "parent")]
+    assert call.sent("wit_work_item_link_write")[-1]["updates"][0]["linkToId"] == int(
+        other.key
+    )
+
+
+def test_azure_reparent_without_a_parent_only_links() -> None:
+    azure, call = _azure()
+    story = azure.create_work_item(WorkItemKind.USER_STORY, "S", "s", "").value
+    feature = azure.create_work_item(WorkItemKind.FEATURE, "F", "f", "").value
+    azure.update_work_item(story.key, WorkItemChanges(parent=feature.key))
+    assert [a["action"] for a in call.sent("wit_work_item_link_write")] == ["link"]
+
+
+def test_azure_tags_are_written_joined() -> None:
+    azure, call = _azure()
+    story = azure.create_work_item(WorkItemKind.USER_STORY, "S", "s", "").value
+    azure.update_work_item(story.key, WorkItemChanges(tags=("api", "ux")))
+    assert {
+        "op": "add",
+        "path": "/fields/System.Tags",
+        "value": "api; ux",
+    } in call.sent("wit_work_item_write")[-1]["updates"]
