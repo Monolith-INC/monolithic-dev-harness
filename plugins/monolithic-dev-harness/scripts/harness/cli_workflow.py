@@ -407,7 +407,8 @@ def work_session_command(args: argparse.Namespace) -> int:
             result = fmap(
                 work_sessions.list_sessions(project),
                 lambda sessions: [
-                    work_sessions.as_json(session) for session in sessions
+                    work_sessions.as_json(session)
+                    for session in work_sessions.chosen_among(sessions)
                 ],
             )
         case "route":

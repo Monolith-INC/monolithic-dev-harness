@@ -17,7 +17,7 @@ from pathlib import Path
 import pytest
 
 from core.result import Ok, err
-from harness import cli, modes, rules, state, work_sessions
+from harness import cli, modes, rules, startup, state, work_sessions
 from tests.harness.test_modes import VALID_FIELDS, refusal, write_mode
 from tests.settings_fixture import write_settings
 
@@ -705,6 +705,47 @@ def test_leave_waits_for_a_repair_in_progress_and_gives_up_when_it_never_ends(
     assert code == "mode_unwritable"
     assert state.mode_record(repo).exists()
     assert isinstance(modes.leave(repo), Ok)
+
+
+# a mode's session is the mode's own: nobody is asked about it or shown it
+
+
+def test_a_live_mode_session_leaves_begin_at_start_new(repo: Path) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+
+    routed = work_sessions.route(repo, "add a feature")
+
+    assert isinstance(routed, Ok)
+    assert routed.value["action"] == "start_new"
+    started = startup._begin_session(repo, "add a feature", None, False)
+    assert isinstance(started, Ok)
+    assert isinstance(started.value, work_sessions.Session)
+    assert started.value.id != active.session_id
+    assert started.value.request == "add a feature"
+
+
+def test_work_session_list_does_not_show_the_mode_session(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    mine = work_sessions.create(repo, "my work")
+    assert isinstance(mine, Ok)
+    capsys.readouterr()
+
+    assert cli.main(["work-session", "list", "--repo", str(repo)]) == 0
+
+    shown = json.loads(capsys.readouterr().out)
+    assert [item["id"] for item in shown] == [mine.value.id]
+    assert active.session_id not in json.dumps(shown)
+
+
+def test_the_status_session_list_does_not_show_the_mode_session(repo: Path) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+
+    listed = cli.runtime_status(repo)["sessions"]
+
+    assert listed == []
+    assert active.session_id not in json.dumps(cli.runtime_status(repo))
 
 
 # reading never raises

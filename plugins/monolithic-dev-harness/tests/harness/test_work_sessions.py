@@ -285,6 +285,32 @@ class WorkSessionTest(unittest.TestCase):
         self.assertEqual(work_sessions.recording_mode(self.project), ())
         self.assertFalse((self.project / ".harness").exists())
 
+    def test_a_session_that_records_a_mode_is_never_a_candidate_for_begin(self) -> None:
+        work_sessions.create(self.project, "fixture mode", mode="fixture")
+
+        routed = work_sessions.route(self.project, "add a feature").value
+
+        self.assertEqual(routed["action"], "start_new")
+        self.assertEqual(routed["candidates"], [])
+        self.assertEqual(routed["matches"], [])
+
+    def test_a_mode_session_is_not_matched_by_its_request_either(self) -> None:
+        work_sessions.create(self.project, "fixture mode", mode="fixture")
+
+        routed = work_sessions.route(self.project, "fixture mode").value
+
+        self.assertEqual(routed["action"], "start_new")
+        self.assertEqual(routed["matches"], [])
+
+    def test_route_still_offers_the_sessions_a_person_made_beside_a_mode(self) -> None:
+        work_sessions.create(self.project, "fixture mode", mode="fixture")
+        mine = work_sessions.create(self.project, "Investigate DAY-001").value
+
+        routed = work_sessions.route(self.project, "add a feature").value
+
+        self.assertEqual(routed["action"], "ask_user")
+        self.assertEqual([item["id"] for item in routed["candidates"]], [mine.id])
+
     def test_unmark_takes_the_mode_off_a_session(self) -> None:
         marked = work_sessions.create(
             self.project, "fixture mode", mode="fixture", mode_root="EPIC-1"

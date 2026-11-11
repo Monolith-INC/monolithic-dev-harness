@@ -308,6 +308,12 @@ def list_sessions(project: Path) -> Result[tuple[Session, ...]]:
     return _read_many(project.resolve(), folders)
 
 
+def chosen_among(sessions: tuple[Session, ...]) -> tuple[Session, ...]:
+    """The sessions a person is shown and chooses among. A session that records a mode is the
+    mode's own: nobody started it, so nobody is asked about it, and its id is never shown."""
+    return tuple(session for session in sessions if not session.mode)
+
+
 def route(project: Path, request: str) -> Result[dict[str, Any]]:
     """Return exact-request candidates without changing session state."""
     normalized = " ".join(request.split()).casefold()
@@ -331,12 +337,12 @@ def _route(
 ) -> dict[str, Any]:
     matches = tuple(
         session
-        for session in sessions
+        for session in chosen_among(sessions)
         if " ".join(session.request.split()).casefold() == normalized_request
     )
     candidates = tuple(
         session
-        for session in sessions
+        for session in chosen_among(sessions)
         if session.status in (Status.ACTIVE, Status.PAUSED, Status.STOPPED)
     )
     match matches, candidates:

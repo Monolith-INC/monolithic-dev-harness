@@ -211,7 +211,7 @@ def runtime_status(repo: Path) -> dict:
             work_sessions.as_json(session)
             for result in (work_sessions.list_sessions(repo),)
             if isinstance(result, Ok)
-            for session in result.value
+            for session in work_sessions.chosen_among(result.value)
         ],
     }
 
