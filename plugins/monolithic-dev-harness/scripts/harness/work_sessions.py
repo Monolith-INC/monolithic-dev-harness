@@ -42,8 +42,13 @@ class Session:
     implicit_selection: bool = True
     work_item: str = ""  # the Story or Bug this session implements, once linked
     entry_item: str = ""  # the Epic, Feature, Story or Bug the user started from
-    mode: str = ""  # the mode this session is the durable record of, if it is one
+    mode: str = (
+        ""  # the mode this session is the durable record of, while that mode runs
+    )
     mode_root: str = ""  # that mode's ROOT: the Epic it works on
+    # Permanent: this session was made for a mode. Leaving the mode clears `mode`, never this, so
+    # a session a person never started stays out of every list and every `begin` for good.
+    mode_session: bool = False
 
 
 def scope_folder(
@@ -83,6 +88,7 @@ def _payload(session: Session) -> dict[str, Any]:
         "entry_item": session.entry_item,
         "mode": session.mode,
         "mode_root": session.mode_root,
+        "mode_session": session.mode_session,
     }
 
 
@@ -108,6 +114,7 @@ def _from_payload(
             entry_item=str(payload.get("entry_item") or ""),
             mode=str(payload.get("mode") or ""),
             mode_root=str(payload.get("mode_root") or ""),
+            mode_session=payload.get("mode_session") is True,
         )
     except (KeyError, TypeError, ValueError):
         return err(
@@ -215,6 +222,7 @@ def _create(
         implicit_selection=implicit_selection,
         mode=mode,
         mode_root=mode_root,
+        mode_session=bool(mode),
     )
     staging.mkdir(parents=True, exist_ok=False)
     try:
@@ -309,9 +317,10 @@ def list_sessions(project: Path) -> Result[tuple[Session, ...]]:
 
 
 def chosen_among(sessions: tuple[Session, ...]) -> tuple[Session, ...]:
-    """The sessions a person is shown and chooses among. A session that records a mode is the
-    mode's own: nobody started it, so nobody is asked about it, and its id is never shown."""
-    return tuple(session for session in sessions if not session.mode)
+    """The sessions a person is shown and chooses among. A session made for a mode is the mode's
+    own, while it runs and after it was left: nobody started it, so nobody is asked about it, and
+    its id is never shown."""
+    return tuple(session for session in sessions if not session.mode_session)
 
 
 def route(project: Path, request: str) -> Result[dict[str, Any]]:

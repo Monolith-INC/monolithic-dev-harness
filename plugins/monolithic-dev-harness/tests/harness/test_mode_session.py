@@ -826,6 +826,23 @@ def test_work_session_list_does_not_show_the_mode_session(
     assert active.session_id not in json.dumps(shown)
 
 
+def test_a_session_ended_by_leave_does_not_show_in_the_session_list(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    mine = work_sessions.create(repo, "my work")
+    assert isinstance(mine, Ok)
+    assert isinstance(modes.leave(repo), Ok)
+    assert session_status(repo, active.session_id) == work_sessions.Status.COMPLETE
+    capsys.readouterr()
+
+    assert cli.main(["work-session", "list", "--repo", str(repo)]) == 0
+
+    shown = json.loads(capsys.readouterr().out)
+    assert [item["id"] for item in shown] == [mine.value.id]
+    assert active.session_id not in json.dumps(cli.runtime_status(repo))
+
+
 def test_the_status_session_list_does_not_show_the_mode_session(repo: Path) -> None:
     active = entered(modes.enter(repo, "fixture"))
 

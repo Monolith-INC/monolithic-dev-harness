@@ -324,6 +324,44 @@ class WorkSessionTest(unittest.TestCase):
         self.assertEqual(reread.status, work_sessions.Status.ACTIVE)
         self.assertEqual(work_sessions.recording_mode(self.project), ())
 
+    def test_a_session_keeps_the_mark_that_it_was_a_mode_session_once_the_mode_is_off(
+        self,
+    ) -> None:
+        marked = work_sessions.create(
+            self.project, "fixture mode", mode="fixture", mode_root="EPIC-1"
+        ).value
+        self.assertTrue(marked.mode_session)
+
+        self.assertIsInstance(work_sessions.unmark(self.project, marked.id), Ok)
+
+        reread = work_sessions.select(self.project, marked.id).value
+        self.assertEqual(reread.mode, "")
+        self.assertTrue(reread.mode_session)
+        self.assertEqual(work_sessions.chosen_among((reread,)), ())
+
+    def test_a_session_made_for_no_mode_never_carries_the_mode_session_mark(
+        self,
+    ) -> None:
+        plain = work_sessions.create(self.project, "Investigate DAY-001").value
+
+        read = work_sessions.select(self.project, plain.id).value
+
+        self.assertFalse(read.mode_session)
+        self.assertEqual(work_sessions.chosen_among((read,)), (read,))
+
+    def test_a_left_mode_session_is_neither_a_candidate_nor_a_match_for_begin(
+        self,
+    ) -> None:
+        marked = work_sessions.create(
+            self.project, "fixture mode", mode="fixture"
+        ).value
+        self.assertIsInstance(work_sessions.unmark(self.project, marked.id), Ok)
+
+        routed = work_sessions.route(self.project, "fixture mode").value
+
+        self.assertEqual(routed["action"], "start_new")
+        self.assertEqual((routed["matches"], routed["candidates"]), ([], []))
+
     def test_unmark_leaves_a_session_that_records_no_mode_as_it_is(self) -> None:
         plain = work_sessions.create(self.project, "Investigate DAY-001").value
 
