@@ -1,8 +1,9 @@
-"""Every harness rule is marked `always` or `mode`, and an `always` rule needs no session.
+"""Every harness rule and guard is marked, and an `always` one needs no session.
 
 Modes scope the process, not the safety net: a rule that guards the project or the user stays on
-whether or not a work session is bound. `rules.CLASS` marks each rule, and these tests keep the
-marks complete and honest, so a later change cannot drop a guard by accident.
+whether or not a work session is bound. `rules.CLASS` marks each rule `evaluate` runs and
+`rules.GUARDS` each guard the hook decides on its own, and these tests keep the marks complete and
+honest, so a later change cannot drop a guard by accident.
 """
 
 from __future__ import annotations
@@ -11,8 +12,13 @@ import ast
 import inspect
 import json
 
-from harness import mode_hooks, rules, sessions
+from harness import hook, mode_hooks, process_assignment, rules, sessions
+from host_adapters import codex_bindings, codex_process
 from tests.harness.test_hook_rules import AZ, HookTestCase, sh
+
+# Checks of the conversation's work session, not rules: the candidates to become mode hooks in a
+# later slice, so they carry no mark yet.
+SESSION_BOUND = frozenset({"work-session-context", "work-session-mismatch"})
 
 
 def rule_names_evaluate_can_report() -> set[str]:
@@ -58,13 +64,65 @@ def rule_names_evaluate_can_report() -> set[str]:
     return names
 
 
+def literal_deny_names(*modules) -> set[str]:
+    """Every name written as a string literal in a `.deny("name", ...)` call, wherever it sits."""
+    return {
+        call.args[0].value
+        for module in modules
+        for call in ast.walk(ast.parse(inspect.getsource(module)))
+        if isinstance(call, ast.Call)
+        and isinstance(call.func, ast.Attribute)
+        and call.func.attr == "deny"
+        and call.args
+        and isinstance(call.args[0], ast.Constant)
+        and isinstance(call.args[0].value, str)
+    }
+
+
 class TestEveryRuleIsClassified:
     def test_every_rule_has_exactly_one_class(self) -> None:
         assert set(rules.CLASS) == rule_names_evaluate_can_report()
         assert set(rules.CLASS.values()) <= {"always", "mode"}
 
     def test_the_session_bound_checks_are_not_rules(self) -> None:
-        assert not {"work-session-context", "work-session-mismatch"} & set(rules.CLASS)
+        assert not SESSION_BOUND & set(rules.CLASS)
+
+
+class TestEveryGuardIsMarked:
+    """A guard is a deny the hook decides itself, before or around `evaluate`."""
+
+    HOOK_MODULES = (
+        rules,
+        hook,
+        mode_hooks,
+        process_assignment,
+        codex_bindings,
+        codex_process,
+    )
+
+    def test_every_guard_is_always_on(self) -> None:
+        assert rules.GUARDS
+        assert set(rules.GUARDS.values()) == {"always"}
+
+    def test_no_name_is_marked_as_both_a_rule_and_a_guard(self) -> None:
+        assert not set(rules.CLASS) & set(rules.GUARDS)
+
+    def test_every_deny_the_hooks_name_is_marked_or_session_bound(self) -> None:
+        emitted = literal_deny_names(*self.HOOK_MODULES)
+
+        unmarked = emitted - set(rules.CLASS) - set(rules.GUARDS) - SESSION_BOUND
+
+        assert unmarked == set()
+
+    def test_every_guard_is_emitted_by_name_or_is_the_controls_gate(self) -> None:
+        # `harness-controls` never denies: it is the gate that lets a person suspend, resume
+        # or free the harness, and the hook acts on it from the prompt.
+        emitted = literal_deny_names(*self.HOOK_MODULES)
+
+        assert set(rules.GUARDS) - {"harness-controls"} <= emitted
+
+    def test_the_session_bound_checks_are_not_guards(self) -> None:
+        assert not SESSION_BOUND & set(rules.GUARDS)
 
 
 class TestAlwaysControlsDenyWithNoSession(HookTestCase):
@@ -160,3 +218,22 @@ class TestAlwaysControlsDenyWithNoSession(HookTestCase):
                 self.assertDenied(deny_case(), rule)
                 work_sessions = self.repo / ".harness" / "state" / "work_sessions"
                 self.assertEqual(sorted(work_sessions.glob("WS-*")), [])
+
+
+class TestPlainBeginDenies(HookTestCase):
+    """`plain-begin` stays on with no work session: it protects how a session is first bound."""
+
+    UNREADABLE = (
+        'harness begin --request "add a footer" --repo . && echo done',
+        'harness begin --request "$REQUEST" --repo .; ls',
+        'harness begin --request "$(cat request.txt)" --repo .',
+    )
+
+    def test_a_begin_the_hooks_cannot_read_is_denied_with_no_session(self) -> None:
+        for command in self.UNREADABLE:
+            with self.subTest(command=command):
+                self.assertDenied(
+                    self.claude("Bash", {"command": command}), "plain-begin"
+                )
+        work_sessions = self.repo / ".harness" / "state" / "work_sessions"
+        self.assertEqual(sorted(work_sessions.glob("WS-*")), [])

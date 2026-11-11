@@ -307,3 +307,23 @@ def test_a_mode_session_that_cannot_be_bound_does_not_block_the_call(
     assert pre_tool_reason(repo, LISTED_READ, capsys, "chat-a") is None
 
     assert bound_to(repo, "chat-a") is None
+
+
+# the controls a mode never touches
+
+
+@pytest.mark.parametrize(
+    "in_a_mode", [True, False], ids=["in a mode", "outside a mode"]
+)
+def test_harness_controls_still_act_from_the_users_prompt(
+    repo: Path, in_a_mode: bool
+) -> None:
+    if in_a_mode:
+        entered(modes.enter(repo, "fixture"))
+    prompt = {"cwd": str(repo), "session_id": "chat-a"}
+
+    hook.handle_prompt("claude", {**prompt, "prompt": "harness suspend"})
+    assert state.harness_mode(repo) == "suspended"
+
+    hook.handle_prompt("claude", {**prompt, "prompt": "harness resume"})
+    assert state.harness_mode(repo) == "active"

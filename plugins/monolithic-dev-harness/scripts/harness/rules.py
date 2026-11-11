@@ -1077,13 +1077,10 @@ def _delivery(settings: Settings, rule: Callable[[], Decision]) -> Decision:
 # `feature-branch` and `draft-reviewed-prs` are `always` for now: neither is bound to a work
 # session. Whether a mode takes them over is a later decision.
 #
-# Not here, on purpose:
-# - `work-session-context` and `work-session-mismatch` are checks of `hook._held`, not rules of
-#   `evaluate`. They are the session-bound controls, and the candidates to become `mode` in a later
-#   slice.
-# - `hook-entry` (`rule_hook_entry`), `plain-begin`, and the `harness-error` that fails closed
-#   when the rules cannot run are decided in `hook.handle_pre_tool` before or around `evaluate`,
-#   unconditionally. They carry no class: nothing scopes them.
+# The guards the hook decides itself, before or around `evaluate`, are marked in `GUARDS` below.
+# Not marked anywhere, on purpose: `work-session-context` and `work-session-mismatch` are checks of
+# `hook._held`, not rules of `evaluate`. They are the session-bound controls, and the candidates to
+# become `mode` in a later slice.
 CLASS: Mapping[str, Literal["always", "mode"]] = MappingProxyType(
     {
         "human-owned": "always",
@@ -1096,6 +1093,30 @@ CLASS: Mapping[str, Literal["always", "mode"]] = MappingProxyType(
         "approval-required": "always",
         "generated-files": "always",
         "mode-operations": "mode",
+    }
+)
+
+# The guards the hook decides itself, marked like the rules: every one stays on in a mode, outside
+# one, with or without a work session. They guard the user, the hook's own integrity or a process
+# boundary, not a stage of work. Keyed by the name a guard gives `Decision.deny`; `harness-controls`
+# never denies, it is the gate that lets only a person suspend, resume or free the harness.
+#
+# Left unnamed, so unmarked: the workflow policy's own denies carry only a message
+# (`hook_runtime`, `policy/git_branch_guard`), and `codex_process` names a deny by the failure code
+# it met. None of them is scoped by a mode either.
+GUARDS: Mapping[str, Literal["always"]] = MappingProxyType(
+    {
+        "hook-entry": "always",
+        "plain-begin": "always",
+        "harness-error": "always",
+        "harness-controls": "always",
+        "decision-pending": "always",
+        "artifacts-not-shown": "always",
+        "plain-questions": "always",
+        "decision-invalid": "always",
+        "assignment-policy": "always",
+        "codex-child-lineage": "always",
+        "codex-child-authority": "always",
     }
 )
 
