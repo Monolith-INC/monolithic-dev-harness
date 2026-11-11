@@ -67,6 +67,8 @@ class WorkItem:
     url: str = ""
     description: str = ""
     parent_id: str = ""
+    tags: tuple[str, ...] = ()
+    priority: int | None = None  # 1 urgent … 4 low; None when the item has none
     provider_data: Mapping[str, Any] = field(
         default_factory=lambda: EMPTY, compare=False
     )
@@ -234,6 +236,11 @@ class WorkItemChanges:
     hours: Hours | None = None
     assignee: str | None = None
     iteration: str | None = None
+    # The new parent's id or key. Moving an item is the adapter's own write, never a plain field.
+    parent: str | None = None
+    # The item's whole tag list: it replaces the tags the item had, and () clears them.
+    tags: tuple[str, ...] | None = None
+    priority: int | None = None  # 1 urgent … 4 low
 
 
 @dataclass(frozen=True)
@@ -245,6 +252,8 @@ class FieldNames:
     story_points: str
     assignee: str
     iteration: str
+    tags: str
+    priority: str
 
 
 def changed_fields(
@@ -258,6 +267,8 @@ def changed_fields(
         names.story_points: changes.story_points,
         names.assignee: changes.assignee,
         names.iteration: changes.iteration,
+        names.tags: None if changes.tags is None else list(changes.tags),
+        names.priority: changes.priority,
     }
     fields: dict[str, Any] = {
         name: value for name, value in named.items() if value is not None
@@ -271,7 +282,7 @@ def changed_fields(
             pass
     return (
         Ok(fields)
-        if fields
+        if fields or changes.parent is not None
         else err("invalid_request", "name at least one field to change")
     )
 

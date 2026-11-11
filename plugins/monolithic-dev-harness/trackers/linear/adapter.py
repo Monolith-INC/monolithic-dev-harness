@@ -34,7 +34,9 @@ from integrations.planning import (
     pick_sprint,
 )
 
-FIELDS = FieldNames("title", "description", "estimate", "assignee", "cycle")
+FIELDS = FieldNames(
+    "title", "description", "estimate", "assignee", "cycle", "labels", "priority"
+)
 CYCLE_MARKERS = ("startsAt", "endsAt")  # a single cycle, not a listing
 NO_CAPACITY = (
     "Linear records no team capacity; only the cycle's dates are known, so availability is "

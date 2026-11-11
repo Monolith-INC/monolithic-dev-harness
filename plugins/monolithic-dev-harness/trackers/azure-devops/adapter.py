@@ -92,6 +92,8 @@ PARENT = "System.Parent"
 ASSIGNED_TO = "System.AssignedTo"
 ITERATION_PATH = "System.IterationPath"
 CREATED_BY = "System.CreatedBy"
+TAGS = "System.Tags"  # one string, tags joined by "; "
+PRIORITY = "Microsoft.VSTS.Common.Priority"  # 1 … 4
 TEAM_PROJECT = "System.TeamProject"
 CHANGED_DATE = "System.ChangedDate"
 FIELDS = (ID, TITLE, WORK_ITEM_TYPE, STATE, DESCRIPTION, PARENT)
@@ -507,7 +509,13 @@ def _update(
 ) -> Result[WorkItem]:
     """One JSON-Patch update with only the named fields, then the item read back."""
     names = FieldNames(
-        TITLE, DESCRIPTION, _points_field(process), ASSIGNED_TO, ITERATION_PATH
+        TITLE,
+        DESCRIPTION,
+        _points_field(process),
+        ASSIGNED_TO,
+        ITERATION_PATH,
+        TAGS,
+        PRIORITY,
     )
     return bind(
         changed_fields(changes, names, _hour_fields(process)),

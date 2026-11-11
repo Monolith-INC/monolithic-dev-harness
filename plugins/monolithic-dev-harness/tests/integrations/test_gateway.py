@@ -99,6 +99,67 @@ class GatewayTest(unittest.TestCase):
             ).failure.message,
         )
 
+    def test_reparent_to_itself_is_refused(self) -> None:
+        story = self.call(
+            "tracker_create_work_item", kind="user_story", title="S"
+        ).value
+        refused = self.call(
+            "tracker_update_work_item", ref=story["key"], parentRef=story["key"]
+        )
+        self.assertEqual(refused.failure.code, "invalid_parent")
+
+    def test_reparent_to_its_own_child_is_refused(self) -> None:
+        feature = self.call("tracker_create_work_item", kind="feature", title="F").value
+        story = self.call(
+            "tracker_create_work_item",
+            kind="user_story",
+            title="S",
+            parentRef=feature["key"],
+        ).value
+        refused = self.call(
+            "tracker_update_work_item", ref=feature["key"], parentRef=story["key"]
+        )
+        self.assertEqual(refused.failure.code, "invalid_parent")
+
+    def test_priority_outside_1_to_4_is_rejected(self) -> None:
+        story = self.call(
+            "tracker_create_work_item", kind="user_story", title="S"
+        ).value
+        for value in (0, 5):
+            self.assertIn(
+                "priority",
+                self.call(
+                    "tracker_update_work_item", ref=story["key"], priority=value
+                ).failure.message,
+            )
+
+    def test_readback_ignores_tag_order_and_case(self) -> None:
+        from integrations.contracts import LogicalState, WorkItem, WorkItemKind
+
+        written = WorkItem(
+            "1",
+            "1",
+            "S",
+            WorkItemKind.USER_STORY,
+            LogicalState.BACKLOG,
+            tags=("api", "ux"),
+        )
+        read = WorkItem(
+            "1",
+            "1",
+            "S",
+            WorkItemKind.USER_STORY,
+            LogicalState.BACKLOG,
+            tags=("UX", "api"),
+        )
+        tracker = mock.Mock(get_work_item=lambda ref: Ok(read))
+        self.assertIsInstance(
+            gateway._verified_item_write(
+                "tracker_update_work_item", written, tracker, {}
+            ),
+            Ok,
+        )
+
     def test_arguments_are_checked_against_the_tool_schema(self) -> None:
         self.assertIn(
             "missing 'title'",

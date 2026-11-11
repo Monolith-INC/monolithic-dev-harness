@@ -11,12 +11,12 @@ import json
 import secrets
 import sys
 from collections.abc import Callable, Mapping
-from dataclasses import fields, is_dataclass
+from dataclasses import fields, is_dataclass, replace
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from core.result import Err, Ok, Result, attempt, bind, err, fmap
+from core.result import Err, Ok, Result, attempt, bind, err, fmap, sequence
 from core.schema import validate
 from harness import decisions, state
 from harness import settings as repo_settings
@@ -30,6 +30,7 @@ from .contracts import (
     PullRequestDraft,
     ScmOps,
     TrackerOps,
+    WorkItem,
     WorkItemChanges,
     WorkItemKind,
 )
@@ -83,7 +84,9 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
             "tracker_update_work_item",
             "Change the named fields of an existing work item, then read it back. The description "
             "is the whole refined body. hours is a Task's effort; firstEstimate also records it "
-            "as the original estimate where the tracker keeps one.",
+            "as the original estimate where the tracker keeps one. parentRef moves the item under "
+            "another parent. tags is the item's whole tag list, replacing the old one. priority "
+            "is 1 (urgent) to 4 (low).",
             ("ref",),
             {
                 "ref": STRING,
@@ -94,6 +97,9 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
                 "firstEstimate": BOOLEAN,
                 "assignee": STRING,
                 "iteration": STRING,
+                "parentRef": STRING,
+                "tags": {"type": "array", "items": STRING},
+                "priority": {"type": "integer", "minimum": 1, "maximum": 4},
             },
         ),
         ("tracker_list_children", "List child work items.", ("ref",), {"ref": STRING}),
@@ -405,8 +411,9 @@ def _tracker_call(name: str, args: Mapping[str, Any], ops: TrackerOps) -> Result
                 else Ok(item)
             ),
         ),
-        "tracker_update_work_item": lambda: ops.update_work_item(
-            args["ref"], _changes(args)
+        "tracker_update_work_item": lambda: bind(
+            _valid_parent(ops, args["ref"], args.get("parentRef", "")),
+            lambda _: ops.update_work_item(args["ref"], _changes(args)),
         ),
         "tracker_list_children": lambda: ops.list_children(args["ref"]),
         "tracker_transition_work_item": lambda: ops.transition_work_item(
@@ -437,7 +444,7 @@ def _verified_item_write(name, value, ops, args) -> Result[Any]:
                 ops.get_work_item(value.id),
                 lambda readback: (
                     Ok(plain(readback))
-                    if readback == value
+                    if _comparable(readback) == _comparable(value)
                     else err(
                         "write_readback_mismatch",
                         "The tracker readback differs from the write result; reconcile it before retrying.",
@@ -446,6 +453,11 @@ def _verified_item_write(name, value, ops, args) -> Result[Any]:
             )
         case _:
             return Ok(plain(value))
+
+
+def _comparable(item: WorkItem) -> WorkItem:
+    """The item with its tags as a set: trackers return them in their own order and case."""
+    return replace(item, tags=tuple(sorted({tag.casefold() for tag in item.tags})))
 
 
 def _changes(args: Mapping[str, Any]) -> WorkItemChanges:
@@ -461,7 +473,46 @@ def _changes(args: Mapping[str, Any]) -> WorkItemChanges:
         ),
         assignee=args.get("assignee"),
         iteration=args.get("iteration"),
+        parent=args.get("parentRef"),
+        tags=tuple(args["tags"]) if "tags" in args else None,
+        priority=args.get("priority"),
     )
+
+
+def _valid_parent(ops: TrackerOps, ref: str, parent: str) -> Result[None]:
+    """A new parent that is neither the item itself nor one of its descendants: the hierarchy
+    is at most Feature, Story, Task below any item, so two levels of children are searched."""
+    if not parent:
+        return Ok(None)
+
+    def names(item: WorkItem) -> set[str]:
+        return {item.id.casefold(), item.key.casefold()}
+
+    def refuse(reason: str) -> Result[None]:
+        return err("invalid_parent", f"{ref} cannot move under {parent}: {reason}")
+
+    def check(item: WorkItem) -> Result[None]:
+        if parent.casefold() in names(item):
+            return refuse("an item cannot be its own parent")
+        return bind(
+            ops.list_children(item.key),
+            lambda children: bind(
+                sequence(tuple(ops.list_children(child.key) for child in children)),
+                lambda grandchildren: (
+                    refuse("it is one of the item's own children")
+                    if any(
+                        parent.casefold() in names(descendant)
+                        for descendant in (
+                            *children,
+                            *(g for gs in grandchildren for g in gs),
+                        )
+                    )
+                    else Ok(None)
+                ),
+            ),
+        )
+
+    return bind(ops.get_work_item(ref), check)
 
 
 def _publish(ops: TrackerOps, args: Mapping[str, Any]) -> Result[Any]:

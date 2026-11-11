@@ -42,7 +42,9 @@ from integrations.planning_files import (
 )
 
 PAGE_SIZE = 50
-FIELDS = FieldNames("title", "description", POINTS, ASSIGNED_TO, ITERATION)
+FIELDS = FieldNames(
+    "title", "description", POINTS, ASSIGNED_TO, ITERATION, "tags", "priority"
+)
 PREFIXES = {
     WorkItemKind.EPIC: "EPIC",
     WorkItemKind.FEATURE: "FEATURE",
@@ -69,7 +71,11 @@ def adapter(context: AdapterContext) -> TrackerOps:
         update_work_item=lambda ref, changes: bind(
             changed_fields(changes, FIELDS, RECORDED_HOURS),
             lambda fields: bind(
-                _find(context, root, ref), lambda found: _update(context, found, fields)
+                _find(context, root, ref),
+                lambda found: bind(
+                    _parent_fields(context, root, found, changes.parent),
+                    lambda parent: _update(context, found, {**fields, **parent}),
+                ),
             ),
         ),
         transition_work_item=lambda ref, state: bind(
@@ -178,6 +184,10 @@ def _item(record: Mapping[str, Any]) -> WorkItem:
         url=str(record["key"]),
         description=str(record.get("description", "")),
         parent_id=str(record.get("parentId") or ""),
+        tags=tuple(str(tag) for tag in record.get("tags") or ()),
+        priority=int(record["priority"])
+        if record.get("priority") is not None
+        else None,
         provider_data=record,
     )
 
@@ -216,6 +226,27 @@ def _allowed_child(
         (),
     )
     return kinds[kind] in children
+
+
+def _parent_fields(
+    context: AdapterContext, root: Path, found: Record, parent: str | None
+) -> Result[dict[str, Any]]:
+    """The record change that moves the item under `parent`, which must be allowed to hold it,
+    as at create; nothing when no move was asked for."""
+    if parent is None:
+        return Ok({})
+    kind = WorkItemKind(str(found[1]["kind"]))
+    return bind(
+        _find(context, root, parent),
+        lambda target: (
+            Ok({"parentId": target[1]["key"]})
+            if _allowed_child(context, WorkItemKind(str(target[1]["kind"])), kind)
+            else err(
+                "invalid_parent",
+                f"a {target[1]['kind']} cannot contain a {kind.value}",
+            )
+        ),
+    )
 
 
 def _next_key(root: Path, manifest: Manifest, kind: WorkItemKind) -> str:
