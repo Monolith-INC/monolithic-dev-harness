@@ -4,6 +4,31 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- A `manual-check` question confirms checks the user ran by hand (#50):
+  `harness decision present --gate manual-check --value "checks=<name>, <name>"`. **Confirm**
+  records each check for the code as it was when the question was shown. Before this, a Task's manual
+  evidence was recorded only from the typed phrase `harness manual-check <name> ok`, which still
+  works.
+- Azure Boards places new items where the team works (#51). A new item is assigned to whoever
+  created it and joins the team's current sprint (the `team` setting, or `<project> Team`); a Task
+  still takes its Story's assignee and sprint first. A new backlog item is ranked last on the
+  backlog. If the sprint cannot be read, the item is created without one.
+  `tracker_create_work_item` takes `storyPoints`, so a Story is created with its estimate. Story
+  points are whole numbers.
+
+### Fixed
+
+- `.tsv` files in the artifacts path are planning documents, like `.csv`, not code (#49).
+- Approvals and method results survive a move of the artifacts path (#49). A file is still covered
+  when the same content is at the same trailing path under the new artifacts path. Before this, a
+  Story already in review went back to preparation.
+- A `move-item` question shows a tracker state such as `in_progress` as words ("in progress"), so
+  it is no longer refused for showing an identifier.
+
 ## [0.7.0-rc.12] - 2026-11-06
 
 ### Changed
