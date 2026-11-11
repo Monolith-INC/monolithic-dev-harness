@@ -12,6 +12,7 @@ harness preference show | language <en|pt-br>
 harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...] | tree
 harness adoption assess | plan | status | materialize ...
 harness knowledge <operation> ...
+harness modes enter <name> [--root <ref>] | leave | status
 """
 
 from __future__ import annotations
@@ -45,6 +46,7 @@ from harness import (  # noqa: E402
     gitstate,
     knowledge,
     local_tracker,
+    modes,
     preferences,
     process_cli,
     project_paths,
@@ -604,6 +606,36 @@ def knowledge_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def modes_command(args: argparse.Namespace) -> int:
+    repo = Path(args.repo)
+    result = {
+        "enter": lambda: modes.enter(repo, args.name or "", root=args.root or ""),
+        "leave": lambda: modes.leave(repo),
+        "status": lambda: Ok(modes.active(repo)),
+    }[args.operation]()
+    match result:
+        case Err(failure):
+            print(
+                json.dumps(
+                    {
+                        "outcome": "error",
+                        "error": failure.code,
+                        "message": failure.message,
+                    },
+                    ensure_ascii=False,
+                ),
+                file=sys.stderr,
+            )
+            return 2
+        case Ok(None):
+            return 0
+        case Ok(record):
+            print(
+                json.dumps(asdict(record), ensure_ascii=False, indent=2, sort_keys=True)
+            )
+            return 0
+
+
 def parser() -> argparse.ArgumentParser:
     """Every `harness` command and its arguments."""
     parser = argparse.ArgumentParser(
@@ -721,6 +753,13 @@ def parser() -> argparse.ArgumentParser:
     knowledge_parser.add_argument("terms", nargs="*")
     knowledge_parser.add_argument("--repo", default=".")
     knowledge_parser.add_argument("--store", default="project")
+    modes_parser = sub.add_parser(
+        "modes", help="enter, leave, or show the active mode and its work session"
+    )
+    modes_parser.add_argument("operation", choices=("enter", "leave", "status"))
+    modes_parser.add_argument("name", nargs="?", help="the mode to enter")
+    modes_parser.add_argument("--root", help="the work item the mode works on (enter)")
+    modes_parser.add_argument("--repo", default=".")
     return parser
 
 
@@ -748,6 +787,8 @@ def main(argv: list[str] | None = None) -> int:
         return doctor(args)
     if args.command == "knowledge":
         return knowledge_command(args)
+    if args.command == "modes":
+        return modes_command(args)
     if args.command == "session":
         return session_command(args)
     if args.command == "preference":

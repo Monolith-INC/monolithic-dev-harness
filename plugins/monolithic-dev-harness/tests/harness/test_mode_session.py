@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
 from core.result import Ok
-from harness import modes, rules, state, work_sessions
+from harness import cli, modes, rules, state, work_sessions
 from tests.harness.test_modes import VALID_FIELDS, refusal, write_mode
 
 
@@ -121,3 +122,28 @@ def test_touch_keeps_a_mode_fresh(repo: Path) -> None:
 def test_the_agent_cannot_write_mode_json_directly(repo: Path) -> None:
     assert rules.is_human_owned(".harness/state/mode.json")
     assert rules.shell_writes_human_owned("echo '{}' > .harness/state/mode.json", repo)
+
+
+def test_cli_enters_shows_and_leaves_a_mode(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert (
+        cli.main(["modes", "enter", "fixture", "--root", "EPIC-1", "--repo", str(repo)])
+        == 0
+    )
+    record = json.loads(capsys.readouterr().out)
+    assert record["mode"] == "fixture"
+    assert record["root"] == "EPIC-1"
+
+    assert cli.main(["modes", "status", "--repo", str(repo)]) == 0
+    assert json.loads(capsys.readouterr().out) == record
+
+    assert cli.main(["modes", "enter", "fixture", "--repo", str(repo)]) == 2
+    refusal_report = json.loads(capsys.readouterr().err)
+    assert refusal_report["error"] == "mode_active"
+    assert "fixture" in refusal_report["message"]
+
+    assert cli.main(["modes", "leave", "--repo", str(repo)]) == 0
+    capsys.readouterr()
+    assert cli.main(["modes", "status", "--repo", str(repo)]) == 0
+    assert capsys.readouterr().out == ""
