@@ -18,7 +18,13 @@ PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 
 
 @pytest.mark.parametrize(
-    "module", ["harness.rules", "integrations.gateway", "integrations.run_gateway"]
+    "module",
+    [
+        "harness.rules",
+        "integrations.gateway",
+        "integrations.run_gateway",
+        "host_adapters.work_session_context",
+    ],
 )
 def test_the_module_imports_first_in_a_fresh_interpreter(module: str) -> None:
     env = {**os.environ, "PYTHONPATH": os.pathsep.join([".", "scripts"])}

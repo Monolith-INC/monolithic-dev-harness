@@ -9,6 +9,8 @@ The startup adapter pairs trusted pre/post events and protected completion evide
 The pending-decision guard runs first, so a pending question cannot be escaped by switching work.
 A damaged link refuses everything but an explicit switch, which keeps the damaged record and binds
 the conversation again (`relink_allowed`).
+While a mode is active, a conversation that chose no live session acts in the mode's session. That
+is derived on each read (`for_payload`) and never stored: nothing links a conversation to a mode.
 """
 
 from __future__ import annotations
@@ -20,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from core.result import Err, Failure, Ok, Result, attempt, bind, fmap, require
-from harness import commands, decisions, state, work_sessions
+from harness import commands, decisions, modes, state, work_sessions
 
 VERSION = 1
 ROOT = Path(".harness") / "state" / "host_sessions"
@@ -316,9 +318,26 @@ def bind_requested(
 def for_payload(
     project: Path, host: str, payload: dict[str, Any]
 ) -> Result[str | None]:
+    """The work session a conversation acts in: the one it chose, else the active mode's.
+
+    Pure: nothing is written for the conversation. A damaged link stays an error and is never
+    adopted, so it keeps its refusal.
+    """
     from host_adapters import native_session_id
 
     host_session_id = native_session_id(host, payload)
-    return (
+    linked = (
         resolve_session(project, host, host_session_id) if host_session_id else Ok(None)
     )
+    return fmap(linked, lambda identifier: _derived(project, identifier))
+
+
+def _derived(project: Path, linked: str | None) -> str | None:
+    """A live session the conversation chose wins; none, or one that has ended, is no choice."""
+    if linked is not None and not work_sessions.ended(project, linked):
+        return linked
+    match modes.active(project):
+        case None:
+            return linked
+        case current:
+            return current.session_id

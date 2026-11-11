@@ -212,6 +212,9 @@ def _pre_tool(host: str, event: str, payload: dict[str, Any], notes: list[str]) 
             ),
         )
         return 0
+    if settings.governed(repo):
+        # The first read of the mode in a call repairs it, so this one comes before any other.
+        notes.extend(_mode_notice(repo))
     context = work_session_context.for_payload(repo, host, payload)
     request = (
         work_session_context.requested(call.command, Path(call.cwd or repo), repo)
@@ -225,7 +228,7 @@ def _pre_tool(host: str, event: str, payload: dict[str, Any], notes: list[str]) 
     work_session_id = context.value if isinstance(context, Ok) else None
     if not settings.governed(repo):
         # Not a governed repository: the harness is opt-in per repo (bootstrap writes the settings).
-        match _bind(repo, host, payload, work_session_id, request, notes):
+        match _bind(repo, host, payload, work_session_id, request):
             case Err(failure):
                 _emit_decision(
                     host, rules.Decision.deny("work-session-context", failure.message)
@@ -241,7 +244,7 @@ def _pre_tool(host: str, event: str, payload: dict[str, Any], notes: list[str]) 
         signal.setitimer(signal.ITIMER_REAL, RULES_BUDGET_SECONDS)
     try:
         return _governed_pre_tool(
-            host, event, payload, call, repo, work_session_id, request, notes
+            host, event, payload, call, repo, work_session_id, request
         )
     except (Exception, _OutOfTime) as exc:
         # Any failure of the rules or the workflow policy, including a crash or running out of
@@ -263,7 +266,6 @@ def _governed_pre_tool(
     repo: Path,
     work_session_id: str | None,
     request: tuple[str, str] | None,
-    notes: list[str],
 ) -> int:
     loaded = settings.load(repo)
     match loaded:
@@ -285,7 +287,7 @@ def _governed_pre_tool(
                     return 0
                 case _:
                     pass
-            match _bind(repo, host, payload, work_session_id, request, notes):
+            match _bind(repo, host, payload, work_session_id, request):
                 case Err(failure):
                     _emit_decision(
                         host,
@@ -464,7 +466,6 @@ def _bind(
     payload: dict[str, Any],
     current: str | None,
     request: tuple[str, str] | None,
-    notes: list[str],
 ) -> Result[object]:
     """Bind the conversation to the session an allowed command chose; a failure binds nothing."""
     match process_channel.is_subagent(host, payload):
@@ -480,59 +481,18 @@ def _bind(
     from host_adapters import native_session_id, startup_context
 
     conversation = native_session_id(host, payload)
-    linked = work_session_context.for_payload(repo, host, payload)
     return bind(
-        bind(
-            work_session_context.bind_requested(
-                repo, host, conversation, current, request
-            ),
-            lambda bound: Ok(
-                _join_mode(repo, host, conversation, bound, linked, notes)
-            ),
-        ),
+        work_session_context.bind_requested(repo, host, conversation, current, request),
         lambda _: startup_context.arm(
             repo, host, payload, _tool_call(host, "pre-tool", payload).command, repo
         ),
     )
 
 
-def _join_mode(
-    repo: Path,
-    host: str,
-    conversation: str,
-    bound: str | None,
-    linked: Result[str | None],
-    notes: list[str],
-) -> str | None:
-    """A conversation with no live session joins the active mode's session, without a question.
-
-    Only a cleanly read link joins: a damaged one keeps its refusal. A mode session that cannot be
-    chosen (it was paused, say) leaves the binding as it was rather than refusing the call: the
-    mode must never be what locks the user out, so the agent is told instead.
-    """
-    if not conversation or not isinstance(linked, Ok) or not _joinable(repo, bound):
-        return bound
-    match attempt(
-        lambda: modes.active(repo), "mode_unreadable", "the active mode cannot be read"
-    ):
-        case Ok(None) | Err():
-            return bound
-        case Ok(mode):
-            pass
-    match work_session_context.bind_session(repo, host, conversation, mode.session_id):
-        case Ok(identifier):
-            return identifier
-        case _:
-            notes.append(
-                f"This conversation is not in the {mode.mode} mode's work session; "
-                "run `harness modes leave`, or resume that session."
-            )
-            return bound
-
-
-def _joinable(repo: Path, bound: str | None) -> bool:
-    """No session yet, or one that has ended: nothing the conversation still needs is kept."""
-    return bound is None or work_sessions.ended(repo, bound)
+def _mode_notice(repo: Path) -> list[str]:
+    """The one line a read of the mode has for the agent, when it repaired the mode or could not."""
+    notice = modes.resolve(repo).notice
+    return [notice] if notice else []
 
 
 def handle_startup(host: str, payload: dict[str, Any]) -> int:
@@ -719,6 +679,8 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
             return 0
         case _:
             pass
+    # The first read of the mode in a call repairs it, so this one comes before any other.
+    mode_notes = _mode_notice(repo) if settings.governed(repo) else []
     context = work_session_context.for_payload(repo, host, payload)
     if isinstance(context, Err):
         _print_prompt(host, [context.failure.message])
@@ -779,6 +741,7 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         notes.append(
             f"[harness] manual check {name} recorded for the code as it is now ({code[:12]})."
         )
+    notes.extend(mode_notes)
     if orientation := mode_hooks.orient(repo):
         notes.append(orientation)
     if output := hook_bridge.format_prompt(host, notes):
