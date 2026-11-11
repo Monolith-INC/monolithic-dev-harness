@@ -288,6 +288,8 @@ class TrackerOps:
     list_children: Callable[[str], Result[tuple[WorkItem, ...]]]
     list_artifacts: Callable[[str], Result[tuple[ArtifactRef, ...]]]
     add_artifact: Callable[[str, ArtifactDraft], Result[ArtifactRef]]
+    # Rewrites a published artifact in place (its id stays) with the draft, envelope included.
+    revise_artifact: Callable[[str, ArtifactRef, ArtifactDraft], Result[ArtifactRef]]
     link_development_artifact: Callable[[str, str, str], Result[Mapping[str, Any]]]
     # Sprints, read by the adapter from its tracker. A sprint reference is a sprint's id, name or
     # path; "current", or none, is the sprint running now (`planning.CURRENT`).

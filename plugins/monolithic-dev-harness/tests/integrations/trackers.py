@@ -19,10 +19,12 @@ class AzureBoard:
 
     def __init__(self) -> None:
         self.items: dict[int, dict[str, Any]] = {}
+        self.comments = {}
         self.next_id = 100
         self.answers = {
             "wit_work_item": self.read,
             "wit_work_item_write": self.write,
+            "wit_work_item_comment_write": self.comment,
             "wit_work_item_link_write": self.link,
             "wit_query": self.query,
             "work": self.work,
@@ -49,6 +51,20 @@ class AzureBoard:
                 return preamble + json.dumps({"workingDays": ["monday", "friday"]})
         raise AssertionError(args)
 
+    comments: dict[int, tuple[int, str]]
+
+    def comment(self, args: dict[str, Any]) -> Any:
+        match args["action"]:
+            case "add":
+                number = 900 + len(self.comments)
+                self.comments[number] = (int(args["workItemId"]), args["text"])
+                return {"id": number, "text": args["text"]}
+            case "update":
+                number = int(args["commentId"])
+                self.comments[number] = (int(args["workItemId"]), args["text"])
+                return {"id": number, "text": args["text"]}
+        raise AssertionError(args)
+
     def record(self, number: int) -> dict[str, Any]:
         return {"id": number, "fields": dict(self.items[number])}
 
@@ -62,7 +78,13 @@ class AzureBoard:
                     for number in args["ids"]
                 ]
             case "list_comments":
-                return {"comments": []}
+                return {
+                    "comments": [
+                        {"id": number, "text": text}
+                        for number, (item, text) in self.comments.items()
+                        if item == int(args["workItemId"])
+                    ]
+                }
             case "list_for_iteration":
                 assert args["iterationId"] == self.sprint["id"], args
                 return {
@@ -135,11 +157,17 @@ class LinearWorkspace:
 
     def __init__(self) -> None:
         self.issues: dict[str, dict[str, Any]] = {}
+        self.comments: dict[str, tuple[str, str]] = {}
         self.answers = {
             "get_issue": lambda args: self.issues[args["id"]],
             "list_issues": self.list,
             "save_issue": self.save,
-            "list_comments": lambda args: [],
+            "list_comments": lambda args: [
+                {"id": number, "body": body}
+                for number, (issue, body) in self.comments.items()
+                if issue == args["issueId"]
+            ],
+            "save_comment": self.comment,
             "list_cycles": lambda args: [self.cycle],
         }
         self.cycle = {
@@ -150,6 +178,15 @@ class LinearWorkspace:
             "endsAt": f"{FINISH.isoformat()}T00:00:00Z",
             "isActive": True,
         }
+
+    def comment(self, args: dict[str, Any]) -> Any:
+        if "id" in args:
+            issue, _ = self.comments[args["id"]]
+            self.comments[args["id"]] = (issue, args["body"])
+            return {"id": args["id"], "body": args["body"]}
+        number = f"c{len(self.comments) + 1}"
+        self.comments[number] = (args["issueId"], args["body"])
+        return {"id": number, "body": args["body"]}
 
     def save(self, args: dict[str, Any]) -> Any:
         if "id" not in args:

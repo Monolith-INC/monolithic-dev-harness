@@ -150,6 +150,20 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
             },
         ),
         (
+            "tracker_revise_artifact",
+            "Rewrite a published artifact in place: artifactId is its id from "
+            "tracker_list_artifacts; kind, title, revision and content are what it becomes.",
+            ("ref", "artifactId", "kind", "title", "content", "revision"),
+            {
+                "ref": STRING,
+                "artifactId": STRING,
+                "kind": STRING,
+                "title": STRING,
+                "content": STRING,
+                "revision": STRING,
+            },
+        ),
+        (
             "tracker_list_artifacts",
             "List workflow artifacts on a work item.",
             ("ref",),
@@ -450,6 +464,14 @@ def _tracker_call(name: str, args: Mapping[str, Any], ops: TrackerOps) -> Result
             args["ref"], LogicalState(args["state"])
         ),
         "tracker_publish_artifact": lambda: _publish(ops, args),
+        "tracker_revise_artifact": lambda: artifacts.revise(
+            ops,
+            args["ref"],
+            args["artifactId"],
+            ArtifactDraft(
+                args["kind"], args["title"], args["content"], args["revision"]
+            ),
+        ),
         "tracker_list_artifacts": lambda: fmap(
             ops.list_artifacts(args["ref"]),
             lambda found: artifacts.of_kind(found, args.get("kind", "")),

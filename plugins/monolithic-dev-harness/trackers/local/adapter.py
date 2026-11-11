@@ -99,6 +99,10 @@ def adapter(context: AdapterContext) -> TrackerOps:
             _find(context, root, ref),
             lambda found: _add_artifact(root, found[1], draft),
         ),
+        revise_artifact=lambda ref, artifact, draft: bind(
+            _find(context, root, ref),
+            lambda found: _revise_artifact(root, found[1], artifact, draft),
+        ),
         link_development_artifact=lambda ref, url, kind: bind(
             _find(context, root, ref), lambda found: _link(found, url, kind)
         ),
@@ -404,6 +408,34 @@ def _artifacts(
         lambda texts: oks(
             artifacts.reference(_relative(root, path), _relative(root, path), stored)
             for path, stored in texts
+        ),
+    )
+
+
+def _revise_artifact(
+    root: Path, record: Mapping[str, Any], artifact: ArtifactRef, draft: ArtifactDraft
+) -> Result[ArtifactRef]:
+    """Rewrite the artifact's file, which must be one of this item's."""
+    path = root / artifact.id
+    folder = _artifact_folder(root, record).resolve()
+    if not (path.resolve().is_relative_to(folder) and path.is_file()):
+        return err(
+            "artifact_not_found", f"{record['key']} has no artifact {artifact.id!r}"
+        )
+    return fmap(
+        attempt(
+            lambda: path.write_text(artifacts.encode(draft), encoding="utf-8"),
+            "local_storage_error",
+            f"could not write {path.name}",
+            OSError,
+        ),
+        lambda _: ArtifactRef(
+            artifact.id,
+            draft.kind,
+            draft.title,
+            draft.revision,
+            artifact.url,
+            draft.content,
         ),
     )
 

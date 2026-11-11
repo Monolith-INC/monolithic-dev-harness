@@ -114,6 +114,10 @@ def adapter(context: AdapterContext) -> TrackerOps:
             call("comment", {"issueId": ref.upper(), "body": artifacts.encode(draft)}),
             lambda reply: artifacts.added(_comment(reply), draft),
         ),
+        revise_artifact=lambda ref, artifact, draft: fmap(
+            call("comment", {"id": artifact.id, "body": artifacts.encode(draft)}),
+            lambda reply: artifacts.added(_comment(reply), draft),
+        ),
         link_development_artifact=lambda ref, url, kind: fmap(
             call("comment", {"issueId": ref.upper(), "body": f"{kind}: {url}"}),
             payloads.mapping,

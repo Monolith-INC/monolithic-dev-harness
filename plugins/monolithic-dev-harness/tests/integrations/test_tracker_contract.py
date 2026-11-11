@@ -12,7 +12,12 @@ from pathlib import Path
 import pytest
 
 from core.result import Err, Ok
-from integrations.contracts import TrackerOps, WorkItemChanges, WorkItemKind
+from integrations.contracts import (
+    ArtifactDraft,
+    TrackerOps,
+    WorkItemChanges,
+    WorkItemKind,
+)
 
 from .fakes import FakeTransport, ops
 from .trackers import AzureBoard, LinearWorkspace
@@ -201,3 +206,18 @@ def test_azure_sprint_items_list_then_batch() -> None:
     reads = [a["action"] for a in call.sent("wit_work_item")]
     assert reads[-2:] == ["list_for_iteration", "get_batch"]
     assert call.sent("wit_work_item")[-2]["iterationId"] == sprint.id
+
+
+# --- published documents ----------------------------------------------------------------------
+
+
+def test_revised_document_reads_back_revised(tracker: TrackerOps) -> None:
+    _, story = _story_under_feature(tracker)
+    tracker.add_artifact(story.key, ArtifactDraft("spec", "Spec", "first", "1"))
+    (published,) = tracker.list_artifacts(story.key).value
+    revised = tracker.revise_artifact(
+        story.key, published, ArtifactDraft("spec", "Spec", "second", "1")
+    )
+    assert isinstance(revised, Ok)
+    (now,) = tracker.list_artifacts(story.key).value
+    assert (now.id, now.content) == (published.id, "second")

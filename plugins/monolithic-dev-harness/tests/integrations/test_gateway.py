@@ -170,6 +170,19 @@ class GatewayTest(unittest.TestCase):
             set(gateway.TOOLS_BY_NAME),
         )
 
+    def test_revising_an_unknown_document_fails(self) -> None:
+        story = self.call("tracker_create_work_item", kind="user_story", title="S").value
+        refused = self.call(
+            "tracker_revise_artifact",
+            ref=story["key"],
+            artifactId="nope",
+            kind="spec",
+            title="Spec",
+            revision="1",
+            content="x",
+        )
+        self.assertEqual(refused.failure.code, "artifact_not_found")
+
     def test_arguments_are_checked_against_the_tool_schema(self) -> None:
         self.assertIn(
             "missing 'title'",

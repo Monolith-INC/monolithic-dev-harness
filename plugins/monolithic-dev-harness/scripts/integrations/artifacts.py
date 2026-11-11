@@ -112,6 +112,25 @@ def added(record: Mapping[str, Any], draft: ArtifactDraft) -> ArtifactRef:
     )
 
 
+def revise(
+    ops: TrackerOps, ref: str, artifact_id: str, draft: ArtifactDraft
+) -> Result[ArtifactRef]:
+    """Rewrite the item's published artifact `artifact_id` with `draft`."""
+    return bind(
+        ops.list_artifacts(ref),
+        lambda found: next(
+            (
+                ops.revise_artifact(ref, artifact, draft)
+                for artifact in found
+                if artifact.id == artifact_id
+            ),
+            err(
+                "artifact_not_found", f"{ref} has no published artifact {artifact_id!r}"
+            ),
+        ),
+    )
+
+
 def of_kind(artifacts: tuple[ArtifactRef, ...], kind: str) -> tuple[ArtifactRef, ...]:
     return tuple(item for item in artifacts if not kind or item.kind == kind)
 

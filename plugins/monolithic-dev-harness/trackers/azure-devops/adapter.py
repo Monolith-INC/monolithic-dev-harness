@@ -209,6 +209,22 @@ def adapter(context: AdapterContext) -> TrackerOps:
         ),
         list_artifacts=lambda ref: _comments(call, ref),
         add_artifact=lambda ref, draft: _comment(call, ref, draft),
+        revise_artifact=lambda ref, artifact, draft: bind(
+            payloads.number(ref, "work item"),
+            lambda number: fmap(
+                call(
+                    "comment",
+                    "update",
+                    {
+                        "workItemId": number,
+                        "commentId": int(artifact.id),
+                        "text": artifacts.encode(draft),
+                        "format": "Markdown",
+                    },
+                ),
+                lambda reply: artifacts.added(payloads.mapping(reply), draft),
+            ),
+        ),
         link_development_artifact=lambda ref, url, kind: bind(
             payloads.number(ref, "work item"),
             lambda number: fmap(
