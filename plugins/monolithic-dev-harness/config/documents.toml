@@ -1,0 +1,64 @@
+# The discovery documents, defined once. Each table's name is the document's kind.
+#
+# Fields:
+#   title        the ROOT title, with {project} for the project name
+#   sections     level-2 headings, in order; the last is always "Change history"
+#   interview    the areas the discovery interview covers
+#   upstream     optional: the document this one is built from
+#                  kind   the upstream document's kind
+#                  gate   "approved", "exists" or "warn"
+#                  map    upstream section -> this document's section
+#
+# Every mapped section must exist on both sides. The loader in scripts/harness/documents_catalog.py
+# refuses the catalog otherwise.
+
+[vision-doc]
+title = "Vision Doc — {project}"
+sections = [
+  "Problem Statement",
+  "Target Users",
+  "Desired Outcome",
+  "Business Objectives",
+  "Success Metrics",
+  "Constraints",
+  "Out of Scope",
+  "Open Questions",
+  "Next Step",
+  "Change history",
+]
+interview = [
+  "Problem",
+  "Target users",
+  "Desired outcome",
+  "Business objectives",
+  "Success metrics with baseline",
+  "Constraints",
+  "Out of scope",
+]
+
+[prd]
+title = "PRD — {project}"
+sections = [
+  "User Problem",
+  "Personas",
+  "Business Goals",
+  "User Journeys",
+  "Functional Requirements",
+  "NFRs",
+  "Out of Scope",
+  "Dependencies",
+  "Risks",
+  "KPIs",
+  "Open Questions",
+  "Next Step",
+  "Change history",
+]
+interview = [
+  "User journeys",
+  "Functional requirements",
+  "NFRs",
+  "Dependencies",
+  "Risks",
+  "Open questions",
+]
+upstream = { kind = "vision-doc", gate = "approved", map = { "Problem Statement" = "User Problem", "Target Users" = "Personas", "Business Objectives" = "Business Goals", "Success Metrics" = "KPIs", "Constraints" = "NFRs", "Out of Scope" = "Out of Scope", "Open Questions" = "Open Questions" } }

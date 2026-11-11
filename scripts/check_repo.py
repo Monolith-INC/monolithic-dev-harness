@@ -9,6 +9,7 @@
   meets the tracker contract (both with the plugin's own standard-library checker);
 - every mode folder under the plugin's `modes/` loads with the mode loader (manifest, files,
   hooks, operations and skills);
+- the plugin's document catalog loads, and every upstream mapping names real sections;
 - every skill's frontmatter `name` matches its folder;
 - every document under docs/ has title / status / owner / last_reviewed frontmatter;
 - the workflow diagram matches the route it is drawn from;
@@ -117,6 +118,18 @@ def check_modes(problems: list[str]) -> None:
                 )
 
 
+def check_documents(problems: list[str]) -> None:
+    sys.path.insert(0, str(PLUGIN / "scripts"))
+    from core.result import Err
+    from harness import documents_catalog
+
+    match documents_catalog.load():
+        case Err(failure):
+            problems.append(
+                f"plugins/monolithic-dev-harness/config/documents.toml: {failure.message}"
+            )
+
+
 def check_skills(problems: list[str]) -> None:
     for skill in sorted((PLUGIN / "skills").iterdir()):
         text = (skill / "SKILL.md").read_text(encoding="utf-8")
@@ -184,6 +197,7 @@ def main() -> int:
         check_required_files,
         check_json,
         check_modes,
+        check_documents,
         check_skills,
         check_docs,
         check_links,
