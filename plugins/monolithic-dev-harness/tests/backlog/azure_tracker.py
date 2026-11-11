@@ -66,6 +66,7 @@ def serving(transport: FakeTransport | None) -> Iterator[None]:
     if transport is None:
         yield
         return
+    import integrations.gateway_client  # noqa: F401 - the patch target must be loaded
     from integrations import registry
 
     with mock.patch(
