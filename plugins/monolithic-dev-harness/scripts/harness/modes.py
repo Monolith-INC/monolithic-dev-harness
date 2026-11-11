@@ -6,6 +6,7 @@ is known, each operation is a gateway tool, each skill is a plugin skill, and bo
 
 from __future__ import annotations
 
+import re
 import tomllib
 from collections.abc import Iterable
 from dataclasses import asdict, dataclass, replace
@@ -23,6 +24,8 @@ SKILLS_ROOT = PLUGIN_ROOT / "skills"
 SCHEMA_PATH = PLUGIN_ROOT / "config" / "mode.schema.json"
 MANIFEST = "mode.toml"
 REQUIRED_FILES = ("workflow.md", "rules.md")
+# One plain folder name: it never holds a separator, and cannot be empty, `.` or `..`.
+PLAIN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}")
 HOOK_IDS = frozenset({"orient", "operations", "knowledge_first"})
 IDLE = timedelta(hours=4)
 
@@ -50,12 +53,15 @@ class Mode:
 def load(name: str, root: Path = MODES_ROOT) -> Result[Mode]:
     folder = root / name
     return bind(
-        _manifest(folder),
-        lambda data: bind(
-            _schema_checked(data),
-            lambda checked: bind(
-                sequence(_checks(folder, checked)),
-                lambda _: Ok(_mode(folder, checked)),
+        _plain(name),
+        lambda _: bind(
+            _manifest(folder),
+            lambda data: bind(
+                _schema_checked(data),
+                lambda checked: bind(
+                    sequence(_checks(folder, checked)),
+                    lambda _: Ok(_mode(folder, checked)),
+                ),
             ),
         ),
     )
@@ -65,6 +71,17 @@ def available(root: Path = MODES_ROOT) -> tuple[str, ...]:
     if not root.is_dir():
         return ()
     return tuple(sorted(path.name for path in root.iterdir() if path.is_dir()))
+
+
+def _plain(name: str) -> Result[None]:
+    """A mode is a folder directly under `modes/`, so its name is one plain folder name."""
+    if PLAIN_NAME.fullmatch(name):
+        return Ok(None)
+    return err(
+        "invalid_mode",
+        f"mode name {name!r} is not a plain folder name: letters, digits, '.', '_' and '-', "
+        "starting with a letter or digit",
+    )
 
 
 def _manifest(folder: Path) -> Result[dict[str, Any]]:
@@ -94,6 +111,7 @@ def _checks(folder: Path, data: dict[str, Any]) -> tuple[Result[None], ...]:
 
     skill_names = _skill_names()
     return (
+        _named_for(folder, data["name"]),
         _unknown("hooks", data["hooks"], HOOK_IDS, "a known hook id"),
         _unknown(
             "operations",
@@ -128,6 +146,15 @@ def _unknown(field: str, names: Iterable[str], known: Any, what: str) -> Result[
             f"{field} names {rejected[0]!r}, which is not {what}",
         )
     return Ok(None)
+
+
+def _named_for(folder: Path, name: str) -> Result[None]:
+    if name == folder.name:
+        return Ok(None)
+    return err(
+        "invalid_mode",
+        f"mode {folder.name}: name is {name!r}, which must be its folder name",
+    )
 
 
 def _file_present(folder: Path, filename: str) -> Result[None]:

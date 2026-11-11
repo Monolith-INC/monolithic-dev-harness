@@ -177,6 +177,45 @@ def test_a_mode_without_its_procedure_or_rules_is_refused(
     assert missing in message
 
 
+def test_a_manifest_named_differently_from_its_folder_is_refused(
+    tmp_path: Path,
+) -> None:
+    write_mode(tmp_path, name="alias", fields=with_fields(name="realname"))
+
+    code, message = refusal(modes.load("alias", root=tmp_path))
+
+    assert code == "invalid_mode"
+    assert "folder name" in message
+    assert "alias" in message
+    assert "realname" in message
+
+
+@pytest.mark.parametrize(
+    "unsafe",
+    ["", ".", "..", "a/b", "a\\b", "/etc"],
+    ids=["empty", "dot", "dotdot", "slash", "backslash", "absolute"],
+)
+def test_a_mode_name_that_is_not_one_plain_folder_name_is_refused(
+    tmp_path: Path, unsafe: str
+) -> None:
+    code, message = refusal(modes.load(unsafe, root=tmp_path))
+
+    assert code == "invalid_mode"
+    assert "folder name" in message
+
+
+def test_a_mode_cannot_be_loaded_from_outside_the_modes_folder(tmp_path: Path) -> None:
+    root = tmp_path / "modes"
+    root.mkdir()
+    # The manifest agrees with the name that points at it, so only the name can refuse it.
+    write_mode(tmp_path, name="outside", fields=with_fields(name="../outside"))
+
+    code, message = refusal(modes.load("../outside", root=root))
+
+    assert code == "invalid_mode"
+    assert "folder name" in message
+
+
 def test_a_folder_without_a_manifest_is_refused(tmp_path: Path) -> None:
     write_mode(tmp_path, fields=None)
 
