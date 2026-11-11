@@ -16,7 +16,6 @@ from typing import Any
 from core.result import Ok, Result, attempt, bind, err, fmap, sequence
 from core.schema import load_schema, validate
 from harness import state, work_sessions
-from integrations.gateway import TOOLS_BY_NAME
 
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 MODES_ROOT = PLUGIN_ROOT / "modes"
@@ -90,6 +89,9 @@ def _schema_checked(data: dict[str, Any]) -> Result[dict[str, Any]]:
 
 
 def _checks(folder: Path, data: dict[str, Any]) -> tuple[Result[None], ...]:
+    # Imported here: the gateway imports the rule chain, which imports this module.
+    from integrations.gateway import TOOLS_BY_NAME
+
     skill_names = _skill_names()
     return (
         _unknown("hooks", data["hooks"], HOOK_IDS, "a known hook id"),
