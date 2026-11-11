@@ -4,10 +4,17 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.7.0-rc.13] - 2026-11-11
 
 ### Added
 
+- **Modes, slice 1: discovery (preview).** `harness modes enter discovery [--root <epic>]` starts a
+  mode that takes an idea through a Vision Doc and a PRD on its Epic. The `discovery` skill picks it up
+  or can be called by name. `harness modes step` shows where the work stands, and each prompt repeats
+  it. `harness modes leave` ends the mode. The mode runs its own hidden work session: no question is
+  asked, a broken mode record is repaired and the mode resumes, and every repair is shown to the user.
+  Inside a mode an approval covers the content it approved. The always-on controls apply inside and
+  outside a mode. The knowledge-first hook is declared but not active yet.
 - A `manual-check` question confirms checks the user ran by hand (#50):
   `harness decision present --gate manual-check --value "checks=<name>, <name>"`. **Confirm**
   records each check for the code as it was when the question was shown. Before this, a Task's manual
