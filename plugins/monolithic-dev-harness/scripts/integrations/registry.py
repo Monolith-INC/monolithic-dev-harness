@@ -43,7 +43,6 @@ from .contracts import (
     IdRules,
     LogicalState,
     Manifest,
-    PlanningReply,
     TrackerOps,
     Transport,
     WorkItemKind,
@@ -167,7 +166,6 @@ def _consistent(folder: Path, document: Mapping[str, Any]) -> Result[None]:
     }
     kinds = document["kinds"]
     settings = tuple(str(item["key"]) for item in document["settings"])
-    replies = tuple(str(item["key"]) for item in document["planning"]["replies"])
     return bind(
         sequence(
             (
@@ -213,11 +211,6 @@ def _consistent(folder: Path, document: Mapping[str, Any]) -> Result[None]:
                     len(set(settings)) == len(settings),
                     "invalid_tracker",
                     "setting keys must be unique",
-                ),
-                require(
-                    len(set(replies)) == len(replies),
-                    "invalid_tracker",
-                    "planning reply keys must be unique",
                 ),
                 _placeholders(document["connection"], frozenset(settings)),
             )
@@ -345,10 +338,6 @@ def _manifest(folder: Path, source: str, document: Mapping[str, Any]) -> Manifes
         tools=MappingProxyType(dict(document.get("tools", {}))),
         connection=MappingProxyType(dict(document["connection"])),
         settings=tuple(str(item["key"]) for item in document["settings"]),
-        planning=tuple(
-            PlanningReply(str(item["key"]), str(item["description"]))
-            for item in document["planning"]["replies"]
-        ),
         required_settings=tuple(
             str(item["key"]) for item in document["settings"] if item["required"]
         ),
@@ -618,18 +607,6 @@ def _adapter_function(manifest: Manifest) -> Result[Any]:
                 f"{manifest.name}/{ADAPTER} does not export adapter(context)",
             )
         ),
-    )
-
-
-def require_replies(manifest: Manifest, replies: Mapping[str, Any]) -> Result[None]:
-    """Every reply the tracker's planning reads is present, or which are missing and how to fetch them."""
-    missing = tuple(reply for reply in manifest.planning if reply.key not in replies)
-    return require(
-        not missing,
-        "missing_replies",
-        f"{manifest.name} planning needs these replies, fetched through the host's tools and "
-        "passed as --replies: "
-        + "; ".join(f"{reply.key} ({reply.description})" for reply in missing),
     )
 
 

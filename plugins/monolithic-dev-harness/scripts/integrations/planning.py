@@ -1,8 +1,7 @@
 """The sprint model every tracker's planning operations speak.
 
 Each tracker's `TrackerOps` (see `contracts.py`) turns what it knows about a sprint into these
-values: the replies a skill fetched through the host's tools (Azure DevOps, Linear) or the
-tracker's own files (local). Its `tracker.json` names the replies it needs under `planning`.
+values, read from its tracker (Azure DevOps, Linear) or from its own files (local).
 They read and plan only: a planned write is shown to a person before anything is recorded.
 """
 

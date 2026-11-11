@@ -6,9 +6,8 @@ A tracker is two things in its folder (`trackers/<name>/`): `tracker.json`, chec
 record of functions, so an adapter that leaves one out cannot be built. Every function returns an
 `Ok`/`Err` value; none raises for an expected condition.
 
-Every tracker plans too: it reads a sprint and its items into the model in `planning.py` and names
-the fields that record hours. The replies it reads are the ones its manifest lists under
-`planning.replies`, fetched by a skill through the host's tools and handed over as a mapping.
+Every tracker plans too: it reads its sprints from its tracker itself, into the model in
+`planning.py`, and names the fields that record hours.
 
 Values are plain and immutable. Text that is absent is `""`, never `None`.
 """
@@ -177,14 +176,6 @@ class Artifact:
 
 
 @dataclass(frozen=True)
-class PlanningReply:
-    """A provider reply the tracker's planning operations read, and what to fetch for it."""
-
-    key: str
-    description: str
-
-
-@dataclass(frozen=True)
 class Manifest:
     """A checked `tracker.json`. `document` keeps the file as read, for `tracker_describe`."""
 
@@ -202,7 +193,6 @@ class Manifest:
     settings: tuple[str, ...]
     required_settings: tuple[str, ...]
     text_format: str
-    planning: tuple[PlanningReply, ...]
     document: Mapping[str, Any] = field(compare=False)
 
 
@@ -299,19 +289,12 @@ class TrackerOps:
     list_artifacts: Callable[[str], Result[tuple[ArtifactRef, ...]]]
     add_artifact: Callable[[str, ArtifactDraft], Result[ArtifactRef]]
     link_development_artifact: Callable[[str, str, str], Result[Mapping[str, Any]]]
-    # Planning: (replies, sprint reference) in. The reference "current", or none, means the active
-    # sprint (`planning.CURRENT`); a tracker that cannot tell which that is refuses it. A reply
-    # that was given but holds no data is refused, never read as an empty sprint.
-    # `records_hours`: whether a Task's hours can be written (`update_work_item`) at all.
-    read_iteration: Callable[[Mapping[str, Any], str], Result[IterationReading]]
-    iteration_items: Callable[
-        [Mapping[str, Any], str], Result[tuple[EstimableItem, ...]]
-    ]
     # Sprints, read by the adapter from its tracker. A sprint reference is a sprint's id, name or
     # path; "current", or none, is the sprint running now (`planning.CURRENT`).
     current_sprint: Callable[[], Result[Sprint]]
     sprint_capacity: Callable[[str], Result[IterationReading]]
     sprint_items: Callable[[str], Result[tuple[EstimableItem, ...]]]
+    # Whether a Task's hours can be written (`update_work_item`) at all.
     records_hours: bool
 
 

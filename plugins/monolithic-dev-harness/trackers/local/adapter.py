@@ -3,8 +3,8 @@
 Each work item is a ticket file in its state's folder; its artifacts are Markdown files under
 `Tickets/Attachments/<KEY>/`. Hierarchy follows the manifest's artifacts. A work item's planning
 fields (its sprint, points, and hours) use the same names as a planning file's front matter
-(`integrations.planning`). Planning reads these files, so it needs no replies, but it does need the
-sprint named: there is no "current" sprint to fall back on.
+(`integrations.planning`). A sprint is a `capacity-<sprint>.json` file beside `Tickets/`; the
+current sprint is the one whose dates cover today.
 """
 
 from __future__ import annotations
@@ -101,25 +101,6 @@ def adapter(context: AdapterContext) -> TrackerOps:
         ),
         link_development_artifact=lambda ref, url, kind: bind(
             _find(context, root, ref), lambda found: _link(found, url, kind)
-        ),
-        read_iteration=lambda replies, ref: bind(
-            _sprint(ref), lambda name: _capacity(context.repo, name)
-        ),
-        iteration_items=lambda replies, ref: bind(
-            _sprint(ref),
-            lambda name: fmap(
-                _records(context, root),
-                lambda found: tuple(
-                    planning_item(
-                        str(record["key"]),
-                        str(record.get("title", "")),
-                        str(record.get("kind", "")),
-                        record,
-                    )
-                    for _, record in found
-                    if record.get("key") and str(record.get(ITERATION) or "") == name
-                ),
-            ),
         ),
         current_sprint=lambda: _current_sprint(context.repo),
         sprint_capacity=lambda ref: bind(
@@ -544,16 +525,4 @@ def _named_sprint(repo: Path, ref: str) -> Result[str]:
         fmap(_current_sprint(repo), lambda sprint: sprint.name)
         if is_current(ref)
         else Ok(ref.strip())
-    )
-
-
-def _sprint(ref: str) -> Result[str]:
-    """The sprint's name; the local tracker keeps no "current" sprint to fall back on."""
-    return (
-        Ok(ref.strip())
-        if not is_current(ref)
-        else err(
-            "invalid_request",
-            "name the sprint: the local tracker reads capacity-<sprint>.json beside Tickets/",
-        )
     )

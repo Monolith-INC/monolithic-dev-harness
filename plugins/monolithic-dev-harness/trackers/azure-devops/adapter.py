@@ -229,18 +229,14 @@ def adapter(context: AdapterContext) -> TrackerOps:
                 payloads.mapping,
             ),
         ),
-        read_iteration=lambda replies, ref: fmap(
-            _usable(replies), lambda _: _reading(replies, ref)
-        ),
-        iteration_items=lambda replies, ref: _sprint_items(replies, process),
         current_sprint=lambda: fmap(_sprint_entry(context, call, ""), _sprint),
         sprint_capacity=lambda ref: bind(
-            _sprint_entry(context, call, ref),
-            lambda entry: _capacity_reading(context, call, entry, ref),
+            _sprint_listing(context, call, ref),
+            lambda listing: _capacity_for(context, call, listing, ref),
         ),
         sprint_items=lambda ref: bind(
-            _sprint_entry(context, call, ref),
-            lambda entry: _iteration_items(context, call, entry, process),
+            _sprint_listing(context, call, ref),
+            lambda listing: _items_for(context, call, listing, ref, process),
         ),
         records_hours=True,
     )
@@ -447,8 +443,9 @@ def _team(context: AdapterContext) -> str:
     return context.values.get("team") or f"{context.values.get('project', '')} Team"
 
 
-def _sprint_entry(context: AdapterContext, call, ref: str) -> Result[Mapping[str, Any]]:
-    """The team iteration `ref` names (id, name or path), or the current one."""
+def _sprint_listing(context: AdapterContext, call, ref: str) -> Result[Any]:
+    """The team's iterations: only the current one when `ref` asks for it. A reply that holds
+    no sprint (an error text, say) is refused, never read as a team without sprints."""
     current = is_current(ref)
     return bind(
         call(
@@ -456,17 +453,44 @@ def _sprint_entry(context: AdapterContext, call, ref: str) -> Result[Mapping[str
             "list_team_iterations",
             {"team": _team(context), **({"timeframe": "current"} if current else {})},
         ),
-        lambda reply: _found(
-            pick_sprint(
-                _json_tail(reply),
-                ref,
-                SPRINT_MARKERS,
-                ("id", "name", "path"),
-                _current_sprint,
-            )[0],
-            ref,
+        lambda reply: fmap(
+            _usable({"iteration": _json_tail(reply)}), lambda _: _json_tail(reply)
         ),
     )
+
+
+def _pick(listing: Any, ref: str) -> Mapping[str, Any] | None:
+    return pick_sprint(
+        listing, ref, SPRINT_MARKERS, ("id", "name", "path"), _current_sprint
+    )[0]
+
+
+def _sprint_entry(context: AdapterContext, call, ref: str) -> Result[Mapping[str, Any]]:
+    """The team iteration `ref` names (id, name or path), or the current one."""
+    return bind(
+        _sprint_listing(context, call, ref),
+        lambda listing: _found(_pick(listing, ref), ref),
+    )
+
+
+def _capacity_for(
+    context: AdapterContext, call, listing: Any, ref: str
+) -> Result[IterationReading]:
+    """The sprint's capacity; a sprint the team does not have is a reading with no dates and a
+    warning that says so, as planning reports it rather than stopping."""
+    entry = _pick(listing, ref)
+    if entry is None:
+        return Ok(_reading({"iteration": listing}, ref))
+    return _capacity_reading(context, call, entry, ref)
+
+
+def _items_for(
+    context: AdapterContext, call, listing: Any, ref: str, process: str | None
+) -> Result[tuple[EstimableItem, ...]]:
+    entry = _pick(listing, ref)
+    if entry is None:
+        return Ok(())
+    return _iteration_items(context, call, entry, process)
 
 
 def _found(entry: Mapping[str, Any] | None, ref: str) -> Result[Mapping[str, Any]]:
@@ -501,11 +525,14 @@ def _capacity_reading(
             "get_team_capacity",
             {"team": team, "iterationId": payloads.text(entry, "id")},
         ),
-        lambda capacities: fmap(
+        lambda capacities: bind(
             call("work", "get_team_settings", {"team": team}),
-            lambda settings: _reading(
+            lambda settings: _checked_reading(
                 {
-                    "iteration": entry,
+                    # The chosen sprint, in a shape `pick_sprint` reads back as that sprint.
+                    "iteration": entry
+                    if any(marker in entry for marker in SPRINT_MARKERS)
+                    else [entry],
                     "capacities": _json_tail(capacities),
                     "team_settings": _json_tail(settings),
                 },
@@ -513,6 +540,10 @@ def _capacity_reading(
             ),
         ),
     )
+
+
+def _checked_reading(replies: Mapping[str, Any], ref: str) -> Result[IterationReading]:
+    return fmap(_usable(replies), lambda _: _reading(replies, ref))
 
 
 def _iteration_items(
@@ -832,7 +863,7 @@ def _comment(call, ref: str, draft: ArtifactDraft) -> Result[ArtifactRef]:
 
 
 def _reading(replies: Mapping[str, Any], iteration_ref: str) -> IterationReading:
-    """The sprint from the replies the manifest's `planning.replies` names; see `pick_sprint`."""
+    """The sprint from Azure's iteration, capacity and team-settings replies; see `pick_sprint`."""
     sprint, missing = pick_sprint(
         replies.get("iteration"),
         iteration_ref,
@@ -870,7 +901,7 @@ def _usable(replies: Mapping[str, Any]) -> Result[None]:
     return require(
         not unusable,
         "unreadable_reply",
-        f"these replies hold no usable data, fetch them again: {', '.join(unusable)}",
+        f"Azure DevOps returned no usable data for: {', '.join(unusable)}",
     )
 
 
@@ -887,9 +918,8 @@ def _sprint_items(
     return (
         err(
             "ids_only",
-            "the work_items reply lists only work item ids; read them with "
-            "wit_work_item[get_batch] (no fields list) and pass that reply as work_items, "
-            "or [] when the sprint has none",
+            "Azure DevOps returned only work item ids for the sprint's work items, not their "
+            "fields",
         )
         if payloads.listed(relations)
         or any(
@@ -900,7 +930,7 @@ def _sprint_items(
         if isinstance(relations, list)
         else err(
             "unreadable_reply",
-            "the work_items reply holds no usable data, fetch it again",
+            "Azure DevOps returned no usable data for the sprint's work items",
         )
         if "work_items" in replies and not payloads.readable(reply, "fields", "id")
         else Ok(_estimables(reply, process=process))

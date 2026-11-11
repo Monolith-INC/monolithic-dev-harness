@@ -119,6 +119,13 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
             {"sprint": STRING},
         ),
         (
+            "tracker_sprint_capacity",
+            "A sprint's dates, team members, their daily capacity and days off. sprint is the "
+            "sprint's id, name or path; leave it out for the current sprint.",
+            (),
+            {"sprint": STRING},
+        ),
+        (
             "tracker_transition_work_item",
             "Move a work item to a harness state.",
             ("ref", "state"),
@@ -326,6 +333,7 @@ READ_ONLY_OPERATIONS = frozenset(
         "tracker_list_artifacts",
         "tracker_current_sprint",
         "tracker_sprint_items",
+        "tracker_sprint_capacity",
         "scm_get_pull_request",
         "scm_list_review_threads",
         "workflow_tracking_status",
@@ -437,6 +445,7 @@ def _tracker_call(name: str, args: Mapping[str, Any], ops: TrackerOps) -> Result
         "tracker_list_children": lambda: ops.list_children(args["ref"]),
         "tracker_current_sprint": lambda: ops.current_sprint(),
         "tracker_sprint_items": lambda: ops.sprint_items(args.get("sprint", "")),
+        "tracker_sprint_capacity": lambda: ops.sprint_capacity(args.get("sprint", "")),
         "tracker_transition_work_item": lambda: ops.transition_work_item(
             args["ref"], LogicalState(args["state"])
         ),

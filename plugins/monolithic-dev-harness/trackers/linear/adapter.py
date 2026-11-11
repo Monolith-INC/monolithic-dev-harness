@@ -15,7 +15,7 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import Any
 
-from core.result import Ok, Result, bind, err, fmap, require
+from core.result import Ok, Result, bind, err, fmap
 from integrations import artifacts, payloads
 from integrations.contracts import (
     EMPTY,
@@ -118,38 +118,14 @@ def adapter(context: AdapterContext) -> TrackerOps:
             call("comment", {"issueId": ref.upper(), "body": f"{kind}: {url}"}),
             payloads.mapping,
         ),
-        read_iteration=lambda replies, ref: fmap(
-            _usable(replies, "cycle", CYCLE_MARKERS),
-            lambda _: _cycle(replies.get("cycle"), ref),
-        ),
-        iteration_items=lambda replies, ref: fmap(
-            _usable(replies, "issues", ("identifier",)),
-            lambda _: tuple(
-                _estimable(context, record)
-                for record in payloads.records(replies.get("issues"))
-                if payloads.text(record, "identifier", "id")
-            ),
-        ),
         current_sprint=lambda: fmap(_cycle_entry(context, call, ""), _sprint),
         sprint_capacity=lambda ref: fmap(
-            _cycle_entry(context, call, ref), lambda cycle: _cycle(cycle, ref)
+            _cycle_listing(context, call, ref),
+            lambda listing: _cycle(_pick(listing, ref) or listing, ref),
         ),
         sprint_items=lambda ref: bind(
-            _cycle_entry(context, call, ref),
-            lambda cycle: fmap(
-                call(
-                    "list",
-                    {
-                        "team": context.values.get("team", ""),
-                        "cycle": payloads.text(cycle, "id"),
-                    },
-                ),
-                lambda reply: tuple(
-                    _estimable(context, record)
-                    for record in payloads.records(reply)
-                    if payloads.text(record, "identifier", "id")
-                ),
-            ),
+            _cycle_listing(context, call, ref),
+            lambda listing: _cycle_items(context, call, _pick(listing, ref)),
         ),
         records_hours=False,
     )
@@ -259,18 +235,6 @@ def _comment(reply: Any) -> Mapping[str, Any]:
     )
 
 
-def _usable(
-    replies: Mapping[str, Any], key: str, markers: tuple[str, ...]
-) -> Result[None]:
-    """A reply that was fetched but holds no data (an error text, say) is refused, not read as
-    an empty cycle."""
-    return require(
-        key not in replies or payloads.readable(replies[key], *markers),
-        "unreadable_reply",
-        f"the {key} reply holds no usable data, fetch it again",
-    )
-
-
 def _cycle(reply: Any, iteration_ref: str) -> IterationReading:
     """A cycle's dates; see `pick_sprint`. Linear records no team capacity, and says so."""
     cycle, missing = pick_sprint(
@@ -286,20 +250,53 @@ def _cycle(reply: Any, iteration_ref: str) -> IterationReading:
     )
 
 
+def _cycle_listing(context: AdapterContext, call, ref: str) -> Result[Any]:
+    """The team's cycles: only the current one when `ref` asks for it."""
+    team = context.values.get("team", "")
+    return call(
+        "cycles", {"teamId": team, **({"type": "current"} if is_current(ref) else {})}
+    )
+
+
+def _pick(listing: Any, ref: str) -> Mapping[str, Any] | None:
+    return pick_sprint(listing, ref, CYCLE_MARKERS, ("id", "name", "number"), _active)[
+        0
+    ]
+
+
 def _cycle_entry(context: AdapterContext, call, ref: str) -> Result[Mapping[str, Any]]:
     """The team's cycle `ref` names (id, name or number), or the current one."""
     current = is_current(ref)
-    team = context.values.get("team", "")
     return bind(
-        call("cycles", {"teamId": team, **({"type": "current"} if current else {})}),
-        lambda reply: _found(
-            pick_sprint(reply, ref, CYCLE_MARKERS, ("id", "name", "number"), _active)[
-                0
-            ],
+        _cycle_listing(context, call, ref),
+        lambda listing: _found(
+            _pick(listing, ref),
             "the team has no current cycle"
             if current
             else f"the team has no cycle {ref!r}",
             "no_current_sprint" if current else "sprint_not_found",
+        ),
+    )
+
+
+def _cycle_items(
+    context: AdapterContext, call, cycle: Mapping[str, Any] | None
+) -> Result[tuple[EstimableItem, ...]]:
+    """The cycle's issues; a cycle the team does not have holds none."""
+    if cycle is None:
+        return Ok(())
+    return fmap(
+        call(
+            "list",
+            {
+                "team": context.values.get("team", ""),
+                "cycle": payloads.text(cycle, "id"),
+            },
+        ),
+        lambda reply: tuple(
+            _estimable(context, record)
+            for record in payloads.records(reply)
+            if payloads.text(record, "identifier", "id")
         ),
     )
 
