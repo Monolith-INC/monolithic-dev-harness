@@ -12,7 +12,7 @@ harness preference show | language <en|pt-br>
 harness tracker list | show <name> | stage <folder> [--value KEY=VALUE ...] | tree
 harness adoption assess | plan | status | materialize ...
 harness knowledge <operation> ...
-harness modes enter <name> [--root <ref>] | leave | status
+harness modes enter <name> [--root <ref>] | leave | status | step
 """
 
 from __future__ import annotations
@@ -50,6 +50,7 @@ from harness import (  # noqa: E402
     preferences,
     process_cli,
     project_paths,
+    routing,
     sessions,
     settings,
     state,
@@ -626,12 +627,38 @@ def _mode_status(repo: Path) -> Ok:
     return Ok(read_mode(repo))
 
 
+def _mode_step(repo: Path) -> Result[dict[str, str] | None]:
+    """Where the active mode's work stands, read from its ROOT; or that the harness is suspended."""
+    if modes.suspended(repo):
+        print(SUSPENDED, file=sys.stderr)
+        return Ok(None)
+    match read_mode(repo):
+        case modes.Active() as active:
+            return fmap(
+                routing.current(repo, active),
+                lambda found: {
+                    "mode": active.mode,
+                    "root": active.root,
+                    "step": found.kind,
+                    "detail": found.detail,
+                },
+            )
+        case _:
+            return Err(
+                Failure(
+                    "mode_inactive",
+                    "no mode is active; enter one with `harness modes enter <name>`",
+                )
+            )
+
+
 def modes_command(args: argparse.Namespace) -> int:
     repo = resolve_repo(args.repo)
     result = {
         "enter": lambda: modes.enter(repo, args.name or "", root=args.root or ""),
         "leave": lambda: modes.leave(repo),
         "status": lambda: _mode_status(repo),
+        "step": lambda: _mode_step(repo),
     }[args.operation]()
     match result:
         case Err(failure):
@@ -649,13 +676,16 @@ def modes_command(args: argparse.Namespace) -> int:
             return 2
         case Ok(None):
             return 0
-        case Ok(record):
+        case Ok(modes.Active() as record):
             # The mode's session stays in the record; the user is never shown its id.
             shown = {
                 "mode": record.mode,
                 "root": record.root,
                 "entered": record.entered,
             }
+            print(json.dumps(shown, ensure_ascii=False, indent=2, sort_keys=True))
+            return 0
+        case Ok(shown):
             print(json.dumps(shown, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
 
@@ -778,9 +808,10 @@ def parser() -> argparse.ArgumentParser:
     knowledge_parser.add_argument("--repo", default=".")
     knowledge_parser.add_argument("--store", default="project")
     modes_parser = sub.add_parser(
-        "modes", help="enter, leave, or show the active mode and its work session"
+        "modes",
+        help="enter, leave, or show the active mode, or print the step its work is at",
     )
-    modes_parser.add_argument("operation", choices=("enter", "leave", "status"))
+    modes_parser.add_argument("operation", choices=("enter", "leave", "status", "step"))
     modes_parser.add_argument("name", nargs="?", help="the mode to enter")
     modes_parser.add_argument("--root", help="the work item the mode works on (enter)")
     modes_parser.add_argument("--repo", default=".")

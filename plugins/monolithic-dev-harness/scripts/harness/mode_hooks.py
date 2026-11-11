@@ -1,7 +1,7 @@
 """The mode-scoped hooks. Each runs only while a mode is active and its manifest lists its id.
 
-`orient` gives the prompt the mode's rules. `operations` refuses a gateway tool the mode does not
-list; every other tool is left to the rules.
+`orient` gives the prompt the mode's rules and, for a mode with steps, the step its work is at.
+`operations` refuses a gateway tool the mode does not list; every other tool is left to the rules.
 """
 
 from __future__ import annotations
@@ -9,9 +9,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from core.result import Ok, attempt
+from core.result import Err, Ok, attempt
 
-from . import modes, rules
+from . import modes, routing, rules
 
 GATEWAY_SERVER = "workflow-integrations"
 
@@ -26,7 +26,7 @@ class Orientation:
 
 
 def orient(repo: Path) -> Orientation:
-    """The mode's rules for the prompt.
+    """The mode's rules for the prompt, with the step its work is at.
 
     Guidance only: when it cannot be given, the prompt goes on without it and says so, so a mode
     never stops the approvals and revokes the same prompt carries.
@@ -34,11 +34,12 @@ def orient(repo: Path) -> Orientation:
     match _hooked(repo, "orient"):
         case None:
             return Orientation()
-        case mode:
-            return _rules_of(mode)
+        case active:
+            return _oriented(repo, active)
 
 
-def _rules_of(mode: modes.Mode) -> Orientation:
+def _oriented(repo: Path, active: modes.Active) -> Orientation:
+    mode = active.manifest
     match attempt(
         lambda: (mode.root / "rules.md").read_text(encoding="utf-8"),
         "orient_failed",
@@ -47,12 +48,35 @@ def _rules_of(mode: modes.Mode) -> Orientation:
         ValueError,
     ):
         case Ok(text):
-            return Orientation(f"[harness] mode: {mode.name}. Rules:\n{text}")
+            head = f"[harness] mode: {mode.name}."
+            step = _step(repo, active)
+            return Orientation(
+                f"{head}\n{step}\nRules:\n{text}" if step else f"{head} Rules:\n{text}"
+            )
         case _:
             return Orientation(
                 notice=f"The {mode.name} mode's rules could not be read, so this prompt "
                 "carries none of them."
             )
+
+
+def _step(repo: Path, active: modes.Active) -> str:
+    """The line saying where the mode's work stands, or one saying it could not be read. A mode
+    with no steps has none. Never raises: a tracker that does not answer costs the prompt a line,
+    not its approvals."""
+    if not routing.routed(active.mode):
+        return ""
+    match attempt(
+        lambda: routing.current(repo, active), "step_unread", "reading the step failed"
+    ):
+        case Ok(Ok(found)):
+            return f"Current step: {routing.describe(found)}"
+        case Ok(Err(failure)) | Err(failure):
+            return f"Current step: could not be read ({_one_line(failure.message)})."
+
+
+def _one_line(message: str) -> str:
+    return " ".join(message.split()).rstrip(".")
 
 
 def operations(call: rules.ToolCall, repo: Path) -> rules.Decision | None:
@@ -61,9 +85,10 @@ def operations(call: rules.ToolCall, repo: Path) -> rules.Decision | None:
     match _hooked(repo, "operations"):
         case None:
             return None
-        case mode if call.name in mode.operations:
+        case active if call.name in active.manifest.operations:
             return None
-        case mode:
+        case active:
+            mode = active.manifest
             return rules.Decision.deny(
                 "mode-operations",
                 f"`{call.name}` is not an operation of the {mode.name} mode, which allows: "
@@ -75,14 +100,14 @@ def _gateway(call: rules.ToolCall) -> bool:
     return call.kind == "mcp" and call.server.endswith(GATEWAY_SERVER)
 
 
-def _hooked(repo: Path, hook_id: str) -> modes.Mode | None:
+def _hooked(repo: Path, hook_id: str) -> modes.Active | None:
     """The active mode when its manifest lists `hook_id`; None when no such hook runs.
 
     A mode that cannot be read or repaired is no mode here: a mode never denies a call because of
     its own broken state.
     """
     match modes.active(repo):
-        case modes.Active(manifest=mode) if hook_id in mode.hooks:
-            return mode
+        case modes.Active(manifest=mode) as active if hook_id in mode.hooks:
+            return active
         case _:
             return None
