@@ -24,11 +24,12 @@ import hashlib
 import os
 import posixpath
 import re
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Literal
 
 from core.result import Ok
 
@@ -1064,6 +1065,35 @@ def rule_history_preserved(call: ToolCall) -> Decision:
 def _delivery(settings: Settings, rule: Callable[[], Decision]) -> Decision:
     """A rule about Git commands applies only when the user chose Git-based delivery."""
     return rule() if settings.git_delivery else Decision.allow()
+
+
+# What each rule `evaluate` runs does when modes scope the process: `always` guards the project or
+# the user and stays on in a mode, outside one, with or without a work session; `mode` belongs to
+# a stage of work and a mode may replace it. Keyed by the name the rule gives `Decision.deny`.
+#
+# `feature-branch` and `draft-reviewed-prs` are `always` for now: neither is bound to a work
+# session. Whether a mode takes them over is a later decision.
+#
+# Not here, on purpose:
+# - `work-session-context` and `work-session-mismatch` are checks of `hook._held`, not rules of
+#   `evaluate`. They are the session-bound controls, and the candidates to become `mode` in a later
+#   slice.
+# - `hook-entry` (`rule_hook_entry`), `plain-begin`, and the `harness-error` that fails closed
+#   when the rules cannot run are decided in `hook.handle_pre_tool` before or around `evaluate`,
+#   unconditionally. They carry no class: nothing scopes them.
+CLASS: Mapping[str, Literal["always", "mode"]] = MappingProxyType(
+    {
+        "human-owned": "always",
+        "tracked-tickets": "always",
+        "tracker-invalid": "always",
+        "protected-items": "always",
+        "feature-branch": "always",
+        "draft-reviewed-prs": "always",
+        "history-preserved": "always",
+        "approval-required": "always",
+        "generated-files": "always",
+    }
+)
 
 
 def evaluate(
