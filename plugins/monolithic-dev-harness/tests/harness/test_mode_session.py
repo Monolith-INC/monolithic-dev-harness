@@ -356,6 +356,26 @@ def test_a_paused_mode_session_is_resumed(repo: Path) -> None:
     assert modes.resolve(repo).notice == ""
 
 
+def test_a_session_another_call_just_resumed_is_not_a_failed_repair(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    assert isinstance(work_sessions.transition(repo, active.session_id, "pause"), Ok)
+    transition = work_sessions.transition
+
+    def lose_the_race(project: Path, identifier: str, operation: str, **options):
+        transition(project, identifier, operation, **options)  # the other call won
+        return transition(project, identifier, operation, **options)
+
+    monkeypatch.setattr(work_sessions, "transition", lose_the_race)
+
+    resolved = modes.resolve(repo)
+
+    assert resolved.active is not None
+    assert resolved.active.session_id == active.session_id
+    assert resolved.notice == RECOVERED
+
+
 def end_by_completing(project: Path, active: modes.Active) -> None:
     work_sessions.transition(project, active.session_id, "complete")
 

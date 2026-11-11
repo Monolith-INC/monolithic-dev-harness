@@ -336,10 +336,7 @@ def _alive(repo: Path, current: Active) -> Resolution:
         case Ok(session) if session.status == work_sessions.Status.PAUSED:
             return _repaired(
                 current.mode,
-                fmap(
-                    work_sessions.transition(repo, current.session_id, "resume"),
-                    lambda _: current,
-                ),
+                fmap(_resume(repo, current.session_id), lambda _: current),
             )
         case _:
             return _repaired(
@@ -381,7 +378,25 @@ def _adopted(repo: Path, session: work_sessions.Session) -> Result[Active]:
 def _live(repo: Path, session: work_sessions.Session) -> Result[None]:
     if session.status != work_sessions.Status.PAUSED:
         return Ok(None)
-    return fmap(work_sessions.transition(repo, session.id, "resume"), lambda _: None)
+    return _resume(repo, session.id)
+
+
+def _resume(repo: Path, identifier: str) -> Result[None]:
+    """Resume a paused session. One that a call running at the same moment already resumed is as
+    good: hooks of parallel tool calls each repair what they find."""
+    match work_sessions.transition(repo, identifier, "resume"):
+        case Err() as failed if not _running(repo, identifier):
+            return failed
+        case _:
+            return Ok(None)
+
+
+def _running(repo: Path, identifier: str) -> bool:
+    match work_sessions.select(repo, identifier):
+        case Ok(session):
+            return session.status == work_sessions.Status.ACTIVE
+        case _:
+            return False
 
 
 def _repaired(name: str, result: Result[Active]) -> Resolution:
