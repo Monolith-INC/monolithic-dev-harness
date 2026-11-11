@@ -170,7 +170,7 @@ class EstimableItem:
 
 @dataclass(frozen=True)
 class IterationReading:
-    """A sprint read from provider replies, with anything the translation could not account for."""
+    """A sprint read from the tracker, with anything the translation could not account for."""
 
     capacity: IterationCapacity
     warnings: tuple[str, ...] = ()

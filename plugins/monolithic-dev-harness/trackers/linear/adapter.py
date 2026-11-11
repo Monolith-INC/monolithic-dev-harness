@@ -25,6 +25,7 @@ from integrations.contracts import (
     Page,
     TrackerOps,
     WorkItem,
+    WorkItemChanges,
     WorkItemKind,
     changed_fields,
 )
@@ -74,21 +75,16 @@ def adapter(context: AdapterContext) -> TrackerOps:
         update_work_item=lambda ref, changes: bind(
             changed_fields(changes, FIELDS, no_hours),
             lambda fields: bind(
-                _with_kind_label(call, context, ref, fields),
-                lambda fields: bind(
-                    call(
-                        "save",
-                        {
-                            "id": ref.upper(),
-                            **fields,
-                            **(
-                                {"parentId": changes.parent.upper()}
-                                if changes.parent
-                                else {}
-                            ),
-                        },
+                _existing_parent(call, context, changes.parent),
+                lambda _: bind(
+                    _with_kind_label(call, context, ref, fields),
+                    lambda fields: bind(
+                        call(
+                            "save",
+                            {"id": ref.upper(), **fields, **_parent_field(changes)},
+                        ),
+                        issue,
                     ),
-                    issue,
                 ),
             ),
         ),
@@ -198,6 +194,20 @@ def _priority(value: Any) -> int | None:
     return int(number) if str(number or "").isdigit() and int(number) > 0 else None
 
 
+def _parent_field(changes: WorkItemChanges) -> dict[str, str]:
+    return {"parentId": changes.parent.upper()} if changes.parent else {}
+
+
+def _existing_parent(call, context: AdapterContext, parent: str | None) -> Result[None]:
+    """A new parent that Linear holds; a move under one it does not changes nothing."""
+    if not parent:
+        return Ok(None)
+    return fmap(
+        bind(call("get", {"id": parent.upper()}), lambda reply: _issue(context, reply)),
+        lambda _: None,
+    )
+
+
 def _with_kind_label(
     call, context: AdapterContext, ref: str, fields: dict[str, Any]
 ) -> Result[dict[str, Any]]:
@@ -262,8 +272,21 @@ def _cycle(reply: Any, iteration_ref: str) -> IterationReading:
 def _cycle_listing(context: AdapterContext, call, ref: str) -> Result[Any]:
     """The team's cycles: only the current one when `ref` asks for it."""
     team = context.values.get("team", "")
-    return call(
-        "cycles", {"teamId": team, **({"type": "current"} if is_current(ref) else {})}
+    return bind(
+        call(
+            "cycles",
+            {"teamId": team, **({"type": "current"} if is_current(ref) else {})},
+        ),
+        lambda reply: _readable(reply, "cycles", CYCLE_MARKERS),
+    )
+
+
+def _readable(reply: Any, what: str, markers: tuple[str, ...]) -> Result[Any]:
+    """A reply that holds data; error text in its place is refused, never read as "none"."""
+    return (
+        Ok(reply)
+        if payloads.readable(reply, *markers)
+        else err("unreadable_reply", f"Linear returned no usable data for the {what}")
     )
 
 
@@ -295,12 +318,15 @@ def _cycle_items(
     if cycle is None:
         return Ok(())
     return fmap(
-        call(
-            "list",
-            {
-                "team": context.values.get("team", ""),
-                "cycle": payloads.text(cycle, "id"),
-            },
+        bind(
+            call(
+                "list",
+                {
+                    "team": context.values.get("team", ""),
+                    "cycle": payloads.text(cycle, "id"),
+                },
+            ),
+            lambda reply: _readable(reply, "cycle's issues", ("identifier",)),
         ),
         lambda reply: tuple(
             _estimable(context, record)

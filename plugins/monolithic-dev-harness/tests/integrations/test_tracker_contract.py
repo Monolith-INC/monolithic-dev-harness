@@ -240,3 +240,50 @@ def test_removed_document_is_gone(name: str, tmp_path: Path) -> None:
 def test_azure_offers_no_document_removal() -> None:
     azure, _ = _azure()
     assert dict(azure.optional) == {}
+
+
+# --- final review: a re-parent that cannot be made changes nothing -----------------------------
+
+
+def test_reparent_to_a_missing_item_leaves_the_item_as_it_was(
+    tracker: TrackerOps,
+) -> None:
+    feature, story = _story_under_feature(tracker)
+    missing = "999999" if story.key.isdigit() else "STORY-9999"
+    refused = tracker.update_work_item(
+        story.key, WorkItemChanges(parent=missing, priority=1)
+    )
+    assert isinstance(refused, Err)
+    after = tracker.get_work_item(story.key).value
+    assert after.parent_id == feature.id
+    assert after.priority is None
+
+
+def test_local_priority_that_is_no_number_reads_as_none(tmp_path: Path) -> None:
+    local = ops("local", {}, repo=tmp_path)
+    _, story = _story_under_feature(local)
+    path = next(tmp_path.glob("Tickets/*/*.md"))
+    for path in tmp_path.glob("Tickets/*/*.md"):
+        if story.key in path.read_text():
+            text = path.read_text().replace("---\n\n", "priority: high\n---\n\n", 1)
+            path.write_text(text)
+    assert local.get_work_item(story.key).value.priority is None
+
+
+def test_linear_unreadable_cycles_stop_planning() -> None:
+    call = FakeTransport(
+        {
+            "list_cycles": lambda args: "Error: not authorized",
+            "list_issues": lambda a: [],
+        }
+    )
+    linear = ops("linear", LINEAR, call)
+    assert linear.sprint_capacity("current").failure.code == "unreadable_reply"
+    assert linear.sprint_items("current").failure.code == "unreadable_reply"
+
+
+def test_linear_unreadable_cycle_issues_stop_planning() -> None:
+    workspace = LinearWorkspace()
+    answers = {**workspace.answers, "list_issues": lambda args: "Error: rate limited"}
+    linear = ops("linear", LINEAR, FakeTransport(answers))
+    assert linear.sprint_items("current").failure.code == "unreadable_reply"

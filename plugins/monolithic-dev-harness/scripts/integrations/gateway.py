@@ -559,37 +559,35 @@ def _changes(args: Mapping[str, Any]) -> WorkItemChanges:
 
 
 def _valid_parent(ops: TrackerOps, ref: str, parent: str) -> Result[None]:
-    """A new parent that is neither the item itself nor one of its descendants: the hierarchy
-    is at most Feature, Story, Task below any item, so two levels of children are searched."""
+    """A new parent that exists and is neither the item itself nor one of its descendants, checked
+    before any write, so a move that cannot be made changes nothing."""
     if not parent:
         return Ok(None)
-
-    def names(item: WorkItem) -> set[str]:
-        return {item.id.casefold(), item.key.casefold()}
+    wanted = parent.casefold()
 
     def refuse(reason: str) -> Result[None]:
         return err("invalid_parent", f"{ref} cannot move under {parent}: {reason}")
 
-    def check(item: WorkItem) -> Result[None]:
-        if parent.casefold() in names(item):
-            return refuse("an item cannot be its own parent")
+    def names(item: WorkItem) -> set[str]:
+        return {item.id.casefold(), item.key.casefold()}
+
+    def below(items: tuple[WorkItem, ...]) -> Result[None]:
+        """Refuse when the new parent is among `items` or anything below them."""
+        if any(wanted in names(item) for item in items):
+            return refuse("it is one of the item's own children")
+        if not items:
+            return Ok(None)
         return bind(
-            ops.list_children(item.key),
-            lambda children: bind(
-                sequence(tuple(ops.list_children(child.key) for child in children)),
-                lambda grandchildren: (
-                    refuse("it is one of the item's own children")
-                    if any(
-                        parent.casefold() in names(descendant)
-                        for descendant in (
-                            *children,
-                            *(g for gs in grandchildren for g in gs),
-                        )
-                    )
-                    else Ok(None)
-                ),
-            ),
+            sequence(tuple(ops.list_children(item.key) for item in items)),
+            lambda levels: below(tuple(child for level in levels for child in level)),
         )
+
+    def check(item: WorkItem) -> Result[None]:
+        if wanted in names(item):
+            return refuse("an item cannot be its own parent")
+        if isinstance(ops.get_work_item(parent), Err):
+            return refuse("no such work item")
+        return bind(ops.list_children(item.key), below)
 
     return bind(ops.get_work_item(ref), check)
 

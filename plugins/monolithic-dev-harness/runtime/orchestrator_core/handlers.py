@@ -326,10 +326,9 @@ def handle_estimate_breakdown(
     iteration_ref = as_text(arguments.get("iteration_ref")) or None
 
     # Capacity is checked when asked for: a sprint was named ("current" names the running one).
-    # Once asked, a
-    # check that cannot run (no usable tracker, a reply missing or unreadable, a sprint or its
-    # items unreadable) stops the run, since writing hours past an unchecked ceiling is what the
-    # check exists to prevent. What a check that ran finds (nobody to match, no team capacity
+    # Once asked, a check that cannot run (no usable tracker or gateway, a sprint or its items
+    # unreadable) stops the run, since writing hours past an unchecked ceiling is what the check
+    # exists to prevent. What a check that ran finds (nobody to match, no team capacity
     # recorded) is reported and the estimate stands.
     asked = iteration_ref is not None
     match (

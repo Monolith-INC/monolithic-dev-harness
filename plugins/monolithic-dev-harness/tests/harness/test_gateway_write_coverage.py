@@ -10,11 +10,14 @@ OTHER_READS = frozenset({"workflow_resume_tracker"})
 
 
 def test_every_gateway_tool_is_a_read_or_a_write() -> None:
-    assert set(TOOLS_BY_NAME) - GATEWAY_WRITES - READ_ONLY_OPERATIONS - OTHER_READS == set()
+    assert (
+        set(TOOLS_BY_NAME) - GATEWAY_WRITES - READ_ONLY_OPERATIONS - OTHER_READS
+        == set()
+    )
 
 
 def test_no_tool_is_both_a_read_and_a_write() -> None:
-    assert GATEWAY_WRITES & READ_ONLY_OPERATIONS == set()
+    assert set() == GATEWAY_WRITES & READ_ONLY_OPERATIONS
 
 
 def test_changing_or_removing_a_published_document_needs_an_approval() -> None:

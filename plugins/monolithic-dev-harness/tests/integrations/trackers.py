@@ -71,7 +71,8 @@ class AzureBoard:
     def read(self, args: dict[str, Any]) -> Any:
         match args["action"]:
             case "get":
-                return self.record(int(args["id"]))
+                number = int(args["id"])
+                return self.record(number) if number in self.items else {}
             case "get_batch":
                 return [
                     {"body": json.dumps(self.record(int(number)))}
@@ -159,7 +160,7 @@ class LinearWorkspace:
         self.issues: dict[str, dict[str, Any]] = {}
         self.comments: dict[str, tuple[str, str]] = {}
         self.answers = {
-            "get_issue": lambda args: self.issues[args["id"]],
+            "get_issue": lambda args: self.issues.get(args["id"], {}),
             "list_issues": self.list,
             "save_issue": self.save,
             "list_comments": lambda args: [

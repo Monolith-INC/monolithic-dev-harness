@@ -696,18 +696,20 @@ def _update(
         changed_fields(changes, names, _hour_fields(process)),
         lambda fields: bind(
             payloads.number(ref, "work item"),
+            # The move goes first: it checks the new parent before changing anything, so a move
+            # that cannot be made leaves the item's fields as they were too.
             lambda number: bind(
-                (
-                    call(
-                        "write",
-                        "update",
-                        {"id": number, "updates": _patch(_azure(fields))},
-                    )
-                    if fields
-                    else Ok(None)
-                ),
+                _reparent(call, read, ref, number, changes.parent),
                 lambda _: bind(
-                    _reparent(call, read, ref, number, changes.parent),
+                    (
+                        call(
+                            "write",
+                            "update",
+                            {"id": number, "updates": _patch(_azure(fields))},
+                        )
+                        if fields
+                        else Ok(None)
+                    ),
                     lambda _: read(ref),
                 ),
             ),
@@ -724,31 +726,35 @@ def _azure(fields: Mapping[str, Any]) -> dict[str, Any]:
 
 
 def _reparent(call, read, ref: str, number: int, parent: str | None) -> Result[None]:
-    """Move the item under `parent`: its old parent link, if any, is removed first, since an item
-    has one parent and Azure keeps the parent as a link rather than a field."""
+    """Move the item under `parent`. Azure keeps the parent as a link, and an item has one, so
+    the old link is removed before the new one is added; the new parent is read first, so a
+    parent that does not exist leaves the old link in place."""
     if parent is None:
         return Ok(None)
     return bind(
-        read(ref),
-        lambda item: bind(
-            (
-                call("link", "unlink", {"id": number, "type": "parent"})
-                if item.parent_id
-                else Ok(None)
-            ),
+        payloads.number(parent, "parent"),
+        lambda target: bind(
+            read(parent),
             lambda _: bind(
-                payloads.number(parent, "parent"),
-                lambda target: fmap(
-                    call(
-                        "link",
-                        "link",
-                        {
-                            "updates": [
-                                {"id": number, "linkToId": target, "type": "parent"}
-                            ]
-                        },
+                read(ref),
+                lambda item: bind(
+                    (
+                        call("link", "unlink", {"id": number, "type": "parent"})
+                        if item.parent_id
+                        else Ok(None)
                     ),
-                    lambda _: None,
+                    lambda _: fmap(
+                        call(
+                            "link",
+                            "link",
+                            {
+                                "updates": [
+                                    {"id": number, "linkToId": target, "type": "parent"}
+                                ]
+                            },
+                        ),
+                        lambda _: None,
+                    ),
                 ),
             ),
         ),

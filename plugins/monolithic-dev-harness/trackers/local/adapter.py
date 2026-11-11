@@ -196,11 +196,14 @@ def _item(record: Mapping[str, Any]) -> WorkItem:
         description=str(record.get("description", "")),
         parent_id=str(record.get("parentId") or ""),
         tags=tuple(str(tag) for tag in record.get("tags") or ()),
-        priority=int(record["priority"])
-        if record.get("priority") is not None
-        else None,
+        priority=_priority(record.get("priority")),
         provider_data=record,
     )
+
+
+def _priority(value: Any) -> int | None:
+    """A ticket's priority, 1 urgent … 4 low; anything else, such as a hand-written word, is none."""
+    return int(value) if str(value).strip() in ("1", "2", "3", "4") else None
 
 
 def _page(found: tuple[Record, ...], query: str, cursor: str) -> Page:

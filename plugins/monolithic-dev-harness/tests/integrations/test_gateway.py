@@ -214,6 +214,35 @@ class GatewayTest(unittest.TestCase):
         self.assertEqual(refused.failure.code, "unsupported_capability")
         self.assertIn("cannot remove a published artifact", refused.failure.message)
 
+    def test_reparent_to_a_missing_item_is_refused(self) -> None:
+        story = self.call(
+            "tracker_create_work_item", kind="user_story", title="S"
+        ).value
+        refused = self.call(
+            "tracker_update_work_item", ref=story["key"], parentRef="FEATURE-9999"
+        )
+        self.assertEqual(refused.failure.code, "invalid_parent")
+
+    def test_reparent_under_any_descendant_is_refused(self) -> None:
+        epic = self.call("tracker_create_work_item", kind="epic", title="E").value
+        feature = self.call(
+            "tracker_create_work_item", kind="feature", title="F", parentRef=epic["key"]
+        ).value
+        story = self.call(
+            "tracker_create_work_item",
+            kind="user_story",
+            title="S",
+            parentRef=feature["key"],
+        ).value
+        task = self.call(
+            "tracker_create_work_item", kind="task", title="T", parentRef=story["key"]
+        ).value
+        refused = self.call(
+            "tracker_update_work_item", ref=epic["key"], parentRef=task["key"]
+        )
+        self.assertEqual(refused.failure.code, "invalid_parent")
+        self.assertIn("own children", refused.failure.message)
+
     def test_arguments_are_checked_against_the_tool_schema(self) -> None:
         self.assertIn(
             "missing 'title'",
