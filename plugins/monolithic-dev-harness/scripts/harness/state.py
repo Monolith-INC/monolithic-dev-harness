@@ -29,6 +29,11 @@ def state_dir(repo: Path) -> Path:
     return repo / STATE_RELATIVE_PATH
 
 
+def mode_record(repo: Path) -> Path:
+    """The active mode and its work session; written only by `harness.modes`."""
+    return state_dir(repo) / "mode.json"
+
+
 def ensure_local_exclude(repo: Path) -> tuple[str, ...]:
     """Keep local-only records out of the project's own repository, when it has one."""
     from harness.gitstate import own_exclude

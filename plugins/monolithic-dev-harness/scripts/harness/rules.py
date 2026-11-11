@@ -282,6 +282,7 @@ _OWNED_FILES = (
     (".harness", "settings.json"),
     (".harness", "state", "tracking.json"),
     (".harness", "state", "suspension.json"),
+    (".harness", "state", "mode.json"),
     (".harness", "state", "decision.json"),
     (".harness", "state", "decision-history.json"),
     (".harness", "state", "onboarding.json"),
