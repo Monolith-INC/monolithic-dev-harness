@@ -178,9 +178,10 @@ def _server_owned(record: dict) -> bool:
     )
 
 
-# Skills link their shared documents as `../../references/...` and `../../common/...`, so these
-# sit beside the linked skills, where the same relative paths find them.
-SHARED_FOLDERS = ("references", "common")
+# Skills link their shared documents as `../../references/...` and `../../common/...`, and the
+# discovery skill its mode's procedure and the document catalog as `../../modes/...` and
+# `../../config/...`, so these sit beside the linked skills, where the same relative paths find them.
+SHARED_FOLDERS = ("references", "common", "modes", "config")
 
 
 def _links(
