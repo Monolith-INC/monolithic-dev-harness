@@ -266,6 +266,35 @@ def resolve(repo: Path) -> Resolution:
             return Resolution(None, _unrecovered())
 
 
+def acting_in(repo: Path, work_session_id: str | None) -> bool:
+    """Whether this work session is the active mode's: a conversation acting in it is in the mode."""
+    match active(repo):
+        case Active(session_id=identifier):
+            return work_session_id == identifier
+        case _:
+            return False
+
+
+def approvals_for(
+    repo: Path, work_session_id: str | None
+) -> list[tuple[Path, dict[str, Any]]]:
+    """The open approvals a write in this work session can rely on, newest first.
+
+    Its own. Inside a mode, also every approval tied to reviewed content: it belongs to what it
+    approves, not to the mode's session, which a repair may have replaced since. A general window
+    is still the session's, and outside a mode nothing else counts.
+    """
+    own = state.open_approvals(repo, work_session_id)
+    if not acting_in(repo, work_session_id):
+        return own
+    held = {path for path, _ in own}
+    return sorted(
+        [*own, *(item for item in state.bound_approvals(repo) if item[0] not in held)],
+        key=lambda item: str(item[1].get("opened", "")),
+        reverse=True,
+    )
+
+
 def leave(repo: Path) -> Result[None]:
     """End the mode, in whatever state it is: complete every work session that records one and
     remove the pointer, so a mode that could not be recovered can still be left."""

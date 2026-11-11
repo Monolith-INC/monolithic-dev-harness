@@ -19,14 +19,17 @@ from harness import (
     hook,
     mode_hooks,
     modes,
+    questions,
     rules,
     settings,
     state,
     tracker_policy,
     work_sessions,
     workflow,
+    workflow_evidence,
 )
 from host_adapters import hook_bridge, work_session_context
+from integrations import gateway as integration_gateway
 from tests.harness.test_mode_session import entered
 from tests.harness.test_modes import with_fields, write_mode
 from tests.settings_fixture import write_settings
@@ -826,6 +829,201 @@ def test_an_approved_body_is_held_to_in_a_mode_whichever_session_is_running(
     different = body_decision(repo, new.session_id, APPROVED_BODY + "more")
     assert not different.allowed
     assert "no approved draft holds" in (different.reason or "")
+
+
+# the receipt of a publication, and a question answered about the same content, follow the content
+
+
+PUBLISH_ANSWER = "publish"
+DOCUMENT_QUESTION = "Approve this document and save it?"
+DOCUMENT_OPTIONS = ("Approve", "Not now")
+
+
+def approved_publication(project: Path, session: str) -> str:
+    """The user approved publishing in this session: its answer, and the approval that answer opened,
+    tied to the reviewed draft. Returns the approval's id."""
+    folder = work_sessions.select(project, session).value.folder
+    approval = questions.approval_id(PUBLISH_ANSWER)
+    state.write_json(
+        folder / decisions.HISTORY,
+        {
+            "answers": [
+                {
+                    "id": PUBLISH_ANSWER,
+                    "gate": "publish-items",
+                    "status": "answered",
+                    "answer": "Approve (Recommended)",
+                }
+            ]
+        },
+    )
+    state.open_approval(
+        project, approval, 20, work_session_id=session, binds=reviewed_draft(project)
+    )
+    return approval
+
+
+def create_item(project: Path) -> None:
+    created = integration_gateway.handle_call(
+        "tracker_create_work_item",
+        {"kind": "epic", "title": "Discovery Epic"},
+        project,
+    )
+    assert isinstance(created, Ok), created
+
+
+def receipts(project: Path, session: str) -> tuple[dict, ...]:
+    return workflow_evidence.publications(work_sessions.select(project, session).value)
+
+
+def replaced(project: Path, session: str) -> str:
+    """The mode's session ended: the next read of the mode replaces it. Returns the new one."""
+    assert isinstance(work_sessions.transition(project, session, "complete"), Ok)
+    successor = modes.active(project)
+    assert successor is not None and successor.session_id != session
+    return successor.session_id
+
+
+def test_a_publication_receipt_is_recorded_in_the_mode_session_that_was_approved(
+    repo: Path,
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    approval = approved_publication(repo, active.session_id)
+
+    create_item(repo)
+
+    (receipt,) = receipts(repo, active.session_id)
+    assert receipt["approval_id"] == approval
+
+
+def test_a_publication_receipt_finds_the_approval_given_before_the_mode_session_was_replaced(
+    repo: Path,
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    approval = approved_publication(repo, active.session_id)
+    new = replaced(repo, active.session_id)
+
+    create_item(repo)
+
+    (receipt,) = receipts(repo, new)
+    assert receipt["approval_id"] == approval
+    assert receipt["work_session"] == new
+
+
+def test_outside_a_mode_a_publication_receipt_never_borrows_an_approval_of_an_ended_session(
+    repo: Path,
+) -> None:
+    ended = started(repo, "work that ended")
+    approved_publication(repo, ended.id)
+    assert isinstance(work_sessions.transition(repo, ended.id, "complete"), Ok)
+    successor = started(repo, "work that went on")
+
+    create_item(repo)
+
+    assert receipts(repo, successor.id) == ()
+
+
+def test_a_publication_with_no_approval_anywhere_leaves_no_receipt_in_a_mode(
+    repo: Path,
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    new = replaced(repo, active.session_id)
+
+    create_item(repo)
+
+    assert receipts(repo, new) == ()
+
+
+def answered_document(project: Path, session: str) -> tuple[str, tuple]:
+    """The user approved this draft in this session. Returns the answer's id and the draft as asked."""
+    folder = work_sessions.select(project, session).value.folder
+    artifacts = ((DRAFT, draft_digest(project)),)
+    answer = "answer-document"
+    state.write_json(
+        folder / decisions.HISTORY,
+        {
+            "answers": [
+                {
+                    "id": answer,
+                    "gate": "approve-document",
+                    "status": "answered",
+                    "answer": "Approve",
+                    "question": DOCUMENT_QUESTION,
+                    "options": list(DOCUMENT_OPTIONS),
+                    "approval": True,
+                    "artifacts": [list(pair) for pair in artifacts],
+                }
+            ]
+        },
+    )
+    state.open_approval(
+        project,
+        questions.approval_id(answer),
+        20,
+        work_session_id=session,
+        binds={"artifacts": [list(pair) for pair in artifacts]},
+    )
+    return answer, artifacts
+
+
+def asked_again(project: Path, session: str, artifacts: tuple) -> dict | None:
+    return decisions.reusable(
+        project,
+        DOCUMENT_QUESTION,
+        DOCUMENT_OPTIONS,
+        artifacts,
+        True,
+        work_session_id=session,
+    )
+
+
+def test_a_question_answered_about_the_same_content_is_not_asked_again_once_the_mode_session_was_replaced(
+    repo: Path,
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    reviewed_draft(repo)
+    answer, artifacts = answered_document(repo, active.session_id)
+    new = replaced(repo, active.session_id)
+
+    reused = asked_again(repo, new, artifacts)
+
+    assert reused is not None and reused["id"] == answer
+
+
+def test_a_question_about_content_that_changed_is_asked_again_in_a_mode(
+    repo: Path,
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    reviewed_draft(repo)
+    _, artifacts = answered_document(repo, active.session_id)
+    new = replaced(repo, active.session_id)
+    (repo / DRAFT).write_text(APPROVED_BODY + "an edit nobody approved\n")
+
+    assert asked_again(repo, new, ((DRAFT, draft_digest(repo)),)) is None
+
+
+def test_a_question_answered_in_an_ended_mode_session_is_asked_again_once_the_mode_is_left(
+    repo: Path,
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    reviewed_draft(repo)
+    _, artifacts = answered_document(repo, active.session_id)
+    assert isinstance(modes.leave(repo), Ok)
+    fresh = started(repo, "work after the mode")
+
+    assert asked_again(repo, fresh.id, artifacts) is None
+
+
+def test_outside_a_mode_an_answer_of_another_session_is_never_reused(
+    repo: Path,
+) -> None:
+    ended = started(repo, "work that ended")
+    reviewed_draft(repo)
+    _, artifacts = answered_document(repo, ended.id)
+    assert isinstance(work_sessions.transition(repo, ended.id, "complete"), Ok)
+    successor = started(repo, "work that went on")
+
+    assert asked_again(repo, successor.id, artifacts) is None
 
 
 def test_a_general_window_is_still_its_own_sessions_inside_a_mode(

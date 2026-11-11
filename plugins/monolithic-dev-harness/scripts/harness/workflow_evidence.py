@@ -8,7 +8,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from core.result import Err, Ok, Result, bind, err
-from harness import decisions, gates, questions, state, work_sessions
+from harness import decisions, gates, modes, questions, state, work_sessions
 
 
 def all_history(session: work_sessions.Session) -> tuple[dict, ...]:
@@ -92,20 +92,13 @@ def record_publication(repo: Path, item: dict) -> Result[dict]:
     match work_sessions.list_sessions(repo):
         case Ok(sessions):
             match tuple(
-                session
+                (session, approval)
                 for session in sessions
                 if session.status == work_sessions.Status.ACTIVE
-                and state.active_approval(repo, session.id) is not None
-                and any(
-                    entry.get("gate") == "publish-items"
-                    and entry.get("status") == "answered"
-                    and option_id(entry) == "approve"
-                    and questions.approval_id(entry.get("id", ""))
-                    == state.active_approval(repo, session.id)[1]["id"]
-                    for entry in history(session)
-                )
+                for approval in (_publication_approval(repo, session),)
+                if approval
             ):
-                case (session,):
+                case ((session, approval),):
                     return Ok(
                         state.write_json(
                             session.folder / "publications" / f"{uuid4().hex}.json",
@@ -117,9 +110,7 @@ def record_publication(repo: Path, item: dict) -> Result[dict]:
                                 "title": item["title"],
                                 "source_digest": item_digest(item),
                                 "approach_id": _published_approach(session),
-                                "approval_id": state.active_approval(repo, session.id)[
-                                    1
-                                ]["id"],
+                                "approval_id": approval,
                             },
                         )
                     )
@@ -127,6 +118,39 @@ def record_publication(repo: Path, item: dict) -> Result[dict]:
                     return Ok({})  # Ambiguous owner never becomes a route fact.
         case Err() as failed:
             return failed
+
+
+def _publication_approval(repo: Path, session: work_sessions.Session) -> str:
+    """The id of the newest open approval a write in this session can rely on, when it is the
+    approval of an answered `publish-items`; else empty. Inside a mode the answer may be one of an
+    earlier session of the mode: the approval belongs to the content it approved."""
+    match modes.approvals_for(repo, session.id)[:1]:
+        case [(_, {"id": str() as approval, "work_session": str() as given})]:
+            return (
+                approval
+                if _approves_publication(repo, session, given, approval)
+                else ""
+            )
+        case _:
+            return ""
+
+
+def _approves_publication(
+    repo: Path, session: work_sessions.Session, given_in: str, approval: str
+) -> bool:
+    match (
+        Ok(session) if given_in == session.id else work_sessions.select(repo, given_in)
+    ):
+        case Ok(giver):
+            return any(
+                entry.get("gate") == "publish-items"
+                and entry.get("status") == "answered"
+                and option_id(entry) == "approve"
+                and questions.approval_id(entry.get("id", "")) == approval
+                for entry in history(giver)
+            )
+        case _:
+            return False
 
 
 def _published_approach(session: work_sessions.Session) -> str:
