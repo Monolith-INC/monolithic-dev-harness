@@ -166,3 +166,54 @@ def test_approved_reads_the_status_line_under_the_title() -> None:
     assert not documents_catalog.approved(
         "# PRD — Acme\n\n## User Problem\n\nStatus: Approved\n"
     )
+
+
+DRAFT = """# PRD — Acme
+
+Status: Draft
+
+## User Problem
+
+Users cannot find their orders.
+
+## Change history
+
+| Date | Change | By |
+|---|---|---|
+| 2026-11-11 | Draft | Ana |
+"""
+
+
+def test_substance_is_a_document_without_its_status_line_and_change_history() -> None:
+    approved = DRAFT.replace("Status: Draft", "Status: Approved") + (
+        "| 2026-11-12 | Approved by Ana | Ana |\n"
+    )
+
+    assert documents_catalog.substance(approved) == documents_catalog.substance(DRAFT)
+    assert "Users cannot find their orders." in documents_catalog.substance(DRAFT)
+    assert "Status" not in documents_catalog.substance(DRAFT)
+    assert "Change history" not in documents_catalog.substance(DRAFT)
+
+
+def test_substance_changes_with_any_other_word_or_section() -> None:
+    reworded = DRAFT.replace("cannot find", "can find")
+    extra_section = DRAFT.replace(
+        "## Change history", "## Risks\n\nNone.\n\n## Change history"
+    )
+
+    assert documents_catalog.substance(reworded) != documents_catalog.substance(DRAFT)
+    assert documents_catalog.substance(extra_section) != documents_catalog.substance(
+        DRAFT
+    )
+
+
+def test_substance_ignores_trailing_blanks_and_a_status_line_only_under_the_title() -> (
+    None
+):
+    spaced = DRAFT.replace("orders.", "orders.   ") + "\n\n"
+    in_a_section = DRAFT.replace(
+        "Users cannot find their orders.", "Status: Approved by finance"
+    )
+
+    assert documents_catalog.substance(spaced) == documents_catalog.substance(DRAFT)
+    assert "Status: Approved by finance" in documents_catalog.substance(in_a_section)

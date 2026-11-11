@@ -36,6 +36,7 @@ from core.result import Ok
 
 from . import (
     code_content,
+    documents_catalog,
     gitstate,
     globs,
     local_tracker,
@@ -944,6 +945,49 @@ def _approved_body(repo: Path, work_session_id: str | None, body: str) -> bool:
     )
 
 
+# Publishing or rewriting an artifact: for a catalog document its content is the document.
+_DOCUMENT_WRITES = frozenset({"tracker_publish_artifact", "tracker_revise_artifact"})
+
+
+def _document_kind(call: ToolCall) -> str:
+    """The catalog document an artifact write is about, or empty: its `kind` names one."""
+    kind = call.tool_input.get("kind")
+    if call.name not in _DOCUMENT_WRITES or not isinstance(kind, str):
+        return ""
+    match documents_catalog.load():
+        case Ok(catalog) if kind in catalog:
+            return kind
+        case _:
+            return ""
+
+
+def _reviewed_substance(repo: Path, entry: Any) -> str | None:
+    """What a reviewed file holds, as a document's substance; None when it cannot be read."""
+    try:
+        return documents_catalog.substance((repo / str(entry[0])).read_text("utf-8"))
+    except (OSError, UnicodeDecodeError, IndexError, TypeError):
+        return None
+
+
+def _approved_document(repo: Path, work_session_id: str | None, content: str) -> bool:
+    """Whether an open approval, its reviewed files unchanged, holds the draft this document is:
+    the same but for its status and change history."""
+    wanted = documents_catalog.substance(content)
+    return (
+        bool(wanted)
+        and not work_sessions.ended(repo, work_session_id)
+        and any(
+            _context_unchanged(repo, binds, str(record.get("id", "")))
+            and any(
+                _reviewed_substance(repo, entry) == wanted
+                for entry in binds.get("artifacts", ())
+            )
+            for _, record in modes.approvals_for(repo, work_session_id)
+            for binds in (record.get("binds") or {},)
+        )
+    )
+
+
 def rule_approval_required(
     call: ToolCall,
     repo: Path,
@@ -961,6 +1005,20 @@ def rule_approval_required(
                 "`Tickets/Ready/`), show it with `harness workflow show --artifact <draft>`, and "
                 "ask `harness decision present --gate publish-items --artifact <draft>`. The "
                 "description must be the draft's body, word for word. You cannot approve it "
+                "yourself.",
+            )
+    match _document_kind(call):
+        case str() as kind if kind and not _approved_document(
+            repo, work_session_id, str(call.tool_input.get("content") or "")
+        ):
+            return Decision.deny(
+                "approval-required",
+                f"`{call.name}` publishes a {kind} that no approved draft holds. Write the draft "
+                f"where `harness document path --type {kind} --item <key>` says, show it with "
+                "`harness workflow show --artifact <draft>`, and ask `harness decision present "
+                "--gate approve-document --artifact <draft>`: an approval of another document "
+                "does not cover this one. Publish the draft's text word for word; only its "
+                "`Status` line and its `Change history` may differ. You cannot approve it "
                 "yourself.",
             )
     match covering_approval(call, repo, work_session_id):

@@ -66,6 +66,22 @@ def approved(content: str) -> bool:
     return any(line.strip() == "Status: Approved" for line in header.splitlines())
 
 
+def substance(content: str) -> str:
+    """What a reviewer approves in a document: all of it but the `Status` line under the title and
+    the `Change history` section, the two parts that publishing it as approved changes."""
+    kept: list[str] = []
+    in_header = True
+    in_history = False
+    for line in content.splitlines():
+        if heading := HEADING.match(line):
+            in_header = False
+            in_history = heading.group(1) == "Change history"
+        if in_history or (in_header and line.strip().startswith("Status:")):
+            continue
+        kept.append(line.rstrip())
+    return "\n".join(kept).strip()
+
+
 def _read(path: Path) -> Result[dict[str, Any]]:
     return bind(
         attempt(
