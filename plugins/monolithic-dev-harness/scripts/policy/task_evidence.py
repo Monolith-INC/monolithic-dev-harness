@@ -16,7 +16,7 @@ def approved_note(repo: Path, path: Path, key: str, kind: str = "") -> bool:
                 key in note.work_items
                 and (not kind or note.kind == kind)
                 and note.digest
-                in state.pinned_notes(repo).get(str(path.resolve()), set())
+                in local_artifacts.current_pins(repo).get(str(path.resolve()), set())
             )
         case _:
             return False

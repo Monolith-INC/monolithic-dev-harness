@@ -79,7 +79,6 @@ def source_matches(
 
 
 def approved_source(repo: Path, item) -> bool:
-    from harness import state
     from harness.workflow_evidence import item_digest
 
     return any(
@@ -87,7 +86,7 @@ def approved_source(repo: Path, item) -> bool:
         and note.kind == "implementation-plan"
         and item.key in note.work_items
         and note.frontmatter.get("source_digest") == item_digest(item)
-        for path, digests in state.pinned_notes(repo).items()
+        for path, digests in local_artifacts.current_pins(repo).items()
         for note in (local_artifacts.note(Path(path)),)
         if note is not None
     )

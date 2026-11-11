@@ -73,6 +73,41 @@ class LocalArtifactsTests(unittest.TestCase):
         )
         self.assertEqual(self.kinds(), {"spec"})
 
+    # --- a moved artifacts path ----------------------------------------------------------
+
+    def move_vault(self, to: str = "Moved") -> Path:
+        moved = self.repo / to
+        self.vault.rename(moved)
+        write_settings(self.repo, artifacts_path=to)
+        return moved
+
+    def test_an_approval_holds_for_the_same_note_under_a_moved_artifacts_path(
+        self,
+    ) -> None:
+        self.note("specs/s.md", "type: spec\nstory: 7824")
+        self.approve()
+        self.move_vault()
+        self.assertEqual(self.kinds(), {"spec"})
+
+    def test_a_moved_note_edited_after_the_approval_is_not_approved(self) -> None:
+        self.note("specs/s.md", "type: spec\nstory: 7824")
+        self.approve()
+        moved = self.move_vault() / "specs" / "s.md"
+        moved.write_text(
+            moved.read_text(encoding="utf-8") + "More.\n", encoding="utf-8"
+        )
+        self.assertEqual(self.kinds(), set())
+
+    def test_a_moved_note_is_found_at_its_deepest_matching_trailing_path(self) -> None:
+        self.note("a/s.md", "type: spec\nstory: 7824")
+        self.approve()
+        moved = self.move_vault()
+        (moved / "s.md").write_bytes((moved / "a" / "s.md").read_bytes())
+        self.assertEqual(
+            set(local_artifacts.current_pins(self.repo)),
+            {str((moved / "a" / "s.md").resolve())},
+        )
+
     # --- what counts as approved now -----------------------------------------------------
 
     def test_a_pinned_note_naming_the_key_reports_its_raw_type(self) -> None:

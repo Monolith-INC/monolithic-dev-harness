@@ -27,7 +27,7 @@ def git_commands(command: str) -> list[list[str]]:
 # Documents and data a planning folder holds. Without source globs these are not code there; any
 # other file, such as a script, still is, so the planning folder cannot carry code past the gate.
 PLANNING_DOCUMENTS = frozenset(
-    {".md", ".json", ".jsonl", ".yaml", ".yml", ".csv", ".txt"}
+    {".md", ".json", ".jsonl", ".yaml", ".yml", ".csv", ".tsv", ".txt"}
 )
 
 
