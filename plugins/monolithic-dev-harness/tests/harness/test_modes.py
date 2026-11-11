@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -234,3 +235,55 @@ def test_available_lists_mode_folders_in_order(tmp_path: Path) -> None:
 
 def test_available_is_empty_before_any_mode_exists(tmp_path: Path) -> None:
     assert modes.available(tmp_path / "modes") == ()
+
+
+# the discovery mode that ships with the plugin
+
+DISCOVERY_OPERATIONS = (
+    "tracker_describe",
+    "tracker_preflight",
+    "tracker_search_work_items",
+    "tracker_get_work_item",
+    "tracker_create_work_item",
+    "tracker_list_artifacts",
+    "tracker_publish_artifact",
+    "tracker_revise_artifact",
+)
+
+
+def discovery() -> modes.Mode:
+    match modes.load("discovery"):
+        case Ok(mode):
+            return mode
+        case Err(failure):
+            raise AssertionError(failure.message)
+
+
+def test_the_discovery_mode_loads() -> None:
+    mode = discovery()
+
+    assert mode.name == "discovery"
+    assert mode.entry_skill == "discovery"
+    assert mode.operations == DISCOVERY_OPERATIONS
+    assert mode.hooks == ("orient", "operations")
+    assert mode.knowledge == "first"
+    assert mode.exit == ("The PRD is approved.",)
+    assert "discovery" in modes.available()
+
+
+def test_the_discovery_rules_are_imperatives_only() -> None:
+    lines = (discovery().root / "rules.md").read_text(encoding="utf-8").splitlines()
+
+    assert lines and all(re.match(r"[A-Z]{3,}\b", line) for line in lines)
+
+
+def test_the_discovery_skill_and_procedure_call_only_the_gateway_tools_the_mode_lists() -> (
+    None
+):
+    mode = discovery()
+    skill = modes.SKILLS_ROOT / mode.entry_skill / "SKILL.md"
+
+    for path in (skill, mode.root / "workflow.md"):
+        named = set(re.findall(r"\b(?:tracker|scm)_[a-z_]+\b", path.read_text("utf-8")))
+        assert named, path
+        assert named <= set(mode.operations), (path.name, named - set(mode.operations))
