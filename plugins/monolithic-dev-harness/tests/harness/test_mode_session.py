@@ -1,8 +1,15 @@
-"""A mode's session: entering creates a work session nobody is asked about, and leaving ends it."""
+"""A mode's session: entering creates a work session nobody is asked about, and leaving ends it.
+
+A mode never just drops. Every read of it is total and repairs what it finds: a broken or missing
+pointer is regenerated from the work session that records the mode, a paused session is resumed, and
+a completed or missing one is replaced by a new session for the same mode and ROOT.
+"""
 
 from __future__ import annotations
 
 import json
+import shutil
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -12,6 +19,11 @@ from core.result import Ok
 from harness import cli, modes, rules, state, work_sessions
 from tests.harness.test_modes import VALID_FIELDS, refusal, write_mode
 from tests.settings_fixture import write_settings
+
+RECOVERED = "Recovered the fixture mode."
+UNRECOVERED = (
+    "The fixture mode could not be recovered; run `harness modes leave` to end it."
+)
 
 
 @pytest.fixture
@@ -33,19 +45,26 @@ def entered(result) -> modes.Active:
             raise AssertionError(f"expected the mode to be entered, got {result!r}")
 
 
-def session_status(project: Path, identifier: str) -> work_sessions.Status:
+def session_of(project: Path, identifier: str) -> work_sessions.Session:
     match work_sessions.select(project, identifier):
         case Ok(session):
-            return session.status
+            return session
         case _:
             raise AssertionError(f"work session {identifier} was not found")
 
 
-def age_touch(project: Path, hours: int) -> None:
+def session_status(project: Path, identifier: str) -> work_sessions.Status:
+    return session_of(project, identifier).status
+
+
+def pointer(project: Path) -> dict:
     record = state.read_json(state.mode_record(project))
     assert record is not None
-    stale = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
-    state.write_json(state.mode_record(project), {**record, "touched": stale})
+    return record
+
+
+def set_aside(project: Path) -> list[Path]:
+    return sorted(state.state_dir(project).glob("mode.json.damaged-*"))
 
 
 def test_enter_creates_a_session_with_no_question(repo: Path) -> None:
@@ -60,13 +79,20 @@ def test_enter_creates_a_session_with_no_question(repo: Path) -> None:
         "mode.json",
         "work_sessions",
     ]
-    assert state.read_json(state.mode_record(repo)) == {
+    assert pointer(repo) == {
         "mode": "fixture",
         "session_id": active.session_id,
         "root": "",
         "entered": active.entered,
-        "touched": active.touched,
     }
+
+
+def test_enter_records_the_mode_and_its_root_on_the_session(repo: Path) -> None:
+    active = entered(modes.enter(repo, "fixture", root="EPIC-1"))
+
+    session = session_of(repo, active.session_id)
+
+    assert (session.mode, session.mode_root) == ("fixture", "EPIC-1")
 
 
 def test_an_unknown_mode_is_refused_before_any_session_exists(repo: Path) -> None:
@@ -114,6 +140,25 @@ def test_cli_enter_is_refused_in_a_repository_the_harness_does_not_govern(
     assert not (bare / ".harness").exists()
 
 
+def test_enter_that_cannot_record_the_mode_leaves_no_live_session_behind(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_json = state.write_json
+
+    def refuse_the_pointer(path: Path, payload: dict) -> None:
+        if path == state.mode_record(repo):
+            raise OSError("the pointer cannot be written")
+        write_json(path, payload)
+
+    monkeypatch.setattr(state, "write_json", refuse_the_pointer)
+
+    code, _ = refusal(modes.enter(repo, "fixture"))
+
+    assert code == "mode_unwritable"
+    assert work_sessions.recording_mode(repo) == ()
+    assert modes.resolve(repo) == modes.Resolution(None)
+
+
 def test_leave_completes_the_session_and_clears_the_record(repo: Path) -> None:
     active = entered(modes.enter(repo, "fixture"))
 
@@ -130,50 +175,342 @@ def test_leave_without_an_active_mode_is_refused(repo: Path) -> None:
     assert code == "mode_inactive"
 
 
-def test_a_stale_record_is_cleared_on_read(repo: Path) -> None:
+def test_a_mode_untouched_for_five_hours_is_still_active(repo: Path) -> None:
     active = entered(modes.enter(repo, "fixture"))
-    age_touch(repo, hours=5)
+    long_ago = (datetime.now(UTC) - timedelta(hours=5)).isoformat()
+    state.write_json(
+        state.mode_record(repo),
+        {**pointer(repo), "entered": long_ago, "touched": long_ago},
+    )
 
-    assert modes.active(repo) is None
-    assert not state.mode_record(repo).exists()
-    assert session_status(repo, active.session_id) == work_sessions.Status.COMPLETE
-    assert isinstance(modes.enter(repo, "fixture"), Ok)
+    resolved = modes.resolve(repo)
 
-
-@pytest.mark.parametrize("field", ["touched", "entered"])
-@pytest.mark.parametrize(
-    "unreadable",
-    ["2026-11-11T10:00:00", "not a time", ""],
-    ids=["naive", "garbled", "empty"],
-)
-def test_a_time_that_cannot_be_read_counts_as_idle(
-    repo: Path, field: str, unreadable: str
-) -> None:
-    active = entered(modes.enter(repo, "fixture"))
-    record = state.read_json(state.mode_record(repo))
-    assert record is not None
-    state.write_json(state.mode_record(repo), {**record, field: unreadable})
-
-    assert modes.active(repo) is None
-    modes.touch(repo)
-
-    assert not state.mode_record(repo).exists()
-    assert session_status(repo, active.session_id) == work_sessions.Status.COMPLETE
-    assert isinstance(modes.enter(repo, "fixture"), Ok)
-
-
-def test_touch_keeps_a_mode_fresh(repo: Path) -> None:
-    entered(modes.enter(repo, "fixture"))
-    age_touch(repo, hours=3)
-
-    modes.touch(repo)
-
-    assert modes.active(repo) is not None
+    assert resolved.active is not None
+    assert resolved.active.session_id == active.session_id
+    assert resolved.notice == ""
+    assert session_status(repo, active.session_id) == work_sessions.Status.ACTIVE
+    assert not set_aside(repo)
 
 
 def test_the_agent_cannot_write_mode_json_directly(repo: Path) -> None:
     assert rules.is_human_owned(".harness/state/mode.json")
     assert rules.shell_writes_human_owned("echo '{}' > .harness/state/mode.json", repo)
+
+
+# a healthy mode
+
+
+def test_a_healthy_mode_is_read_without_any_repair(repo: Path) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    before = state.mode_record(repo).read_bytes()
+
+    resolved = modes.resolve(repo)
+
+    assert resolved.active == active
+    assert resolved.notice == ""
+    assert state.mode_record(repo).read_bytes() == before
+    assert not set_aside(repo)
+
+
+def test_no_mode_and_no_record_is_quiet_and_writes_nothing(repo: Path) -> None:
+    assert modes.resolve(repo) == modes.Resolution(None)
+
+    assert not state.state_dir(repo).exists()
+
+
+# a broken pointer
+
+
+def invalid_utf8(path: Path, record: dict) -> None:
+    path.write_bytes(b"\xff\xfe")
+
+
+def invalid_json(path: Path, record: dict) -> None:
+    path.write_text("{damaged", encoding="utf-8")
+
+
+def not_an_object(path: Path, record: dict) -> None:
+    path.write_text("[]", encoding="utf-8")
+
+
+def without_root(path: Path, record: dict) -> None:
+    record.pop("root")
+    path.write_text(json.dumps(record), encoding="utf-8")
+
+
+def with_a_naive_time(path: Path, record: dict) -> None:
+    path.write_text(
+        json.dumps({**record, "entered": "2026-11-11T10:00:00"}), encoding="utf-8"
+    )
+
+
+def with_an_unknown_mode(path: Path, record: dict) -> None:
+    path.write_text(json.dumps({**record, "mode": "gone"}), encoding="utf-8")
+
+
+def a_directory(path: Path, record: dict) -> None:
+    path.unlink()
+    path.mkdir()
+
+
+BREAKAGES = [
+    invalid_utf8,
+    invalid_json,
+    not_an_object,
+    without_root,
+    with_a_naive_time,
+    with_an_unknown_mode,
+    a_directory,
+]
+
+
+def break_pointer(project: Path, breakage: Callable[[Path, dict], None]) -> bytes:
+    """Break the pointer with `breakage`; the bytes it was left with, for comparison."""
+    path = state.mode_record(project)
+    breakage(path, pointer(project))
+    return path.read_bytes() if path.is_file() else b""
+
+
+@pytest.mark.parametrize("breakage", BREAKAGES, ids=lambda fn: fn.__name__)
+def test_a_broken_pointer_with_a_live_session_is_set_aside_and_regenerated(
+    repo: Path, breakage: Callable[[Path, dict], None]
+) -> None:
+    active = entered(modes.enter(repo, "fixture", root="EPIC-1"))
+    broken = break_pointer(repo, breakage)
+
+    resolved = modes.resolve(repo)
+
+    assert resolved.active is not None
+    assert resolved.active.session_id == active.session_id
+    assert (resolved.active.mode, resolved.active.root) == ("fixture", "EPIC-1")
+    assert resolved.notice == RECOVERED
+    assert active.session_id not in resolved.notice
+    kept = set_aside(repo)
+    assert len(kept) == 1
+    assert (kept[0].read_bytes() if kept[0].is_file() else b"") == broken
+    assert pointer(repo)["session_id"] == active.session_id
+    assert pointer(repo)["root"] == "EPIC-1"
+    assert len(work_sessions.recording_mode(repo)) == 1
+    assert modes.resolve(repo).notice == ""
+
+
+@pytest.mark.parametrize("breakage", BREAKAGES, ids=lambda fn: fn.__name__)
+def test_a_broken_pointer_with_no_mode_session_is_set_aside_and_there_is_no_mode(
+    repo: Path, breakage: Callable[[Path, dict], None]
+) -> None:
+    state.write_json(
+        state.mode_record(repo),
+        {
+            "mode": "fixture",
+            "session_id": "WS-000000000000",
+            "root": "",
+            "entered": datetime.now(UTC).isoformat(),
+        },
+    )
+    break_pointer(repo, breakage)
+
+    assert modes.resolve(repo) == modes.Resolution(None)
+
+    assert len(set_aside(repo)) == 1
+    assert not state.mode_record(repo).exists()
+
+
+def test_a_deleted_pointer_with_a_live_mode_session_is_regenerated(repo: Path) -> None:
+    active = entered(modes.enter(repo, "fixture", root="EPIC-1"))
+    state.mode_record(repo).unlink()
+
+    resolved = modes.resolve(repo)
+
+    assert resolved.active is not None
+    assert resolved.active.session_id == active.session_id
+    assert resolved.notice == RECOVERED
+    assert pointer(repo)["session_id"] == active.session_id
+    assert not set_aside(repo)
+    assert modes.resolve(repo).notice == ""
+
+
+def test_a_session_for_a_mode_nobody_knows_is_not_regenerated(repo: Path) -> None:
+    other = work_sessions.create(repo, "gone mode", mode="gone")
+    assert isinstance(other, Ok)
+
+    resolved = modes.resolve(repo)
+
+    assert resolved == modes.Resolution(None, UNRECOVERED.replace("fixture", "gone"))
+    assert not state.mode_record(repo).exists()
+
+
+# a mode session that is not live
+
+
+def test_a_paused_mode_session_is_resumed(repo: Path) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    assert isinstance(work_sessions.transition(repo, active.session_id, "pause"), Ok)
+
+    resolved = modes.resolve(repo)
+
+    assert resolved.active is not None
+    assert resolved.active.session_id == active.session_id
+    assert resolved.notice == RECOVERED
+    assert session_status(repo, active.session_id) == work_sessions.Status.ACTIVE
+    assert len(work_sessions.recording_mode(repo)) == 1
+    assert modes.resolve(repo).notice == ""
+
+
+def end_by_completing(project: Path, active: modes.Active) -> None:
+    work_sessions.transition(project, active.session_id, "complete")
+
+
+def end_by_stopping(project: Path, active: modes.Active) -> None:
+    work_sessions.transition(project, active.session_id, "stop")
+
+
+def end_by_deleting(project: Path, active: modes.Active) -> None:
+    shutil.rmtree(session_of(project, active.session_id).folder)
+
+
+@pytest.mark.parametrize(
+    "ending",
+    [end_by_completing, end_by_stopping, end_by_deleting],
+    ids=lambda fn: fn.__name__,
+)
+def test_an_ended_or_missing_mode_session_is_replaced_for_the_same_mode_and_root(
+    repo: Path, ending: Callable[[Path, modes.Active], None]
+) -> None:
+    active = entered(modes.enter(repo, "fixture", root="EPIC-1"))
+    ending(repo, active)
+
+    resolved = modes.resolve(repo)
+
+    assert resolved.active is not None
+    new = resolved.active
+    assert new.session_id != active.session_id
+    assert (new.mode, new.root, new.entered) == ("fixture", "EPIC-1", active.entered)
+    assert resolved.notice == RECOVERED
+    assert active.session_id not in resolved.notice
+    created = session_of(repo, new.session_id)
+    assert created.status == work_sessions.Status.ACTIVE
+    assert (created.mode, created.mode_root) == ("fixture", "EPIC-1")
+    assert pointer(repo)["session_id"] == new.session_id
+    assert work_sessions.current(repo) == new.session_id
+    assert modes.resolve(repo).notice == ""
+
+
+# a repair that cannot be done
+
+
+def test_two_live_mode_sessions_mean_no_mode_and_a_failure_notice(repo: Path) -> None:
+    entered(modes.enter(repo, "fixture"))
+    assert isinstance(work_sessions.create(repo, "other", mode="fixture"), Ok)
+    state.mode_record(repo).unlink()
+
+    resolved = modes.resolve(repo)
+
+    assert resolved == modes.Resolution(None, UNRECOVERED)
+    assert not state.mode_record(repo).exists()
+    assert modes.resolve(repo) == resolved
+
+
+def test_a_repair_that_cannot_be_written_means_no_mode_for_that_call(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    state.mode_record(repo).unlink()
+    with monkeypatch.context() as unwritable:
+
+        def refuse(path: Path, payload: dict) -> None:
+            raise OSError("nothing can be written")
+
+        unwritable.setattr(state, "write_json", refuse)
+
+        assert modes.resolve(repo) == modes.Resolution(None, UNRECOVERED)
+
+    retried = modes.resolve(repo)
+    assert retried.active is not None
+    assert retried.active.session_id == active.session_id
+    assert retried.notice == RECOVERED
+
+
+def test_a_pointer_that_cannot_be_moved_aside_is_still_no_mode_and_never_an_error(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    break_pointer(repo, invalid_json)
+
+    def refuse(_: Path) -> None:
+        raise OSError("cannot move the file")
+
+    monkeypatch.setattr(modes, "_set_aside", refuse)
+
+    assert modes.active(repo) is None
+
+
+def test_enter_is_refused_while_a_mode_cannot_be_recovered(repo: Path) -> None:
+    entered(modes.enter(repo, "fixture"))
+    assert isinstance(work_sessions.create(repo, "other", mode="fixture"), Ok)
+    state.mode_record(repo).unlink()
+
+    code, message = refusal(modes.enter(repo, "fixture"))
+
+    assert code == "mode_active"
+    assert "harness modes leave" in message
+    assert len(work_sessions.recording_mode(repo)) == 2
+
+
+# leaving, whatever state the mode is in
+
+
+def test_leave_ends_every_mode_session_when_the_mode_cannot_be_recovered(
+    repo: Path,
+) -> None:
+    first = entered(modes.enter(repo, "fixture"))
+    second = work_sessions.create(repo, "other", mode="fixture")
+    assert isinstance(second, Ok)
+    state.mode_record(repo).unlink()
+
+    assert isinstance(modes.leave(repo), Ok)
+
+    assert session_status(repo, first.session_id) == work_sessions.Status.COMPLETE
+    assert session_status(repo, second.value.id) == work_sessions.Status.COMPLETE
+    assert modes.resolve(repo) == modes.Resolution(None)
+
+
+def test_leave_ends_a_mode_whose_pointer_is_broken(repo: Path) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    break_pointer(repo, invalid_utf8)
+
+    assert isinstance(modes.leave(repo), Ok)
+
+    assert session_status(repo, active.session_id) == work_sessions.Status.COMPLETE
+    assert not state.mode_record(repo).exists()
+    assert modes.resolve(repo) == modes.Resolution(None)
+
+
+def test_leave_does_not_bring_back_a_mode_whose_session_already_ended(
+    repo: Path,
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    end_by_completing(repo, active)
+
+    assert isinstance(modes.leave(repo), Ok)
+
+    assert not state.mode_record(repo).exists()
+    assert work_sessions.recording_mode(repo) == ()
+    assert modes.resolve(repo) == modes.Resolution(None)
+
+
+# reading never raises
+
+
+def test_reading_the_mode_never_raises_on_a_pointer_it_cannot_decode(
+    repo: Path,
+) -> None:
+    state.mode_record(repo).parent.mkdir(parents=True)
+    state.mode_record(repo).write_bytes(b"\xff\xfe")
+
+    assert modes.active(repo) is None
+
+
+# the command line
 
 
 def test_cli_enters_shows_and_leaves_a_mode(
@@ -198,6 +535,30 @@ def test_cli_enters_shows_and_leaves_a_mode(
     assert cli.main(["modes", "leave", "--repo", str(repo)]) == 0
     capsys.readouterr()
     assert cli.main(["modes", "status", "--repo", str(repo)]) == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_cli_status_recovers_a_broken_pointer_and_shows_the_mode(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture", root="EPIC-1"))
+    capsys.readouterr()
+    break_pointer(repo, invalid_utf8)
+
+    assert cli.main(["modes", "status", "--repo", str(repo)]) == 0
+
+    shown = json.loads(capsys.readouterr().out)
+    assert (shown["mode"], shown["root"]) == ("fixture", "EPIC-1")
+
+
+def test_cli_status_is_silent_for_a_broken_pointer_no_session_backs(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    state.mode_record(repo).parent.mkdir(parents=True)
+    state.mode_record(repo).write_bytes(b"\xff\xfe")
+
+    assert cli.main(["modes", "status", "--repo", str(repo)]) == 0
+
     assert capsys.readouterr().out == ""
 
 

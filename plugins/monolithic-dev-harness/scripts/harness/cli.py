@@ -635,7 +635,6 @@ def modes_command(args: argparse.Namespace) -> int:
                 "mode": record.mode,
                 "root": record.root,
                 "entered": record.entered,
-                "touched": record.touched,
             }
             print(json.dumps(shown, ensure_ascii=False, indent=2, sort_keys=True))
             return 0

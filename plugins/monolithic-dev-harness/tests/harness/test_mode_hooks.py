@@ -7,7 +7,6 @@ does not list. The tests run in-process, with `modes.MODES_ROOT` pointed at fixt
 from __future__ import annotations
 
 import json
-from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -102,20 +101,6 @@ def test_orient_is_silent_when_the_manifest_does_not_list_it(repo: Path) -> None
     assert mode_hooks.orient(repo) is None
 
 
-def test_orient_keeps_the_mode_fresh(repo: Path) -> None:
-    entered(modes.enter(repo, "fixture"))
-    stale = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
-    record = state.read_json(state.mode_record(repo))
-    assert record is not None
-    state.write_json(state.mode_record(repo), {**record, "touched": stale})
-
-    mode_hooks.orient(repo)
-
-    touched = state.read_json(state.mode_record(repo))
-    assert touched is not None
-    assert touched["touched"] > stale
-
-
 def test_the_prompt_carries_the_mode_rules(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -128,26 +113,11 @@ def test_the_prompt_carries_the_mode_rules(
     assert "[harness] mode: fixture. Rules:" in capsys.readouterr().out
 
 
-def break_rules_file(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    (repo.parent / "modes" / "fixture" / "rules.md").write_bytes(b"\xff\xfe")
-
-
-def break_touch(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    def unwritable(_: Path) -> None:
-        raise OSError("mode.json cannot be written")
-
-    monkeypatch.setattr(modes, "touch", unwritable)
-
-
-@pytest.mark.parametrize("breakage", [break_rules_file, break_touch])
 def test_a_failing_orient_drops_neither_the_prompt_nor_its_approval(
-    repo: Path,
-    capsys: pytest.CaptureFixture[str],
-    monkeypatch: pytest.MonkeyPatch,
-    breakage,
+    repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     active = entered(modes.enter(repo, "fixture"))
-    breakage(repo, monkeypatch)
+    (repo.parent / "modes" / "fixture" / "rules.md").write_bytes(b"\xff\xfe")
 
     hook.handle_prompt(
         "claude",
@@ -200,14 +170,85 @@ def test_operations_is_silent_when_the_manifest_does_not_list_it(repo: Path) -> 
     assert mode_hooks.operations(gateway(UNLISTED_READ), repo) is None
 
 
-def test_a_mode_that_cannot_load_refuses_gateway_tools(repo: Path) -> None:
+def test_a_mode_that_cannot_load_never_refuses_a_gateway_tool(repo: Path) -> None:
     entered(modes.enter(repo, "fixture"))
     (repo.parent / "modes" / "fixture" / "mode.toml").unlink()
 
-    decision = mode_hooks.operations(gateway(LISTED), repo)
+    assert mode_hooks.operations(gateway(LISTED), repo) is None
+    assert mode_hooks.operations(gateway(UNLISTED_WRITE), repo) is None
+    assert mode_hooks.orient(repo) is None
+
+
+def write_pointer(project: Path, how: str) -> None:
+    """A hand-made pointer no work session backs, broken in the way `how` names."""
+    path = state.mode_record(project)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    match how:
+        case "invalid utf-8":
+            path.write_bytes(b"\xff\xfe")
+        case "invalid json":
+            path.write_text("{damaged", encoding="utf-8")
+        case "naive time":
+            path.write_text(
+                json.dumps(
+                    {
+                        "mode": "fixture",
+                        "session_id": "WS-000000000000",
+                        "root": "",
+                        "entered": "2026-11-11T10:00:00",
+                    }
+                ),
+                encoding="utf-8",
+            )
+        case "unknown mode":
+            path.write_text(
+                json.dumps(
+                    {
+                        "mode": "gone",
+                        "session_id": "WS-000000000000",
+                        "root": "",
+                        "entered": "2026-11-11T10:00:00+00:00",
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+
+@pytest.mark.parametrize(
+    "how", ["invalid utf-8", "invalid json", "naive time", "unknown mode"]
+)
+def test_a_pointer_nothing_backs_means_no_mode_and_no_call_is_denied(
+    repo: Path, capsys: pytest.CaptureFixture[str], how: str
+) -> None:
+    write_pointer(repo, how)
+
+    assert mode_hooks.orient(repo) is None
+    assert mode_hooks.operations(gateway(UNLISTED_WRITE), repo) is None
+    assert pre_tool_reason(repo, UNLISTED_READ, capsys) is None
+    assert pre_tool_reason(repo, LISTED_READ, capsys) is None
+
+
+def test_orient_shows_the_mode_once_a_broken_pointer_is_regenerated(
+    repo: Path,
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    state.mode_record(repo).write_bytes(b"\xff\xfe")
+
+    text = mode_hooks.orient(repo)
+
+    assert text is not None
+    assert text.startswith("[harness] mode: fixture. Rules:")
+
+
+def test_a_paused_mode_session_is_resumed_and_its_operations_apply_again(
+    repo: Path,
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    assert isinstance(work_sessions.transition(repo, active.session_id, "pause"), Ok)
+
+    decision = mode_hooks.operations(gateway(UNLISTED_WRITE), repo)
 
     assert decision is not None
-    assert decision.allowed is False
     assert decision.rule == "mode-operations"
 
 
@@ -298,17 +339,6 @@ def test_a_conversation_already_bound_stays_in_its_own_session(
     assert bound_to(repo, "chat-a") == other.value.id
 
 
-def test_a_mode_session_that_cannot_be_bound_does_not_block_the_call(
-    repo: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    active = entered(modes.enter(repo, "fixture"))
-    assert isinstance(work_sessions.transition(repo, active.session_id, "pause"), Ok)
-
-    assert pre_tool_reason(repo, LISTED_READ, capsys, "chat-a") is None
-
-    assert bound_to(repo, "chat-a") is None
-
-
 def test_a_conversation_that_left_a_mode_joins_the_next_mode_session(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -352,13 +382,6 @@ def test_a_damaged_link_is_neither_replaced_nor_moved_by_the_mode_session(
     assert not list(link.value.parent.glob("*.damaged-*.json"))
 
 
-def test_an_unreadable_mode_record_leaves_the_binding_as_it_was(repo: Path) -> None:
-    entered(modes.enter(repo, "fixture"))
-    state.mode_record(repo).write_bytes(b"\xff\xfe")
-
-    assert hook._join_mode(repo, "claude", "chat-a", None, Ok(None), []) is None
-
-
 def pre_tool_output(
     project: Path,
     tool: str,
@@ -377,21 +400,6 @@ def pre_tool_output(
         },
     )
     return capsys.readouterr().out.strip()
-
-
-def test_a_mode_session_that_cannot_be_joined_allows_the_call_with_a_notice(
-    repo: Path, capsys: pytest.CaptureFixture[str]
-) -> None:
-    active = entered(modes.enter(repo, "fixture"))
-    assert isinstance(work_sessions.transition(repo, active.session_id, "pause"), Ok)
-
-    out = pre_tool_output(repo, LISTED_READ, capsys, "chat-a")
-
-    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
-    assert "not in the fixture mode's work session" in context
-    assert "harness modes leave" in context
-    assert active.session_id not in out
-    assert "deny" not in out
 
 
 # the controls a mode never touches
