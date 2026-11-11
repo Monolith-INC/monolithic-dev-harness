@@ -18,6 +18,7 @@ from harness import (
     discovery,
     gates,
     harness_controls,
+    modes,
     onboarding,
     plan_review,
     preferences,
@@ -34,7 +35,7 @@ from harness import (
     workflow,
     workflow_requirements,
 )
-from harness.cli_common import pairs, print_result, resolve_repo
+from harness.cli_common import pairs, print_result, read_mode, resolve_repo
 from host_adapters.codex_runtime import (
     CodexRuntimeProfile,
     DecisionContext,
@@ -371,14 +372,25 @@ def _current_as_json(project: Path, session: work_sessions.Session) -> dict:
 
 
 def _with_current_session(args: argparse.Namespace) -> argparse.Namespace:
-    """Nobody has to name the work session: an unnamed one is the project's current session.
-    Each `--artifact` inside the project is named one way, relative to it, so evidence recorded
-    under one spelling is found under any other."""
+    """Nobody has to name the work session: an unnamed one is the active mode's session, as for a
+    conversation with no choice of its own (`work_session_context.for_payload`), else the
+    project's current session. Each `--artifact` inside the project is named one way, relative to
+    it, so evidence recorded under one spelling is found under any other."""
     project = Path(args.repo).resolve()
-    args.session_id = work_sessions.acting(project, args.session_id)
+    args.session_id = work_sessions.acting(
+        project, args.session_id or _mode_session(project)
+    )
     if getattr(args, "artifact", None):
         args.artifact = [_project_relative(project, name) for name in args.artifact]
     return args
+
+
+def _mode_session(project: Path) -> str | None:
+    match read_mode(project):
+        case modes.Active(session_id=identifier):
+            return identifier
+        case _:
+            return None
 
 
 def _project_relative(project: Path, name: str) -> str:

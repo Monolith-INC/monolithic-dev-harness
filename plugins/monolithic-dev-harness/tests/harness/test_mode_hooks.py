@@ -14,6 +14,7 @@ import pytest
 
 from core.result import Err, Ok
 from harness import (
+    cli,
     decisions,
     hook,
     mode_hooks,
@@ -988,6 +989,78 @@ def test_outside_a_mode_the_mismatch_still_names_both_sessions(
 
     assert "work-session-mismatch" in out
     assert mine.id in out and implied_elsewhere.value.id in out
+
+
+# a harness command that names no session acts in the mode's session, wherever `current` points
+
+
+def present_gate(project: Path, *extra: str) -> int:
+    return cli.main(
+        ["decision", "present", "--gate", "planning-depth", "--host", "text"]
+        + ["--repo", str(project), *extra]
+    )
+
+
+def test_decision_present_in_a_mode_records_the_decision_in_the_mode_session(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    other = move_current_elsewhere(repo)
+    assert work_sessions.current(repo) == other.id
+
+    assert present_gate(repo) == 0
+
+    asked = decisions.pending(repo, active.session_id)
+    assert asked is not None
+    assert asked.scope == active.session_id
+    assert decisions.pending(repo, other.id) is None
+    capsys.readouterr()
+
+
+def test_outside_a_mode_decision_present_still_records_in_the_current_session(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    mine = move_current_elsewhere(repo)
+
+    assert present_gate(repo) == 0
+
+    asked = decisions.pending(repo, mine.id)
+    assert asked is not None and asked.scope == mine.id
+    capsys.readouterr()
+
+
+def test_a_session_named_on_the_command_wins_over_the_mode_session(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    other = move_current_elsewhere(repo)
+
+    assert present_gate(repo, "--session-id", other.id) == 0
+
+    asked = decisions.pending(repo, other.id)
+    assert asked is not None and asked.scope == other.id
+    assert decisions.pending(repo, active.session_id) is None
+    capsys.readouterr()
+
+
+def test_showing_a_file_in_a_mode_is_recorded_for_the_mode_session(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    other = move_current_elsewhere(repo)
+    reviewed_draft(repo)
+
+    shown = cli.main(["workflow", "show", "--artifact", DRAFT, "--repo", str(repo)])
+
+    assert shown == 0
+    session = work_sessions.select(repo, active.session_id).value
+    assert (session.folder / "shown-artifacts.json").is_file()
+    assert not (other_folder(repo, other.id) / "shown-artifacts.json").exists()
+    capsys.readouterr()
+
+
+def other_folder(project: Path, identifier: str) -> Path:
+    return work_sessions.select(project, identifier).value.folder
 
 
 def test_a_pending_decision_in_a_mode_is_guided_without_naming_the_session_or_the_decision(

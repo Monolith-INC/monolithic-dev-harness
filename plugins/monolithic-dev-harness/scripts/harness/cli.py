@@ -55,7 +55,12 @@ from harness import (  # noqa: E402
     state,
     tracker_tree,
 )
-from harness.cli_common import pairs, print_result, resolve_repo  # noqa: E402
+from harness.cli_common import (  # noqa: E402
+    pairs,
+    print_result,
+    read_mode,
+    resolve_repo,
+)
 from integrations import (  # noqa: E402
     branches,
     onboarding,
@@ -618,10 +623,7 @@ def _mode_status(repo: Path) -> Ok:
     if modes.suspended(repo):
         print(SUSPENDED, file=sys.stderr)
         return Ok(None)
-    read = modes.resolve(repo)
-    if read.notice:
-        print(read.notice, file=sys.stderr)
-    return Ok(read.active)
+    return Ok(read_mode(repo))
 
 
 def modes_command(args: argparse.Namespace) -> int:
