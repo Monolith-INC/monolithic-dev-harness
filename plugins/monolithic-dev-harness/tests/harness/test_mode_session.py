@@ -111,6 +111,28 @@ def test_a_stale_record_is_cleared_on_read(repo: Path) -> None:
     assert isinstance(modes.enter(repo, "fixture"), Ok)
 
 
+@pytest.mark.parametrize("field", ["touched", "entered"])
+@pytest.mark.parametrize(
+    "unreadable",
+    ["2026-11-11T10:00:00", "not a time", ""],
+    ids=["naive", "garbled", "empty"],
+)
+def test_a_time_that_cannot_be_read_counts_as_idle(
+    repo: Path, field: str, unreadable: str
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    record = state.read_json(state.mode_record(repo))
+    assert record is not None
+    state.write_json(state.mode_record(repo), {**record, field: unreadable})
+
+    assert modes.active(repo) is None
+    modes.touch(repo)
+
+    assert not state.mode_record(repo).exists()
+    assert session_status(repo, active.session_id) == work_sessions.Status.COMPLETE
+    assert isinstance(modes.enter(repo, "fixture"), Ok)
+
+
 def test_touch_keeps_a_mode_fresh(repo: Path) -> None:
     entered(modes.enter(repo, "fixture"))
     age_touch(repo, hours=3)

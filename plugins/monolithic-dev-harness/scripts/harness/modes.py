@@ -213,15 +213,18 @@ def _now() -> str:
 
 
 def _moment(text: str) -> datetime | None:
+    """The instant `text` names, or None when it is not an ISO time that carries a time zone."""
     try:
-        return datetime.fromisoformat(text)
+        moment = datetime.fromisoformat(text)
     except ValueError:
         return None
+    return moment if moment.tzinfo is not None else None
 
 
 def _idle(record: Active) -> bool:
-    moment = _moment(record.touched)
-    return moment is not None and datetime.now(UTC) - moment > IDLE
+    """Idle past `IDLE`. A record whose times cannot be read has nothing to say it is fresh."""
+    touched, entered = _moment(record.touched), _moment(record.entered)
+    return touched is None or entered is None or datetime.now(UTC) - touched > IDLE
 
 
 def _record(repo: Path) -> Active | None:
@@ -232,7 +235,7 @@ def _record(repo: Path) -> Active | None:
             "root": str(root),
             "entered": str(entered),
             "touched": str(touched),
-        } if _moment(touched) is not None:
+        }:
             return Active(mode, session_id, root, entered, touched)
         case _:
             return None
