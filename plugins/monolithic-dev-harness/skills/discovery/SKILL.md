@@ -43,16 +43,14 @@ still needs the user's approval. Answer a general question directly and stay in 
   `bmad-advanced-elicitation` skill only to deepen a thin answer, at most once per section.
 - Write the draft where `harness document path --type <kind> --item <ROOT key>` says, with `<kind>`
   `vision-doc` or `prd`. Before ROOT exists, use `--new epic --title "<project name>"` instead; if
-  the tracker assigns ids only when an item is created, create ROOT first. If the draft file
-  already exists, resume from it.
+  that says the tracker names an item only when it is created, ask the user to create the discovery
+  Epic and enter with `--root <key>`. If the draft file already exists, resume from it.
 - Revisions are `r1`, `r2`, …: the next one is one above the highest revision of that kind that
-  `tracker_list_artifacts` shows. Publish with `tracker_publish_artifact` (kind, the catalog title,
-  the content, the revision), then list again to confirm the new revision is there under that
-  title. If it is not, report it and stop.
-- Create ROOT, when it is absent, with `tracker_create_work_item` (kind epic, title the project
-  name, no description). Then run `harness modes leave` and `harness modes enter discovery --root
-  <the new key>`, so the mode knows its Epic; nothing is lost, because the step comes from ROOT.
-  If ROOT may already exist, look for an Epic with the project's name first
+  `tracker_list_artifacts` shows.
+- Nothing is saved before the gate: the harness refuses `tracker_publish_artifact` and
+  `tracker_create_work_item` until the user has approved the draft with `approve-document`. Show the
+  draft and ask the gate first; creating ROOT and publishing both come after it (see Gates).
+- If ROOT may already exist, look for an Epic with the project's name first
   (`tracker_search_work_items`), and use it after the user confirms.
 - Step 2 starts only from an approved Vision Doc. Read it with `tracker_list_artifacts` (kind
   `vision-doc`, highest revision), map its sections with the catalog's `upstream` entry, show
@@ -60,18 +58,28 @@ still needs the user's approval. Answer a general question directly and stay in 
 
 ## Gates (G1, G2): show it, approve it, then save it
 
-The harness will not save a document nobody approved, so ask the gate before the publish the
-workflow lists, and publish once, as the approved revision:
+The harness will not save a document nobody approved, nor create ROOT before the first one is
+approved, so ask the gate first, then create ROOT when it is absent, then publish once, as the
+approved revision:
 
 1. Show the draft: run `harness workflow show --artifact <draft>`, put its output in your reply, run
    `harness decision status`, then ask `harness decision present --gate approve-document --artifact
    <draft>`. Read [human decisions](../../references/human-decisions.md) when asking. Never pass a
    session id, and never approve for the user.
-2. When the user approves, publish the draft's text with two changes made in the publish call, not
-   in the file (editing the file voids the approval): the `Status` line reads `Approved`, and
-   `Change history` gains a row `<today> | Approved by <user> | <user>`.
-3. If the user answers "Not now", keep the draft, ask what to change, and publish nothing.
-4. A new Vision Doc revision means re-checking the PRD: fill or flag only its gaps.
+2. If the user answers "Not now", keep the draft, ask what to change, and save nothing.
+3. When the user approves and ROOT is absent (the first gate), create it with
+   `tracker_create_work_item` (kind epic, title the project name, and no `description` key at all:
+   the approval covers the call, and a description of its own is refused). Then run `harness modes
+   leave` and `harness modes enter discovery --root <the new key>`, so the mode knows its Epic;
+   nothing is lost, because the step comes from ROOT, and the approval still holds.
+4. Publish with `tracker_publish_artifact` (`ref` ROOT, `kind`, the catalog title, the content, the
+   revision), once. The content is the draft's text with two changes made in the publish call, not in
+   the file (editing the file voids the approval): the `Status` line reads `Approved`, and `Change
+   history` gains a row `<today> | Approved by <user> | <user>`. The harness refuses any other
+   difference from the approved draft: that needs a new approval. Then list again with
+   `tracker_list_artifacts` to confirm the new revision is there under that title. If it is not,
+   report it and stop.
+5. A new Vision Doc revision means re-checking the PRD: fill or flag only its gaps.
 
 ## Exit
 

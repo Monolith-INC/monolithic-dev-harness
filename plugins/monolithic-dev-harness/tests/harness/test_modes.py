@@ -287,3 +287,52 @@ def test_the_discovery_skill_and_procedure_call_only_the_gateway_tools_the_mode_
         named = set(re.findall(r"\b(?:tracker|scm)_[a-z_]+\b", path.read_text("utf-8")))
         assert named, path
         assert named <= set(mode.operations), (path.name, named - set(mode.operations))
+
+
+def section(text: str, heading: str) -> str:
+    """The body of the section whose heading starts with `heading`, up to the next heading."""
+    start = text.index(heading)
+    following = re.search(r"\n#{2,3} ", text[start + len(heading) :])
+    return (
+        text[start : start + len(heading) + following.start()]
+        if following
+        else text[start:]
+    )
+
+
+def test_the_discovery_skill_asks_the_gate_before_it_creates_root_or_publishes() -> (
+    None
+):
+    text = (modes.SKILLS_ROOT / "discovery" / "SKILL.md").read_text("utf-8")
+    writing = section(text, "## Writing a document")
+    gates = section(text, "## Gates")
+
+    writes = [
+        bullet
+        for bullet in writing.split("\n- ")
+        if "tracker_create_work_item" in bullet or "tracker_publish_artifact" in bullet
+    ]
+    assert writes
+    assert all("approve-document" in bullet for bullet in writes), writes
+    assert (
+        gates.index("decision present")
+        < gates.index("tracker_create_work_item")
+        < gates.index("tracker_publish_artifact")
+    )
+    assert "no `description`" in gates
+
+
+def test_the_discovery_procedure_tells_the_same_order_as_the_skill() -> None:
+    text = (discovery().root / "workflow.md").read_text("utf-8")
+
+    for step in ("### Step 1", "### Step 2"):
+        assert "Publish" not in section(text, step), step
+    for gate in ("### Gate G1", "### Gate G2"):
+        assert "once" in section(text, gate), gate
+        assert "Approved" in section(text, gate), gate
+    first = section(text, "### Gate G1")
+    assert (
+        first.index("approve-document")
+        < first.index("tracker_create_work_item")
+        < first.index("tracker_publish_artifact")
+    )

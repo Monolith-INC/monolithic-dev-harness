@@ -43,13 +43,15 @@ is stored. `harness modes step` prints it.
 2. Interview the 7 areas in one message, with an "I'm already assuming…" list, then wait:
    Problem, Target users, Desired outcome, Business objectives, Success metrics (with baseline),
    Constraints, Out of scope.
-3. Create ROOT if it is absent: `tracker_create_work_item`, kind epic, title the project name.
-4. Publish `vision-doc` as the next revision.
+3. Write the draft with the catalog's headings and show it. Nothing is saved yet.
 
 ### Gate G1
 
-The harness `approve-document` question on the Vision Doc. Approving publishes a revision with
-Status `Approved` and a `Change history` row "Approved by [user]".
+The harness `approve-document` question on the Vision Doc draft, asked before anything is saved.
+When it is approved, create ROOT if it is absent (`tracker_create_work_item`, kind epic, title the
+project name, no description), then publish `vision-doc` once, as the next revision
+(`tracker_publish_artifact`), with Status `Approved` and a `Change history` row "Approved by
+[user]". It is never published as a draft first.
 
 ### Step 2: PRD
 
@@ -57,11 +59,12 @@ Status `Approved` and a `Change history` row "Approved by [user]".
 2. Map the Vision Doc's sections into the PRD with the catalog, and show "Already have: …".
 3. Interview only the gaps, in one message: user journeys, functional requirements, NFRs,
    dependencies, risks, open questions.
-4. Publish `prd`: functional requirements numbered `FR-01…`, written with "shall" and "should".
+4. Write the draft: functional requirements numbered `FR-01…`, written with "shall" and "should",
+   and show it. Nothing is saved yet.
 
 ### Gate G2
 
-As G1, on the PRD.
+As G1, on the PRD: when it is approved, publish `prd` once, with Status `Approved`.
 
 ## Loops
 
