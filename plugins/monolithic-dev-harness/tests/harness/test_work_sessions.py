@@ -241,6 +241,50 @@ class WorkSessionTest(unittest.TestCase):
         self.assertEqual(run("resume", session_id).returncode, 0)
         self.assertIn(session_id, run("list").stdout)
 
+    def test_a_session_records_the_mode_it_belongs_to(self) -> None:
+        created = work_sessions.create(
+            self.project, "discovery mode", mode="discovery", mode_root="EPIC-1"
+        ).value
+
+        read = work_sessions.select(self.project, created.id).value
+
+        self.assertEqual((read.mode, read.mode_root), ("discovery", "EPIC-1"))
+
+    def test_a_session_made_for_no_mode_records_none(self) -> None:
+        created = work_sessions.create(self.project, "Investigate DAY-001").value
+
+        read = work_sessions.select(self.project, created.id).value
+
+        self.assertEqual((read.mode, read.mode_root), ("", ""))
+
+    def test_recording_mode_lists_the_unended_sessions_that_carry_one(self) -> None:
+        plain = work_sessions.create(self.project, "Investigate DAY-001").value
+        active = work_sessions.create(self.project, "a mode", mode="one").value
+        paused = work_sessions.create(self.project, "b mode", mode="two").value
+        stopped = work_sessions.create(self.project, "c mode", mode="three").value
+        done = work_sessions.create(self.project, "d mode", mode="four").value
+        work_sessions.transition(self.project, paused.id, "pause")
+        work_sessions.transition(self.project, stopped.id, "stop")
+        work_sessions.transition(self.project, done.id, "complete")
+
+        found = work_sessions.recording_mode(self.project)
+
+        self.assertEqual({session.id for session in found}, {active.id, paused.id})
+        self.assertNotIn(plain.id, {session.id for session in found})
+
+    def test_recording_mode_skips_a_session_record_that_cannot_be_read(self) -> None:
+        good = work_sessions.create(self.project, "a mode", mode="one").value
+        broken = work_sessions.create(self.project, "b mode", mode="two").value
+        (broken.folder / "session.json").write_bytes(b"\xff\xfe")
+
+        found = work_sessions.recording_mode(self.project)
+
+        self.assertEqual([session.id for session in found], [good.id])
+
+    def test_recording_mode_needs_no_sessions_folder(self) -> None:
+        self.assertEqual(work_sessions.recording_mode(self.project), ())
+        self.assertFalse((self.project / ".harness").exists())
+
 
 if __name__ == "__main__":
     unittest.main()

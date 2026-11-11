@@ -42,6 +42,8 @@ class Session:
     implicit_selection: bool = True
     work_item: str = ""  # the Story or Bug this session implements, once linked
     entry_item: str = ""  # the Epic, Feature, Story or Bug the user started from
+    mode: str = ""  # the mode this session is the durable record of, if it is one
+    mode_root: str = ""  # that mode's ROOT: the Epic it works on
 
 
 def scope_folder(
@@ -79,6 +81,8 @@ def _payload(session: Session) -> dict[str, Any]:
         "implicit_selection": session.implicit_selection,
         "work_item": session.work_item,
         "entry_item": session.entry_item,
+        "mode": session.mode,
+        "mode_root": session.mode_root,
     }
 
 
@@ -102,6 +106,8 @@ def _from_payload(
             implicit_selection=payload.get("implicit_selection", True) is True,
             work_item=str(payload.get("work_item") or ""),
             entry_item=str(payload.get("entry_item") or ""),
+            mode=str(payload.get("mode") or ""),
+            mode_root=str(payload.get("mode_root") or ""),
         )
     except (KeyError, TypeError, ValueError):
         return err(
@@ -156,9 +162,16 @@ def start(project: Path, request: str) -> Result[Session]:
 
 
 def create(
-    project: Path, request: str, *, implicit_selection: bool = False
+    project: Path,
+    request: str,
+    *,
+    implicit_selection: bool = False,
+    mode: str = "",
+    mode_root: str = "",
 ) -> Result[Session]:
-    """Create durable work without selecting it; startup selects only after validation."""
+    """Create durable work without selecting it; startup selects only after validation.
+
+    A session made for a mode carries the mode's name and ROOT: it is the mode's durable record."""
     return bind(
         require(
             bool(request.strip()),
@@ -166,7 +179,9 @@ def create(
             "a work session needs the original request",
         ),
         lambda _: attempt(
-            lambda: _create(project.resolve(), request.strip(), implicit_selection),
+            lambda: _create(
+                project.resolve(), request.strip(), implicit_selection, mode, mode_root
+            ),
             "session_unwritable",
             "could not create a work session",
             OSError,
@@ -179,7 +194,9 @@ def _remembered(project: Path, session: Session) -> Session:
     return session
 
 
-def _create(project: Path, request: str, implicit_selection: bool) -> Session:
+def _create(
+    project: Path, request: str, implicit_selection: bool, mode: str, mode_root: str
+) -> Session:
     state.ensure_local_exclude(project)
     identifier = "WS-" + secrets.token_hex(6)
     sessions_root = root(project)
@@ -196,6 +213,8 @@ def _create(project: Path, request: str, implicit_selection: bool) -> Session:
         events=({"type": "started", "at": now},),
         folder=folder,
         implicit_selection=implicit_selection,
+        mode=mode,
+        mode_root=mode_root,
     )
     staging.mkdir(parents=True, exist_ok=False)
     try:
@@ -337,6 +356,41 @@ def _route(
         "matches": [as_json(session) for session in matches],
         "candidates": [as_json(session) for session in candidates],
     }
+
+
+def recording_mode(project: Path) -> tuple[Session, ...]:
+    """The sessions that carry a mode and have not ended (active or paused), oldest first.
+
+    A record that cannot be read carries nothing. The scan peeks at each file before reading it
+    as a session, so a project with many sessions pays little for asking.
+    """
+    carrying = (
+        path.parent.name
+        for path in sorted(root(project).glob("*/session.json"))
+        if _names_a_mode(path)
+    )
+    found = tuple(
+        session
+        for identifier in carrying
+        for session in _unended(select(project, identifier))
+    )
+    return tuple(sorted(found, key=lambda item: (item.created_at, item.id)))
+
+
+def _names_a_mode(record: Path) -> bool:
+    try:
+        payload = json.loads(record.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    return isinstance(payload, dict) and bool(payload.get("mode"))
+
+
+def _unended(found: Result[Session]) -> tuple[Session, ...]:
+    match found:
+        case Ok(session) if session.status in (Status.ACTIVE, Status.PAUSED):
+            return (session,)
+        case _:
+            return ()
 
 
 def _read_many(project: Path, folders: tuple[Path, ...]) -> Result[tuple[Session, ...]]:
