@@ -708,6 +708,147 @@ def test_leaving_ends_a_mode_that_could_not_be_recovered(
     assert pre_tool_output(repo, UNLISTED_READ, capsys) == ""
 
 
+# a conversation in a mode acts in the mode's session, so its commands do, and no message names it
+
+CLI = Path(hook.PLUGIN_ROOT) / "bin" / "harness"
+
+
+def shell_output(
+    project: Path,
+    command: str,
+    capsys: pytest.CaptureFixture[str],
+    conversation: str = "chat-a",
+) -> str:
+    """The raw text the hook prints for a shell command."""
+    hook.handle_pre_tool(
+        "claude",
+        "pre-tool",
+        {
+            "cwd": str(project),
+            "tool_name": "Bash",
+            "tool_input": {"command": command},
+            "session_id": conversation,
+        },
+    )
+    return capsys.readouterr().out
+
+
+def move_current_elsewhere(project: Path) -> work_sessions.Session:
+    """Another conversation's `begin`: it starts a session and makes it the project's current one."""
+    started_elsewhere = work_sessions.start(project, "somebody else's work")
+    assert isinstance(started_elsewhere, Ok)
+    return started_elsewhere.value
+
+
+def ids_in(text: str, *known: str) -> list[str]:
+    return [identifier for identifier in known if identifier in text] + (
+        ["a work-session id"] if "WS-" in text else []
+    )
+
+
+def test_an_implied_command_in_a_mode_is_not_refused_because_current_points_elsewhere(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    other = move_current_elsewhere(repo)
+    assert work_sessions.current(repo) == other.id
+    implied = (
+        f"{CLI} decision present --repo {repo} --gate publish-branch --value branch=x"
+    )
+
+    out = shell_output(repo, implied, capsys)
+
+    assert "work-session-mismatch" not in out
+    assert ids_in(out, active.session_id, other.id) == []
+
+
+def test_a_command_naming_another_session_in_a_mode_is_refused_without_naming_any(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    other = move_current_elsewhere(repo)
+    named = (
+        f"{CLI} decision present --repo {repo} --gate publish-branch "
+        f"--value branch=x --session-id {other.id}"
+    )
+
+    out = shell_output(repo, named, capsys)
+
+    assert "work-session-mismatch" in out
+    assert "fixture" in out
+    assert ids_in(out, active.session_id, other.id) == []
+
+
+def test_outside_a_mode_the_mismatch_still_names_both_sessions(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    mine = move_current_elsewhere(repo)
+    other = work_sessions.create(repo, "other work")
+    assert isinstance(other, Ok)
+    choose(repo, "chat-a", mine.id)
+    implied_elsewhere = work_sessions.start(repo, "third")
+    assert isinstance(implied_elsewhere, Ok)
+    implied = (
+        f"{CLI} decision present --repo {repo} --gate publish-branch --value branch=x"
+    )
+
+    out = shell_output(repo, implied, capsys)
+
+    assert "work-session-mismatch" in out
+    assert mine.id in out and implied_elsewhere.value.id in out
+
+
+def test_a_pending_decision_in_a_mode_is_guided_without_naming_the_session_or_the_decision(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    assert isinstance(
+        decisions.begin(
+            repo,
+            "d-private-1",
+            "Continue?",
+            ("Continue", "Stop"),
+            "chat",
+            work_session_id=active.session_id,
+        ),
+        Ok,
+    )
+
+    out = shell_output(repo, "touch notes.txt", capsys)
+
+    reason = json.loads(out)["hookSpecificOutput"]["permissionDecisionReason"]
+    assert "decision-pending" in reason
+    assert "fixture" in reason
+    assert "decision fallback" in reason
+    assert "--session-id" not in reason
+    assert "d-private-1" not in reason
+    assert ids_in(reason, active.session_id) == []
+
+
+def test_a_pending_decision_outside_a_mode_still_names_the_session_and_the_decision(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    mine = move_current_elsewhere(repo)
+    assert isinstance(
+        decisions.begin(
+            repo,
+            "d-private-1",
+            "Continue?",
+            ("Continue", "Stop"),
+            "chat",
+            work_session_id=mine.id,
+        ),
+        Ok,
+    )
+
+    reason = json.loads(shell_output(repo, "touch notes.txt", capsys))[
+        "hookSpecificOutput"
+    ]["permissionDecisionReason"]
+
+    assert "d-private-1" in reason
+    assert f"--session-id {mine.id}" in reason
+
+
 # what the USER is shown: the host's own line, beside the context only the agent reads
 
 

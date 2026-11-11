@@ -11,6 +11,8 @@ A damaged link refuses everything but an explicit switch, which keeps the damage
 the conversation again (`relink_allowed`).
 While a mode is active, a conversation that chose no live session acts in the mode's session. That
 is derived on each read (`for_payload`) and never stored: nothing links a conversation to a mode.
+Its commands without `--session-id` are that session's, so `current` pointing elsewhere never
+refuses them, and a refusal inside a mode names the mode, never a session.
 """
 
 from __future__ import annotations
@@ -202,12 +204,15 @@ def _bindable(
     )
 
 
-def requested(command: str, cwd: Path, project: Path) -> tuple[str, str] | None:
+def requested(
+    command: str, cwd: Path, project: Path, acting: str | None = None
+) -> tuple[str, str] | None:
     """(work session, how) a shell command asks this conversation to work in, if any.
 
     `how` is `select` or `resume` for an explicit switch, `named` when a session-scoped
     `workflow` or `decision` command names its session, `implied` when it names none and so
-    uses the project's current one.
+    uses the project's current one. A conversation that acts in a mode's session (`acting`) has
+    its commands without a session in that session.
     """
     match commands.harness_args(command, cwd):
         case ("begin", *rest) if "--new" not in rest:
@@ -219,13 +224,13 @@ def requested(command: str, cwd: Path, project: Path) -> tuple[str, str] | None:
         case ("work-session", "select" | "resume" as how, identifier, *_):
             return identifier, how
         case ("workflow" | "decision", *rest):
-            return _scoped(tuple(rest), cwd, project)
+            return _scoped(tuple(rest), cwd, project, acting)
         case _:
             return None
 
 
 def _scoped(
-    options: tuple[str, ...], cwd: Path, project: Path
+    options: tuple[str, ...], cwd: Path, project: Path, acting: str | None
 ) -> tuple[str, str] | None:
     named = commands.option(options, "--session-id")
     acts_here = (cwd / (commands.option(options, "--repo") or ".")).resolve() == (
@@ -235,10 +240,27 @@ def _scoped(
         case str(), _ if named:
             return named, "named"
         case _, True:
-            implied = work_sessions.current(project)
+            implied = _implied(project, acting)
             return (implied, "implied") if implied else None
         case _:
             return None
+
+
+def _implied(project: Path, acting: str | None) -> str | None:
+    """The session a command without `--session-id` runs in: the one a conversation acting in a
+    mode's session is in, else the project's current."""
+    return acting if mode_named(project, acting) else work_sessions.current(project)
+
+
+def mode_named(project: Path, acting: str | None) -> str:
+    """The name of the mode a conversation acts in, or empty: its session is the mode's."""
+    match modes.active(project):
+        case modes.Active(mode=name, session_id=identifier) if (
+            acting is not None and identifier == acting
+        ):
+            return name
+        case _:
+            return ""
 
 
 def recovery_allowed(
@@ -277,9 +299,19 @@ def damaged(failure: Failure) -> str:
     )
 
 
-def mismatch(current: str | None, request: tuple[str, str] | None) -> Failure | None:
-    """A command that names another session than the one this conversation works in."""
+def mismatch(
+    current: str | None, request: tuple[str, str] | None, mode: str = ""
+) -> Failure | None:
+    """A command that names another session than the one this conversation works in. Inside a
+    mode (`mode` names it) the message names the mode, never a session."""
     match request:
+        case (_, "named") if mode and current is not None and request[0] != current:
+            return Failure(
+                "work_session_mismatch",
+                f"this conversation works in the {mode} mode, so a command that names another "
+                "work session is refused. Run it without `--session-id`, or leave the mode "
+                "with `harness modes leave` to work on other work",
+            )
         case (named, "named") if current is not None and named != current:
             return Failure(
                 "work_session_mismatch",

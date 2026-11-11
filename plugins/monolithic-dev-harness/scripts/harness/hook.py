@@ -238,7 +238,12 @@ def _pre_tool(
         reads.append(modes.resolve(repo))
     context = work_session_context.for_payload(repo, host, payload)
     request = (
-        work_session_context.requested(call.command, Path(call.cwd or repo), repo)
+        work_session_context.requested(
+            call.command,
+            Path(call.cwd or repo),
+            repo,
+            context.value if isinstance(context, Ok) else None,
+        )
         if call.kind == "shell"
         else None
     )
@@ -354,7 +359,9 @@ def _held(
             )
         case Ok(current):
             pass
-    mismatch = work_session_context.mismatch(current, request)
+    mismatch = work_session_context.mismatch(
+        current, request, work_session_context.mode_named(repo, current)
+    )
     if mismatch is not None:
         return rules.Decision.deny("work-session-mismatch", mismatch.message)
     match _progress_control(call, repo):
@@ -382,12 +389,17 @@ def _held(
 def _pending_decision_guidance(
     repo: Path, pending: decisions.Pending | None, host: str, current: str | None
 ) -> str:
-    """Give the agent a valid recovery path without weakening the pending-decision gate."""
+    """Give the agent a valid recovery path without weakening the pending-decision gate.
+
+    A conversation acting in a mode's session names the mode, not the session or the decision: its
+    commands without `--session-id` are that session's.
+    """
+    mode = work_session_context.mode_named(repo, current)
     match pending, decisions.damaged(repo, current):
         case None, str() | None as scope:
             named = (
                 f" --session-id {shlex.quote(current or scope)}"
-                if current or scope
+                if (current or scope) and not mode
                 else ""
             )
             return (
@@ -400,7 +412,7 @@ def _pending_decision_guidance(
             pass
     session = (
         f" --session-id {shlex.quote(pending.scope)}"
-        if pending is not None and pending.scope
+        if pending is not None and pending.scope and not mode
         else ""
     )
     available = "--async-available" if host == "codex" else "--native-unavailable"
@@ -412,8 +424,13 @@ def _pending_decision_guidance(
     match pending:
         case decisions.Pending() as waiting:
             return (
-                f"Wait for the human's answer before continuing. Decision {waiting.id} is "
-                "still pending. Present the exact "
+                "Wait for the human's answer before continuing. "
+                + (
+                    f"A decision in the {mode} mode is"
+                    if mode
+                    else f"Decision {waiting.id} is"
+                )
+                + " still pending. Present the exact "
                 "question ID, wording, option labels, and descriptions returned by `harness decision "
                 "present`; do not paraphrase it or create a replacement question. If that "
                 f"control failed, run this supported fallback command exactly: {fallback}. "
