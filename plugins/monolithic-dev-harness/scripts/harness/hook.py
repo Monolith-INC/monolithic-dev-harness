@@ -47,6 +47,7 @@ from harness import (  # noqa: E402
     globs,
     harness_controls,
     mode_hooks,
+    modes,
     onboarding,
     preferences,
     project_paths,
@@ -463,14 +464,36 @@ def _bind(
             pass
     from host_adapters import native_session_id, startup_context
 
+    conversation = native_session_id(host, payload)
     return bind(
-        work_session_context.bind_requested(
-            repo, host, native_session_id(host, payload), current, request
+        bind(
+            work_session_context.bind_requested(
+                repo, host, conversation, current, request
+            ),
+            lambda bound: Ok(_join_mode(repo, host, conversation, bound)),
         ),
         lambda _: startup_context.arm(
             repo, host, payload, _tool_call(host, "pre-tool", payload).command, repo
         ),
     )
+
+
+def _join_mode(
+    repo: Path, host: str, conversation: str, bound: str | None
+) -> str | None:
+    """An unbound conversation joins the active mode's session, without a question.
+
+    A mode session that cannot be chosen (it was paused, say) leaves the conversation unbound
+    rather than refusing the call: the mode must never be what locks the user out.
+    """
+    mode = modes.active(repo) if bound is None and conversation else None
+    if mode is None:
+        return bound
+    match work_session_context.bind_session(repo, host, conversation, mode.session_id):
+        case Ok(identifier):
+            return identifier
+        case _:
+            return None
 
 
 def handle_startup(host: str, payload: dict[str, Any]) -> int:

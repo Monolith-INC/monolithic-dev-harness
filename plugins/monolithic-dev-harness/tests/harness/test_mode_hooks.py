@@ -12,7 +12,9 @@ from pathlib import Path
 
 import pytest
 
-from harness import hook, mode_hooks, modes, rules, state
+from core.result import Ok
+from harness import decisions, hook, mode_hooks, modes, rules, state, work_sessions
+from host_adapters import work_session_context
 from tests.harness.test_mode_session import entered
 from tests.harness.test_modes import with_fields, write_mode
 from tests.settings_fixture import write_settings
@@ -55,13 +57,21 @@ def gateway(tool: str) -> rules.ToolCall:
 
 
 def pre_tool_reason(
-    project: Path, tool: str, capsys: pytest.CaptureFixture[str]
+    project: Path,
+    tool: str,
+    capsys: pytest.CaptureFixture[str],
+    conversation: str | None = None,
 ) -> str | None:
     """The deny reason the hook prints for a gateway call, or None when it allows the call."""
     hook.handle_pre_tool(
         "claude",
         "pre-tool",
-        {"cwd": str(project), "tool_name": GATEWAY + tool, "tool_input": {}},
+        {
+            "cwd": str(project),
+            "tool_name": GATEWAY + tool,
+            "tool_input": {},
+            **({"session_id": conversation} if conversation else {}),
+        },
     )
     out = capsys.readouterr().out.strip()
     if not out:
@@ -206,3 +216,62 @@ def test_the_hook_does_not_scope_gateway_reads_outside_a_mode(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     assert pre_tool_reason(repo, UNLISTED_READ, capsys) is None
+
+
+# the conversation's session
+
+
+def bound_to(project: Path, conversation: str) -> str | None:
+    match work_session_context.resolve_session(project, "claude", conversation):
+        case Ok(identifier):
+            return identifier
+        case failure:
+            raise AssertionError(f"the conversation link cannot be read: {failure!r}")
+
+
+def test_the_hook_binds_an_unbound_conversation_to_the_mode_session(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    assert bound_to(repo, "chat-a") is None
+
+    assert pre_tool_reason(repo, LISTED_READ, capsys, "chat-a") is None
+
+    assert bound_to(repo, "chat-a") == active.session_id
+
+
+def test_the_hook_asks_nothing_when_it_binds_the_mode_session(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+
+    pre_tool_reason(repo, LISTED_READ, capsys, "chat-a")
+
+    assert not decisions.any_waiting(repo)
+
+
+def test_a_conversation_already_bound_stays_in_its_own_session(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    other = work_sessions.create(repo, "other work")
+    assert isinstance(other, Ok)
+    assert isinstance(
+        work_session_context.bind_session(repo, "claude", "chat-a", other.value.id),
+        Ok,
+    )
+    entered(modes.enter(repo, "fixture"))
+
+    pre_tool_reason(repo, LISTED_READ, capsys, "chat-a")
+
+    assert bound_to(repo, "chat-a") == other.value.id
+
+
+def test_a_mode_session_that_cannot_be_bound_does_not_block_the_call(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    assert isinstance(work_sessions.transition(repo, active.session_id, "pause"), Ok)
+
+    assert pre_tool_reason(repo, LISTED_READ, capsys, "chat-a") is None
+
+    assert bound_to(repo, "chat-a") is None
