@@ -11,6 +11,7 @@ import pytest
 from core.result import Ok
 from harness import cli, modes, rules, state, work_sessions
 from tests.harness.test_modes import VALID_FIELDS, refusal, write_mode
+from tests.settings_fixture import write_settings
 
 
 @pytest.fixture
@@ -147,3 +148,24 @@ def test_cli_enters_shows_and_leaves_a_mode(
     capsys.readouterr()
     assert cli.main(["modes", "status", "--repo", str(repo)]) == 0
     assert capsys.readouterr().out == ""
+
+
+def test_cli_from_a_project_subfolder_uses_the_project_root(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_settings(repo)
+    subfolder = repo / "plugins" / "x"
+    subfolder.mkdir(parents=True)
+    monkeypatch.chdir(subfolder)
+
+    assert cli.main(["modes", "enter", "fixture"]) == 0
+    assert modes.active(repo) is not None
+    assert not (subfolder / ".harness").exists()
+    capsys.readouterr()
+
+    assert cli.main(["modes", "status"]) == 0
+    assert json.loads(capsys.readouterr().out)["mode"] == "fixture"
+
+    assert cli.main(["modes", "leave"]) == 0
+    assert modes.active(repo) is None
+    assert not (subfolder / ".harness").exists()

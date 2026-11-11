@@ -607,7 +607,7 @@ def knowledge_command(args: argparse.Namespace) -> int:
 
 
 def modes_command(args: argparse.Namespace) -> int:
-    repo = Path(args.repo)
+    repo = resolve_repo(args.repo)
     result = {
         "enter": lambda: modes.enter(repo, args.name or "", root=args.root or ""),
         "leave": lambda: modes.leave(repo),
