@@ -223,6 +223,52 @@ def test_no_mode_and_no_record_is_quiet_and_writes_nothing(repo: Path) -> None:
     assert not state.state_dir(repo).exists()
 
 
+# the mode is read, and repaired, only where the harness governs and is not suspended
+
+
+def test_a_mode_is_neither_read_nor_repaired_where_the_harness_does_not_govern(
+    repo: Path, tmp_path: Path
+) -> None:
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    assert isinstance(work_sessions.create(bare, "fixture mode", mode="fixture"), Ok)
+
+    assert modes.resolve(bare) == modes.Resolution(None)
+
+    assert not state.mode_record(bare).exists()
+    assert not state.mode_lock(bare).exists()
+
+
+def test_a_broken_pointer_is_left_alone_while_the_harness_is_suspended(
+    repo: Path,
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    broken = break_pointer(repo, invalid_utf8)
+    state.set_harness_mode(repo, "suspended")
+
+    assert modes.resolve(repo) == modes.Resolution(None)
+
+    assert state.mode_record(repo).read_bytes() == broken
+    assert not set_aside(repo)
+    state.set_harness_mode(repo, "active")
+    resumed = modes.resolve(repo)
+    assert resumed.active is not None
+    assert resumed.active.session_id == active.session_id
+    assert resumed.notice == RECOVERED
+
+
+def test_an_ended_mode_session_is_left_alone_while_the_harness_is_suspended(
+    repo: Path,
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    end_by_completing(repo, active)
+    state.set_harness_mode(repo, "suspended")
+
+    assert modes.resolve(repo) == modes.Resolution(None)
+
+    assert len(work_sessions.list_sessions(repo).value) == 1  # type: ignore[union-attr]
+
+
 # a broken pointer
 
 
@@ -381,6 +427,23 @@ def test_a_session_another_call_just_resumed_is_not_a_failed_repair(
     assert resolved.notice == RECOVERED
 
 
+def test_a_lost_pointer_and_a_paused_mode_session_are_regenerated_and_resumed(
+    repo: Path,
+) -> None:
+    active = entered(modes.enter(repo, "fixture", root="EPIC-1"))
+    assert isinstance(work_sessions.transition(repo, active.session_id, "pause"), Ok)
+    state.mode_record(repo).unlink()
+
+    resolved = modes.resolve(repo)
+
+    assert resolved.active is not None
+    assert resolved.active.session_id == active.session_id
+    assert resolved.notice == RECOVERED
+    assert session_status(repo, active.session_id) == work_sessions.Status.ACTIVE
+    assert pointer(repo)["session_id"] == active.session_id
+    assert len(work_sessions.recording_mode(repo)) == 1
+
+
 def end_by_completing(project: Path, active: modes.Active) -> None:
     work_sessions.transition(project, active.session_id, "complete")
 
@@ -536,6 +599,30 @@ def test_leave_does_not_bring_back_a_mode_whose_session_already_ended(
     assert not state.mode_record(repo).exists()
     assert work_sessions.recording_mode(repo) == ()
     assert modes.resolve(repo) == modes.Resolution(None)
+
+
+def test_a_current_session_record_that_cannot_be_decoded_is_a_refused_entry_not_a_crash(
+    repo: Path,
+) -> None:
+    current = work_sessions.root(repo) / work_sessions.CURRENT
+    current.parent.mkdir(parents=True)
+    current.write_bytes(b"\xff\xfe")
+
+    code, _ = refusal(modes.enter(repo, "fixture"))
+
+    assert code == "mode_unwritable"
+    assert work_sessions.recording_mode(repo) == ()
+    assert not state.mode_record(repo).exists()
+
+
+def test_a_repair_that_meets_an_undecodable_current_session_record_says_so(
+    repo: Path,
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    state.mode_record(repo).unlink()
+    (work_sessions.root(repo) / work_sessions.CURRENT).write_bytes(b"\xff\xfe")
+
+    assert modes.resolve(repo) == modes.Resolution(None, UNRECOVERED)
 
 
 # leaving is safe to interrupt: the mode mark goes first, so nothing is left to recover

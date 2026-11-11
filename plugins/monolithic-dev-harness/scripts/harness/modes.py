@@ -252,8 +252,11 @@ def resolve(repo: Path) -> Resolution:
     The mode's work session is its durable record and `mode.json` only points at it, so the pointer
     can always be regenerated. A repair that cannot be done means no mode for this call, with a
     notice, and the next call tries again. The hook asks once at the start of a call, so the
-    notice reaches the agent once.
+    notice reaches the agent once. Where the harness does not govern, or is suspended, there is no
+    mode and nothing is written.
     """
+    if not _in_reach(repo):
+        return Resolution(None)
     match attempt(
         lambda: _resolved(repo), "mode_unresolved", "the mode cannot be read"
     ):
@@ -304,6 +307,12 @@ def _moment(text: str) -> datetime | None:
     except ValueError:
         return None
     return moment if moment.tzinfo is not None else None
+
+
+def _in_reach(repo: Path) -> bool:
+    """A mode is read, and repaired with writes, only where the harness governs and is not
+    suspended: elsewhere it does nothing, so nothing of it is written."""
+    return settings.governed(repo) and state.harness_mode(repo) != "suspended"
 
 
 def _resolved(repo: Path) -> Resolution:
@@ -572,6 +581,7 @@ def _point(repo: Path, entry: Active) -> Result[Active]:
             "mode_unwritable",
             f"could not record mode {entry.mode}",
             OSError,
+            ValueError,
         ),
         lambda _: entry,
     )

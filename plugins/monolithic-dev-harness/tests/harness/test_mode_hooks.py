@@ -406,14 +406,28 @@ def test_a_host_that_names_no_conversation_acts_in_the_mode_session_too(
             raise AssertionError(f"unexpected {failure!r}")
 
 
-def test_the_hook_asks_nothing_of_a_conversation_acting_in_the_mode_session(
+def state_files(project: Path) -> dict[str, bytes]:
+    return {
+        str(path.relative_to(project)): path.read_bytes()
+        for path in sorted(state.state_dir(project).rglob("*"))
+        if path.is_file() and path.name != "mode.lock"
+    }
+
+
+def test_the_hook_asks_and_stores_nothing_for_a_conversation_acting_in_the_mode_session(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
     entered(modes.enter(repo, "fixture"))
+    before = state_files(repo)
 
-    pre_tool_reason(repo, LISTED_READ, capsys, "chat-a")
+    assert pre_tool_reason(repo, LISTED_READ, capsys, "chat-a") is None
+    hook.handle_prompt(
+        "claude", {"cwd": str(repo), "prompt": "what next?", "session_id": "chat-a"}
+    )
+    capsys.readouterr()
 
     assert not decisions.any_waiting(repo)
+    assert state_files(repo) == before
 
 
 def test_leaving_and_entering_again_in_the_same_conversation_acts_in_the_new_session(
