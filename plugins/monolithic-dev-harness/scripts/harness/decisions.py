@@ -10,7 +10,15 @@ from pathlib import Path
 from typing import Any
 
 from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
-from harness import commands, gates, questions, setup_reviews, state, workflow
+from harness import (
+    code_content,
+    commands,
+    gates,
+    questions,
+    setup_reviews,
+    state,
+    workflow,
+)
 
 RELATIVE_PATH = Path(".harness/state/decision.json")
 HISTORY = "decision-history.json"
@@ -732,6 +740,22 @@ def _resolve(
                     raise ValueError(failure.message)
                 case Ok():
                     pass
+        case "manual-check", _ if not own_words and (
+            questions.choice_label(answer).casefold() not in questions.DECLINE_LABELS
+        ):
+            manual = (current.get("binds") or {}).get("manual") or {}
+            if code_content.current(repo) != manual.get("code"):
+                raise ValueError(
+                    "the code changed after the question was shown, so the manual check was "
+                    "not recorded; ask again about the code as it is now"
+                )
+            for name in manual.get("checks", ()):
+                state.record_manual(
+                    repo,
+                    str(name),
+                    manual["code"],
+                    str(current.get("question", ""))[:500],
+                )
         case _:
             pass
     match current.get("gate"), current.get("work_session_id"):

@@ -294,7 +294,7 @@ not offered.
 | --- | --- |
 | `approve HB-XXXX` / `aprovo HB-XXXX` | opens an approval window (`approvals.window_minutes`) |
 | `harness revoke` | closes every open window |
-| `harness manual-check <name> ok` | records manual evidence for the code as it is now (in Claude, click **Approve change**) |
+| `harness manual-check <name> ok` | records manual evidence for the code as it is now (in Claude, click **Approve change**, or **Confirm** on the `manual-check` gate) |
 | `approve HT-XXXXXX` | Cursor: trusts the onboarded tracker whose current version has that short id |
 | `use HT-XXXXXX` | Cursor: selects that trusted tracker, writing it into the settings file |
 | `stop trusting <tracker>` | Cursor: withdraws trust from the tracker named by label or name |

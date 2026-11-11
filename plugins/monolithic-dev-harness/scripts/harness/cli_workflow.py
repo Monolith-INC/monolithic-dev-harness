@@ -13,6 +13,7 @@ from core.result import Err, Failure, Ok, Result, attempt, bind, err, fmap, requ
 from harness import (
     artifact_manifest,
     artifact_review,
+    code_content,
     decisions,
     discovery,
     gates,
@@ -591,6 +592,8 @@ def decision_command(args: argparse.Namespace) -> int:
                     ),
                 }
                 if spec.approval
+                else _manual_binds(repo, args.value)
+                if spec.gate == "manual-check"
                 else None
             )
             match spec.gate:
@@ -675,6 +678,18 @@ def decision_command(args: argparse.Namespace) -> int:
             )
         case _:
             return 2
+
+
+def _manual_binds(repo: Path, values: list[str] | None) -> dict:
+    """What a manual-check question is about: the checks it names and the code as it is now, so
+    Confirm records them for exactly that code."""
+    names = dict(pairs(values)).get("checks", "")
+    return {
+        "manual": {
+            "checks": [name.strip() for name in names.split(",") if name.strip()],
+            "code": code_content.current(repo),
+        }
+    }
 
 
 def _reused(entry: dict | None) -> Result[str] | None:

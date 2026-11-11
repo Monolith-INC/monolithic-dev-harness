@@ -222,14 +222,19 @@ def render(
     if chosen and chosen not in {option.id for option in gate.options}:
         return err("gate_values", f"gate {gate_id} has no option {chosen!r}")
 
-    def fill(text: str) -> str:
-        return _SLOT.sub(lambda match: values[match.group(1)], text)
+    def fill(text: str, shown: dict[str, str] = values) -> str:
+        return _SLOT.sub(lambda match: shown[match.group(1)], text)
+
+    # A tracker state name (`in_progress`) reads as words in the question; the value is unchanged.
+    worded = values | (
+        {"status": values["status"].replace("_", " ")} if "status" in values else {}
+    )
 
     return Ok(
         Rendered(
             kind=gate.kind,
             gate=gate.id,
-            question=fill(gate.question[language]),
+            question=fill(gate.question[language], worded),
             options=tuple(
                 fill(option.label[language])
                 + (f" ({RECOMMENDED[language]})" if option.id == chosen else "")
