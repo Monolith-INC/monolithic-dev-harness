@@ -12,6 +12,7 @@ import secrets
 import sys
 from collections.abc import Callable, Mapping
 from dataclasses import fields, is_dataclass, replace
+from datetime import date
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -103,6 +104,20 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
             },
         ),
         ("tracker_list_children", "List child work items.", ("ref",), {"ref": STRING}),
+        (
+            "tracker_current_sprint",
+            "The sprint running now: its id, name, dates, and the path a work item's iteration "
+            "takes to join it.",
+            (),
+            {},
+        ),
+        (
+            "tracker_sprint_items",
+            "The work items in a sprint, with their points and hours. sprint is the sprint's id, "
+            "name or path; leave it out for the current sprint.",
+            (),
+            {"sprint": STRING},
+        ),
         (
             "tracker_transition_work_item",
             "Move a work item to a harness state.",
@@ -251,6 +266,8 @@ def plain(value: Any) -> Any:
             return [plain(item) for item in value]
         case Path():
             return str(value)
+        case date():
+            return value.isoformat()
         case _:
             return value
 
@@ -307,6 +324,8 @@ READ_ONLY_OPERATIONS = frozenset(
         "tracker_search_work_items",
         "tracker_list_children",
         "tracker_list_artifacts",
+        "tracker_current_sprint",
+        "tracker_sprint_items",
         "scm_get_pull_request",
         "scm_list_review_threads",
         "workflow_tracking_status",
@@ -416,6 +435,8 @@ def _tracker_call(name: str, args: Mapping[str, Any], ops: TrackerOps) -> Result
             lambda _: ops.update_work_item(args["ref"], _changes(args)),
         ),
         "tracker_list_children": lambda: ops.list_children(args["ref"]),
+        "tracker_current_sprint": lambda: ops.current_sprint(),
+        "tracker_sprint_items": lambda: ops.sprint_items(args.get("sprint", "")),
         "tracker_transition_work_item": lambda: ops.transition_work_item(
             args["ref"], LogicalState(args["state"])
         ),

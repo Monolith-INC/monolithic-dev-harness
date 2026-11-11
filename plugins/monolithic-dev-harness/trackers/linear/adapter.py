@@ -33,6 +33,8 @@ from integrations.planning import (
     EstimableItem,
     IterationCapacity,
     IterationReading,
+    Sprint,
+    is_current,
     no_hours,
     pick_sprint,
 )
@@ -126,6 +128,27 @@ def adapter(context: AdapterContext) -> TrackerOps:
                 _estimable(context, record)
                 for record in payloads.records(replies.get("issues"))
                 if payloads.text(record, "identifier", "id")
+            ),
+        ),
+        current_sprint=lambda: fmap(_cycle_entry(context, call, ""), _sprint),
+        sprint_capacity=lambda ref: fmap(
+            _cycle_entry(context, call, ref), lambda cycle: _cycle(cycle, ref)
+        ),
+        sprint_items=lambda ref: bind(
+            _cycle_entry(context, call, ref),
+            lambda cycle: fmap(
+                call(
+                    "list",
+                    {
+                        "team": context.values.get("team", ""),
+                        "cycle": payloads.text(cycle, "id"),
+                    },
+                ),
+                lambda reply: tuple(
+                    _estimable(context, record)
+                    for record in payloads.records(reply)
+                    if payloads.text(record, "identifier", "id")
+                ),
             ),
         ),
         records_hours=False,
@@ -260,6 +283,42 @@ def _cycle(reply: Any, iteration_ref: str) -> IterationReading:
             finish_date=parse_date((cycle or EMPTY).get("endsAt")),
         ),
         (NO_CAPACITY, *missing),
+    )
+
+
+def _cycle_entry(context: AdapterContext, call, ref: str) -> Result[Mapping[str, Any]]:
+    """The team's cycle `ref` names (id, name or number), or the current one."""
+    current = is_current(ref)
+    team = context.values.get("team", "")
+    return bind(
+        call("cycles", {"teamId": team, **({"type": "current"} if current else {})}),
+        lambda reply: _found(
+            pick_sprint(reply, ref, CYCLE_MARKERS, ("id", "name", "number"), _active)[
+                0
+            ],
+            "the team has no current cycle"
+            if current
+            else f"the team has no cycle {ref!r}",
+            "no_current_sprint" if current else "sprint_not_found",
+        ),
+    )
+
+
+def _found(
+    cycle: Mapping[str, Any] | None, missing: str, code: str
+) -> Result[Mapping[str, Any]]:
+    return Ok(cycle) if cycle is not None else err(code, missing)
+
+
+def _sprint(cycle: Mapping[str, Any]) -> Sprint:
+    """A cycle as a sprint; an issue joins it by the cycle's id."""
+    cycle_id = payloads.text(cycle, "id")
+    return Sprint(
+        id=cycle_id,
+        name=payloads.text(cycle, "name") or f"Cycle {payloads.text(cycle, 'number')}",
+        path=cycle_id,
+        start=parse_date(cycle.get("startsAt")),
+        end=parse_date(cycle.get("endsAt")),
     )
 
 

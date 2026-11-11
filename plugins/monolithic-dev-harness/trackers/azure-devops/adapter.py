@@ -47,8 +47,10 @@ from integrations.planning import (
     IterationCapacity,
     IterationReading,
     MemberCapacity,
+    Sprint,
     date_ranges,
     hour_writer,
+    is_current,
     pick_sprint,
 )
 
@@ -231,6 +233,15 @@ def adapter(context: AdapterContext) -> TrackerOps:
             _usable(replies), lambda _: _reading(replies, ref)
         ),
         iteration_items=lambda replies, ref: _sprint_items(replies, process),
+        current_sprint=lambda: fmap(_sprint_entry(context, call, ""), _sprint),
+        sprint_capacity=lambda ref: bind(
+            _sprint_entry(context, call, ref),
+            lambda entry: _capacity_reading(context, call, entry, ref),
+        ),
+        sprint_items=lambda ref: bind(
+            _sprint_entry(context, call, ref),
+            lambda entry: _iteration_items(context, call, entry, process),
+        ),
         records_hours=True,
     )
 
@@ -422,13 +433,122 @@ def _person(value: Any) -> str:
 
 def _current_iteration(context: AdapterContext, call) -> str:
     """The path of the team's current sprint; `""` when it cannot be read, since a sprint is a
-    default and never a reason to fail a create. The team is the `team` setting, or the default
-    team Azure names after the project."""
-    team = context.values.get("team") or f"{context.values.get('project', '')} Team"
-    reply = call("work", "list_team_iterations", {"team": team, "timeframe": "current"})
-    entries = payloads.records(_json_tail(value_or(reply, None)))
-    sprint = _current_sprint(entries) if entries else None
-    return payloads.text(sprint, "path") if sprint else ""
+    default and never a reason to fail a create."""
+    return value_or(
+        fmap(
+            _sprint_entry(context, call, ""), lambda entry: payloads.text(entry, "path")
+        ),
+        "",
+    )
+
+
+def _team(context: AdapterContext) -> str:
+    """The `team` setting, or the default team Azure names after the project."""
+    return context.values.get("team") or f"{context.values.get('project', '')} Team"
+
+
+def _sprint_entry(context: AdapterContext, call, ref: str) -> Result[Mapping[str, Any]]:
+    """The team iteration `ref` names (id, name or path), or the current one."""
+    current = is_current(ref)
+    return bind(
+        call(
+            "work",
+            "list_team_iterations",
+            {"team": _team(context), **({"timeframe": "current"} if current else {})},
+        ),
+        lambda reply: _found(
+            pick_sprint(
+                _json_tail(reply),
+                ref,
+                SPRINT_MARKERS,
+                ("id", "name", "path"),
+                _current_sprint,
+            )[0],
+            ref,
+        ),
+    )
+
+
+def _found(entry: Mapping[str, Any] | None, ref: str) -> Result[Mapping[str, Any]]:
+    if entry is not None:
+        return Ok(entry)
+    return (
+        err("no_current_sprint", "the team has no current sprint")
+        if is_current(ref)
+        else err("sprint_not_found", f"the team has no sprint {ref!r}")
+    )
+
+
+def _sprint(entry: Mapping[str, Any]) -> Sprint:
+    attributes = payloads.object_or_empty(entry.get("attributes"))
+    return Sprint(
+        id=payloads.text(entry, "id"),
+        name=payloads.text(entry, "name"),
+        path=payloads.text(entry, "path"),
+        start=parse_date(attributes.get("startDate")),
+        end=parse_date(attributes.get("finishDate")),
+    )
+
+
+def _capacity_reading(
+    context: AdapterContext, call, entry: Mapping[str, Any], ref: str
+) -> Result[IterationReading]:
+    """The sprint's team capacity and working days, read through the team's `work` tool."""
+    team = _team(context)
+    return bind(
+        call(
+            "work",
+            "get_team_capacity",
+            {"team": team, "iterationId": payloads.text(entry, "id")},
+        ),
+        lambda capacities: fmap(
+            call("work", "get_team_settings", {"team": team}),
+            lambda settings: _reading(
+                {
+                    "iteration": entry,
+                    "capacities": _json_tail(capacities),
+                    "team_settings": _json_tail(settings),
+                },
+                ref,
+            ),
+        ),
+    )
+
+
+def _iteration_items(
+    context: AdapterContext, call, entry: Mapping[str, Any], process: str | None
+) -> Result[tuple[EstimableItem, ...]]:
+    """The sprint's work items: the iteration lists their ids, a batch read gives their fields."""
+    return bind(
+        call(
+            "read",
+            "list_for_iteration",
+            {"team": _team(context), "iterationId": payloads.text(entry, "id")},
+        ),
+        lambda listing: _batch_items(call, _iteration_ids(listing), process),
+    )
+
+
+def _iteration_ids(listing: Any) -> tuple[int, ...]:
+    relations = payloads.object_or_empty(_json_tail(listing)).get("workItemRelations")
+    return tuple(
+        int(target["id"])
+        for relation in payloads.listed(relations)
+        if isinstance(relation, dict)
+        and isinstance(target := relation.get("target"), dict)
+        and str(target.get("id", "")).isdigit()
+    )
+
+
+def _batch_items(
+    call, ids: tuple[int, ...], process: str | None
+) -> Result[tuple[EstimableItem, ...]]:
+    if not ids:
+        return Ok(())
+    return bind(
+        call("read", "get_batch", {"ids": list(ids)}),
+        lambda batch: _sprint_items({"work_items": batch}, process),
+    )
 
 
 def _json_tail(reply: Any) -> Any:

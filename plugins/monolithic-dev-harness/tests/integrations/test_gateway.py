@@ -160,6 +160,16 @@ class GatewayTest(unittest.TestCase):
             Ok,
         )
 
+    def test_sprint_tools_stay_allowed_while_a_question_waits(self) -> None:
+        self.assertLessEqual(
+            {"tracker_current_sprint", "tracker_sprint_items"},
+            gateway.READ_ONLY_OPERATIONS,
+        )
+        self.assertLessEqual(
+            {"tracker_current_sprint", "tracker_sprint_items"},
+            set(gateway.TOOLS_BY_NAME),
+        )
+
     def test_arguments_are_checked_against_the_tool_schema(self) -> None:
         self.assertIn(
             "missing 'title'",

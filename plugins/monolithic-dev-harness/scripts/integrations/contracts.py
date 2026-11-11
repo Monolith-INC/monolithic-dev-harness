@@ -24,7 +24,7 @@ from typing import Any
 
 from core.result import Ok, Result, err
 
-from .planning import EstimableItem, HourFields, IterationReading
+from .planning import EstimableItem, HourFields, IterationReading, Sprint
 
 EMPTY: Mapping[str, Any] = MappingProxyType({})
 
@@ -307,6 +307,11 @@ class TrackerOps:
     iteration_items: Callable[
         [Mapping[str, Any], str], Result[tuple[EstimableItem, ...]]
     ]
+    # Sprints, read by the adapter from its tracker. A sprint reference is a sprint's id, name or
+    # path; "current", or none, is the sprint running now (`planning.CURRENT`).
+    current_sprint: Callable[[], Result[Sprint]]
+    sprint_capacity: Callable[[str], Result[IterationReading]]
+    sprint_items: Callable[[str], Result[tuple[EstimableItem, ...]]]
     records_hours: bool
 
 

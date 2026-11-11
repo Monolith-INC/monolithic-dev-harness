@@ -31,7 +31,7 @@ from integrations.contracts import (
     WorkItemKind,
     changed_fields,
 )
-from integrations.planning import IterationReading, is_current
+from integrations.planning import IterationReading, Sprint, is_current
 from integrations.planning_files import (
     ASSIGNED_TO,
     ITERATION,
@@ -107,6 +107,26 @@ def adapter(context: AdapterContext) -> TrackerOps:
         ),
         iteration_items=lambda replies, ref: bind(
             _sprint(ref),
+            lambda name: fmap(
+                _records(context, root),
+                lambda found: tuple(
+                    planning_item(
+                        str(record["key"]),
+                        str(record.get("title", "")),
+                        str(record.get("kind", "")),
+                        record,
+                    )
+                    for _, record in found
+                    if record.get("key") and str(record.get(ITERATION) or "") == name
+                ),
+            ),
+        ),
+        current_sprint=lambda: _current_sprint(context.repo),
+        sprint_capacity=lambda ref: bind(
+            _named_sprint(context.repo, ref), lambda name: _capacity(context.repo, name)
+        ),
+        sprint_items=lambda ref: bind(
+            _named_sprint(context.repo, ref),
             lambda name: fmap(
                 _records(context, root),
                 lambda found: tuple(
@@ -469,6 +489,61 @@ def _capacity(repo: Path, name: str) -> Result[IterationReading]:
             f"sprint {name!r} has no capacity file at {path.name} beside Tickets/",
         ),
         lambda _: read_capacity_file(path, name),
+    )
+
+
+def _current_sprint(repo: Path) -> Result[Sprint]:
+    """The sprint file whose dates cover today; of several, the one that started last."""
+    files = sorted(local_tracker.storage_root(repo).parent.glob("capacity-*.json"))
+    today = datetime.now(UTC).date()
+    return bind(
+        sequence(
+            tuple(
+                fmap(
+                    read_capacity_file(path, path.stem.removeprefix("capacity-")),
+                    lambda reading: reading.capacity,
+                )
+                for path in files
+            )
+        ),
+        lambda sprints: next(
+            (
+                Ok(
+                    Sprint(
+                        s.iteration_ref,
+                        s.iteration_ref,
+                        s.iteration_ref,
+                        s.start_date,
+                        s.finish_date,
+                    )
+                )
+                for s in sorted(
+                    (
+                        s
+                        for s in sprints
+                        if s.start_date
+                        and s.finish_date
+                        and s.start_date <= today <= s.finish_date
+                    ),
+                    key=lambda s: s.start_date,
+                    reverse=True,
+                )
+            ),
+            err(
+                "no_current_sprint",
+                "no sprint file beside Tickets/ covers today; read: "
+                + (", ".join(path.name for path in files) or "none"),
+            ),
+        ),
+    )
+
+
+def _named_sprint(repo: Path, ref: str) -> Result[str]:
+    """The sprint's name: the one named, or the current one's."""
+    return (
+        fmap(_current_sprint(repo), lambda sprint: sprint.name)
+        if is_current(ref)
+        else Ok(ref.strip())
     )
 
 

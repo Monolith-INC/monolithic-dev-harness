@@ -28,6 +28,7 @@
     "labels": "list_issue_labels",
     "label_create": "create_issue_label",
     "teams": "list_teams",
+    "cycles": "list_cycles",
     "comments": "list_comments",
     "comment": "save_comment"
   },

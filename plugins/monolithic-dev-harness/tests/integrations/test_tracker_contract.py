@@ -5,6 +5,8 @@ remote ones), so a scenario that passes here passes through the one neutral cont
 
 from __future__ import annotations
 
+import json
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
@@ -24,12 +26,25 @@ LINEAR = {"team": "ENG"}
 def tracker(request, tmp_path: Path) -> TrackerOps:
     match request.param:
         case "local":
+            _capacity(tmp_path, "S1", -3, 7)
             return ops("local", {}, repo=tmp_path)
         case "azure-devops":
             return ops("azure-devops", AZURE, FakeTransport(AzureBoard().answers))
         case "linear":
             return ops("linear", LINEAR, FakeTransport(LinearWorkspace().answers))
     raise AssertionError(request.param)
+
+
+def _capacity(repo: Path, name: str, start: int, finish: int) -> None:
+    today = datetime.now(UTC).date()
+    (repo / f"capacity-{name}.json").write_text(
+        json.dumps(
+            {
+                "startDate": (today + timedelta(days=start)).isoformat(),
+                "finishDate": (today + timedelta(days=finish)).isoformat(),
+            }
+        )
+    )
 
 
 def _story_under_feature(tracker: TrackerOps):
@@ -136,3 +151,53 @@ def test_linear_empty_tags_keep_only_the_kind_label() -> None:
     linear.update_work_item(story.key, WorkItemChanges(tags=()))
     assert len(call.sent("save_issue")[-1]["labels"]) == 1
     assert linear.get_work_item(story.key).value.kind is WorkItemKind.USER_STORY
+
+
+# --- sprints ------------------------------------------------------------------------------------
+
+
+def test_current_sprint_has_its_dates(tracker: TrackerOps) -> None:
+    sprint = tracker.current_sprint().value
+    assert sprint.start <= datetime.now(UTC).date() <= sprint.end
+    assert sprint.path
+
+
+def test_sprint_items_are_the_sprints_items(tracker: TrackerOps) -> None:
+    _, story = _story_under_feature(tracker)
+    _, outside = _story_under_feature(tracker)
+    sprint = tracker.current_sprint().value
+    tracker.update_work_item(story.key, WorkItemChanges(iteration=sprint.path))
+    # A tracker may place new items in the current sprint; this one is moved out of it.
+    tracker.update_work_item(outside.key, WorkItemChanges(iteration="Elsewhere"))
+    listed = {item.item_id for item in tracker.sprint_items("current").value}
+    assert story.id in listed and outside.id not in listed
+
+
+def test_sprint_capacity_reads_the_current_sprint(tracker: TrackerOps) -> None:
+    sprint = tracker.current_sprint().value
+    reading = tracker.sprint_capacity("current").value
+    assert reading.capacity.start_date == sprint.start
+
+
+def test_no_local_sprint_covering_today_names_the_files(tmp_path: Path) -> None:
+    _capacity(tmp_path, "OLD", -30, -20)
+    failed = ops("local", {}, repo=tmp_path).current_sprint()
+    assert isinstance(failed, Err) and failed.failure.code == "no_current_sprint"
+    assert "capacity-OLD.json" in failed.failure.message
+
+
+def test_overlapping_local_sprints_take_the_latest_start(tmp_path: Path) -> None:
+    _capacity(tmp_path, "LONG", -20, 10)
+    _capacity(tmp_path, "NEW", -2, 10)
+    assert ops("local", {}, repo=tmp_path).current_sprint().value.name == "NEW"
+
+
+def test_azure_sprint_items_list_then_batch() -> None:
+    azure, call = _azure()
+    story = azure.create_work_item(WorkItemKind.USER_STORY, "S", "s", "").value
+    sprint = azure.current_sprint().value
+    azure.update_work_item(story.key, WorkItemChanges(iteration=sprint.path))
+    azure.sprint_items("current")
+    reads = [a["action"] for a in call.sent("wit_work_item")]
+    assert reads[-2:] == ["list_for_iteration", "get_batch"]
+    assert call.sent("wit_work_item")[-2]["iterationId"] == sprint.id

@@ -5,9 +5,13 @@ from __future__ import annotations
 
 import json
 import re
+from datetime import UTC, datetime, timedelta
 from typing import Any
 
 PARENT = "System.Parent"
+ITERATION = "System.IterationPath"
+TODAY = datetime.now(UTC).date()
+START, FINISH = TODAY - timedelta(days=3), TODAY + timedelta(days=7)
 
 
 class AzureBoard:
@@ -21,7 +25,29 @@ class AzureBoard:
             "wit_work_item_write": self.write,
             "wit_work_item_link_write": self.link,
             "wit_query": self.query,
+            "work": self.work,
         }
+        self.sprint = {
+            "id": "it-1",
+            "name": "Sprint 1",
+            "path": "proj\\Sprint 1",
+            "attributes": {
+                "startDate": f"{START.isoformat()}T00:00:00Z",
+                "finishDate": f"{FINISH.isoformat()}T00:00:00Z",
+                "timeFrame": 1,
+            },
+        }
+
+    def work(self, args: dict[str, Any]) -> Any:
+        preamble = f"Project: {args['project']}, Team: {args['team']}\n"
+        match args["action"]:
+            case "list_team_iterations":
+                return preamble + json.dumps([self.sprint])
+            case "get_team_capacity":
+                return preamble + json.dumps({"teamMembers": []})
+            case "get_team_settings":
+                return preamble + json.dumps({"workingDays": ["monday", "friday"]})
+        raise AssertionError(args)
 
     def record(self, number: int) -> dict[str, Any]:
         return {"id": number, "fields": dict(self.items[number])}
@@ -37,6 +63,15 @@ class AzureBoard:
                 ]
             case "list_comments":
                 return {"comments": []}
+            case "list_for_iteration":
+                assert args["iterationId"] == self.sprint["id"], args
+                return {
+                    "workItemRelations": [
+                        {"target": {"id": number}}
+                        for number, fields in self.items.items()
+                        if fields.get(ITERATION) == self.sprint["path"]
+                    ]
+                }
         raise AssertionError(args)
 
     def _new(self, kind: str, title: str, parent: int | None) -> dict[str, Any]:
@@ -105,6 +140,15 @@ class LinearWorkspace:
             "list_issues": self.list,
             "save_issue": self.save,
             "list_comments": lambda args: [],
+            "list_cycles": lambda args: [self.cycle],
+        }
+        self.cycle = {
+            "id": "cyc-1",
+            "name": "Cycle 1",
+            "number": 1,
+            "startsAt": f"{START.isoformat()}T00:00:00Z",
+            "endsAt": f"{FINISH.isoformat()}T00:00:00Z",
+            "isActive": True,
         }
 
     def save(self, args: dict[str, Any]) -> Any:
@@ -125,6 +169,7 @@ class LinearWorkspace:
                 "parentId",
                 "priority",
                 "state",
+                "cycle",
             ):
                 issue[name] = list(value) if name == "labels" else value
         return issue
@@ -133,5 +178,6 @@ class LinearWorkspace:
         return [
             issue
             for issue in self.issues.values()
-            if "parentId" not in args or issue.get("parentId") == args["parentId"]
+            if ("parentId" not in args or issue.get("parentId") == args["parentId"])
+            and ("cycle" not in args or issue.get("cycle") == args["cycle"])
         ]
