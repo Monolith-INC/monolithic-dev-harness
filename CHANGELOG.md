@@ -15,6 +15,9 @@ All notable changes to this project are documented here. The format follows
   asked, a broken mode record is repaired and the mode resumes, and every repair is shown to the user.
   Inside a mode an approval covers the content it approved. The always-on controls apply inside and
   outside a mode. The knowledge-first hook is declared but not active yet.
+- A Vision Doc or PRD is published only as the draft the user approved: approving the Vision Doc
+  does not cover the PRD. While a mode is active, the hook and harness commands agree on which
+  session a command belongs to, and an ordinary session's publication receipt is kept.
 - A `manual-check` question confirms checks the user ran by hand (#50):
   `harness decision present --gate manual-check --value "checks=<name>, <name>"`. **Confirm**
   records each check for the code as it was when the question was shown. Before this, a Task's manual
