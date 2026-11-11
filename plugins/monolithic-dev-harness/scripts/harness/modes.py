@@ -236,7 +236,7 @@ def resolve(repo: Path) -> Resolution:
         case Ok(found):
             return found
         case _:
-            return Resolution(None)
+            return Resolution(None, _unrecovered())
 
 
 def leave(repo: Path) -> Result[None]:
@@ -407,10 +407,10 @@ def _repaired(name: str, result: Result[Active]) -> Resolution:
             return Resolution(None, _unrecovered(name))
 
 
-def _unrecovered(name: str) -> str:
-    return (
-        f"The {name} mode could not be recovered; run `harness modes leave` to end it."
-    )
+def _unrecovered(name: str = "") -> str:
+    """The failure line. A mode that could not be read at all has no name to give."""
+    subject = f"The {name} mode" if name else "A mode"
+    return f"{subject} could not be recovered; run `harness modes leave` to end it."
 
 
 def _governed(repo: Path) -> Result[None]:

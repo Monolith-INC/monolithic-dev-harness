@@ -741,9 +741,12 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         notes.append(
             f"[harness] manual check {name} recorded for the code as it is now ({code[:12]})."
         )
+    oriented = mode_hooks.orient(repo)
+    if oriented.notice:
+        mode_notes.append(oriented.notice)
     notes.extend(mode_notes)
-    if orientation := mode_hooks.orient(repo):
-        notes.append(orientation)
+    if oriented.text:
+        notes.append(oriented.text)
     if output := hook_bridge.format_prompt(host, notes):
         print(output)
     return 0

@@ -24,6 +24,10 @@ RECOVERED = "Recovered the fixture mode."
 UNRECOVERED = (
     "The fixture mode could not be recovered; run `harness modes leave` to end it."
 )
+# A broken pointer names no mode, so a failure to read the mode at all cannot name one either.
+GENERIC_UNRECOVERED = (
+    "A mode could not be recovered; run `harness modes leave` to end it."
+)
 
 
 @pytest.fixture
@@ -450,7 +454,7 @@ def test_a_repair_that_cannot_be_written_means_no_mode_for_that_call(
     assert retried.notice == RECOVERED
 
 
-def test_a_pointer_that_cannot_be_moved_aside_is_still_no_mode_and_never_an_error(
+def test_a_pointer_that_cannot_be_moved_aside_is_no_mode_and_says_so(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     entered(modes.enter(repo, "fixture"))
@@ -462,6 +466,19 @@ def test_a_pointer_that_cannot_be_moved_aside_is_still_no_mode_and_never_an_erro
     monkeypatch.setattr(modes, "_set_aside", refuse)
 
     assert modes.active(repo) is None
+    assert modes.resolve(repo) == modes.Resolution(None, GENERIC_UNRECOVERED)
+
+
+def test_an_unexpected_failure_reading_the_mode_is_said_never_swallowed(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def explode(_: Path) -> modes.Resolution:
+        raise RuntimeError("something nobody planned for")
+
+    monkeypatch.setattr(modes, "_resolved", explode)
+
+    assert modes.resolve(repo) == modes.Resolution(None, GENERIC_UNRECOVERED)
+    assert "RuntimeError" not in modes.resolve(repo).notice
 
 
 def test_enter_is_refused_while_a_mode_cannot_be_recovered(repo: Path) -> None:

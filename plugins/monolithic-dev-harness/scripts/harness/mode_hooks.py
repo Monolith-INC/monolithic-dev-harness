@@ -6,37 +6,53 @@ list; every other tool is left to the rules.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
-from core.result import Err, Ok, attempt
+from core.result import Ok, attempt
 
 from . import modes, rules
 
 GATEWAY_SERVER = "workflow-integrations"
 
 
-def orient(repo: Path) -> str | None:
-    """The mode's rules for the prompt, or None.
+@dataclass(frozen=True)
+class Orientation:
+    """What the prompt hook has from the mode: its rules for the agent, or one line saying it
+    could not give them, for the agent and the user."""
 
-    Guidance only: when it cannot be given, the prompt goes on without it, so a mode never stops
-    the approvals and revokes the same prompt carries.
+    text: str | None = None
+    notice: str = ""
+
+
+def orient(repo: Path) -> Orientation:
+    """The mode's rules for the prompt.
+
+    Guidance only: when it cannot be given, the prompt goes on without it and says so, so a mode
+    never stops the approvals and revokes the same prompt carries.
     """
-    match attempt(
-        lambda: _orientation(repo), "orient_failed", "mode rules unavailable"
-    ):
-        case Ok(text):
-            return text
-        case Err(_):
-            return None
-
-
-def _orientation(repo: Path) -> str | None:
     match _hooked(repo, "orient"):
         case None:
-            return None
+            return Orientation()
         case mode:
-            rules_text = (mode.root / "rules.md").read_text(encoding="utf-8")
-            return f"[harness] mode: {mode.name}. Rules:\n{rules_text}"
+            return _rules_of(mode)
+
+
+def _rules_of(mode: modes.Mode) -> Orientation:
+    match attempt(
+        lambda: (mode.root / "rules.md").read_text(encoding="utf-8"),
+        "orient_failed",
+        "mode rules unavailable",
+        OSError,
+        ValueError,
+    ):
+        case Ok(text):
+            return Orientation(f"[harness] mode: {mode.name}. Rules:\n{text}")
+        case _:
+            return Orientation(
+                notice=f"The {mode.name} mode's rules could not be read, so this prompt "
+                "carries none of them."
+            )
 
 
 def operations(call: rules.ToolCall, repo: Path) -> rules.Decision | None:

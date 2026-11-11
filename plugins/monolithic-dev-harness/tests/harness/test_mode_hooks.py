@@ -24,6 +24,9 @@ LISTED_READ = "tracker_describe"
 UNLISTED_READ = "tracker_preflight"
 UNLISTED_WRITE = "tracker_update_work_item"
 OPERATIONS = [LISTED, LISTED_READ]
+RULES_UNREADABLE = (
+    "The fixture mode's rules could not be read, so this prompt carries none of them."
+)
 
 
 @pytest.fixture
@@ -82,23 +85,34 @@ def pre_tool_reason(
 
 
 def test_orient_is_silent_without_a_mode(repo: Path) -> None:
-    assert mode_hooks.orient(repo) is None
+    assert mode_hooks.orient(repo) == mode_hooks.Orientation()
 
 
 def test_orient_gives_the_mode_and_its_rules_inside_one(repo: Path) -> None:
     entered(modes.enter(repo, "fixture"))
 
-    text = mode_hooks.orient(repo)
+    oriented = mode_hooks.orient(repo)
 
-    assert text is not None
-    assert text.startswith("[harness] mode: fixture. Rules:")
-    assert "# fixture" in text
+    assert oriented.text is not None
+    assert oriented.text.startswith("[harness] mode: fixture. Rules:")
+    assert "# fixture" in oriented.text
+    assert oriented.notice == ""
 
 
 def test_orient_is_silent_when_the_manifest_does_not_list_it(repo: Path) -> None:
     entered(modes.enter(repo, "operations-only"))
 
-    assert mode_hooks.orient(repo) is None
+    assert mode_hooks.orient(repo) == mode_hooks.Orientation()
+
+
+def test_orient_says_when_the_mode_rules_cannot_be_read(repo: Path) -> None:
+    entered(modes.enter(repo, "fixture"))
+    (repo.parent / "modes" / "fixture" / "rules.md").write_bytes(b"\xff\xfe")
+
+    oriented = mode_hooks.orient(repo)
+
+    assert oriented.text is None
+    assert oriented.notice == RULES_UNREADABLE
 
 
 def test_the_prompt_carries_the_mode_rules(
@@ -127,6 +141,7 @@ def test_a_failing_orient_drops_neither_the_prompt_nor_its_approval(
     out = capsys.readouterr().out
     assert "approval HB-ABCD1234 recorded" in out
     assert "[harness] mode:" not in out
+    assert RULES_UNREADABLE in out
     assert state.open_approvals(repo, active.session_id)
 
 
@@ -176,7 +191,7 @@ def test_a_mode_that_cannot_load_never_refuses_a_gateway_tool(repo: Path) -> Non
 
     assert mode_hooks.operations(gateway(LISTED), repo) is None
     assert mode_hooks.operations(gateway(UNLISTED_WRITE), repo) is None
-    assert mode_hooks.orient(repo) is None
+    assert mode_hooks.orient(repo) == mode_hooks.Orientation()
 
 
 def write_pointer(project: Path, how: str) -> None:
@@ -222,7 +237,7 @@ def test_a_pointer_nothing_backs_means_no_mode_and_no_call_is_denied(
 ) -> None:
     write_pointer(repo, how)
 
-    assert mode_hooks.orient(repo) is None
+    assert mode_hooks.orient(repo) == mode_hooks.Orientation()
     assert mode_hooks.operations(gateway(UNLISTED_WRITE), repo) is None
     assert pre_tool_reason(repo, UNLISTED_READ, capsys) is None
     assert pre_tool_reason(repo, LISTED_READ, capsys) is None
@@ -234,10 +249,10 @@ def test_orient_shows_the_mode_once_a_broken_pointer_is_regenerated(
     entered(modes.enter(repo, "fixture"))
     state.mode_record(repo).write_bytes(b"\xff\xfe")
 
-    text = mode_hooks.orient(repo)
+    oriented = mode_hooks.orient(repo)
 
-    assert text is not None
-    assert text.startswith("[harness] mode: fixture. Rules:")
+    assert oriented.text is not None
+    assert oriented.text.startswith("[harness] mode: fixture. Rules:")
 
 
 def test_a_paused_mode_session_is_resumed_and_its_operations_apply_again(
@@ -296,6 +311,9 @@ def test_the_hook_does_not_scope_gateway_reads_outside_a_mode(
 RECOVERED = "Recovered the fixture mode."
 UNRECOVERED = (
     "The fixture mode could not be recovered; run `harness modes leave` to end it."
+)
+GENERIC_UNRECOVERED = (
+    "A mode could not be recovered; run `harness modes leave` to end it."
 )
 
 
@@ -652,6 +670,23 @@ def test_the_prompt_says_when_the_mode_could_not_be_recovered(
     out = capsys.readouterr().out
     assert UNRECOVERED in out
     assert "[harness] mode:" not in out
+
+
+def test_a_repair_that_fails_without_a_known_mode_is_still_said_on_the_call(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    state.mode_record(repo).write_bytes(b"\xff\xfe")
+
+    def refuse(_: Path) -> None:
+        raise OSError("cannot move the file")
+
+    monkeypatch.setattr(modes, "_set_aside", refuse)
+
+    out = pre_tool_output(repo, UNLISTED_READ, capsys)
+
+    assert notice_in(out) == GENERIC_UNRECOVERED
+    assert "deny" not in out
 
 
 def test_leaving_ends_a_mode_that_could_not_be_recovered(
