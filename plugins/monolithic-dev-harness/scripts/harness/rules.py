@@ -53,6 +53,8 @@ GATEWAY_WRITES = frozenset(
         "tracker_update_work_item",
         "tracker_transition_work_item",
         "tracker_publish_artifact",
+        "tracker_revise_artifact",
+        "tracker_remove_artifact",
         "tracker_link_development_artifact",
         "scm_create_pull_request",
         "scm_reply_to_thread",
