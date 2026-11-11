@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import re
+import secrets
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,11 @@ def state_dir(repo: Path) -> Path:
 def mode_record(repo: Path) -> Path:
     """The active mode and its work session; written only by `harness.modes`."""
     return state_dir(repo) / "mode.json"
+
+
+def mode_lock(repo: Path) -> Path:
+    """The lock file that serializes repairs of the mode; it holds nothing."""
+    return state_dir(repo) / "mode.lock"
 
 
 def ensure_local_exclude(repo: Path) -> tuple[str, ...]:
@@ -62,11 +68,16 @@ def ensure_local_exclude(repo: Path) -> tuple[str, ...]:
 def write_json(path: Path, payload: dict[str, Any]) -> None:
     """Replace a state file atomically: readers see the old record or the new one, never half."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(path.suffix + ".tmp")
-    tmp.write_text(
-        json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-    )
-    tmp.replace(path)
+    # One staging name per writer, so writers of the same file never share (and tear) one.
+    tmp = path.with_name(f"{path.name}.{secrets.token_hex(6)}.tmp")
+    try:
+        tmp.write_text(
+            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        tmp.replace(path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def read_json(path: Path) -> dict[str, Any] | None:

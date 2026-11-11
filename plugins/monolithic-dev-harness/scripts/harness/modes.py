@@ -9,10 +9,13 @@ names that session. Reading the mode is total and repairs: see `resolve`.
 
 from __future__ import annotations
 
+import fcntl
 import json
 import re
+import time
 import tomllib
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -31,6 +34,10 @@ REQUIRED_FILES = ("workflow.md", "rules.md")
 # One plain folder name: it never holds a separator, and cannot be empty, `.` or `..`.
 PLAIN_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,79}")
 HOOK_IDS = frozenset({"orient", "operations", "knowledge_first"})
+# A repair takes milliseconds. A call waits this long for another call's repair of the same mode,
+# and then says the mode could not be recovered, so a stuck holder never hangs a hook.
+REPAIR_WAIT_SECONDS = 2.0
+_POLL_SECONDS = 0.005
 
 
 @dataclass(frozen=True)
@@ -272,6 +279,24 @@ def _moment(text: str) -> datetime | None:
 
 
 def _resolved(repo: Path) -> Resolution:
+    """A healthy mode is read without the lock. Anything else is repaired under it."""
+    match _pointer(repo):
+        case Ok(Active() as current) if _running(repo, current.session_id):
+            return Resolution(current)
+        case Ok(None) if not work_sessions.recording_mode(repo):
+            return Resolution(None)
+        case _:
+            return _repaired_alone(repo)
+
+
+def _repaired_alone(repo: Path) -> Resolution:
+    """Hooks of parallel tool calls each find the same mode needing the same repair, so one repairs
+    at a time. What this call read before the lock may be stale, so the repair reads it again."""
+    with _repair_lock(repo):
+        return _mended(repo)
+
+
+def _mended(repo: Path) -> Resolution:
     match _pointer(repo):
         case Ok(Active() as current):
             return _alive(repo, current)
@@ -280,6 +305,28 @@ def _resolved(repo: Path) -> Resolution:
         case _:
             _set_aside(repo)
             return _regenerated(repo)
+
+
+@contextmanager
+def _repair_lock(repo: Path) -> Iterator[None]:
+    """Hold the repair lock: a file under the state folder, locked for as long as it is open."""
+    path = state.mode_lock(repo)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.open("a") as handle:
+        _acquire(handle)
+        yield
+
+
+def _acquire(handle: Any) -> None:
+    deadline = time.monotonic() + REPAIR_WAIT_SECONDS
+    while True:
+        try:
+            fcntl.flock(handle, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            return
+        except BlockingIOError:
+            if time.monotonic() >= deadline:
+                raise TimeoutError("another call is repairing the mode") from None
+            time.sleep(_POLL_SECONDS)
 
 
 def _pointer(repo: Path) -> Result[Active | None]:
@@ -346,14 +393,26 @@ def _alive(repo: Path, current: Active) -> Resolution:
 
 
 def _regenerated(repo: Path) -> Resolution:
-    """No usable pointer: it comes back from the one unended session that records a mode."""
+    """No usable pointer: it comes back from the oldest unended session that records a mode, and
+    any others, which a failed call left behind, end."""
     match work_sessions.recording_mode(repo):
         case ():
             return Resolution(None)
-        case (session,):
-            return _repaired(session.mode, _adopted(repo, session))
-        case (first, *_):
-            return Resolution(None, _unrecovered(first.mode))
+        case (oldest, *others):
+            return _repaired(
+                oldest.mode,
+                bind(_ended(repo, others), lambda _: _adopted(repo, oldest)),
+            )
+
+
+def _ended(repo: Path, sessions: list[work_sessions.Session]) -> Result[None]:
+    return fmap(
+        sequence(
+            work_sessions.transition(repo, session.id, "complete")
+            for session in sessions
+        ),
+        lambda _: None,
+    )
 
 
 def _adopted(repo: Path, session: work_sessions.Session) -> Result[Active]:

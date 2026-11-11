@@ -636,17 +636,25 @@ def test_the_prompt_after_a_broken_pointer_shows_the_mode_the_notice_and_keeps_t
     assert kept.read_bytes() == b"\xff\xfe"
 
 
-def two_live_mode_sessions(repo: Path) -> modes.Active:
+def unrecoverable_mode(repo: Path, monkeypatch: pytest.MonkeyPatch) -> modes.Active:
+    """A mode whose pointer is gone and cannot be written back: every call fails to repair it."""
     active = entered(modes.enter(repo, "fixture"))
-    assert isinstance(work_sessions.create(repo, "other", mode="fixture"), Ok)
     state.mode_record(repo).unlink()
+    write_json = state.write_json
+
+    def refuse(path: Path, payload: dict) -> None:
+        if path == state.mode_record(repo):
+            raise OSError("the pointer cannot be written")
+        write_json(path, payload)
+
+    monkeypatch.setattr(state, "write_json", refuse)
     return active
 
 
 def test_a_mode_that_could_not_be_recovered_is_said_on_every_call_and_denies_nothing(
-    repo: Path, capsys: pytest.CaptureFixture[str]
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    active = two_live_mode_sessions(repo)
+    active = unrecoverable_mode(repo, monkeypatch)
 
     for _ in range(2):
         out = pre_tool_output(repo, UNLISTED_READ, capsys)
@@ -659,9 +667,9 @@ def test_a_mode_that_could_not_be_recovered_is_said_on_every_call_and_denies_not
 
 
 def test_the_prompt_says_when_the_mode_could_not_be_recovered(
-    repo: Path, capsys: pytest.CaptureFixture[str]
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    two_live_mode_sessions(repo)
+    unrecoverable_mode(repo, monkeypatch)
 
     hook.handle_prompt(
         "claude", {"cwd": str(repo), "prompt": "what next?", "session_id": "chat-a"}
@@ -690,9 +698,9 @@ def test_a_repair_that_fails_without_a_known_mode_is_still_said_on_the_call(
 
 
 def test_leaving_ends_a_mode_that_could_not_be_recovered(
-    repo: Path, capsys: pytest.CaptureFixture[str]
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    two_live_mode_sessions(repo)
+    unrecoverable_mode(repo, monkeypatch)
     assert pre_tool_output(repo, UNLISTED_READ, capsys) != ""
 
     assert isinstance(modes.leave(repo), Ok)

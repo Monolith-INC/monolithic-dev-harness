@@ -422,18 +422,6 @@ def test_an_ended_or_missing_mode_session_is_replaced_for_the_same_mode_and_root
 # a repair that cannot be done
 
 
-def test_two_live_mode_sessions_mean_no_mode_and_a_failure_notice(repo: Path) -> None:
-    entered(modes.enter(repo, "fixture"))
-    assert isinstance(work_sessions.create(repo, "other", mode="fixture"), Ok)
-    state.mode_record(repo).unlink()
-
-    resolved = modes.resolve(repo)
-
-    assert resolved == modes.Resolution(None, UNRECOVERED)
-    assert not state.mode_record(repo).exists()
-    assert modes.resolve(repo) == resolved
-
-
 def test_a_repair_that_cannot_be_written_means_no_mode_for_that_call(
     repo: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -481,22 +469,36 @@ def test_an_unexpected_failure_reading_the_mode_is_said_never_swallowed(
     assert "RuntimeError" not in modes.resolve(repo).notice
 
 
-def test_enter_is_refused_while_a_mode_cannot_be_recovered(repo: Path) -> None:
+def refuse_the_pointer(project: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """From now on the pointer cannot be written, so a mode that needs it repaired cannot be."""
+    write_json = state.write_json
+
+    def refuse(path: Path, payload: dict) -> None:
+        if path == state.mode_record(project):
+            raise OSError("the pointer cannot be written")
+        write_json(path, payload)
+
+    monkeypatch.setattr(state, "write_json", refuse)
+
+
+def test_enter_is_refused_while_a_mode_cannot_be_recovered(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     entered(modes.enter(repo, "fixture"))
-    assert isinstance(work_sessions.create(repo, "other", mode="fixture"), Ok)
     state.mode_record(repo).unlink()
+    refuse_the_pointer(repo, monkeypatch)
 
     code, message = refusal(modes.enter(repo, "fixture"))
 
     assert code == "mode_active"
     assert "harness modes leave" in message
-    assert len(work_sessions.recording_mode(repo)) == 2
+    assert len(work_sessions.recording_mode(repo)) == 1
 
 
 # leaving, whatever state the mode is in
 
 
-def test_leave_ends_every_mode_session_when_the_mode_cannot_be_recovered(
+def test_leave_ends_every_mode_session_even_when_several_are_live(
     repo: Path,
 ) -> None:
     first = entered(modes.enter(repo, "fixture"))
