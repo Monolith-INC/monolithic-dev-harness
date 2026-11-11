@@ -76,7 +76,7 @@ def pre_tool_reason(
     out = capsys.readouterr().out.strip()
     if not out:
         return None
-    return json.loads(out)["hookSpecificOutput"]["permissionDecisionReason"]
+    return json.loads(out)["hookSpecificOutput"].get("permissionDecisionReason")
 
 
 # orient
@@ -307,6 +307,91 @@ def test_a_mode_session_that_cannot_be_bound_does_not_block_the_call(
     assert pre_tool_reason(repo, LISTED_READ, capsys, "chat-a") is None
 
     assert bound_to(repo, "chat-a") is None
+
+
+def test_a_conversation_that_left_a_mode_joins_the_next_mode_session(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    pre_tool_reason(repo, LISTED_READ, capsys, "chat-a")
+    assert isinstance(modes.leave(repo), Ok)
+    second = entered(modes.enter(repo, "fixture"))
+
+    assert pre_tool_reason(repo, LISTED_READ, capsys, "chat-a") is None
+    assert bound_to(repo, "chat-a") == second.session_id
+    hook.handle_prompt(
+        "claude",
+        {"cwd": str(repo), "prompt": "approve HB-ABCD1234", "session_id": "chat-a"},
+    )
+    capsys.readouterr()
+
+    assert pre_tool_reason(repo, LISTED, capsys, "chat-a") is None
+
+
+def test_a_damaged_link_is_neither_replaced_nor_moved_by_the_mode_session(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    link = work_session_context._path(repo, "claude", "chat-a")
+    assert isinstance(link, Ok)
+    link.value.parent.mkdir(parents=True, exist_ok=True)
+    link.value.write_text("{damaged", encoding="utf-8")
+    hook.handle_pre_tool(
+        "claude",
+        "pre-tool",
+        {
+            "cwd": str(repo),
+            "tool_name": "Read",
+            "tool_input": {"file_path": str(repo / "notes.txt")},
+            "session_id": "chat-a",
+        },
+    )
+    assert capsys.readouterr().out.strip() == ""
+
+    assert link.value.read_text(encoding="utf-8") == "{damaged"
+    assert not list(link.value.parent.glob("*.damaged-*.json"))
+
+
+def test_an_unreadable_mode_record_leaves_the_binding_as_it_was(repo: Path) -> None:
+    entered(modes.enter(repo, "fixture"))
+    state.mode_record(repo).write_bytes(b"\xff\xfe")
+
+    assert hook._join_mode(repo, "claude", "chat-a", None, Ok(None), []) is None
+
+
+def pre_tool_output(
+    project: Path,
+    tool: str,
+    capsys: pytest.CaptureFixture[str],
+    conversation: str,
+) -> str:
+    """The raw text the hook prints for a gateway call."""
+    hook.handle_pre_tool(
+        "claude",
+        "pre-tool",
+        {
+            "cwd": str(project),
+            "tool_name": GATEWAY + tool,
+            "tool_input": {},
+            "session_id": conversation,
+        },
+    )
+    return capsys.readouterr().out.strip()
+
+
+def test_a_mode_session_that_cannot_be_joined_allows_the_call_with_a_notice(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    assert isinstance(work_sessions.transition(repo, active.session_id, "pause"), Ok)
+
+    out = pre_tool_output(repo, LISTED_READ, capsys, "chat-a")
+
+    context = json.loads(out)["hookSpecificOutput"]["additionalContext"]
+    assert "not in the fixture mode's work session" in context
+    assert "harness modes leave" in context
+    assert active.session_id not in out
+    assert "deny" not in out
 
 
 # the controls a mode never touches

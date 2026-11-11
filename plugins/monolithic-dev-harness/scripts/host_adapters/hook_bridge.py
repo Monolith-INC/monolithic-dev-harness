@@ -294,6 +294,18 @@ def format_stop(reason: str) -> str:
     return json.dumps({"decision": "block", "reason": reason})
 
 
+def format_pre_tool_notice(note: str) -> str:
+    """An allowed tool call's note for the agent: context only, no permission decision."""
+    return json.dumps(
+        {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "additionalContext": note,
+            }
+        }
+    )
+
+
 def format_prompt(host: str, notes: list[str]) -> str | None:
     match host, "\n".join(notes):
         case "cursor", _:

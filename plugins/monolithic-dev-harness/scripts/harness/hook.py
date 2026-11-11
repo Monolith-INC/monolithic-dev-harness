@@ -162,6 +162,19 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 
 
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
+    """Check one tool call. An allowed call that carries a note gets the note as its context."""
+    notes: list[str] = []
+    printed = io.StringIO()
+    with contextlib.redirect_stdout(printed):
+        code = _pre_tool(host, event, payload, notes)
+    output = printed.getvalue()
+    if not output and notes:
+        output = hook_bridge.format_pre_tool_notice(" ".join(notes)) + "\n"
+    sys.stdout.write(output)
+    return code
+
+
+def _pre_tool(host: str, event: str, payload: dict[str, Any], notes: list[str]) -> int:
     repo = _workspace(payload, host)
     match state.harness_mode(repo):
         case "suspended":
@@ -212,7 +225,7 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
     work_session_id = context.value if isinstance(context, Ok) else None
     if not settings.governed(repo):
         # Not a governed repository: the harness is opt-in per repo (bootstrap writes the settings).
-        match _bind(repo, host, payload, work_session_id, request):
+        match _bind(repo, host, payload, work_session_id, request, notes):
             case Err(failure):
                 _emit_decision(
                     host, rules.Decision.deny("work-session-context", failure.message)
@@ -228,7 +241,7 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
         signal.setitimer(signal.ITIMER_REAL, RULES_BUDGET_SECONDS)
     try:
         return _governed_pre_tool(
-            host, event, payload, call, repo, work_session_id, request
+            host, event, payload, call, repo, work_session_id, request, notes
         )
     except (Exception, _OutOfTime) as exc:
         # Any failure of the rules or the workflow policy, including a crash or running out of
@@ -250,6 +263,7 @@ def _governed_pre_tool(
     repo: Path,
     work_session_id: str | None,
     request: tuple[str, str] | None,
+    notes: list[str],
 ) -> int:
     loaded = settings.load(repo)
     match loaded:
@@ -271,7 +285,7 @@ def _governed_pre_tool(
                     return 0
                 case _:
                     pass
-            match _bind(repo, host, payload, work_session_id, request):
+            match _bind(repo, host, payload, work_session_id, request, notes):
                 case Err(failure):
                     _emit_decision(
                         host,
@@ -450,6 +464,7 @@ def _bind(
     payload: dict[str, Any],
     current: str | None,
     request: tuple[str, str] | None,
+    notes: list[str],
 ) -> Result[object]:
     """Bind the conversation to the session an allowed command chose; a failure binds nothing."""
     match process_channel.is_subagent(host, payload):
@@ -465,12 +480,15 @@ def _bind(
     from host_adapters import native_session_id, startup_context
 
     conversation = native_session_id(host, payload)
+    linked = work_session_context.for_payload(repo, host, payload)
     return bind(
         bind(
             work_session_context.bind_requested(
                 repo, host, conversation, current, request
             ),
-            lambda bound: Ok(_join_mode(repo, host, conversation, bound)),
+            lambda bound: Ok(
+                _join_mode(repo, host, conversation, bound, linked, notes)
+            ),
         ),
         lambda _: startup_context.arm(
             repo, host, payload, _tool_call(host, "pre-tool", payload).command, repo
@@ -479,21 +497,42 @@ def _bind(
 
 
 def _join_mode(
-    repo: Path, host: str, conversation: str, bound: str | None
+    repo: Path,
+    host: str,
+    conversation: str,
+    bound: str | None,
+    linked: Result[str | None],
+    notes: list[str],
 ) -> str | None:
-    """An unbound conversation joins the active mode's session, without a question.
+    """A conversation with no live session joins the active mode's session, without a question.
 
-    A mode session that cannot be chosen (it was paused, say) leaves the conversation unbound
-    rather than refusing the call: the mode must never be what locks the user out.
+    Only a cleanly read link joins: a damaged one keeps its refusal. A mode session that cannot be
+    chosen (it was paused, say) leaves the binding as it was rather than refusing the call: the
+    mode must never be what locks the user out, so the agent is told instead.
     """
-    mode = modes.active(repo) if bound is None and conversation else None
-    if mode is None:
+    if not conversation or not isinstance(linked, Ok) or not _joinable(repo, bound):
         return bound
+    match attempt(
+        lambda: modes.active(repo), "mode_unreadable", "the active mode cannot be read"
+    ):
+        case Ok(None) | Err():
+            return bound
+        case Ok(mode):
+            pass
     match work_session_context.bind_session(repo, host, conversation, mode.session_id):
         case Ok(identifier):
             return identifier
         case _:
-            return None
+            notes.append(
+                f"This conversation is not in the {mode.mode} mode's work session; "
+                "run `harness modes leave`, or resume that session."
+            )
+            return bound
+
+
+def _joinable(repo: Path, bound: str | None) -> bool:
+    """No session yet, or one that has ended: nothing the conversation still needs is kept."""
+    return bound is None or work_sessions.ended(repo, bound)
 
 
 def handle_startup(host: str, payload: dict[str, Any]) -> int:
