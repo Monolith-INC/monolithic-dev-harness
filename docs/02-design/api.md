@@ -260,25 +260,29 @@ story tasks; `ids.pattern`, `ids.branch_key` (with a named group `id`), and ever
 | `tools` | provider tool names the adapter calls |
 | `ids` | `pattern`, `branch_key`, `mention[]`, `mentions_link` |
 | `writes` | `{server, tools[]}`: host tools that change the tracker (`*` matches any run) |
-| `planning` | `{replies[]}` of `{key, description}`: the provider replies its planning reads, and how to fetch each |
+| `optional` | operations beyond the base surface the tracker offers natively (`remove_artifact`) |
 | `attachments`, `text_format` | where artifacts go; markdown, html, or plain |
 
 ### Operations
 
 `adapter.py` exports `adapter(context: AdapterContext) -> TrackerOps`
 (`scripts/integrations/contracts.py`). `TrackerOps` holds `get_work_item`, `search_work_items`,
-`create_work_item`, `transition_work_item`, `list_children`, `list_artifacts`, `add_artifact`,
-`link_development_artifact`, and the planning operations `read_iteration`, `iteration_items`, and
-`hour_fields` (the sprint model is in `scripts/integrations/planning.py`; the sprint reference
-`current`, or none, means the active sprint). Every tracker provides all of them; each returns
-`Ok` or `Err` and never raises for an expected condition.
+`create_work_item`, `update_work_item` (including a new parent, the whole tag list and a priority
+from 1 urgent to 4 low), `transition_work_item`, `list_children`, `list_artifacts`, `add_artifact`,
+`revise_artifact`, `link_development_artifact`, and the sprint operations `current_sprint`,
+`sprint_capacity` and `sprint_items`, which the adapter reads from its tracker itself (the sprint
+model is in `scripts/integrations/planning.py`; the sprint reference `current`, or none, means the
+running sprint). This is the base surface: every tracker provides all of it, and each operation
+returns `Ok` or `Err` and never raises for an expected condition. `TrackerOps.optional` holds what a
+tracker offers beyond it, only where the tracker has it natively, matching `optional` in its
+`tracker.json` (Article 14 of the constitution).
 
 ## Gateway tools — `workflow-integrations`
 
 | Tool | Write (needs approval) |
 | --- | --- |
-| `tracker_describe`, `tracker_get_work_item`, `tracker_search_work_items`, `tracker_list_children`, `tracker_list_artifacts` | no |
-| `tracker_create_work_item`, `tracker_update_work_item`, `tracker_transition_work_item`, `tracker_publish_artifact`, `tracker_link_development_artifact` | yes |
+| `tracker_describe`, `tracker_get_work_item`, `tracker_search_work_items`, `tracker_list_children`, `tracker_list_artifacts`, `tracker_current_sprint`, `tracker_sprint_items`, `tracker_sprint_capacity` | no |
+| `tracker_create_work_item`, `tracker_update_work_item`, `tracker_transition_work_item`, `tracker_publish_artifact`, `tracker_revise_artifact`, `tracker_remove_artifact` (only where the tracker offers it), `tracker_link_development_artifact` | yes |
 | `scm_get_pull_request`, `scm_list_review_threads` | no |
 | `scm_create_pull_request` (drafts only), `scm_reply_to_thread`, `scm_create_review_thread`, `scm_update_thread_comment`, `scm_set_thread_status`, `scm_link_work_item` | yes |
 | `workflow_tracking_status`, `workflow_resume_tracker` | no |

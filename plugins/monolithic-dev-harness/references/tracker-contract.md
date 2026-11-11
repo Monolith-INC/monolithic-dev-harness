@@ -14,14 +14,19 @@ Before choosing a hierarchy, a destination, a provider call, or an id format, ca
 | `states` | the provider state for each harness state: backlog, ready, in_progress, done, canceled |
 | `ids` | how an id looks (`pattern`), how a branch carries it (`branch_key`), which text links it (`mention`, `mentions_link`) |
 | `writes` | the host tools that change the tracker; each needs an approval window |
-| `planning` | the replies sprint planning reads (`replies[].key`), and how to fetch each (`description`) |
+| `optional` | operations beyond the base surface this tracker offers (`remove_artifact`); its tools appear only then |
 | `text_format` | markdown, html, or plain, for descriptions and comments |
 
 Use the harness kinds and states with the gateway (`tracker_create_work_item`,
 `tracker_update_work_item`, `tracker_transition_work_item`); the adapter maps them.
 `tracker_update_work_item` changes only the fields it names (title, description, story points, a
-Task's hours, assignee, sprint) and reads the item back; a tracker that keeps no hours refuses a
-change of hours. Show people the provider's own names
+Task's hours, assignee, sprint, `parentRef` to move it under another parent, `tags` as the whole
+tag list, `priority` from 1 urgent to 4 low) and reads the item back; a tracker that keeps no hours
+refuses a change of hours. Ask the harness for sprints, never the tracker's own tools:
+`tracker_current_sprint` gives the running sprint and the `path` an item's `iteration` takes to
+join it, `tracker_sprint_items` its items, `tracker_sprint_capacity` its team and capacity.
+`tracker_revise_artifact` rewrites a published artifact in place; `tracker_remove_artifact` is
+offered only by trackers that can remove one. Show people the provider's own names
 from `kinds` and `states`. Nothing about a particular tracker is part of the workflow: what one
 tracker needs beyond this contract lives in its adapter.
 

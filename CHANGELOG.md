@@ -19,6 +19,28 @@ All notable changes to this project are documented here. The format follows
   backlog. If the sprint cannot be read, the item is created without one.
   `tracker_create_work_item` takes `storyPoints`, so a Story is created with its estimate. Story
   points are whole numbers.
+- Every tracker has the same base surface (Article 14 of the constitution):
+  `tracker_update_work_item` takes `parentRef` (move an item under another parent), `tags` (the
+  whole tag list) and `priority` (1 urgent to 4 low); `tracker_current_sprint`,
+  `tracker_sprint_items` and `tracker_sprint_capacity` read sprints; `tracker_revise_artifact`
+  rewrites a published document in place. Azure DevOps, Linear and the local tracker implement all
+  of it, and one contract scenario runs against all three.
+- A tracker can offer what goes beyond the base surface where it has it natively, listed under
+  `optional` in its `tracker.json`. `tracker_remove_artifact` is offered by Linear and the local
+  tracker; Azure DevOps cannot delete a comment, so it does not offer it, and the tool is not
+  listed there.
+
+### Changed
+
+- Sprint planning reads the sprint through the selected tracker, via the host gateway, instead of
+  replies an agent fetched from the tracker's own tools and pasted in. Capacity is checked when a
+  sprint is named (`--iteration current`, or `iteration_ref` in the Task list). A planning run never
+  starts its own tracker server, so it never asks to sign in again.
+
+### Removed
+
+- `planning.replies` in `tracker.json`, the `--replies` option of `capacity` and
+  `estimate-breakdown`, and the `read_iteration` and `iteration_items` tracker operations.
 
 ### Fixed
 
