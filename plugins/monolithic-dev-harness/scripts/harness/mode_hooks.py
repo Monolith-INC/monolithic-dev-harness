@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from core.result import Err, Ok, Result
+from core.result import Err, Ok, Result, attempt
 
 from . import modes, rules
 
@@ -16,14 +16,27 @@ GATEWAY_SERVER = "workflow-integrations"
 
 
 def orient(repo: Path) -> str | None:
-    match _hooked(repo, "orient"):
-        case None:
+    """The mode's rules for the prompt, or None.
+
+    Guidance only: when it cannot be given, the prompt goes on without it, so a mode never stops
+    the approvals and revokes the same prompt carries.
+    """
+    match attempt(
+        lambda: _orientation(repo), "orient_failed", "mode rules unavailable"
+    ):
+        case Ok(text):
+            return text
+        case Err(_):
             return None
+
+
+def _orientation(repo: Path) -> str | None:
+    match _hooked(repo, "orient"):
         case Ok(mode):
             modes.touch(repo)
             rules_text = (mode.root / "rules.md").read_text(encoding="utf-8")
             return f"[harness] mode: {mode.name}. Rules:\n{rules_text}"
-        case Err(_):
+        case _:
             return None
 
 

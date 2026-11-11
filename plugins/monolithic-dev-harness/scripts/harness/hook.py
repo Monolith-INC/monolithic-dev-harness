@@ -719,8 +719,6 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         return 0
     window = _window(repo)
     notes.extend(_tracker_reply_notes(repo, prompt))
-    if orientation := mode_hooks.orient(repo):
-        notes.append(orientation)
     if REVOKE_RE.search(prompt):
         notes.append(
             f"[harness] revoked {state.revoke_approvals(repo)} open approval window(s)."
@@ -742,6 +740,8 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         notes.append(
             f"[harness] manual check {name} recorded for the code as it is now ({code[:12]})."
         )
+    if orientation := mode_hooks.orient(repo):
+        notes.append(orientation)
     if output := hook_bridge.format_prompt(host, notes):
         print(output)
     return 0

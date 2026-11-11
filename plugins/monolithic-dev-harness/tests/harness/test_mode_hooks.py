@@ -128,6 +128,38 @@ def test_the_prompt_carries_the_mode_rules(
     assert "[harness] mode: fixture. Rules:" in capsys.readouterr().out
 
 
+def break_rules_file(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (repo.parent / "modes" / "fixture" / "rules.md").write_bytes(b"\xff\xfe")
+
+
+def break_touch(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def unwritable(_: Path) -> None:
+        raise OSError("mode.json cannot be written")
+
+    monkeypatch.setattr(modes, "touch", unwritable)
+
+
+@pytest.mark.parametrize("breakage", [break_rules_file, break_touch])
+def test_a_failing_orient_drops_neither_the_prompt_nor_its_approval(
+    repo: Path,
+    capsys: pytest.CaptureFixture[str],
+    monkeypatch: pytest.MonkeyPatch,
+    breakage,
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    breakage(repo, monkeypatch)
+
+    hook.handle_prompt(
+        "claude",
+        {"cwd": str(repo), "prompt": "approve HB-ABCD1234", "session_id": "chat-a"},
+    )
+
+    out = capsys.readouterr().out
+    assert "approval HB-ABCD1234 recorded" in out
+    assert "[harness] mode:" not in out
+    assert state.open_approvals(repo, active.session_id)
+
+
 # operations
 
 
