@@ -93,3 +93,45 @@ class AzureBoard:
             else []
         )
         return {"workItems": [{"id": n} for n in numbers]}
+
+
+class LinearWorkspace:
+    """Linear issues as the hosted MCP server's issue tools read and write them."""
+
+    def __init__(self) -> None:
+        self.issues: dict[str, dict[str, Any]] = {}
+        self.answers = {
+            "get_issue": lambda args: self.issues[args["id"]],
+            "list_issues": self.list,
+            "save_issue": self.save,
+            "list_comments": lambda args: [],
+        }
+
+    def save(self, args: dict[str, Any]) -> Any:
+        if "id" not in args:
+            identifier = f"ENG-{len(self.issues) + 1}"
+            self.issues[identifier] = {
+                "identifier": identifier,
+                "state": "Backlog",
+                "labels": [],
+            }
+            args = {**args, "id": identifier}
+        issue = self.issues[args["id"]]
+        for name, value in args.items():
+            if name in (
+                "title",
+                "description",
+                "labels",
+                "parentId",
+                "priority",
+                "state",
+            ):
+                issue[name] = list(value) if name == "labels" else value
+        return issue
+
+    def list(self, args: dict[str, Any]) -> Any:
+        return [
+            issue
+            for issue in self.issues.values()
+            if "parentId" not in args or issue.get("parentId") == args["parentId"]
+        ]

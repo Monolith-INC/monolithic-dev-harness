@@ -13,10 +13,11 @@ from core.result import Err, Ok
 from integrations.contracts import TrackerOps, WorkItemChanges, WorkItemKind
 
 from .fakes import FakeTransport, ops
-from .trackers import AzureBoard
+from .trackers import AzureBoard, LinearWorkspace
 
-ADAPTERS = ["local", "azure-devops"]
+ADAPTERS = ["local", "azure-devops", "linear"]
 AZURE = {"organization": "o", "project": "proj"}
+LINEAR = {"team": "ENG"}
 
 
 @pytest.fixture(params=ADAPTERS)
@@ -26,6 +27,8 @@ def tracker(request, tmp_path: Path) -> TrackerOps:
             return ops("local", {}, repo=tmp_path)
         case "azure-devops":
             return ops("azure-devops", AZURE, FakeTransport(AzureBoard().answers))
+        case "linear":
+            return ops("linear", LINEAR, FakeTransport(LinearWorkspace().answers))
     raise AssertionError(request.param)
 
 
@@ -110,3 +113,26 @@ def test_azure_tags_are_written_joined() -> None:
         "path": "/fields/System.Tags",
         "value": "api; ux",
     } in call.sent("wit_work_item_write")[-1]["updates"]
+
+
+def _linear() -> tuple[TrackerOps, FakeTransport]:
+    call = FakeTransport(LinearWorkspace().answers)
+    return ops("linear", LINEAR, call), call
+
+
+def test_linear_tags_keep_the_kind_label() -> None:
+    linear, call = _linear()
+    _, story = _story_under_feature(linear)
+    linear.update_work_item(story.key, WorkItemChanges(tags=("api",)))
+    labels = call.sent("save_issue")[-1]["labels"]
+    assert set(labels) >= {"api"} and len(labels) == 2
+    assert linear.get_work_item(story.key).value.kind is WorkItemKind.USER_STORY
+    assert linear.get_work_item(story.key).value.tags == ("api",)
+
+
+def test_linear_empty_tags_keep_only_the_kind_label() -> None:
+    linear, call = _linear()
+    _, story = _story_under_feature(linear)
+    linear.update_work_item(story.key, WorkItemChanges(tags=()))
+    assert len(call.sent("save_issue")[-1]["labels"]) == 1
+    assert linear.get_work_item(story.key).value.kind is WorkItemKind.USER_STORY

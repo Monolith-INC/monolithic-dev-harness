@@ -4,6 +4,9 @@ Issues are addressed by their identifier (`ENG-12`). The harness work kind trave
 label named in the manifest's `kinds`; artifacts and development links are issue comments.
 A sprint is a cycle: Linear knows its dates and each issue's point estimate, but no team capacity
 and no hours, so planning reports that and names no hour fields.
+
+The `save_issue` arguments for parent (`parentId`), labels and priority follow the hosted server's
+documented tool names; their exact shapes are confirmed only by a Linear trial.
 """
 
 from __future__ import annotations
@@ -68,7 +71,24 @@ def adapter(context: AdapterContext) -> TrackerOps:
         ),
         update_work_item=lambda ref, changes: bind(
             changed_fields(changes, FIELDS, no_hours),
-            lambda fields: bind(call("save", {"id": ref.upper(), **fields}), issue),
+            lambda fields: bind(
+                _with_kind_label(call, context, ref, fields),
+                lambda fields: bind(
+                    call(
+                        "save",
+                        {
+                            "id": ref.upper(),
+                            **fields,
+                            **(
+                                {"parentId": changes.parent.upper()}
+                                if changes.parent
+                                else {}
+                            ),
+                        },
+                    ),
+                    issue,
+                ),
+            ),
         ),
         transition_work_item=lambda ref, state: bind(
             call("save", {"id": ref.upper(), "state": context.manifest.states[state]}),
@@ -153,7 +173,35 @@ def _item(context: AdapterContext, record: Mapping[str, Any]) -> WorkItem:
         url=payloads.text(record, "url"),
         description=payloads.text(record, "description"),
         parent_id=_parent(record),
+        tags=tuple(
+            label
+            for label in _names(record.get("labels"))
+            if payloads.normalized(label)
+            not in {payloads.normalized(name) for name in manifest.kinds.values()}
+        ),
+        priority=_priority(record.get("priority")),
         provider_data=record,
+    )
+
+
+def _priority(value: Any) -> int | None:
+    """Linear's 1 (urgent) … 4 (low); its 0 means no priority."""
+    number = payloads.text(value, "value") if isinstance(value, dict) else value
+    return int(number) if str(number or "").isdigit() and int(number) > 0 else None
+
+
+def _with_kind_label(
+    call, context: AdapterContext, ref: str, fields: dict[str, Any]
+) -> Result[dict[str, Any]]:
+    """The fields with the issue's own work-kind label added to a new tag list: the kind travels
+    as a label, so replacing the labels must keep it."""
+    if "labels" not in fields:
+        return Ok(fields)
+    return bind(
+        bind(call("get", {"id": ref.upper()}), lambda reply: _issue(context, reply)),
+        lambda item: Ok(
+            {**fields, "labels": [*fields["labels"], context.manifest.kinds[item.kind]]}
+        ),
     )
 
 
