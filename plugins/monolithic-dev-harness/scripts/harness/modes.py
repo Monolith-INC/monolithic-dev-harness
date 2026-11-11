@@ -309,10 +309,15 @@ def _moment(text: str) -> datetime | None:
     return moment if moment.tzinfo is not None else None
 
 
+def suspended(repo: Path) -> bool:
+    """The harness governs here and its checks are suspended, so no mode is in force."""
+    return settings.governed(repo) and state.harness_mode(repo) == "suspended"
+
+
 def _in_reach(repo: Path) -> bool:
     """A mode is read, and repaired with writes, only where the harness governs and is not
     suspended: elsewhere it does nothing, so nothing of it is written."""
-    return settings.governed(repo) and state.harness_mode(repo) != "suspended"
+    return settings.governed(repo) and not suspended(repo)
 
 
 def _resolved(repo: Path) -> Resolution:

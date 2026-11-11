@@ -933,6 +933,53 @@ def test_cli_status_of_a_healthy_mode_prints_no_line_to_stderr(
     assert capsys.readouterr().err == ""
 
 
+SUSPENDED_LINE = (
+    "The harness is suspended, so no mode is in force; type `harness resume` in the chat to "
+    "restore its checks."
+)
+
+
+def test_cli_status_says_the_harness_is_suspended_instead_of_printing_nothing(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    state.set_harness_mode(repo, "suspended")
+    capsys.readouterr()
+
+    assert cli.main(["modes", "status", "--repo", str(repo)]) == 0
+
+    out, error = capsys.readouterr()
+    assert out == ""
+    assert error.strip() == SUSPENDED_LINE
+
+
+def test_cli_status_shows_the_mode_again_once_the_harness_is_resumed(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    state.set_harness_mode(repo, "suspended")
+    state.set_harness_mode(repo, "active")
+    capsys.readouterr()
+
+    assert cli.main(["modes", "status", "--repo", str(repo)]) == 0
+
+    out, error = capsys.readouterr()
+    assert json.loads(out)["mode"] == "fixture"
+    assert error == ""
+
+
+def test_cli_status_says_nothing_of_suspension_where_the_harness_does_not_govern(
+    repo: Path, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    bare = tmp_path / "bare"
+    bare.mkdir()
+    state.set_harness_mode(bare, "suspended")
+
+    assert cli.main(["modes", "status", "--repo", str(bare)]) == 0
+
+    assert capsys.readouterr() == ("", "")
+
+
 def test_cli_status_is_silent_for_a_broken_pointer_no_session_backs(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:

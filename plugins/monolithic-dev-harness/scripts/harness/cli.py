@@ -606,8 +606,18 @@ def knowledge_command(args: argparse.Namespace) -> int:
     return 0
 
 
+SUSPENDED = (
+    "The harness is suspended, so no mode is in force; type `harness resume` in the chat to "
+    "restore its checks."
+)
+
+
 def _mode_status(repo: Path) -> Ok:
-    """Read the mode, and say to the user what that read repaired or could not repair."""
+    """Read the mode, and say to the user what that read repaired or could not repair, or that the
+    harness is suspended, which is why there is no mode to show."""
+    if modes.suspended(repo):
+        print(SUSPENDED, file=sys.stderr)
+        return Ok(None)
     read = modes.resolve(repo)
     if read.notice:
         print(read.notice, file=sys.stderr)
