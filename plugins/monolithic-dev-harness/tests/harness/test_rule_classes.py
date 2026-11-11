@@ -11,7 +11,7 @@ import ast
 import inspect
 import json
 
-from harness import rules, sessions
+from harness import mode_hooks, rules, sessions
 from tests.harness.test_hook_rules import AZ, HookTestCase, sh
 
 
@@ -19,13 +19,14 @@ def rule_names_evaluate_can_report() -> set[str]:
     """Every name a rule that `rules.evaluate` runs passes to `Decision.deny`.
 
     Read from the source, so a rule added to `evaluate` (or a new name reported by a helper a rule
-    calls) shows up here without anyone remembering to list it.
+    calls) shows up here without anyone remembering to list it. A rule may live in `mode_hooks`
+    and be reached as `mode_hooks.<name>`, so both modules are read.
     """
-    functions = {
-        node.name: node
-        for node in ast.parse(inspect.getsource(rules)).body
-        if isinstance(node, ast.FunctionDef)
-    }
+    functions: dict[str, ast.FunctionDef] = {}
+    for module in (rules, mode_hooks):
+        for node in ast.parse(inspect.getsource(module)).body:
+            if isinstance(node, ast.FunctionDef):
+                functions[node.name] = node
     reachable: set[str] = set()
     pending = ["evaluate"]
     while pending:
@@ -34,9 +35,10 @@ def rule_names_evaluate_can_report() -> set[str]:
             continue
         reachable.add(name)
         pending.extend(
-            node.id
+            node.id if isinstance(node, ast.Name) else node.attr
             for node in ast.walk(functions[name])
-            if isinstance(node, ast.Name) and node.id in functions
+            if (isinstance(node, ast.Name) and node.id in functions)
+            or (isinstance(node, ast.Attribute) and node.attr in functions)
         )
     names: set[str] = set()
     for name in reachable:

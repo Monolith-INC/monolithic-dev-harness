@@ -13,6 +13,7 @@ draft-reviewed-prs  Publishing a draft pull request and voting are left to human
 history-preserved   With Git-based delivery, branch history is never rewritten: no rebase, squash merge, or
                     force-push.
 feature-branch      With Git-based delivery, a Feature's Story pull request targets the Feature branch.
+mode-operations     While a mode is active, a gateway tool the mode does not list is refused (`mode_hooks`).
 
 Tests with code and guarded-path evidence are completion requirements in the workflow catalog
 (`harness.workflow_requirements`), checked before a work item is done; no rule reads a commit.
@@ -38,6 +39,7 @@ from . import (
     gitstate,
     globs,
     local_tracker,
+    mode_hooks,
     sessions,
     shellscan,
     state,
@@ -1093,6 +1095,7 @@ CLASS: Mapping[str, Literal["always", "mode"]] = MappingProxyType(
         "history-preserved": "always",
         "approval-required": "always",
         "generated-files": "always",
+        "mode-operations": "mode",
     }
 )
 
@@ -1118,6 +1121,7 @@ def evaluate(
                 lambda: _delivery(settings, lambda: rule_history_preserved(call)),
                 lambda: rule_approval_required(call, repo, policy, work_session_id),
                 lambda: rule_generated_files(call, repo, settings),
+                lambda: mode_hooks.operations(call, repo) or Decision.allow(),
             )
             if not (decision := rule()).allowed
         ),
