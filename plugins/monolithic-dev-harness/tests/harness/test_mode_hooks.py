@@ -600,6 +600,24 @@ def test_the_prompt_tells_the_agent_when_the_mode_was_recovered(
     assert active.session_id not in out
 
 
+def test_the_prompt_after_a_broken_pointer_shows_the_mode_the_notice_and_keeps_the_file(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    state.mode_record(repo).write_bytes(b"\xff\xfe")
+
+    hook.handle_prompt(
+        "claude", {"cwd": str(repo), "prompt": "what next?", "session_id": "chat-a"}
+    )
+
+    out = capsys.readouterr().out
+    assert RECOVERED in out
+    assert "[harness] mode: fixture. Rules:" in out
+    assert active.session_id not in out
+    (kept,) = state.state_dir(repo).glob("mode.json.damaged-*")
+    assert kept.read_bytes() == b"\xff\xfe"
+
+
 def two_live_mode_sessions(repo: Path) -> modes.Active:
     active = entered(modes.enter(repo, "fixture"))
     assert isinstance(work_sessions.create(repo, "other", mode="fixture"), Ok)
