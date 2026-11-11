@@ -285,6 +285,32 @@ class WorkSessionTest(unittest.TestCase):
         self.assertEqual(work_sessions.recording_mode(self.project), ())
         self.assertFalse((self.project / ".harness").exists())
 
+    def test_unmark_takes_the_mode_off_a_session(self) -> None:
+        marked = work_sessions.create(
+            self.project, "fixture mode", mode="fixture", mode_root="EPIC-1"
+        ).value
+
+        result = work_sessions.unmark(self.project, marked.id)
+
+        self.assertIsInstance(result, Ok)
+        reread = work_sessions.select(self.project, marked.id).value
+        self.assertEqual((reread.mode, reread.mode_root), ("", ""))
+        self.assertEqual(reread.status, work_sessions.Status.ACTIVE)
+        self.assertEqual(work_sessions.recording_mode(self.project), ())
+
+    def test_unmark_leaves_a_session_that_records_no_mode_as_it_is(self) -> None:
+        plain = work_sessions.create(self.project, "Investigate DAY-001").value
+
+        self.assertIsInstance(work_sessions.unmark(self.project, plain.id), Ok)
+
+        reread = work_sessions.select(self.project, plain.id).value
+        self.assertEqual(reread.events, plain.events)
+
+    def test_unmark_of_a_session_that_is_not_there_is_refused(self) -> None:
+        self.assertIsInstance(
+            work_sessions.unmark(self.project, "WS-000000000000"), Err
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

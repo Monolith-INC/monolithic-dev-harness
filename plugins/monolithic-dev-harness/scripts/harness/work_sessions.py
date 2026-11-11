@@ -511,6 +511,19 @@ def _transition(
             )
 
 
+def unmark(project: Path, identifier: str) -> Result[Session]:
+    """Take the mode off a session, so it no longer records one. Leaving a mode starts here: a
+    session that records no mode cannot be recovered as a mode, whatever else is left undone."""
+    return bind(
+        select(project, identifier),
+        lambda current: (
+            _save(current, event="left_mode", mode="", mode_root="")
+            if current.mode
+            else Ok(current)
+        ),
+    )
+
+
 def link(project: Path, identifier: str, work_item: str) -> Result[Session]:
     """Name the Story or Bug an active session implements; a new link replaces the old one."""
     return bind(

@@ -7,6 +7,7 @@ a completed or missing one is replaced by a new session for the same mode and RO
 
 from __future__ import annotations
 
+import fcntl
 import json
 import shutil
 from collections.abc import Callable
@@ -15,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from core.result import Ok
+from core.result import Ok, err
 from harness import cli, modes, rules, state, work_sessions
 from tests.harness.test_modes import VALID_FIELDS, refusal, write_mode
 from tests.settings_fixture import write_settings
@@ -535,6 +536,175 @@ def test_leave_does_not_bring_back_a_mode_whose_session_already_ended(
     assert not state.mode_record(repo).exists()
     assert work_sessions.recording_mode(repo) == ()
     assert modes.resolve(repo) == modes.Resolution(None)
+
+
+# leaving is safe to interrupt: the mode mark goes first, so nothing is left to recover
+
+
+def test_leave_clears_the_mode_mark_before_it_completes_the_session(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    seen: list[tuple[str, str, bool]] = []
+    transition = work_sessions.transition
+
+    def watched(project: Path, identifier: str, operation: str, **options):
+        seen.append(
+            (
+                operation,
+                session_of(project, identifier).mode,
+                state.mode_record(project).exists(),
+            )
+        )
+        return transition(project, identifier, operation, **options)
+
+    monkeypatch.setattr(work_sessions, "transition", watched)
+
+    assert isinstance(modes.leave(repo), Ok)
+
+    assert seen == [("complete", "", True)]
+    assert not state.mode_record(repo).exists()
+    assert session_status(repo, active.session_id) == work_sessions.Status.COMPLETE
+
+
+def interrupted_after_the_mark(repo: Path, active: modes.Active) -> None:
+    assert isinstance(work_sessions.unmark(repo, active.session_id), Ok)
+
+
+def interrupted_after_the_completion(repo: Path, active: modes.Active) -> None:
+    interrupted_after_the_mark(repo, active)
+    assert isinstance(work_sessions.transition(repo, active.session_id, "complete"), Ok)
+
+
+@pytest.mark.parametrize(
+    "interrupted",
+    [interrupted_after_the_mark, interrupted_after_the_completion],
+    ids=lambda fn: fn.__name__,
+)
+def test_a_leave_that_stopped_part_way_leaves_nothing_to_recover(
+    repo: Path, interrupted: Callable[[Path, modes.Active], None]
+) -> None:
+    active = entered(modes.enter(repo, "fixture", root="EPIC-1"))
+    interrupted(repo, active)
+
+    assert modes.resolve(repo) == modes.Resolution(None)
+
+    assert not state.mode_record(repo).exists()
+    assert session_status(repo, active.session_id) == work_sessions.Status.COMPLETE
+    assert work_sessions.recording_mode(repo) == ()
+    assert len(work_sessions.list_sessions(repo).value) == 1  # type: ignore[union-attr]
+    assert modes.resolve(repo) == modes.Resolution(None)
+
+
+class Stopped(BaseException):
+    """A call that dies between two steps: nothing catches it."""
+
+
+def test_a_leave_killed_before_it_wrote_anything_changes_nothing(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+
+    def die(*arguments, **options):
+        raise Stopped
+
+    with monkeypatch.context() as killed:
+        killed.setattr(work_sessions, "unmark", die)
+        with pytest.raises(Stopped):
+            modes.leave(repo)
+
+    assert modes.resolve(repo) == modes.Resolution(active)
+    assert len(work_sessions.list_sessions(repo).value) == 1  # type: ignore[union-attr]
+
+
+def test_a_leave_killed_after_the_mark_is_not_brought_back_by_the_next_read(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+
+    def die(*arguments, **options):
+        raise Stopped
+
+    with monkeypatch.context() as killed:
+        killed.setattr(work_sessions, "transition", die)
+        with pytest.raises(Stopped):
+            modes.leave(repo)
+
+    assert modes.resolve(repo) == modes.Resolution(None)
+    assert len(work_sessions.list_sessions(repo).value) == 1  # type: ignore[union-attr]
+    assert session_status(repo, active.session_id) == work_sessions.Status.COMPLETE
+
+
+def test_leave_reports_a_session_it_could_not_complete(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    transition = work_sessions.transition
+
+    def unwritable(project: Path, identifier: str, operation: str, **options):
+        return err("session_unwritable", f"could not update work session {identifier}")
+
+    monkeypatch.setattr(work_sessions, "transition", unwritable)
+
+    code, message = refusal(modes.leave(repo))
+
+    assert code == "mode_unwritable"
+    assert active.session_id not in message
+    assert state.mode_record(repo).exists()
+    monkeypatch.setattr(work_sessions, "transition", transition)
+    assert modes.resolve(repo) == modes.Resolution(None)
+    assert session_status(repo, active.session_id) == work_sessions.Status.COMPLETE
+
+
+def test_leave_reports_a_session_it_could_not_unmark(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+
+    def unwritable(project: Path, identifier: str):
+        return err("session_unwritable", f"could not update work session {identifier}")
+
+    monkeypatch.setattr(work_sessions, "unmark", unwritable)
+
+    code, message = refusal(modes.leave(repo))
+
+    assert code == "mode_unwritable"
+    assert active.session_id not in message
+    assert session_status(repo, active.session_id) == work_sessions.Status.ACTIVE
+    assert state.mode_record(repo).exists()
+
+
+def test_cli_leave_reports_a_failure_to_end_the_mode(
+    repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    capsys.readouterr()
+    monkeypatch.setattr(
+        work_sessions,
+        "transition",
+        lambda *arguments, **options: err("session_unwritable", "write failed"),
+    )
+
+    assert cli.main(["modes", "leave", "--repo", str(repo)]) == 2
+
+    assert json.loads(capsys.readouterr().err)["error"] == "mode_unwritable"
+
+
+def test_leave_waits_for_a_repair_in_progress_and_gives_up_when_it_never_ends(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    monkeypatch.setattr(modes, "REPAIR_WAIT_SECONDS", 0.05)
+    lock = state.mode_lock(repo)
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    with lock.open("a") as holder:
+        fcntl.flock(holder, fcntl.LOCK_EX)
+
+        code, _ = refusal(modes.leave(repo))
+
+    assert code == "mode_unwritable"
+    assert state.mode_record(repo).exists()
+    assert isinstance(modes.leave(repo), Ok)
 
 
 # reading never raises

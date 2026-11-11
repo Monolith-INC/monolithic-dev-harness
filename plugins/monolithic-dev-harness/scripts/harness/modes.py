@@ -21,7 +21,18 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from core.result import Err, Ok, Result, attempt, bind, err, fmap, sequence
+from core.result import (
+    Err,
+    Failure,
+    Ok,
+    Result,
+    attempt,
+    bind,
+    err,
+    fmap,
+    map_failure,
+    sequence,
+)
 from core.schema import load_schema, validate
 from harness import settings, state, work_sessions
 
@@ -249,20 +260,31 @@ def resolve(repo: Path) -> Resolution:
 def leave(repo: Path) -> Result[None]:
     """End the mode, in whatever state it is: complete every work session that records one and
     remove the pointer, so a mode that could not be recovered can still be left."""
-    sessions = tuple(
-        dict.fromkeys((*_pointed_session(repo), *_recorded_sessions(repo)))
-    )
-    if not sessions and not state.mode_record(repo).exists():
+    if not _recorded(repo):
         return err("mode_inactive", "no mode is active")
-    return fmap(
+    return bind(
         attempt(
-            lambda: _end(repo, sessions),
+            lambda: _left(repo),
             "mode_unwritable",
             "could not end the mode",
             OSError,
         ),
-        lambda _: None,
+        lambda ended: ended,
     )
+
+
+def _recorded(repo: Path) -> bool:
+    """Whether anything records a mode: a pointer, or a session that carries one."""
+    return state.mode_record(repo).exists() or bool(work_sessions.recording_mode(repo))
+
+
+def _left(repo: Path) -> Result[None]:
+    """Leave under the repair lock, so a repair in progress is finished and counted first."""
+    with _repair_lock(repo):
+        return _end(
+            repo,
+            tuple(dict.fromkeys((*_pointed_session(repo), *_recorded_sessions(repo)))),
+        )
 
 
 def _now() -> str:
@@ -281,7 +303,7 @@ def _moment(text: str) -> datetime | None:
 def _resolved(repo: Path) -> Resolution:
     """A healthy mode is read without the lock. Anything else is repaired under it."""
     match _pointer(repo):
-        case Ok(Active() as current) if _running(repo, current.session_id):
+        case Ok(Active() as current) if _in_force(repo, current.session_id):
             return Resolution(current)
         case Ok(None) if not work_sessions.recording_mode(repo):
             return Resolution(None)
@@ -378,6 +400,8 @@ def _alive(repo: Path, current: Active) -> Resolution:
     on purpose. Ended or missing: a new session for the same mode and ROOT, since where the work
     stands is derived from ROOT and nothing is lost."""
     match work_sessions.select(repo, current.session_id):
+        case Ok(session) if not session.mode:
+            return _forgotten(repo, current)
         case Ok(session) if session.status == work_sessions.Status.ACTIVE:
             return Resolution(current)
         case Ok(session) if session.status == work_sessions.Status.PAUSED:
@@ -390,6 +414,16 @@ def _alive(repo: Path, current: Active) -> Resolution:
                 current.mode,
                 _start(repo, current.manifest, current.root, current.entered),
             )
+
+
+def _forgotten(repo: Path, current: Active) -> Resolution:
+    """The pointer names a session that records no mode: the mode was left, and the call that left
+    it stopped before it finished. There is nothing to recover. Finish leaving it, quietly."""
+    match bind(_completed(repo, current.session_id), lambda _: _unpointed(repo)):
+        case Ok():
+            return Resolution(None)
+        case _:
+            return Resolution(None, _unrecovered(current.mode))
 
 
 def _regenerated(repo: Path) -> Resolution:
@@ -448,6 +482,15 @@ def _resume(repo: Path, identifier: str) -> Result[None]:
             return failed
         case _:
             return Ok(None)
+
+
+def _in_force(repo: Path, identifier: str) -> bool:
+    """The pointed session is live and still records a mode."""
+    match work_sessions.select(repo, identifier):
+        case Ok(session):
+            return session.status == work_sessions.Status.ACTIVE and bool(session.mode)
+        case _:
+            return False
 
 
 def _running(repo: Path, identifier: str) -> bool:
@@ -557,8 +600,52 @@ def _recorded_sessions(repo: Path) -> tuple[str, ...]:
     return tuple(session.id for session in work_sessions.recording_mode(repo))
 
 
-def _end(repo: Path, sessions: tuple[str, ...]) -> None:
-    # A session that cannot complete has already ended; removing the pointer is what matters.
-    for identifier in sessions:
-        work_sessions.transition(repo, identifier, "complete")
-    state.mode_record(repo).unlink(missing_ok=True)
+def _end(repo: Path, sessions: tuple[str, ...]) -> Result[None]:
+    """Clear the mode mark of every session, then complete them, then remove the pointer.
+
+    The mark goes first. A call that stops between any two steps leaves no session that records a
+    mode, so a read finds nothing to recover: see `_forgotten`. A step that fails is reported and
+    the pointer stays, which lets the next read finish what this one could not."""
+    return map_failure(
+        bind(
+            sequence(_unmarked(repo, identifier) for identifier in sessions),
+            lambda _: bind(
+                sequence(_completed(repo, identifier) for identifier in sessions),
+                lambda _: _unpointed(repo),
+            ),
+        ),
+        lambda _: Failure(
+            "mode_unwritable",
+            "could not end the mode: its record could not be written; "
+            "run `harness modes leave` again",
+            retryable=True,
+        ),
+    )
+
+
+def _unmarked(repo: Path, identifier: str) -> Result[None]:
+    match work_sessions.select(repo, identifier):
+        case Ok():
+            return fmap(work_sessions.unmark(repo, identifier), lambda _: None)
+        case _:
+            return Ok(None)
+
+
+def _completed(repo: Path, identifier: str) -> Result[None]:
+    """Complete a session, unless it has ended already or is not there to complete."""
+    match work_sessions.select(repo, identifier):
+        case Ok(session) if session.status != work_sessions.Status.COMPLETE:
+            return fmap(
+                work_sessions.transition(repo, identifier, "complete"), lambda _: None
+            )
+        case _:
+            return Ok(None)
+
+
+def _unpointed(repo: Path) -> Result[None]:
+    return attempt(
+        lambda: state.mode_record(repo).unlink(missing_ok=True),
+        "mode_unwritable",
+        "could not remove the mode record",
+        OSError,
+    )
