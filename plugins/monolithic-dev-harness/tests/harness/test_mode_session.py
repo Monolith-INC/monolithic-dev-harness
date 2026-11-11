@@ -172,6 +172,22 @@ def test_cli_enters_shows_and_leaves_a_mode(
     assert capsys.readouterr().out == ""
 
 
+def test_cli_never_prints_the_mode_session_id(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert cli.main(["modes", "enter", "fixture", "--repo", str(repo)]) == 0
+    entered_output = capsys.readouterr().out
+    assert cli.main(["modes", "status", "--repo", str(repo)]) == 0
+    status_output = capsys.readouterr().out
+
+    active = modes.active(repo)
+    assert active is not None
+    for output in (entered_output, status_output):
+        assert active.session_id not in output
+        assert "session" not in output
+        assert json.loads(output)["mode"] == "fixture"
+
+
 def test_cli_from_a_project_subfolder_uses_the_project_root(
     repo: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

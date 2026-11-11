@@ -630,9 +630,14 @@ def modes_command(args: argparse.Namespace) -> int:
         case Ok(None):
             return 0
         case Ok(record):
-            print(
-                json.dumps(asdict(record), ensure_ascii=False, indent=2, sort_keys=True)
-            )
+            # The mode's session stays in the record; the user is never shown its id.
+            shown = {
+                "mode": record.mode,
+                "root": record.root,
+                "entered": record.entered,
+                "touched": record.touched,
+            }
+            print(json.dumps(shown, ensure_ascii=False, indent=2, sort_keys=True))
             return 0
 
 
