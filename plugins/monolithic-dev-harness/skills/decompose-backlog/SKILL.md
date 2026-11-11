@@ -87,7 +87,9 @@ write.
 
 Per `../../common/providers.md`, create each item with `tracker_create_work_item` (`kind:
 "user_story"`, Markdown description — the approved draft's body word for word — and `parentRef` its
-Feature). The tracker's adapter maps the kind and any labels.
+Feature, `storyPoints` the draft's estimate as a whole number). The tracker's adapter maps the kind
+and any labels, and places the item where the team works when the tracker has a place for it
+(assignee, current sprint, backlog rank).
 
 ### 6. VERIFY (structural)
 

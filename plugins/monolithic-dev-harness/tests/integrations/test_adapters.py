@@ -96,11 +96,12 @@ class AzureTest(unittest.TestCase):
         )
         self.assertNotIn("parentId", first)
         self.tracker.create_work_item(WorkItemKind.USER_STORY, "Story", "body", "10")
-        last = self.call.sent("wit_work_item_write")[-1]
-        self.assertEqual(
-            (last["action"], last["parentId"], last["workItemType"]),
-            ("add_child", 10, "User Story"),
-        )
+        [child] = [
+            write
+            for write in self.call.sent("wit_work_item_write")
+            if write["action"] == "add_child"
+        ]
+        self.assertEqual((child["parentId"], child["workItemType"]), (10, "User Story"))
 
     def test_a_task_gets_its_storys_sprint_and_assignee(self) -> None:
         story = ado_item(20, "User Story", "Active")
@@ -127,6 +128,97 @@ class AzureTest(unittest.TestCase):
                 "/fields/System.AssignedTo": "ana@example.com",
                 "/fields/System.IterationPath": "proj\\Sprint 65",
             },
+        )
+
+    def created_story(
+        self, fields: dict, work: object = None, highest: float | None = 2000.0
+    ) -> FakeTransport:
+        """Create a Story on a fake Azure whose new item carries `fields`."""
+        story = ado_item(40, "User Story", "New")
+        story["fields"].update(fields)
+        ranked = {"id": 5, "fields": {"Microsoft.VSTS.Common.StackRank": highest}}
+
+        def read(args):
+            match args["action"]:
+                case "get":
+                    return story
+                case "get_batch":
+                    return [{"body": json.dumps(ranked)}]
+
+        call = FakeTransport(
+            {
+                "wit_work_item": read,
+                "wit_query": {"workItems": [{"id": 5}] if highest else []},
+                "wit_work_item_write": {"id": 40, "fields": {}},
+                **({"work": work} if work is not None else {}),
+            }
+        )
+        ops("azure-devops", AZURE, call).create_work_item(
+            WorkItemKind.USER_STORY, "Story", "body", ""
+        )
+        return call
+
+    def test_a_new_story_goes_to_its_creator_and_the_current_sprint(self) -> None:
+        sprint = [{"path": "proj\\Sprint 66", "attributes": {"timeFrame": 1}}]
+        call = self.created_story(
+            {"System.CreatedBy": {"uniqueName": "ana@example.com"}},
+            work=f"Project: proj, Team: proj Team\n{json.dumps(sprint)}",
+        )
+        [asked] = call.sent("work")
+        self.assertEqual(
+            (asked["action"], asked["project"], asked["team"], asked["timeframe"]),
+            ("list_team_iterations", "proj", "proj Team", "current"),
+        )
+        placed = call.sent("wit_work_item_write")[1]
+        self.assertEqual(
+            {u["path"]: u["value"] for u in placed["updates"]},
+            {
+                "/fields/System.AssignedTo": "ana@example.com",
+                "/fields/System.IterationPath": "proj\\Sprint 66",
+            },
+        )
+
+    def test_an_unreadable_sprint_leaves_the_sprint_and_still_creates(self) -> None:
+        call = self.created_story(
+            {"System.CreatedBy": {"uniqueName": "ana@example.com"}}
+        )
+        placed = call.sent("wit_work_item_write")[1]
+        self.assertEqual(
+            {u["path"]: u["value"] for u in placed["updates"]},
+            {"/fields/System.AssignedTo": "ana@example.com"},
+        )
+
+    def test_a_new_backlog_item_is_ranked_after_the_last_one(self) -> None:
+        rank = self.created_story({}).sent("wit_work_item_write")[-1]
+        self.assertEqual(
+            rank["updates"],
+            [
+                {
+                    "op": "add",
+                    "path": "/fields/Microsoft.VSTS.Common.StackRank",
+                    "value": 3000.0,
+                }
+            ],
+        )
+
+    def test_the_first_ranked_item_takes_the_first_rank_step(self) -> None:
+        rank = self.created_story({}, highest=None).sent("wit_work_item_write")[-1]
+        self.assertEqual(rank["updates"][0]["value"], 1000.0)
+
+    def test_an_item_that_has_a_rank_keeps_it(self) -> None:
+        writes = self.created_story({"Microsoft.VSTS.Common.StackRank": 10.0}).sent(
+            "wit_work_item_write"
+        )
+        self.assertEqual([write["action"] for write in writes], ["create"])
+
+    def test_an_update_never_reranks(self) -> None:
+        self.tracker.update_work_item("10", WorkItemChanges(title="Renamed"))
+        self.assertFalse(
+            any(
+                u["path"].endswith("StackRank")
+                for write in self.call.sent("wit_work_item_write")
+                for u in write.get("updates", ())
+            )
         )
 
     def test_transition_writes_the_provider_state(self) -> None:

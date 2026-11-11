@@ -41,7 +41,7 @@ def test_a_split_is_approved_with_the_split_question(skill: str) -> None:
 
 @pytest.mark.parametrize(
     "skill",
-    ("enrich-work-item", "amend-workitems", "auto-fix-artifact", "split-story"),
+    ("enrich-work-item", "amend-workitems", "auto-fix-artifact"),
 )
 def test_existing_items_change_through_the_gateway(skill: str) -> None:
     assert "tracker_update_work_item" in _text(skill)

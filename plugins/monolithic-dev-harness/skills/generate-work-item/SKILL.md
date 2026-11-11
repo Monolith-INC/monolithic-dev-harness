@@ -155,9 +155,11 @@ output.
 ## PHASE 6 — CREATE (selected provider)
 
 Create the item with `tracker_create_work_item` per `../../common/providers.md`: the harness kind,
-`parentRef` the immediate parent, and the approved draft's body word for word. The tracker's
-adapter maps kinds, parent relations and labels. With the local tracker, creating the item turns its
-draft into the tracked ticket.
+`parentRef` the immediate parent, the approved draft's body word for word, and `storyPoints` the
+draft's estimate as a whole number when the kind carries one. The tracker's adapter maps kinds,
+parent relations and labels, and places the item where the team works when the tracker has a place
+for it (assignee, current sprint, backlog rank). With the local tracker, creating the item
+turns its draft into the tracked ticket.
 
 ---
 

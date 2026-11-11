@@ -71,6 +71,12 @@ ORIGINAL_ESTIMATE = "Microsoft.VSTS.Scheduling.OriginalEstimate"
 COMPLETED_WORK = "Microsoft.VSTS.Scheduling.CompletedWork"
 """NOT present on Scrum projects."""
 
+STACK_RANK = "Microsoft.VSTS.Common.StackRank"
+"""Backlog order (lower is higher). The REST create leaves it empty, unlike the web UI; a backlog
+item without it is missing from the team's backlog and board, so a create ranks it at the bottom."""
+
+RANK_STEP = 1000.0
+
 ACTIVITY = "Microsoft.VSTS.Common.Activity"
 """Named `Discipline` in CMMI. Allowed values are configured per project."""
 
@@ -85,6 +91,7 @@ STATE = "System.State"
 PARENT = "System.Parent"
 ASSIGNED_TO = "System.AssignedTo"
 ITERATION_PATH = "System.IterationPath"
+CREATED_BY = "System.CreatedBy"
 TEAM_PROJECT = "System.TeamProject"
 CHANGED_DATE = "System.ChangedDate"
 FIELDS = (ID, TITLE, WORK_ITEM_TYPE, STATE, DESCRIPTION, PARENT)
@@ -177,10 +184,9 @@ def adapter(context: AdapterContext) -> TrackerOps:
         search_work_items=lambda query, cursor: _search(context, call, query),
         create_work_item=lambda kind, title, description, parent: bind(
             _create(context, call, read, kind, title, description, parent),
-            lambda item: (
-                _inherit(call, read, item, parent, process)
-                if kind is WorkItemKind.TASK and parent
-                else Ok(item)
+            lambda item: bind(
+                _placed(context, call, read, item, parent, process),
+                lambda item: _ranked(call, read, item),
             ),
         ),
         update_work_item=lambda ref, changes: _update(
@@ -364,27 +370,76 @@ def _search(context: AdapterContext, call, query: str) -> Result[Page]:
     )
 
 
-def _inherit(call, read, task: WorkItem, parent: str, process: str) -> Result[WorkItem]:
-    """A Task lands in its Story's sprint, assigned as the Story is, as the agile-backlog-toolkit
-    creates it (`System.IterationPath` and `System.AssignedTo` copied from the parent)."""
+def _placed(
+    context: AdapterContext, call, read, item: WorkItem, parent: str, process: str
+) -> Result[WorkItem]:
+    """A new item assigned to whoever created it and placed in the team's current sprint, as the
+    web UI's board does. A Task takes its Story's assignee and sprint where the Story has them, as
+    the agile-backlog-toolkit creates it. A field with nothing to fill it stays as it is."""
 
-    def copy(parent: WorkItem) -> Result[WorkItem]:
-        fields = payloads.object_or_empty(parent.provider_data.get("fields"))
-        person = fields.get(ASSIGNED_TO)
-        assignee = (
-            payloads.text(person, "uniqueName", "displayName")
-            if isinstance(person, dict)
-            else str(person or "")
-        )
+    def place(source: Mapping[str, Any]) -> Result[WorkItem]:
+        own = payloads.object_or_empty(item.provider_data.get("fields"))
         changes = WorkItemChanges(
-            assignee=assignee or None,
-            iteration=payloads.text(fields, ITERATION_PATH) or None,
+            assignee=_person(source.get(ASSIGNED_TO))
+            or _person(own.get(CREATED_BY))
+            or None,
+            iteration=payloads.text(source, ITERATION_PATH)
+            or _current_iteration(context, call)
+            or None,
         )
         if changes.assignee is None and changes.iteration is None:
-            return Ok(task)
-        return _update(call, read, task.key, changes, process)
+            return Ok(item)
+        return _update(call, read, item.key, changes, process)
 
-    return bind(read(parent), copy)
+    if item.kind is WorkItemKind.TASK and parent:
+        return bind(
+            read(parent),
+            lambda story: place(
+                payloads.object_or_empty(story.provider_data.get("fields"))
+            ),
+        )
+    return place({})
+
+
+def _person(value: Any) -> str:
+    """An identity field as the name a write accepts."""
+    return (
+        payloads.text(value, "uniqueName", "displayName")
+        if isinstance(value, dict)
+        else str(value or "")
+    )
+
+
+def _current_iteration(context: AdapterContext, call) -> str:
+    """The path of the team's current sprint; `""` when it cannot be read, since a sprint is a
+    default and never a reason to fail a create. The team is the `team` setting, or the default
+    team Azure names after the project."""
+    team = context.values.get("team") or f"{context.values.get('project', '')} Team"
+    reply = call("work", "list_team_iterations", {"team": team, "timeframe": "current"})
+    entries = payloads.records(_json_tail(value_or(reply, None)))
+    sprint = _current_sprint(entries) if entries else None
+    return payloads.text(sprint, "path") if sprint else ""
+
+
+def _json_tail(reply: Any) -> Any:
+    """The JSON after a text preamble: `list_team_iterations` puts a "Project: ..., Team: ..."
+    line before the listing, so the joined reply is not JSON as a whole."""
+    if not isinstance(reply, str):
+        return reply
+    starts = [index for index in (reply.find("["), reply.find("{")) if index >= 0]
+    return (
+        value_or(
+            attempt(
+                lambda: json.loads(reply[min(starts) :]),
+                "not_json",
+                "reply",
+                ValueError,
+            ),
+            None,
+        )
+        if starts
+        else None
+    )
 
 
 def _create(
@@ -464,6 +519,59 @@ def _update(
             ),
         ),
     )
+
+
+def _ranked(call, read, item: WorkItem) -> Result[WorkItem]:
+    """A backlog item (not a Task) without a backlog rank, ranked at the bottom of the backlog
+    the way the web UI places a new item; any other item as it is."""
+    fields = payloads.object_or_empty(item.provider_data.get("fields"))
+    if item.kind is WorkItemKind.TASK or fields.get(STACK_RANK) is not None:
+        return Ok(item)
+    return bind(
+        _bottom_rank(call),
+        lambda rank: bind(
+            payloads.number(item.key, "work item"),
+            lambda number: bind(
+                call(
+                    "write",
+                    "update",
+                    {
+                        "id": number,
+                        "updates": [
+                            {"op": "add", "path": _field_ref(STACK_RANK), "value": rank}
+                        ],
+                    },
+                ),
+                lambda _: read(item.key),
+            ),
+        ),
+    )
+
+
+def _bottom_rank(call) -> Result[float]:
+    """One step past the highest backlog rank in the project."""
+    statement = (
+        f"SELECT [{ID}] FROM WorkItems WHERE [{TEAM_PROJECT}] = @project "
+        f"AND [{STACK_RANK}] > 0 ORDER BY [{STACK_RANK}] DESC"
+    )
+
+    def highest(ids: tuple[int, ...]) -> Result[float]:
+        if not ids:
+            return Ok(RANK_STEP)
+        return fmap(
+            call("read", "get_batch", {"ids": [ids[0]], "fields": [STACK_RANK]}),
+            lambda reply: next(
+                (
+                    float(record["fields"][STACK_RANK]) + RANK_STEP
+                    for record in _records(reply)
+                    if isinstance(record.get("fields"), dict)
+                    and record["fields"].get(STACK_RANK) is not None
+                ),
+                RANK_STEP,
+            ),
+        )
+
+    return bind(_ids(call, statement), highest)
 
 
 def _patch(fields: Mapping[str, Any]) -> list[dict[str, Any]]:

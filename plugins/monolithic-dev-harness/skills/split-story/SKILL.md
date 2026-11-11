@@ -230,7 +230,7 @@ and ask `harness decision present --gate publish-items` with every draft as `--a
 For each sub-story draft (in order):
 
 1. `tracker_create_work_item` (`kind: "user_story"`, Markdown description = full body from the
-   draft, `parentRef` = `parent_id`), then `tracker_update_work_item` with `storyPoints`.
+   draft, `parentRef` = `parent_id`, `storyPoints` = the draft's estimate as a whole number).
 2. Assert the response carries the new item's `key`. If absent: STOP and report failure with the
    item title and the raw error.
 3. Read back: `tracker_get_work_item(ref=<new key>)`. Assert its `parent_id == parent_id`.

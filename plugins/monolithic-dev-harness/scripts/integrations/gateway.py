@@ -37,6 +37,7 @@ from .contracts import (
 STRING = {"type": "string"}
 NUMBER = {"type": "number"}
 BOOLEAN = {"type": "boolean"}
+INTEGER = {"type": "integer"}
 TOOLS: tuple[Mapping[str, Any], ...] = tuple(
     {
         "name": name,
@@ -64,7 +65,8 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
         ),
         (
             "tracker_create_work_item",
-            "Create an epic, feature, user_story, task, or bug.",
+            "Create an epic, feature, user_story, task, or bug. storyPoints is the item's "
+            "estimate, a whole number, recorded in the same call.",
             ("kind", "title"),
             {
                 "kind": {
@@ -74,6 +76,7 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
                 "title": STRING,
                 "description": STRING,
                 "parentRef": STRING,
+                "storyPoints": INTEGER,
             },
         ),
         (
@@ -86,7 +89,7 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
                 "ref": STRING,
                 "title": STRING,
                 "description": STRING,
-                "storyPoints": NUMBER,
+                "storyPoints": INTEGER,
                 "hours": NUMBER,
                 "firstEstimate": BOOLEAN,
                 "assignee": STRING,
@@ -387,11 +390,20 @@ def _tracker_call(name: str, args: Mapping[str, Any], ops: TrackerOps) -> Result
         "tracker_search_work_items": lambda: ops.search_work_items(
             args["query"], args.get("cursor", "")
         ),
-        "tracker_create_work_item": lambda: ops.create_work_item(
-            WorkItemKind(args["kind"]),
-            args["title"],
-            args.get("description", ""),
-            args.get("parentRef", ""),
+        "tracker_create_work_item": lambda: bind(
+            ops.create_work_item(
+                WorkItemKind(args["kind"]),
+                args["title"],
+                args.get("description", ""),
+                args.get("parentRef", ""),
+            ),
+            lambda item: (
+                ops.update_work_item(
+                    item.key, WorkItemChanges(story_points=args["storyPoints"])
+                )
+                if "storyPoints" in args
+                else Ok(item)
+            ),
         ),
         "tracker_update_work_item": lambda: ops.update_work_item(
             args["ref"], _changes(args)

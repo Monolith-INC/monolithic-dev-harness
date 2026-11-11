@@ -84,6 +84,21 @@ class GatewayTest(unittest.TestCase):
             self.call("tracker_update_work_item", ref=story["key"]).failure.message, str
         )
 
+    def test_a_create_records_whole_story_points_in_the_same_call(self) -> None:
+        story = self.call(
+            "tracker_create_work_item", kind="user_story", title="S", storyPoints=3
+        ).value
+        self.assertEqual(story["provider_data"]["story_points"], 3)
+        self.assertIn(
+            "storyPoints",
+            self.call(
+                "tracker_create_work_item",
+                kind="user_story",
+                title="S",
+                storyPoints=2.5,
+            ).failure.message,
+        )
+
     def test_arguments_are_checked_against_the_tool_schema(self) -> None:
         self.assertIn(
             "missing 'title'",

@@ -230,7 +230,7 @@ class WorkItemChanges:
 
     title: str | None = None
     description: str | None = None
-    story_points: float | None = None
+    story_points: int | None = None
     hours: Hours | None = None
     assignee: str | None = None
     iteration: str | None = None
