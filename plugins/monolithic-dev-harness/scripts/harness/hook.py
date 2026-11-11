@@ -242,7 +242,6 @@ def _pre_tool(
             call.command,
             Path(call.cwd or repo),
             repo,
-            context.value if isinstance(context, Ok) else None,
         )
         if call.kind == "shell"
         else None
@@ -360,7 +359,10 @@ def _held(
         case Ok(current):
             pass
     mismatch = work_session_context.mismatch(
-        current, request, work_session_context.mode_named(repo, current)
+        current,
+        request,
+        work_session_context.mode_named(repo, current),
+        work_session_context.runs_in(repo, request),
     )
     if mismatch is not None:
         return rules.Decision.deny("work-session-mismatch", mismatch.message)

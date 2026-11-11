@@ -275,6 +275,13 @@ def acting_in(repo: Path, work_session_id: str | None) -> bool:
             return False
 
 
+def implied_session(repo: Path, mode: Active | None) -> str | None:
+    """The work session a harness command that names none runs in: the mode's while one is in
+    force, else the project's current. The hook that judges such a command and the CLI that runs
+    it both ask here, so they never disagree."""
+    return mode.session_id if mode is not None else work_sessions.current(repo)
+
+
 def approvals_for(
     repo: Path, work_session_id: str | None
 ) -> list[tuple[Path, dict[str, Any]]]:

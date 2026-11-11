@@ -469,12 +469,12 @@ def test_a_link_to_an_ended_session_counts_as_no_choice(
     assert links(repo) == before
 
 
-def test_a_conversation_that_chose_another_live_session_keeps_it_in_a_mode(
+def test_a_conversation_that_chose_another_live_session_after_the_mode_was_entered_keeps_it(
     repo: Path, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    active = entered(modes.enter(repo, "fixture"))
     other = started(repo)
     choose(repo, "chat-a", other.id)
-    active = entered(modes.enter(repo, "fixture"))
     before = links(repo)
 
     assert acting(repo, "chat-a") == other.id
@@ -944,7 +944,7 @@ def answered_document(project: Path, session: str) -> tuple[str, tuple]:
         {
             "answers": [
                 {
-                    "id": answer,
+                    "id": PUBLISH_ANSWER,
                     "gate": "approve-document",
                     "status": "answered",
                     "answer": "Approve",
@@ -1197,6 +1197,144 @@ def present_gate(project: Path, *extra: str) -> int:
         ["decision", "present", "--gate", "planning-depth", "--host", "text"]
         + ["--repo", str(project), *extra]
     )
+
+
+# the newest explicit choice wins: entering a mode is a conversation's newest choice, unless it
+# chose a session again while the mode ran. The hook and the CLI give the same answer.
+
+
+def present_command(project: Path, *extra: str) -> str:
+    """The shell command `present_gate` runs, as the agent would type it."""
+    return (
+        f"{CLI} decision present --gate planning-depth --host text --repo {project} "
+        + " ".join(extra)
+    ).strip()
+
+
+def asked_in(project: Path, *sessions: str) -> list[str]:
+    """The sessions among these that hold a pending question."""
+    return [
+        identifier
+        for identifier in sessions
+        if decisions.pending(project, identifier) is not None
+    ]
+
+
+def test_a_conversation_bound_before_the_mode_was_entered_acts_in_the_mode(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    other = started(repo)
+    choose(repo, "chat-a", other.id)
+    active = entered(modes.enter(repo, "fixture"))
+
+    assert acting(repo, "chat-a") == active.session_id
+    assert shell_output(repo, present_command(repo), capsys) == ""
+    assert present_gate(repo) == 0
+    capsys.readouterr()
+    assert asked_in(repo, active.session_id, other.id) == [active.session_id]
+
+
+def test_the_reply_to_a_question_the_mode_asked_is_seen_by_a_conversation_bound_before_it(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    other = started(repo)
+    choose(repo, "chat-a", other.id)
+    active = entered(modes.enter(repo, "fixture"))
+    assert present_gate(repo) == 0
+    capsys.readouterr()
+
+    hook.handle_prompt(
+        "claude", {"cwd": str(repo), "prompt": "1", "session_id": "chat-a"}
+    )
+
+    assert "human decision recorded" in capsys.readouterr().out
+    answered = decisions.record(repo, active.session_id)
+    assert answered is not None and answered["status"] == "answered"
+    assert asked_in(repo, active.session_id, other.id) == []
+
+
+def test_a_conversation_returns_to_the_session_it_chose_once_the_mode_is_left(
+    repo: Path,
+) -> None:
+    other = started(repo)
+    choose(repo, "chat-a", other.id)
+    entered(modes.enter(repo, "fixture"))
+    assert isinstance(modes.leave(repo), Ok)
+
+    assert acting(repo, "chat-a") == other.id
+
+
+def test_a_session_chosen_while_the_mode_runs_wins_over_the_mode(
+    repo: Path,
+) -> None:
+    other = started(repo)
+    choose(repo, "chat-a", other.id)
+    entered(modes.enter(repo, "fixture"))
+    chosen_again = started(repo, "chosen during the mode")
+    choose(repo, "chat-a", chosen_again.id)
+
+    assert acting(repo, "chat-a") == chosen_again.id
+
+
+@pytest.mark.parametrize(
+    ("scenario", "allowed"),
+    [
+        ("unbound", True),
+        ("bound-before-the-mode", True),
+        ("bound-after-the-mode", False),
+    ],
+)
+def test_the_hook_allows_a_command_without_a_session_only_where_the_cli_runs_it_in_the_conversations_session(
+    scenario: str, allowed: bool, repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    other = started(repo, "other work")
+    if scenario == "bound-before-the-mode":
+        choose(repo, "chat-a", other.id)
+    active = entered(modes.enter(repo, "fixture"))
+    if scenario == "bound-after-the-mode":
+        choose(repo, "chat-a", other.id)
+    acts_in = acting(repo, "chat-a")
+
+    out = shell_output(repo, present_command(repo), capsys)
+
+    assert (out == "") is allowed, out
+    if allowed:
+        assert present_gate(repo) == 0
+        capsys.readouterr()
+        assert asked_in(repo, active.session_id, other.id) == [acts_in]
+
+
+def test_a_command_without_a_session_from_a_conversation_outside_the_mode_is_refused_by_name_of_its_own(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    mine = work_sessions.start(repo, "story work").value
+    choose(repo, "chat-b", mine.id)
+    assert work_sessions.current(repo) == mine.id
+
+    out = shell_output(repo, present_command(repo), capsys, "chat-b")
+
+    assert "work-session-mismatch" in out
+    reason = json.loads(out)["hookSpecificOutput"]["permissionDecisionReason"]
+    assert f"--session-id {mine.id}" in reason
+    assert "fixture" in reason
+    assert active.session_id not in reason
+    assert asked_in(repo, active.session_id, mine.id) == []
+
+
+def test_a_conversation_bound_after_the_mode_was_entered_works_in_its_own_session_with_its_id(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    mine = work_sessions.start(repo, "story work").value
+    choose(repo, "chat-b", mine.id)
+    named = present_command(repo, "--session-id", mine.id)
+
+    assert shell_output(repo, named, capsys, "chat-b") == ""
+    assert present_gate(repo, "--session-id", mine.id) == 0
+    capsys.readouterr()
+
+    assert asked_in(repo, active.session_id, mine.id) == [mine.id]
 
 
 def test_decision_present_in_a_mode_records_the_decision_in_the_mode_session(
