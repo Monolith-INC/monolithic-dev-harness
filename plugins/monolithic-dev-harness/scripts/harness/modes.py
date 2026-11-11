@@ -220,6 +220,12 @@ class Resolution:
     active: Active | None
     notice: str = ""
 
+    @property
+    def repaired(self) -> bool:
+        """The read changed the mode and it works, as opposed to a repair that failed. A failure
+        repeats on every call until it is fixed, a repair is said once."""
+        return self.active is not None and bool(self.notice)
+
 
 def enter(repo: Path, name: str, root: str = "") -> Result[Active]:
     """Start a mode: a work session the human is never asked about, recorded as the active mode."""

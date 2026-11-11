@@ -606,12 +606,20 @@ def knowledge_command(args: argparse.Namespace) -> int:
     return 0
 
 
+def _mode_status(repo: Path) -> Ok:
+    """Read the mode, and say to the user what that read repaired or could not repair."""
+    read = modes.resolve(repo)
+    if read.notice:
+        print(read.notice, file=sys.stderr)
+    return Ok(read.active)
+
+
 def modes_command(args: argparse.Namespace) -> int:
     repo = resolve_repo(args.repo)
     result = {
         "enter": lambda: modes.enter(repo, args.name or "", root=args.root or ""),
         "leave": lambda: modes.leave(repo),
-        "status": lambda: Ok(modes.active(repo)),
+        "status": lambda: _mode_status(repo),
     }[args.operation]()
     match result:
         case Err(failure):

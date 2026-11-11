@@ -13,7 +13,7 @@ import pytest
 
 from core.result import Err, Ok
 from harness import decisions, hook, mode_hooks, modes, rules, state, work_sessions
-from host_adapters import work_session_context
+from host_adapters import hook_bridge, work_session_context
 from tests.harness.test_mode_session import entered
 from tests.harness.test_modes import with_fields, write_mode
 from tests.settings_fixture import write_settings
@@ -706,6 +706,240 @@ def test_leaving_ends_a_mode_that_could_not_be_recovered(
     assert isinstance(modes.leave(repo), Ok)
 
     assert pre_tool_output(repo, UNLISTED_READ, capsys) == ""
+
+
+# what the USER is shown: the host's own line, beside the context only the agent reads
+
+
+def user_line(output: str) -> str | None:
+    """The line the host shows the user (`systemMessage`), or None when the output has none."""
+    return json.loads(output).get("systemMessage")
+
+
+def damage(project: Path) -> None:
+    state.mode_record(project).write_bytes(b"\xff\xfe")
+
+
+def test_a_recovered_mode_is_shown_to_the_user_and_given_to_the_agent(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    active = entered(modes.enter(repo, "fixture"))
+    damage(repo)
+
+    out = pre_tool_output(repo, LISTED_READ, capsys)
+
+    assert user_line(out) == RECOVERED
+    assert notice_in(out) == RECOVERED
+    assert active.session_id not in out
+    assert pre_tool_output(repo, LISTED_READ, capsys) == ""
+
+
+def test_a_denied_call_that_repaired_the_mode_still_tells_the_user(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    damage(repo)
+
+    out = pre_tool_output(repo, UNLISTED_READ, capsys)
+
+    decision = json.loads(out)["hookSpecificOutput"]
+    assert decision["permissionDecision"] == "deny"
+    assert "[harness mode-operations]" in decision["permissionDecisionReason"]
+    assert user_line(out) == RECOVERED
+    assert pre_tool_output(repo, UNLISTED_READ, capsys) != ""
+    assert "systemMessage" not in json.loads(
+        pre_tool_output(repo, UNLISTED_READ, capsys)
+    )
+
+
+def test_a_mode_that_could_not_be_recovered_is_not_shown_to_the_user_on_every_call(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unrecoverable_mode(repo, monkeypatch)
+
+    for _ in range(2):
+        out = pre_tool_output(repo, UNLISTED_READ, capsys)
+        assert notice_in(out) == UNRECOVERED
+        assert user_line(out) is None
+
+
+def test_the_prompt_shows_the_user_the_repair_and_leaves_the_rest_to_the_agent(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    damage(repo)
+
+    approve(repo, "chat-a")
+
+    out = json.loads(capsys.readouterr().out)
+    context = out["hookSpecificOutput"]["additionalContext"]
+    assert out["hookSpecificOutput"]["hookEventName"] == "UserPromptSubmit"
+    assert out["systemMessage"] == RECOVERED
+    assert RECOVERED in context
+    assert "approval HB-ABCD1234 recorded" in context
+    assert "[harness] mode: fixture. Rules:" in context
+
+
+def test_the_prompt_shows_the_user_a_mode_that_could_not_be_recovered(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    unrecoverable_mode(repo, monkeypatch)
+
+    hook.handle_prompt(
+        "claude", {"cwd": str(repo), "prompt": "what next?", "session_id": "chat-a"}
+    )
+
+    out = json.loads(capsys.readouterr().out)
+    assert out["systemMessage"] == UNRECOVERED
+    assert UNRECOVERED in out["hookSpecificOutput"]["additionalContext"]
+
+
+def test_the_prompt_shows_the_user_when_the_mode_rules_cannot_be_given(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    (repo.parent / "modes" / "fixture" / "rules.md").write_bytes(b"\xff\xfe")
+
+    approve(repo, "chat-a")
+
+    out = json.loads(capsys.readouterr().out)
+    assert out["systemMessage"] == RULES_UNREADABLE
+    assert (
+        "approval HB-ABCD1234 recorded"
+        in out["hookSpecificOutput"]["additionalContext"]
+    )
+    assert "approval" not in out["systemMessage"]
+
+
+def test_a_healthy_mode_leaves_the_prompt_as_plain_text_for_claude(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+
+    hook.handle_prompt(
+        "claude", {"cwd": str(repo), "prompt": "what next?", "session_id": "chat-a"}
+    )
+
+    out = capsys.readouterr().out
+    assert out.startswith("[harness] mode: fixture. Rules:")
+
+
+def test_a_repair_found_first_by_a_stop_is_shown_to_the_user(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    damage(repo)
+
+    hook.handle_stop(
+        "claude",
+        {"cwd": str(repo), "session_id": "chat-a", "last_assistant_message": "done"},
+    )
+
+    assert user_line(capsys.readouterr().out) == RECOVERED
+
+
+def test_a_repair_found_first_by_an_answer_event_is_shown_to_the_user(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    damage(repo)
+
+    hook.handle_answer("claude", {"cwd": str(repo), "session_id": "chat-a"})
+
+    assert user_line(capsys.readouterr().out) == RECOVERED
+
+
+def test_a_repair_found_first_by_a_question_is_shown_to_the_user_beside_its_verdict(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    damage(repo)
+
+    hook.handle_ask(
+        "claude",
+        {
+            "cwd": str(repo),
+            "session_id": "chat-a",
+            "tool_name": "AskUserQuestion",
+            "tool_input": {"questions": []},
+        },
+    )
+
+    out = capsys.readouterr().out
+    assert user_line(out) == RECOVERED
+
+
+def test_a_stop_after_a_healthy_read_says_nothing_to_the_user(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+
+    hook.handle_stop(
+        "claude",
+        {"cwd": str(repo), "session_id": "chat-a", "last_assistant_message": "done"},
+    )
+
+    assert capsys.readouterr().out == ""
+
+
+@pytest.mark.parametrize("host", ["claude", "codex"])
+def test_the_hosts_with_a_user_channel_get_the_system_message(host: str) -> None:
+    assert hook_bridge.reaches_user(host)
+    assert (
+        json.loads(hook_bridge.format_prompt(host, ["a"], ["b"]))["systemMessage"]
+        == "b"
+    )
+    assert (
+        json.loads(hook_bridge.format_pre_tool_notice("a", "b"))["systemMessage"] == "b"
+    )
+
+
+@pytest.mark.parametrize("host", ["cursor", "kimi", "zed"])
+def test_the_hosts_with_no_user_channel_are_given_none(host: str) -> None:
+    assert not hook_bridge.reaches_user(host)
+    shown = hook_bridge.format_prompt(host, ["a"], ["b"])
+    assert "systemMessage" not in (shown or "")
+
+
+def test_codex_is_shown_the_repair_on_a_pre_tool_call_too(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    damage(repo)
+
+    hook.handle_pre_tool(
+        "codex",
+        "pre-tool",
+        {
+            "cwd": str(repo),
+            "tool_name": GATEWAY + UNLISTED_READ,
+            "tool_input": {},
+            "session_id": "chat-a",
+        },
+    )
+
+    assert user_line(capsys.readouterr().out) == RECOVERED
+
+
+def test_a_host_with_no_user_channel_keeps_its_own_output_on_a_repair(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    damage(repo)
+
+    hook.handle_pre_tool(
+        "cursor",
+        "pre-tool",
+        {
+            "cwd": str(repo),
+            "tool_name": "MCP:" + GATEWAY + LISTED_READ,
+            "tool_input": {},
+            "conversation_id": "chat-a",
+        },
+    )
+
+    out = json.loads(capsys.readouterr().out)
+    assert "systemMessage" not in out
 
 
 # the controls a mode never touches

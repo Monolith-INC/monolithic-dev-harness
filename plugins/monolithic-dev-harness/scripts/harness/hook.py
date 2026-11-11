@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import contextlib
+import functools
 import io
 import json
 import os
@@ -29,6 +30,7 @@ import re
 import shlex
 import signal
 import sys
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -162,19 +164,38 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 
 
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
-    """Check one tool call. An allowed call that carries a note gets the note as its context."""
-    notes: list[str] = []
+    """Check one tool call. A call that repaired the mode, or met a mode that cannot be repaired,
+    carries one line about it: as context for the agent, and as a line the host shows the user when
+    the mode was repaired, even on a call that is denied."""
+    reads: list[modes.Resolution] = []
     printed = io.StringIO()
     with contextlib.redirect_stdout(printed):
-        code = _pre_tool(host, event, payload, notes)
-    output = printed.getvalue()
-    if not output and notes:
-        output = hook_bridge.format_pre_tool_notice(" ".join(notes)) + "\n"
-    sys.stdout.write(output)
+        code = _pre_tool(host, event, payload, reads)
+    sys.stdout.write(_with_mode_notice(host, printed.getvalue(), reads))
     return code
 
 
-def _pre_tool(host: str, event: str, payload: dict[str, Any], notes: list[str]) -> int:
+def _with_mode_notice(host: str, output: str, reads: list[modes.Resolution]) -> str:
+    note = " ".join(read.notice for read in reads if read.notice)
+    shown = (
+        " ".join(read.notice for read in reads if read.repaired)
+        if hook_bridge.reaches_user(host)
+        else ""
+    )
+    match output, note, shown:
+        case _, "", _:
+            return output
+        case "", _, _:
+            return hook_bridge.format_pre_tool_notice(note, shown) + "\n"
+        case _, _, "":
+            return output
+        case _:
+            return hook_bridge.with_user_notice(output, shown)
+
+
+def _pre_tool(
+    host: str, event: str, payload: dict[str, Any], reads: list[modes.Resolution]
+) -> int:
     repo = _workspace(payload, host)
     match state.harness_mode(repo):
         case "suspended":
@@ -214,7 +235,7 @@ def _pre_tool(host: str, event: str, payload: dict[str, Any], notes: list[str]) 
         return 0
     if settings.governed(repo):
         # The first read of the mode in a call repairs it, so this one comes before any other.
-        notes.extend(_mode_notice(repo))
+        reads.append(modes.resolve(repo))
     context = work_session_context.for_payload(repo, host, payload)
     request = (
         work_session_context.requested(call.command, Path(call.cwd or repo), repo)
@@ -489,12 +510,6 @@ def _bind(
     )
 
 
-def _mode_notice(repo: Path) -> list[str]:
-    """The one line a read of the mode has for the agent, when it repaired the mode or could not."""
-    notice = modes.resolve(repo).notice
-    return [notice] if notice else []
-
-
 def handle_startup(host: str, payload: dict[str, Any]) -> int:
     from host_adapters import startup_context
 
@@ -649,9 +664,16 @@ def _switch_harness(repo: Path, operation: str) -> str:
     )
 
 
-def _print_prompt(host: str, notes: list[str]) -> None:
-    if output := hook_bridge.format_prompt(host, notes):
+def _print_prompt(host: str, notes: list[str], mode_notes: Sequence[str] = ()) -> None:
+    if output := hook_bridge.format_prompt(host, notes, mode_notes):
         print(output)
+
+
+def _mode_notes(repo: Path) -> list[str]:
+    """The line the first read of the mode in a prompt has to say, when it repaired the mode or could
+    not. The prompt says it once, to the agent and to the user."""
+    notice = modes.resolve(repo).notice if settings.governed(repo) else ""
+    return [notice] if notice else []
 
 
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
@@ -680,10 +702,10 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         case _:
             pass
     # The first read of the mode in a call repairs it, so this one comes before any other.
-    mode_notes = _mode_notice(repo) if settings.governed(repo) else []
+    mode_notes = _mode_notes(repo)
     context = work_session_context.for_payload(repo, host, payload)
     if isinstance(context, Err):
-        _print_prompt(host, [context.failure.message])
+        _print_prompt(host, [context.failure.message], mode_notes)
         return 0
     work_session_id = context.value
     match state.harness_mode(repo), decisions.pending(repo, work_session_id):
@@ -712,7 +734,11 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         else None
     )
     if pending is not None and reply is not None:
-        _print_prompt(host, _answer_decision(repo, pending, work_session_id, reply))
+        _print_prompt(
+            host,
+            _answer_decision(repo, pending, work_session_id, reply),
+            mode_notes,
+        )
         return 0
     if not settings.governed(repo):
         if output := hook_bridge.format_prompt(host, []):
@@ -744,11 +770,9 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     oriented = mode_hooks.orient(repo)
     if oriented.notice:
         mode_notes.append(oriented.notice)
-    notes.extend(mode_notes)
     if oriented.text:
         notes.append(oriented.text)
-    if output := hook_bridge.format_prompt(host, notes):
-        print(output)
+    _print_prompt(host, notes, mode_notes)
     return 0
 
 
@@ -809,6 +833,40 @@ def asks_the_user(message: str) -> bool:
     return any(_QUESTION_LINE.search(line) for line in message.splitlines())
 
 
+def _announcing(
+    handler: Callable[[str, dict[str, Any]], int],
+) -> Callable[[str, dict[str, Any]], int]:
+    """Show the user a repair of the mode that this event is the first to find.
+
+    A prompt and a tool call say it themselves. A stop, a question and its answer read the mode
+    too, and a repair made by a reader that stayed quiet would never be announced. Only a repair is
+    said, once: a mode that cannot be repaired is said by the next prompt.
+    """
+
+    @functools.wraps(handler)
+    def announced(host: str, payload: dict[str, Any]) -> int:
+        shown = _repair_shown(host, payload)
+        printed = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(printed):
+                return handler(host, payload)
+        finally:
+            output = printed.getvalue()
+            sys.stdout.write(
+                hook_bridge.with_user_notice(output, shown) if shown else output
+            )
+
+    return announced
+
+
+def _repair_shown(host: str, payload: dict[str, Any]) -> str:
+    if not hook_bridge.reaches_user(host):
+        return ""
+    read = modes.resolve(_workspace(payload, host))
+    return read.notice if read.repaired else ""
+
+
+@_announcing
 def handle_stop(host: str, payload: dict[str, Any]) -> int:
     """Never end a turn mid-workflow with nothing for the user to answer.
 
@@ -886,6 +944,7 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
     return 0
 
 
+@_announcing
 def handle_ask(host: str, payload: dict[str, Any]) -> int:
     """Observe real questions while suspended, without giving the observer a veto."""
     match _workspace(payload, host):
@@ -1197,6 +1256,7 @@ def _adoption_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any]
                     return None
 
 
+@_announcing
 def handle_answer(host: str, payload: dict[str, Any]) -> int:
     """After the user answers a question: record the decision, then what the question pinned."""
     match harness_controls.answer(_workspace(payload, host), payload, host):

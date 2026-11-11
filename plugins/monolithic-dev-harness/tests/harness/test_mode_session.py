@@ -756,8 +756,36 @@ def test_cli_status_recovers_a_broken_pointer_and_shows_the_mode(
 
     assert cli.main(["modes", "status", "--repo", str(repo)]) == 0
 
-    shown = json.loads(capsys.readouterr().out)
+    out, error = capsys.readouterr()
+    shown = json.loads(out)
     assert (shown["mode"], shown["root"]) == ("fixture", "EPIC-1")
+    assert error.strip() == RECOVERED
+
+
+def test_cli_status_says_when_the_mode_could_not_be_recovered(
+    repo: Path, capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    state.mode_record(repo).unlink()
+    refuse_the_pointer(repo, monkeypatch)
+    capsys.readouterr()
+
+    assert cli.main(["modes", "status", "--repo", str(repo)]) == 0
+
+    out, error = capsys.readouterr()
+    assert out == ""
+    assert error.strip() == UNRECOVERED
+
+
+def test_cli_status_of_a_healthy_mode_prints_no_line_to_stderr(
+    repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    entered(modes.enter(repo, "fixture"))
+    capsys.readouterr()
+
+    assert cli.main(["modes", "status", "--repo", str(repo)]) == 0
+
+    assert capsys.readouterr().err == ""
 
 
 def test_cli_status_is_silent_for_a_broken_pointer_no_session_backs(

@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -294,33 +295,74 @@ def format_stop(reason: str) -> str:
     return json.dumps({"decision": "block", "reason": reason})
 
 
-def format_pre_tool_notice(note: str) -> str:
-    """An allowed tool call's note for the agent: context only, no permission decision."""
+# Hosts whose hook output can carry a line the host shows to the user, beside the context the agent
+# reads. Claude Code and Codex document `systemMessage` for every hook event. Cursor shows
+# `user_message` only when it denies a call, so a repair on an allowed call has nowhere to go there;
+# Kimi and Zed document no such field.
+USER_NOTICE_HOSTS = frozenset({"claude", "codex"})
+
+
+def reaches_user(host: str) -> bool:
+    return host in USER_NOTICE_HOSTS
+
+
+def format_pre_tool_notice(note: str, shown: str = "") -> str:
+    """An allowed tool call's note for the agent: context only, no permission decision. `shown` is
+    the part the host also shows the user."""
     return json.dumps(
         {
+            **({"systemMessage": shown} if shown else {}),
             "hookSpecificOutput": {
                 "hookEventName": "PreToolUse",
                 "additionalContext": note,
-            }
+            },
         }
     )
 
 
-def format_prompt(host: str, notes: list[str]) -> str | None:
-    match host, "\n".join(notes):
+def with_user_notice(output: str, shown: str) -> str:
+    """A hook's output with `shown` added as the line the host shows the user.
+
+    A hook prints one JSON object or nothing. Nothing becomes a line alone. Output that is not one
+    JSON object is left as it is: the line is never worth breaking the host's reply for.
+    """
+    if not output.strip():
+        return json.dumps({"systemMessage": shown}) + "\n"
+    try:
+        payload = json.loads(output)
+    except ValueError:
+        return output
+    if not isinstance(payload, dict):
+        return output
+    earlier = payload.get("systemMessage")
+    lines = [earlier, shown] if isinstance(earlier, str) and earlier else [shown]
+    return json.dumps({**payload, "systemMessage": "\n".join(lines)}) + "\n"
+
+
+def format_prompt(
+    host: str, notes: list[str], mode_notes: Sequence[str] = ()
+) -> str | None:
+    """What a prompt hook prints. `mode_notes` are what the mode machinery has to say; the user is
+    shown those and nothing else, while the agent reads them with the rest."""
+    context = "\n".join([*mode_notes, *notes])
+    shown = "\n".join(mode_notes) if reaches_user(host) else ""
+    match host, context:
         case "cursor", _:
             return json.dumps({"continue": True})
-        case "codex", str() as context if context:
+        case _, "":
+            return None
+        case _ if host == "codex" or shown:
             return json.dumps(
                 {
+                    **({"systemMessage": shown} if shown else {}),
                     "hookSpecificOutput": {
                         "hookEventName": "UserPromptSubmit",
                         "additionalContext": context,
-                    }
+                    },
                 }
             )
-        case _, context:
-            return context or None
+        case _:
+            return context
 
 
 def delegates_workflow_policy(host: str, event: str) -> bool:
