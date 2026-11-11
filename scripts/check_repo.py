@@ -7,6 +7,8 @@
 - every tracked *.json file parses;
 - the example settings validate against the settings schema, and every shipped tracker folder
   meets the tracker contract (both with the plugin's own standard-library checker);
+- every mode folder under the plugin's `modes/` loads with the mode loader (manifest, files,
+  hooks, operations and skills);
 - every skill's frontmatter `name` matches its folder;
 - every document under docs/ has title / status / owner / last_reviewed frontmatter;
 - the workflow diagram matches the route it is drawn from;
@@ -98,6 +100,23 @@ def check_json(problems: list[str]) -> None:
     problems.extend(failure.message for failure in failures(registry.shipped()))
 
 
+def check_modes(problems: list[str]) -> None:
+    if not (PLUGIN / "modes").is_dir():
+        return
+    sys.path.insert(0, str(PLUGIN / "scripts"))
+    from core.result import Err
+    from harness import modes
+
+    for folder in sorted(
+        path for path in (PLUGIN / "modes").iterdir() if path.is_dir()
+    ):
+        match modes.load(folder.name):
+            case Err(failure):
+                problems.append(
+                    f"plugins/monolithic-dev-harness/modes/{folder.name}: {failure.message}"
+                )
+
+
 def check_skills(problems: list[str]) -> None:
     for skill in sorted((PLUGIN / "skills").iterdir()):
         text = (skill / "SKILL.md").read_text(encoding="utf-8")
@@ -164,6 +183,7 @@ def main() -> int:
     for check in (
         check_required_files,
         check_json,
+        check_modes,
         check_skills,
         check_docs,
         check_links,

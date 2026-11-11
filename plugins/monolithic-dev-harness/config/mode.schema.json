@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Harness mode manifest (mode.toml)",
+  "type": "object",
+  "required": ["name", "goal", "expectations", "entry_skill", "skills", "operations", "hooks", "knowledge", "exit"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {"type": "string", "minLength": 1},
+    "goal": {"type": "string", "minLength": 1},
+    "expectations": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "entry_skill": {"type": "string", "minLength": 1},
+    "skills": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "when"],
+        "additionalProperties": false,
+        "properties": {
+          "name": {"type": "string", "minLength": 1},
+          "when": {"type": "string", "minLength": 1}
+        }
+      }
+    },
+    "operations": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "hooks": {"type": "array", "items": {"type": "string", "minLength": 1}},
+    "knowledge": {"enum": ["first", "suggest"]},
+    "exit": {"type": "array", "items": {"type": "string", "minLength": 1}}
+  }
+}
