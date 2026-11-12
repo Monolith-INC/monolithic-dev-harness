@@ -30,10 +30,13 @@ import re
 import shlex
 import signal
 import sys
+import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
+# Read before the harness imports below, which take a good part of a hook's time.
+_PROCESS_STARTED = time.monotonic()
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
     if str(entry) not in sys.path:
@@ -48,6 +51,7 @@ from harness import (  # noqa: E402
     gates,
     globs,
     harness_controls,
+    hook_timing,
     mode_hooks,
     modes,
     onboarding,
@@ -247,6 +251,7 @@ def _pre_tool(
         else None
     )
     held = _held(repo, call, context, request, host=host)
+    hook_timing.step("session-and-pending")
     if held is not None:
         _emit_decision(host, held)
         return 0
@@ -304,6 +309,7 @@ def _governed_pre_tool(
                 tracker_policy.build(repo, loaded),
                 work_sessions.acting(repo, work_session_id),
             )
+    hook_timing.step("rules")
     match decision.allowed:
         case True:
             match process_channel.authorize_tool(host, repo, payload, call):
@@ -326,8 +332,12 @@ def _governed_pre_tool(
     if not decision.allowed:
         _emit_decision(host, decision)
         return 0
+    hook_timing.step("process-and-binding")
     if hook_bridge.delegates_workflow_policy(host, event):
-        return _delegate_to_workflow_policy(host, payload, call, repo)
+        try:
+            return _delegate_to_workflow_policy(host, payload, call, repo)
+        finally:
+            hook_timing.step("workflow-policy")
     _emit_decision(host, decision)
     return 0
 
@@ -730,9 +740,11 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
             return 0
         case _:
             pass
+    hook_timing.step("controls")
     # The first read of the mode in a call repairs it, so this one comes before any other.
     mode_notes = _mode_notes(repo)
     context = work_session_context.for_payload(repo, host, payload)
+    hook_timing.step("mode-and-session")
     if isinstance(context, Err):
         _print_prompt(host, [context.failure.message], mode_notes)
         return 0
@@ -751,6 +763,8 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     match _recover_prompt_answer(repo, host, payload, work_session_id):
         case notes, pending:
             pass
+    hook_timing.step("recover-answer")
+    hook_timing.decision(pending.id if pending else "")
     # Only a reply that picks an offered option answers; anything else is an ordinary prompt.
     reply = (
         prompt_answer(host, prompt, pending)
@@ -763,11 +777,9 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         else None
     )
     if pending is not None and reply is not None:
-        _print_prompt(
-            host,
-            _answer_decision(repo, pending, work_session_id, reply),
-            mode_notes,
-        )
+        answered = _answer_decision(repo, pending, work_session_id, reply)
+        hook_timing.step("record-answer")
+        _print_prompt(host, answered, mode_notes)
         return 0
     if not settings.governed(repo):
         if output := hook_bridge.format_prompt(host, []):
@@ -801,6 +813,7 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         mode_notes.append(oriented.notice)
     if oriented.text:
         notes.append(oriented.text)
+    hook_timing.step("notes")
     _print_prompt(host, notes, mode_notes)
     return 0
 
@@ -916,6 +929,7 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
     ):
         return 0
     context = work_session_context.for_payload(repo, host, payload)
+    hook_timing.step("session")
     if isinstance(context, Err):
         return 0
     scope = context.value
@@ -1004,6 +1018,7 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     if repo is None:
         return 0
     context = work_session_context.for_payload(repo, host, payload)
+    hook_timing.step("controls-and-session")
     if isinstance(context, Err):
         _emit_decision(
             host,
@@ -1020,6 +1035,8 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
         repo, host, payload, decisions.pending(repo, work_session_id), first, transport
     )
     preparing = pending is not None and pending.matches_presentation(first, transport)
+    hook_timing.step("pending")
+    hook_timing.decision(pending.id if pending else hook_bridge.question_id(payload))
     if decisions.blocking(repo, work_session_id) and not preparing:
         _emit_decision(
             host,
@@ -1035,6 +1052,7 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             return 0
         case None:
             pass
+    hook_timing.step("artifacts-shown")
     found = questions.problems(tool_input)
     # Suspended observation may retain a valid binding but never veto presentation.
     if found and state.harness_mode(repo) != "suspended":
@@ -1087,6 +1105,7 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
         case _:
             pass
     detail = {**tracker_detail, **manual_detail, **adoption_detail}
+    hook_timing.step("question-checks")
     tool_use_id = hook_bridge.question_id(payload)
     if not tool_use_id:
         return 0
@@ -1133,6 +1152,7 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
         case _:
             pass
     state.mark_asked(repo, questions.marker_name(tool_use_id), detail, decision_scope)
+    hook_timing.step("record-and-marker")
     return 0
 
 
@@ -1324,6 +1344,8 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
     if repo is None or not tool_use_id:
         return 0
     context = work_session_context.for_payload(repo, host, payload)
+    hook_timing.step("controls-and-session")
+    hook_timing.decision(tool_use_id)
     if isinstance(context, Err):
         print(hook_bridge.format_answer_context(context.failure.message))
         return 0
@@ -1375,6 +1397,7 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
             pending.transport,
             work_session_id=decision_scope,
         )
+        hook_timing.step("record-answer")
         if isinstance(result, Err):
             print(
                 hook_bridge.format_answer_context(
@@ -1385,6 +1408,7 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
     note = _apply_marker(
         repo, tool_use_id, decision_scope, work_session_id, tool_input, response
     )
+    hook_timing.step("marker-and-approval")
     if note:
         print(hook_bridge.format_answer_context(note))
     return 0
@@ -1637,7 +1661,8 @@ def _save_captured_language(repo: Path, answer: str) -> str | None:
             return None
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, started: float | None = None) -> int:
+    hook_timing.begin(time.monotonic() if started is None else started)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--host", choices=("claude", "cursor", "codex", "zed", "kimi"), required=True
@@ -1666,13 +1691,25 @@ def main(argv: list[str] | None = None) -> int:
         payload = {}
     if not isinstance(payload, dict):
         payload = {}
-    return _dispatch_event(
-        argparse.Namespace(
-            host=args.host,
-            event=process_channel.event_name(args.host, args.event, payload),
-        ),
-        payload,
-    )
+    hook_timing.step("startup")
+    try:
+        return _dispatch_event(
+            argparse.Namespace(
+                host=args.host,
+                event=process_channel.event_name(args.host, args.event, payload),
+            ),
+            payload,
+        )
+    finally:
+        _log_timing(args.host, args.event, payload)
+
+
+def _log_timing(host: str, event: str, payload: dict[str, Any]) -> None:
+    """One line about this event in the local timing log; a failure to log is ignored."""
+    try:
+        hook_timing.write(_workspace(payload, host), event, host)
+    except Exception:
+        return
 
 
 def _dispatch_event(args: argparse.Namespace, payload: dict[str, Any]) -> int:
@@ -1691,6 +1728,7 @@ def _dispatch_event(args: argparse.Namespace, payload: dict[str, Any]) -> int:
             return 0
         case _:
             pass
+    hook_timing.step("process-channel")
     match args.event:
         case "startup":
             match attempt(
@@ -1755,4 +1793,4 @@ def _dispatch_event(args: argparse.Namespace, payload: dict[str, Any]) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(started=_PROCESS_STARTED))
