@@ -105,10 +105,16 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     _control_parser(
         sub, "mode", "choose free or structured guidance; governance checks still apply"
     )
-    plan_parser = sub.add_parser("plan", help="inspect a plan's size and scope signals")
+    plan_parser = sub.add_parser(
+        "plan",
+        help="inspect a plan's size and scope signals, or check a Story's plan against the "
+        "tracker again",
+    )
     plan_parser.add_argument("operation", choices=("check", "source"))
     plan_parser.add_argument(
-        "file", help="plan file for check, or tracked item key for source"
+        "file",
+        help="for check: a plan file to inspect, or a Story key whose plan is checked against "
+        "the tracker and given a fresh receipt; for source: a tracked item key",
     )
     plan_parser.add_argument("--repo", default=".")
     begin_parser = sub.add_parser(
@@ -328,6 +334,17 @@ def run(args: argparse.Namespace) -> int:
                         lambda item: json.dumps(
                             {"item": item.key, "source_digest": item_digest(item)}
                         ),
+                    ),
+                )
+            )
+        case "plan" if not (resolve_repo(args.repo) / args.file).is_file():
+            # `plan check <story>`: the tracker-backed checks of the Story's plan, run again.
+            repo = resolve_repo(args.repo)
+            return print_result(
+                bind(
+                    registry.open_selected(repo, settings.load(repo)),
+                    lambda ops: fmap(
+                        plan_review.recheck(repo, args.file, ops), json.dumps
                     ),
                 )
             )
@@ -765,16 +782,13 @@ def _gate_values(repo: Path, args: argparse.Namespace) -> Result[dict[str, str]]
         return Ok(values)
     return bind(
         plan_review.story(repo, list(args.artifact or ())),
-        lambda key: bind(
+        lambda _: bind(
             registry.open_selected(repo, settings.load(repo)),
-            lambda ops: bind(
-                plan_review.tracked(ops, key),
-                lambda _: fmap(
-                    plan_review.source_matches(
-                        repo, list(args.artifact or ()), ops, args.session_id
-                    ),
-                    lambda _: {**values, "story": key},
+            lambda ops: fmap(
+                plan_review.verify(
+                    repo, list(args.artifact or ()), ops, args.session_id
                 ),
+                lambda key: {**values, "story": key},
             ),
         ),
     )

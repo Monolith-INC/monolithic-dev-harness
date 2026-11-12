@@ -716,30 +716,10 @@ def _resolve(
         raise ValueError("the human reply is empty")
     if source != current.get("transport"):
         raise ValueError("the answer arrived through a different interaction")
+    # An answer is recorded from local files only. What `implementation-confirm` needs from the
+    # tracker (the route is at the plan step, the plan matches the Story) ran when the question
+    # was prepared and left a receipt (`plan_review.verify`); a code write waits on that receipt.
     match current.get("gate"), current.get("work_session_id"):
-        case "implementation-confirm", str() as scope if (
-            questions.choice_label(answer).casefold() not in questions.DECLINE_LABELS
-        ):
-            from harness import plan_review, settings
-            from harness.workflow_evidence import gate_ready
-            from integrations import registry
-
-            match bind(
-                gate_ready(repo, scope, "implementation-confirm"),
-                lambda _: bind(
-                    registry.open_selected(repo, settings.load(repo)),
-                    lambda ops: plan_review.source_matches(
-                        repo,
-                        [name for name, _ in current.get("artifacts", ())],
-                        ops,
-                        scope,
-                    ),
-                ),
-            ):
-                case Err(failure):
-                    raise ValueError(failure.message)
-                case Ok():
-                    pass
         case "manual-check", _ if not own_words and (
             questions.choice_label(answer).casefold() not in questions.DECLINE_LABELS
         ):
