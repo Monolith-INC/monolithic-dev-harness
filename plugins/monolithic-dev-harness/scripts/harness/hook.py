@@ -577,9 +577,19 @@ def _pin_reviewed_notes(
         return f" Reviewed plan and spec notes were NOT pinned: {exc}"
     if not notes:
         return ""
-    return (
-        f" It also covers {len(notes)} reviewed plan or spec note(s), as they read now; set"
-        " their `status` to `active`, and any other edit needs a new approval."
+    # A ticket document carries no `status` (ticket rules forbid it); only notes are marked active.
+    statused = [
+        path
+        for path in notes
+        if (found := local_artifacts.note(Path(path))) is not None
+        and found.kind != "ticket"
+    ]
+    return f" It also covers {len(notes)} reviewed note(s), as they read now; " + (
+        "set the `status` of "
+        + ", ".join(f"`{Path(path).name}`" for path in statused)
+        + " to `active`; any other edit needs a new approval."
+        if statused
+        else "any edit needs a new approval."
     )
 
 

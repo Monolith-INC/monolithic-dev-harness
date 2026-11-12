@@ -262,7 +262,7 @@ class ApprovalByClickTests(unittest.TestCase):
         run(self.repo, "ask", {"tool_use_id": "toolu_1", "tool_input": ask()})
         out = self._answer("Approve")
         self.assertNotIn(
-            "plan or spec note", out["hookSpecificOutput"]["additionalContext"]
+            "reviewed note", out["hookSpecificOutput"]["additionalContext"]
         )
         self.assertEqual(state.pinned_notes(self.repo), {})
 
@@ -281,11 +281,30 @@ class ApprovalByClickTests(unittest.TestCase):
         binds = {"artifacts": [["Vault/reviewed.md", digest]]}
         state.open_approval(self.repo, "HD-1", 20, binds=binds)
         note = hook._pin_reviewed_notes(self.repo, "HD-1", binds)
-        self.assertIn("1 reviewed plan or spec note", note)
+        self.assertIn("1 reviewed note", note)
+        self.assertIn("`reviewed.md` to `active`", note)
         self.assertEqual(
             list(state.pinned_notes(self.repo)),
             [str((self.repo / "Vault/reviewed.md").resolve())],
         )
+
+    def test_a_reviewed_ticket_is_pinned_but_not_given_a_status(self) -> None:
+        """rc.10 trial: the note told the agent to set a ticket draft's status, which tickets forbid."""
+        from harness import hook
+
+        write_settings(self.repo, artifacts_path="Vault")
+        (self.repo / "Vault").mkdir()
+        (self.repo / "Vault/ticket.md").write_text(
+            "---\ntype: ticket\nwork_item_type: User Story\n---\n\nBody.\n"
+        )
+        digest = hashlib.sha256(
+            (self.repo / "Vault/ticket.md").read_bytes()
+        ).hexdigest()
+        binds = {"artifacts": [["Vault/ticket.md", digest]]}
+        state.open_approval(self.repo, "HD-2", 20, binds=binds)
+        note = hook._pin_reviewed_notes(self.repo, "HD-2", binds)
+        self.assertIn("1 reviewed note", note)
+        self.assertNotIn("active", note)
 
     def test_not_now_opens_nothing(self) -> None:
         run(self.repo, "ask", {"tool_use_id": "toolu_1", "tool_input": ask()})
