@@ -10,7 +10,12 @@ from integrations.planning_files import ESTIMATED_HOURS, POINTS
 
 FRONTMATTER_RE = re.compile(r"^---\s*\n(.*?)\n---\s*\n", re.DOTALL)
 TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
-FILENAME_RE = re.compile(r"^(\d+|draft|tech-debt|bug|task|spike)-[a-z0-9-]+$")
+# A ticket file (`0001-slug`, a draft), or the refined ticket document the harness names after its
+# item (`ticket-user-story-0001-slug`, Article 8a).
+FILENAME_RE = re.compile(
+    r"^(\d+|draft|tech-debt|bug|task|spike"
+    r"|ticket-(?:epic|feature|user-story|task|bug)-\d+)-[a-z0-9-]+$"
+)
 LEGACY_FRONTMATTER_KEYS = ("azure_id", "parent_feature", "parent_epic")
 
 

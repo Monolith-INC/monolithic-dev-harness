@@ -149,6 +149,15 @@ class TestArtifactValidator(unittest.TestCase):
         )
         self.assertEqual(_detect_body_format(refined), "enriched_story")
 
+    def test_the_refined_ticket_document_name_is_accepted(self) -> None:
+        from orchestrator_core.ingest import FILENAME_RE
+
+        self.assertTrue(
+            FILENAME_RE.match("ticket-user-story-0001-show-both-task-counts")
+        )
+        self.assertTrue(FILENAME_RE.match("0001-show-both-task-counts"))
+        self.assertFalse(FILENAME_RE.match("ticket-show-both-task-counts"))
+
     def test_an_unknown_body_gets_one_diagnostic(self) -> None:
         text = ENGLISH_RAW_STORY.replace("## Requirements", "## Notes").replace(
             "## Acceptance Criteria", "## Checks"
