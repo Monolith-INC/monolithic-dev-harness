@@ -117,6 +117,12 @@ def _detect_body_format(body: str) -> BodyFormat:
     )
 
     h2 = _extract_h2_headings(body)
+    # A refined item quotes its earlier text under Original Description; that quote's headings
+    # (a raw draft's `## Requirements`) say nothing about this item's own format.
+    originals = {
+        labels["original_description"] for labels in SECTION_LABELS_BY_LANGUAGE.values()
+    }
+    h2 = h2[: next((i for i, label in enumerate(h2) if label in originals), len(h2))]
     if RAW_REQUIREMENT_HEADINGS.intersection(h2):
         return "raw_generate"
     all_story_sections = {
