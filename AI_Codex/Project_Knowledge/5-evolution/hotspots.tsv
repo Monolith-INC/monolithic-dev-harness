@@ -10,8 +10,8 @@
 # updated: 2026-11-14
 # version: 1
 # status: current
-# supersedes: 
-# links: 
+# supersedes:
+# links:
 path	commits_touching_path_last_6_months
 plugins/monolithic-dev-harness/scripts/harness/hook.py	75
 plugins/monolithic-dev-harness/scripts/harness/rules.py	56
