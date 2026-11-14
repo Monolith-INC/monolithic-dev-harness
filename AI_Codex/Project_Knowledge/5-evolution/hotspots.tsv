@@ -1,0 +1,35 @@
+# id: 5-evolution/hotspots
+# tier: 5
+# type: evolution
+# area: churn
+# title: Recent source churn
+# read_when: Finding files with frequent changes before planning a review.
+# provenance: derived
+# sources: plugins/monolithic-dev-harness/scripts/**
+# derived_from_commit: a2f686a38a25825d70e6b4a80c71f17c16315953
+# updated: 2026-11-14
+# version: 1
+# status: current
+# supersedes: 
+# links: 
+path	commits_touching_path_last_6_months
+plugins/monolithic-dev-harness/scripts/harness/hook.py	75
+plugins/monolithic-dev-harness/scripts/harness/rules.py	56
+plugins/monolithic-dev-harness/scripts/harness/cli.py	47
+plugins/monolithic-dev-harness/scripts/harness/cli_workflow.py	36
+plugins/monolithic-dev-harness/scripts/hook_runtime.py	34
+plugins/monolithic-dev-harness/scripts/harness/decisions.py	30
+plugins/monolithic-dev-harness/scripts/harness/state.py	25
+plugins/monolithic-dev-harness/scripts/integrations/gateway.py	24
+plugins/monolithic-dev-harness/scripts/harness/bootstrap.py	21
+plugins/monolithic-dev-harness/scripts/harness/questions.py	20
+plugins/monolithic-dev-harness/scripts/harness/modes.py	16
+plugins/monolithic-dev-harness/scripts/harness/work_sessions.py	15
+plugins/monolithic-dev-harness/scripts/integrations/contracts.py	14
+plugins/monolithic-dev-harness/scripts/harness/shellscan.py	14
+plugins/monolithic-dev-harness/scripts/harness/setup.py	14
+plugins/monolithic-dev-harness/scripts/host_adapters/interactions.py	12
+plugins/monolithic-dev-harness/scripts/host_adapters/hook_bridge.py	12
+plugins/monolithic-dev-harness/scripts/harness/workflow.py	11
+plugins/monolithic-dev-harness/scripts/harness/plan_review.py	10
+plugins/monolithic-dev-harness/scripts/integrations/registry.py	10

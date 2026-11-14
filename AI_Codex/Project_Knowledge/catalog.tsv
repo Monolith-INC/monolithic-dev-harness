@@ -1,0 +1,19 @@
+id	type	area	title	path	provenance	updated	read_when
+1-identity/ownership	identity	ownership	Ownership and escalation	1-identity/ownership.md	stated	2026-11-14	Finding the owner to contact when a review needs a human decision.
+1-identity/purpose	identity	purpose	Purpose and consumers	1-identity/purpose.md	stated	2026-11-14	Understanding who the harness serves and what it promises.
+2-structure/architecture	structure	architecture	Authority and adapter boundaries	2-structure/architecture.md	stated	2026-11-14	Checking whether a change puts behavior in the component that owns it.
+2-structure/decisions	structure	decisions	Architecture decision index	2-structure/decisions.md	derived	2026-11-14	Finding the decision that defines a disputed project boundary.
+2-structure/directory-conventions	structure	directories	Document and source locations	2-structure/directory-conventions.md	stated	2026-11-14	Choosing where a plan, work item, durable document or generated artifact belongs.
+2-structure/topology	structure	topology	Repository topology	2-structure/topology.md	derived	2026-11-14	Locating the authored implementation before reviewing a change.
+3-mechanics/build-tooling	mechanics	build	Build and quality commands	3-mechanics/build-tooling.md	derived	2026-11-14	Selecting the repository checks appropriate to a change.
+3-mechanics/contracts	mechanics	contracts	Configuration and provider contracts	3-mechanics/contracts.md	derived	2026-11-14	Finding the canonical shape of settings, tracker data and gateway operations.
+3-mechanics/runtime-ops	mechanics	operations	Installation and runtime activation	3-mechanics/runtime-ops.md	stated	2026-11-14	Distinguishing installed files from active host behavior.
+3-mechanics/stack	mechanics	stack	Runtime and dependencies	3-mechanics/stack.md	derived	2026-11-14	Checking runtime support and direct dependencies before adding code.
+3-mechanics/testing	mechanics	testing	Tests and host evidence	3-mechanics/testing.md	stated	2026-11-14	Deciding which suite and live evidence a behavior change needs.
+4-rules/coding-standards	rules	coding	Coding and dependency rules	4-rules/coding-standards.md	stated	2026-11-14	Checking source conventions and prohibited implementation shortcuts.
+4-rules/functional-principles	rules	functional	Owner functional coding discipline	4-rules/functional-principles.md	stated	2026-11-14	Choosing the shape of new logic or a refactor.
+4-rules/runtime-budgets	rules	budgets	Current hook time budgets	4-rules/runtime-budgets.md	derived	2026-11-14	Assessing whether hook work can exceed its local time limit.
+4-rules/security-compliance	rules	security	Authority and security constraints	4-rules/security-compliance.md	stated	2026-11-14	Checking whether a change weakens approval, provider trust or protected state.
+4-rules/workflow	rules	workflow	Approval, delivery and completion rules	4-rules/workflow.md	stated	2026-11-14	Checking a change against the project definition of done and approval rules.
+5-evolution/hotspots	evolution	churn	Recent source churn	5-evolution/hotspots.tsv	derived	2026-11-14	Finding files with frequent changes before planning a review.
+5-evolution/risks	evolution	verification	Known verification gaps	5-evolution/risks.md	stated	2026-11-14	Avoiding claims that exceed the available approval or test evidence.
