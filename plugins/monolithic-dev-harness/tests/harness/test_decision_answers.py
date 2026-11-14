@@ -186,8 +186,16 @@ def test_a_numbered_reply_answers_a_chat_question(repo: Path) -> None:
 
 def test_typing_after_a_dismissed_picker_answers_it(repo: Path) -> None:
     decisions.begin(repo, "d1", "Next step?", ROUTES, "blocking")
+    # The picker was shown, then dismissed.
+    decisions.bind_question(repo, "d1", "toolu_1", "Next step?", ROUTES, "blocking")
     type_prompt(repo, "feature", host="claude")
     assert (decisions.record(repo) or {}).get("answer") == ROUTES[0]
+
+
+def test_typing_before_the_picker_was_shown_answers_nothing(repo: Path) -> None:
+    decisions.begin(repo, "d1", "Next step?", ROUTES, "blocking")
+    type_prompt(repo, "feature", host="claude")
+    assert decisions.waiting(repo)
 
 
 def ask_without_session(repo: Path, question: str) -> None:

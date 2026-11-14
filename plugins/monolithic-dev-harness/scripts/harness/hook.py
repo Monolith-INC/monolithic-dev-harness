@@ -803,10 +803,13 @@ def _recover_prompt_answer(
     payload: dict[str, Any],
     scope: str | None,
 ) -> tuple[list[str], decisions.Pending | None]:
+    from host_adapters import native_session_id
+
     match decisions.pending(repo, scope):
-        case decisions.Pending() if not _native_decision_origin(
-            repo, host, payload, scope
+        case decisions.Pending(scope=found) if not decisions.presented_here(
+            decisions.record(repo, found) or {}, native_session_id(host, payload) or ""
         ):
+            # Not shown in this conversation: a typed "1" here answers nothing.
             return [], None
         case decisions.Pending() as pending:
             match recorded_answer(host, payload, pending):
@@ -988,6 +991,8 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
 
 def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     """Before a question is shown: send it back if a person would have to decode it."""
+    from host_adapters import native_session_id
+
     match harness_controls.observe(_workspace(payload, host), host, payload):
         case True:
             return 0
@@ -1106,10 +1111,12 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             options,
             transport,
             work_session_id=decision_scope,
+            native_session=native_session_id(host, payload) or "",
         )
         if preparing
-        else decisions.begin(
+        else _begin_shown(
             repo,
+            native_session_id(host, payload) or "",
             tool_use_id,
             question,
             options,
@@ -1135,6 +1142,46 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     state.mark_asked(repo, questions.marker_name(tool_use_id), detail, decision_scope)
     hook_budget.step("record-and-marker")
     return 0
+
+
+def _begin_shown(
+    repo: Path,
+    native_session: str,
+    key: str,
+    question: str,
+    options: tuple[str, ...],
+    transport: str,
+    artifacts: tuple[tuple[str, str], ...],
+    *,
+    work_session_id: str | None,
+    allow_free_text: bool,
+) -> Result[dict[str, Any]]:
+    """Start a decision for a question a dialog is showing now, and record that showing: the
+    conversation that saw it may then type its answer. Codex's async delivery is shown later."""
+    started = decisions.begin(
+        repo,
+        key,
+        question,
+        options,
+        transport,
+        artifacts,
+        work_session_id=work_session_id,
+        allow_free_text=allow_free_text,
+    )
+    match started, transport:
+        case Ok(), "blocking":
+            return decisions.bind_question(
+                repo,
+                key,
+                key,
+                question,
+                options,
+                transport,
+                work_session_id=work_session_id,
+                native_session=native_session,
+            )
+        case _:
+            return started
 
 
 def _native_async_pending(

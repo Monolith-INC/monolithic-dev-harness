@@ -676,17 +676,21 @@ def bind_question(
     transport: str,
     *,
     work_session_id: str | None = None,
+    native_session: str = "",
 ) -> Result[dict[str, Any]]:
     """Tie the pending decision `key` to the host question `tool_id` now showing it.
 
-    The decision keeps its own id; `presentation_id` names the latest showing, and `presented_on`
-    every transport it was shown on. A dialog or chat question may be shown again, and the newest
-    showing is the one whose answer counts.
+    The decision keeps its own id; `presentation_id` names the latest showing, `presented_on`
+    every transport it was shown on, and `presented_in` every conversation (`native_session`).
+    A dialog or chat question may be shown again, and the newest showing is the one whose answer
+    counts. The conversation showing it owns its next reply, as after a fallback.
     """
     return bind(
         _path(repo, work_session_id),
         lambda path: attempt(
-            lambda: _bind_at(path, key, tool_id, question, options, transport),
+            lambda: _bind_at(
+                path, key, tool_id, question, options, transport, native_session
+            ),
             "decision_invalid",
             "native question",
             OSError,
@@ -702,6 +706,7 @@ def _bind_at(
     question: str,
     options: tuple[str, ...],
     transport: str,
+    native_session: str,
 ) -> dict[str, Any]:
     current = state.read_json(path) or {}
     match _bindable(current, key, tool_id, question, options, transport):
@@ -716,6 +721,10 @@ def _bind_at(
         "presented_on": sorted(
             {*current.get("presented_on", ()), str(current.get("transport")), transport}
         ),
+        "presented_in": sorted(
+            {*current.get("presented_in", ()), native_session} - {""}
+        ),
+        "native_session_id": native_session or current.get("native_session_id", ""),
     }
     state.write_json(path, updated)
     return updated
@@ -743,6 +752,28 @@ def _bindable(
             return same and not current.get("presentation_id")
         case _:
             return False
+
+
+def presented_here(record: dict[str, Any], native_session: str) -> bool:
+    """Whether a reply typed in this conversation (`native_session`) may answer the question.
+
+    It must have been shown, and shown here: a typed "1" in another conversation, or before
+    the question ever reached the user, answers nothing. Where the harness knows which
+    conversations showed it, the reply must come from one of them. Where it knows none, a
+    question waiting in the chat or in Codex's async delivery counts as shown, and one waiting
+    for a dialog only once a dialog showed it.
+    """
+    sessions = {
+        *record.get("presented_in", ()),
+        str(record.get("native_session_id") or ""),
+    } - {""}
+    match bool(sessions):
+        case True:
+            return native_session in sessions
+        case False:
+            return record.get("transport") in ("chat", "async") or bool(
+                record.get("presentation_id")
+            )
 
 
 def answers_to(record: dict[str, Any], key: str) -> bool:
