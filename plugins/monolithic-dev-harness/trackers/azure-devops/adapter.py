@@ -110,7 +110,8 @@ WEEKDAY_INDEX = {
     "saturday": 5,
     "sunday": 6,
 }
-TIMEFRAME_CURRENT = (1, "current")  # Azure's iteration timeFrame: the SDK's enum number or the REST text
+# Azure's iteration timeFrame for the current sprint: the SDK's enum number or the REST text
+TIMEFRAME_CURRENT = (1, "current")
 SPRINT_MARKERS = (
     "attributes",
     "startDate",
