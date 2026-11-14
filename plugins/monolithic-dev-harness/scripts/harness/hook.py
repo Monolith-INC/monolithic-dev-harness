@@ -28,12 +28,14 @@ import json
 import os
 import re
 import shlex
-import signal
 import sys
+import time
 from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Any
 
+# Read before the harness imports below, which take a good part of a hook's time.
+_PROCESS_STARTED = time.monotonic()
 PLUGIN_ROOT = Path(__file__).resolve().parents[2]
 for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
     if str(entry) not in sys.path:
@@ -48,6 +50,8 @@ from harness import (  # noqa: E402
     gates,
     globs,
     harness_controls,
+    hook_budget,
+    hook_timing,
     mode_hooks,
     modes,
     onboarding,
@@ -73,20 +77,6 @@ from host_adapters.interactions import (  # noqa: E402
     prompt_answer,
     question_transport,
 )
-
-# The hosts give the hook 15 seconds and treat a timeout as "no decision", which lets the call
-# through. The rules and the workflow policy share less than that, and running out counts as a
-# failure.
-RULES_BUDGET_SECONDS = 12
-
-
-class _OutOfTime(BaseException):
-    """Not an Exception, so no `except Exception` on the way can swallow it and let a call run."""
-
-
-def _out_of_time(_signum: int, _frame: Any) -> None:
-    raise _OutOfTime(f"the rules took longer than {RULES_BUDGET_SECONDS}s")
-
 
 APPROVE_RE = re.compile(
     r"\b(?:approve|aprovo|aprovado|aprovar)\s+(HB-[A-Z0-9]{4,12})\b", re.IGNORECASE
@@ -247,6 +237,7 @@ def _pre_tool(
         else None
     )
     held = _held(repo, call, context, request, host=host)
+    hook_budget.step("session-and-pending")
     if held is not None:
         _emit_decision(host, held)
         return 0
@@ -263,24 +254,17 @@ def _pre_tool(
                 pass
         _emit_decision(host, rules.Decision.allow())
         return 0
-    timed = hasattr(signal, "SIGALRM")
-    if timed:
-        signal.signal(signal.SIGALRM, _out_of_time)
-        signal.setitimer(signal.ITIMER_REAL, RULES_BUDGET_SECONDS)
     try:
         return _governed_pre_tool(
             host, event, payload, call, repo, work_session_id, request
         )
-    except (Exception, _OutOfTime) as exc:
-        # Any failure of the rules or the workflow policy, including a crash or running out of
-        # time, blocks writes. A hook that errors or times out is not a block: the host would let
-        # the call run.
+    except Exception as exc:
+        # Any failure of the rules or the workflow policy blocks writes. A hook that errors is not
+        # a block: the host would let the call run. Running out of time is `hook_budget`'s, and
+        # ends the same way (`_on_timeout`).
         return _fail(
             host, call, f"harness rules could not run: {type(exc).__name__}: {exc}"
         )
-    finally:
-        if timed:
-            signal.setitimer(signal.ITIMER_REAL, 0)
 
 
 def _governed_pre_tool(
@@ -304,6 +288,7 @@ def _governed_pre_tool(
                 tracker_policy.build(repo, loaded),
                 work_sessions.acting(repo, work_session_id),
             )
+    hook_budget.step("rules")
     match decision.allowed:
         case True:
             match process_channel.authorize_tool(host, repo, payload, call):
@@ -326,8 +311,12 @@ def _governed_pre_tool(
     if not decision.allowed:
         _emit_decision(host, decision)
         return 0
+    hook_budget.step("process-and-binding")
     if hook_bridge.delegates_workflow_policy(host, event):
-        return _delegate_to_workflow_policy(host, payload, call, repo)
+        try:
+            return _delegate_to_workflow_policy(host, payload, call, repo)
+        finally:
+            hook_budget.step("workflow-policy")
     _emit_decision(host, decision)
     return 0
 
@@ -730,15 +719,17 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
             return 0
         case _:
             pass
+    hook_budget.step("controls")
     # The first read of the mode in a call repairs it, so this one comes before any other.
     mode_notes = _mode_notes(repo)
     context = work_session_context.for_payload(repo, host, payload)
+    hook_budget.step("mode-and-session")
     if isinstance(context, Err):
         _print_prompt(host, [context.failure.message], mode_notes)
         return 0
     work_session_id = context.value
     match state.harness_mode(repo), decisions.pending(repo, work_session_id):
-        case "suspended", decisions.Pending(id=identifier):
+        case "suspended", decisions.Pending(shown_as=identifier):
             from harness import question_observation
 
             match question_observation.foreign_prompt(repo, identifier, prompt):
@@ -751,6 +742,8 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
     match _recover_prompt_answer(repo, host, payload, work_session_id):
         case notes, pending:
             pass
+    hook_budget.step("recover-answer")
+    hook_timing.decision(pending.id if pending else "")
     # Only a reply that picks an offered option answers; anything else is an ordinary prompt.
     reply = (
         prompt_answer(host, prompt, pending)
@@ -763,11 +756,9 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         else None
     )
     if pending is not None and reply is not None:
-        _print_prompt(
-            host,
-            _answer_decision(repo, pending, work_session_id, reply),
-            mode_notes,
-        )
+        answered = _answer_decision(repo, pending, work_session_id, reply)
+        hook_budget.step("record-answer")
+        _print_prompt(host, answered, mode_notes)
         return 0
     if not settings.governed(repo):
         if output := hook_bridge.format_prompt(host, []):
@@ -801,6 +792,7 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         mode_notes.append(oriented.notice)
     if oriented.text:
         notes.append(oriented.text)
+    hook_budget.step("notes")
     _print_prompt(host, notes, mode_notes)
     return 0
 
@@ -811,10 +803,13 @@ def _recover_prompt_answer(
     payload: dict[str, Any],
     scope: str | None,
 ) -> tuple[list[str], decisions.Pending | None]:
+    from host_adapters import native_session_id
+
     match decisions.pending(repo, scope):
-        case decisions.Pending() if not _native_decision_origin(
-            repo, host, payload, scope
+        case decisions.Pending(scope=found) if not decisions.presented_here(
+            decisions.record(repo, found) or {}, native_session_id(host, payload) or ""
         ):
+            # Not shown in this conversation: a typed "1" here answers nothing.
             return [], None
         case decisions.Pending() as pending:
             match recorded_answer(host, payload, pending):
@@ -916,6 +911,7 @@ def handle_stop(host: str, payload: dict[str, Any]) -> int:
     ):
         return 0
     context = work_session_context.for_payload(repo, host, payload)
+    hook_budget.step("session")
     if isinstance(context, Err):
         return 0
     scope = context.value
@@ -995,6 +991,8 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
 
 def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     """Before a question is shown: send it back if a person would have to decode it."""
+    from host_adapters import native_session_id
+
     match harness_controls.observe(_workspace(payload, host), host, payload):
         case True:
             return 0
@@ -1004,6 +1002,7 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     if repo is None:
         return 0
     context = work_session_context.for_payload(repo, host, payload)
+    hook_budget.step("controls-and-session")
     if isinstance(context, Err):
         _emit_decision(
             host,
@@ -1020,6 +1019,8 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
         repo, host, payload, decisions.pending(repo, work_session_id), first, transport
     )
     preparing = pending is not None and pending.matches_presentation(first, transport)
+    hook_budget.step("pending")
+    hook_timing.decision(pending.id if pending else hook_bridge.question_id(payload))
     if decisions.blocking(repo, work_session_id) and not preparing:
         _emit_decision(
             host,
@@ -1035,6 +1036,7 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             return 0
         case None:
             pass
+    hook_budget.step("artifacts-shown")
     found = questions.problems(tool_input)
     # Suspended observation may retain a valid binding but never veto presentation.
     if found and state.harness_mode(repo) != "suspended":
@@ -1087,6 +1089,7 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
         case _:
             pass
     detail = {**tracker_detail, **manual_detail, **adoption_detail}
+    hook_budget.step("question-checks")
     tool_use_id = hook_bridge.question_id(payload)
     if not tool_use_id:
         return 0
@@ -1099,6 +1102,20 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     decision_scope = (
         pending.scope if pending is not None and preparing else work_session_id
     )
+    artifacts = _artifacts(repo, decision_scope) if not preparing else ()
+    # Prepare the new marker while a timeout can still deny the ask. Do not replace the
+    # decision or consume its previous marker until this preparation finishes in time.
+    try:
+        state.mark_asked(
+            repo, questions.marker_name(tool_use_id), detail, decision_scope
+        )
+        hook_budget.step("prepare-marker")
+    except hook_budget.OutOfTime:
+        if pending is None or pending.shown_as != tool_use_id:
+            state.take_asked(repo, questions.marker_name(tool_use_id), decision_scope)
+        raise
+    # As with recording an answer, finish the local binding and its successful result together.
+    hook_budget.commit()
     result = (
         decisions.bind_question(
             repo,
@@ -1106,16 +1123,19 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             tool_use_id,
             question,
             options,
+            transport,
             work_session_id=decision_scope,
+            native_session=native_session_id(host, payload) or "",
         )
         if preparing
-        else decisions.begin(
+        else _begin_shown(
             repo,
+            native_session_id(host, payload) or "",
             tool_use_id,
             question,
             options,
             transport,
-            _artifacts(repo, decision_scope),
+            artifacts,
             work_session_id=decision_scope,
             allow_free_text=questions.native_routing_question(tool_input)
             and not detail
@@ -1123,17 +1143,60 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
         )
     )
     if isinstance(result, Err):
+        if pending is None or pending.shown_as != tool_use_id:
+            state.take_asked(repo, questions.marker_name(tool_use_id), decision_scope)
         _emit_decision(
             host, rules.Decision.deny("decision-invalid", result.failure.message)
         )
         return 0
+    # The earlier showing's marker goes first, so a late answer to an old dialog opens nothing.
     match preparing, pending:
-        case True, decisions.Pending(id=old_id) if old_id != tool_use_id:
+        case True, decisions.Pending(shown_as=old_id) if old_id != tool_use_id:
             state.take_asked(repo, questions.marker_name(old_id), decision_scope)
         case _:
             pass
-    state.mark_asked(repo, questions.marker_name(tool_use_id), detail, decision_scope)
+    hook_budget.step("record-and-marker")
     return 0
+
+
+def _begin_shown(
+    repo: Path,
+    native_session: str,
+    key: str,
+    question: str,
+    options: tuple[str, ...],
+    transport: str,
+    artifacts: tuple[tuple[str, str], ...],
+    *,
+    work_session_id: str | None,
+    allow_free_text: bool,
+) -> Result[dict[str, Any]]:
+    """Start a decision for a question a dialog is showing now, and record that showing: the
+    conversation that saw it may then type its answer. Codex's async delivery is shown later."""
+    started = decisions.begin(
+        repo,
+        key,
+        question,
+        options,
+        transport,
+        artifacts,
+        work_session_id=work_session_id,
+        allow_free_text=allow_free_text,
+    )
+    match started, transport:
+        case Ok(), "blocking":
+            return decisions.bind_question(
+                repo,
+                key,
+                key,
+                question,
+                options,
+                transport,
+                work_session_id=work_session_id,
+                native_session=native_session,
+            )
+        case _:
+            return started
 
 
 def _native_async_pending(
@@ -1309,7 +1372,7 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
             match work_session_context.for_payload(observed, host, payload):
                 case Ok(scope):
                     match decisions.pending(observed, scope):
-                        case decisions.Pending(id=identifier) if (
+                        case decisions.Pending(shown_as=identifier) if (
                             identifier == hook_bridge.question_id(payload)
                         ):
                             pass
@@ -1324,6 +1387,8 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
     if repo is None or not tool_use_id:
         return 0
     context = work_session_context.for_payload(repo, host, payload)
+    hook_budget.step("controls-and-session")
+    hook_timing.decision(tool_use_id)
     if isinstance(context, Err):
         print(hook_bridge.format_answer_context(context.failure.message))
         return 0
@@ -1351,6 +1416,21 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
             return 0
         case Ok(response):
             pass
+    match pending:
+        case decisions.Pending(presentation_id=newest) if (
+            newest and newest != tool_use_id
+        ):
+            # An earlier dialog of a question shown again: only the newest showing counts.
+            print(
+                hook_bridge.format_answer_context(
+                    "[harness] decision not recorded: this answer came from an earlier "
+                    "showing of the question, and only the newest showing counts. The question "
+                    "is still open; wait for the answer to the one now on screen."
+                )
+            )
+            return 0
+        case _:
+            pass
     if pending is not None:
         answered = questions.answer(tool_input, response)
         match answered:
@@ -1368,6 +1448,7 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
             case _:
                 pass
         chosen = questions.match_option(answered, pending.options) or answered
+        hook_budget.commit()
         result = decisions.resolve(
             repo,
             tool_use_id,
@@ -1375,6 +1456,7 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
             pending.transport,
             work_session_id=decision_scope,
         )
+        hook_budget.step("record-answer")
         if isinstance(result, Err):
             print(
                 hook_bridge.format_answer_context(
@@ -1382,9 +1464,11 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
                 )
             )
             return 0
+    hook_budget.commit()
     note = _apply_marker(
         repo, tool_use_id, decision_scope, work_session_id, tool_input, response
     )
+    hook_budget.step("marker-and-approval")
     if note:
         print(hook_bridge.format_answer_context(note))
     return 0
@@ -1397,6 +1481,7 @@ def _answer_decision(
     reply: tuple[str, str, str],
 ) -> list[str]:
     """Record a typed or delayed reply, then what it approves; notes for the agent."""
+    hook_budget.commit()
     key, answer, transport = reply
     decision_scope = pending.scope
     match decisions.resolve(
@@ -1406,6 +1491,7 @@ def _answer_decision(
             return [f"[harness] decision not recorded: {failure.message}"]
         case Ok(found):
             pass
+
     notes = [
         f"[harness] the user answered in their own words, choosing none of the options: "
         f"{found['answer']}. This approves nothing. Act on what they said, then run "
@@ -1415,8 +1501,14 @@ def _answer_decision(
     ]
     match decision_exchange(pending, answer):
         case tool_input, response:
+            # The marker belongs to the question's latest showing; this reply uses it up.
             match _apply_marker(
-                repo, key, decision_scope, conversation_scope, tool_input, response
+                repo,
+                pending.shown_as,
+                decision_scope,
+                conversation_scope,
+                tool_input,
+                response,
             ):
                 case str() as note:
                     return notes + [note]
@@ -1496,7 +1588,7 @@ def _answered_binds(repo: Path, scope: str | None, key: str) -> dict[str, Any] |
     record = decisions.record(repo, scope) or {}
     return (
         decisions.approval_binds(record)
-        if record.get("id") == key and record.get("status") == "answered"
+        if decisions.answers_to(record, key) and record.get("status") == "answered"
         else None
     )
 
@@ -1593,23 +1685,30 @@ def _apply_marker(
         return None
     return _open_approval(
         repo,
-        questions.approval_id(marker_id),
+        questions.approval_id(_decision_id(repo, decision_scope, marker_id)),
         approved[0],
         conversation_scope,
         _answered_binds(repo, decision_scope, marker_id),
     )
 
 
+def _decision_id(repo: Path, scope: str | None, key: str) -> str:
+    """The decision's own id when `key` names one of its showings, so its approval carries the
+    same id whichever showing was answered; else `key`, a question with no decision."""
+    record = decisions.record(repo, scope) or {}
+    return str(record["id"]) if decisions.answers_to(record, key) else key
+
+
 def _captured_language(repo: Path, scope: str | None, key: str) -> str | None:
     """Persist only a language choice already resolved by a trusted human-answer hook."""
     match decisions.record(repo, scope):
         case {
-            "id": saved_key,
             "status": "answered",
             "gate": "language",
             "answer": str() as answer,
         } as record if (
-            saved_key == key and decisions.decision_kind(record) == "preference"
+            decisions.answers_to(record, key)
+            and decisions.decision_kind(record) == "preference"
         ):
             return _save_captured_language(repo, questions.choice_label(answer))
         case _:
@@ -1637,7 +1736,9 @@ def _save_captured_language(repo: Path, answer: str) -> str | None:
             return None
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: list[str] | None = None, started: float | None = None) -> int:
+    began = time.monotonic() if started is None else started
+    hook_timing.begin(began)
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--host", choices=("claude", "cursor", "codex", "zed", "kimi"), required=True
@@ -1666,13 +1767,84 @@ def main(argv: list[str] | None = None) -> int:
         payload = {}
     if not isinstance(payload, dict):
         payload = {}
-    return _dispatch_event(
-        argparse.Namespace(
-            host=args.host,
-            event=process_channel.event_name(args.host, args.event, payload),
-        ),
-        payload,
-    )
+    hook_timing.step("startup")
+    event = process_channel.event_name(args.host, args.event, payload)
+    try:
+        return hook_budget.run(
+            event,
+            began,
+            lambda: _buffered(
+                lambda: _dispatch_event(
+                    argparse.Namespace(host=args.host, event=event), payload
+                )
+            ),
+            lambda: _on_timeout(args.host, event, payload),
+        )
+    finally:
+        _log_timing(args.host, args.event, payload)
+
+
+def _buffered(handler: Callable[[], int]) -> int:
+    """Print what `handler` printed only once it has finished, so an event cut off by its budget
+    never sends the host half an answer next to the timeout's own."""
+    printed = io.StringIO()
+    with contextlib.redirect_stdout(printed):
+        code = handler()
+    sys.stdout.write(printed.getvalue())
+    return code
+
+
+def _on_timeout(host: str, event: str, payload: dict[str, Any]) -> int:
+    """What an event that ran out of its budget says. It records nothing and never goes quiet."""
+    print(f"[harness hook-budget] {event} ran out of time", file=sys.stderr)
+    match event:
+        case "stop":
+            return 0
+        case "pre-tool" | "shell" | "mcp":
+            return _fail(
+                host,
+                _timed_out_call(host, event, payload),
+                "harness rules could not run: they ran out of time",
+            )
+        case "ask" | "answer" | "prompt":
+            count = hook_budget.count_timeout(
+                _workspace(payload, host), hook_timing.current_decision() or "-"
+            )
+            match event:
+                case "ask":
+                    _emit_decision(
+                        host,
+                        rules.Decision.deny(
+                            "hook-budget", hook_budget.not_shown(count)
+                        ),
+                    )
+                case "answer":
+                    print(
+                        hook_bridge.format_answer_context(
+                            hook_budget.not_recorded(count)
+                        )
+                    )
+                case _:
+                    _print_prompt(host, [hook_budget.not_recorded(count)])
+            return 0
+        case _:
+            return 0
+
+
+def _timed_out_call(host: str, event: str, payload: dict[str, Any]) -> rules.ToolCall:
+    """The call a timed-out check was about, so a read still passes; unknown if it can't be read."""
+    try:
+        return _tool_call(host, event, payload)
+    except Exception:
+        return rules.make_call("unknown", {}, kind="other")
+
+
+def _log_timing(host: str, event: str, payload: dict[str, Any]) -> None:
+    """One line about this event in the local timing log; a failure to log is ignored."""
+    try:
+        hook_timing.write(_workspace(payload, host), event, host)
+    except Exception:
+        return
 
 
 def _dispatch_event(args: argparse.Namespace, payload: dict[str, Any]) -> int:
@@ -1691,6 +1863,7 @@ def _dispatch_event(args: argparse.Namespace, payload: dict[str, Any]) -> int:
             return 0
         case _:
             pass
+    hook_budget.step("process-channel")
     match args.event:
         case "startup":
             match attempt(
@@ -1755,4 +1928,4 @@ def _dispatch_event(args: argparse.Namespace, payload: dict[str, Any]) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(started=_PROCESS_STARTED))

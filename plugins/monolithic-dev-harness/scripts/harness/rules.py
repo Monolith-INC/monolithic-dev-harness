@@ -13,6 +13,8 @@ draft-reviewed-prs  Publishing a draft pull request and voting are left to human
 history-preserved   With Git-based delivery, branch history is never rewritten: no rebase, squash merge, or
                     force-push.
 feature-branch      With Git-based delivery, a Feature's Story pull request targets the Feature branch.
+plan-checked        Code for a Story whose plan was approved waits while no receipt of the plan's tracker
+                    check matches the plan as it is on disk (`plan_review`).
 mode-operations     While a mode is active, a gateway tool the mode does not list is refused (`mode_hooks`).
 
 Tests with code and guarded-path evidence are completion requirements in the workflow catalog
@@ -1064,6 +1066,36 @@ def rule_generated_files(call: ToolCall, repo: Path, settings: Settings) -> Deci
     return Decision.allow()
 
 
+def rule_plan_checked(
+    call: ToolCall, repo: Path, work_session_id: str | None
+) -> Decision:
+    """Code waits while the plan this work session approved has no current check receipt.
+
+    The answer hook records a plan's approval without the tracker. What the tracker has to
+    confirm ran in a CLI command and left a receipt, read here from local files.
+    """
+    from . import plan_review
+
+    chosen = code_content.selection(repo)
+    if (
+        call.kind != "edit"
+        or call.server
+        or not any(chosen.counts(_relative(repo, path)) for path in call.file_paths)
+    ):
+        return Decision.allow()
+    match plan_review.unchecked(repo, work_session_id):
+        case str() as story:
+            return Decision.deny(
+                "plan-checked",
+                f"The approved implementation plan for {story} has no current check against "
+                "the tracker: it was never checked, or the plan changed since. Run `harness "
+                f"plan check {story}`, which reads the Story again and records the check; then "
+                "retry this write. If the check fails, it says what to fix.",
+            )
+        case _:
+            return Decision.allow()
+
+
 _FORCE_PUSH_FLAGS = frozenset(
     {"--force", "--force-with-lease", "--force-if-includes", "--mirror"}
 )
@@ -1151,6 +1183,7 @@ CLASS: Mapping[str, Literal["always", "mode"]] = MappingProxyType(
         "history-preserved": "always",
         "approval-required": "always",
         "generated-files": "always",
+        "plan-checked": "mode",
         "mode-operations": "mode",
     }
 )
@@ -1168,6 +1201,7 @@ GUARDS: Mapping[str, Literal["always"]] = MappingProxyType(
         "hook-entry": "always",
         "plain-begin": "always",
         "harness-error": "always",
+        "hook-budget": "always",
         "harness-controls": "always",
         "decision-pending": "always",
         "artifacts-not-shown": "always",
@@ -1201,6 +1235,7 @@ def evaluate(
                 lambda: _delivery(settings, lambda: rule_history_preserved(call)),
                 lambda: rule_approval_required(call, repo, policy, work_session_id),
                 lambda: rule_generated_files(call, repo, settings),
+                lambda: rule_plan_checked(call, repo, work_session_id),
                 lambda: mode_hooks.operations(call, repo) or Decision.allow(),
             )
             if not (decision := rule()).allowed

@@ -17,3 +17,6 @@ _bmad/
 # Raw acceptance transcripts and archives stay local; their summaries are committed.
 docs/work-items/**/acceptance/**/*.jsonl
 docs/work-items/**/acceptance/**/*.tar.gz
+
+# Private review connections and local adapter state.
+.monolithic-code-review/

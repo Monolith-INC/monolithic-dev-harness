@@ -245,6 +245,7 @@ blocks any agent write to the records. Gates G1, G2, and G4 map to these approva
 | `approval-required` | tracker/SCM writes and `git push` without an open approval window |
 | `protected-items` | any write, link, or child on a protected work item, even with approval |
 | `generated-files` | hand edits to generated files |
+| `plan-checked` | code edits for a Story whose implementation plan was approved, while no receipt of the plan's tracker check matches the plan as it is on disk; `harness plan check <story>` reads the Story again and writes the receipt |
 | `draft-reviewed-prs` | publishing drafts or voting; with Git-based delivery, non-draft pull requests and pull requests without a `ready` verdict and passing checks for the code as it is now |
 | `history-preserved` | with Git-based delivery: rewriting branch history (rebase, squash merges, force-push, `filter-branch`, completing a pull request by squash or rebase) |
 | workflow: code changes | code edits until the execution stage's `requires` hold (`harness workflow requirements`): a linked work session, Tasks parented to its Story or Bug, an approved unchanged implementation plan, the item in progress |

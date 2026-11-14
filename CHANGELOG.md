@@ -4,6 +4,30 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0-rc.14] - 2026-11-14
+
+### Fixed
+
+- An approval can no longer be lost to a slow hook, and an open question never locks the session
+  (the rc.13 trial). Every hook event now stops itself before the host's time limit: 12 seconds
+  before a tool call, 7 for the others, counted from the moment the hook starts. When time runs out
+  nothing is recorded, and the agent is told what to do next: show the question again, then ask
+  the user to type the number of their choice, then ask the user to send `harness suspend`. Each
+  hook event leaves one line in `.harness/state/hook-timing.log` saying what it spent its time on.
+- Recording an answer no longer reads the tracker. What `implementation-confirm` needs from the
+  tracker runs when the question is prepared and leaves a local receipt; a code write waits while
+  the approved plan has no current receipt, and `harness plan check <story>` writes a fresh one.
+- The open question can always be shown again, in a dialog or after moving it to the chat, and
+  the answer to its newest showing counts. An answer that arrives late from an older dialog opens
+  nothing.
+- A typed reply ("1", or an option's label) answers the open question only in a conversation that
+  was shown it. The same reply in another conversation, or before the question reached the user,
+  is an ordinary message.
+- A refined Story that quotes its raw draft under Original Description is read as refined.
+- Ingest accepts the names the harness gives refined ticket documents
+  (`ticket-user-story-0001-slug`).
+- Approving a ticket no longer asks to set its `status`; only notes that carry one are named.
+
 ## [0.7.0-rc.13] - 2026-11-11
 
 ### Added

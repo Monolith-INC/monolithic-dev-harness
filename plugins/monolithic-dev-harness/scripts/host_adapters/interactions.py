@@ -331,7 +331,7 @@ def _prompt_answer(
         reply = replies[0]
         item = json.loads(reply["questionItemId"])
         if (
-            item != ["request_user_input_async", pending.id, 0]
+            item != ["request_user_input_async", pending.shown_as, 0]
             or reply.get("question") != pending.question
         ):
             return None
