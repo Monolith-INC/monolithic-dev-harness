@@ -13,10 +13,12 @@ from core.result import Err, Failure, Ok, Result, attempt, bind, err, fmap, requ
 from harness import (
     artifact_manifest,
     artifact_review,
+    code_content,
     decisions,
     discovery,
     gates,
     harness_controls,
+    modes,
     onboarding,
     plan_review,
     preferences,
@@ -33,7 +35,7 @@ from harness import (
     workflow,
     workflow_requirements,
 )
-from harness.cli_common import pairs, print_result, resolve_repo
+from harness.cli_common import pairs, print_result, read_mode, resolve_repo
 from host_adapters.codex_runtime import (
     CodexRuntimeProfile,
     DecisionContext,
@@ -370,11 +372,14 @@ def _current_as_json(project: Path, session: work_sessions.Session) -> dict:
 
 
 def _with_current_session(args: argparse.Namespace) -> argparse.Namespace:
-    """Nobody has to name the work session: an unnamed one is the project's current session.
-    Each `--artifact` inside the project is named one way, relative to it, so evidence recorded
-    under one spelling is found under any other."""
+    """Nobody has to name the work session: an unnamed one is the active mode's session, else the
+    project's current session, which is the answer the hook judged the command by
+    (`modes.implied_session`). Each `--artifact` inside the project is named one way, relative to
+    it, so evidence recorded under one spelling is found under any other."""
     project = Path(args.repo).resolve()
-    args.session_id = work_sessions.acting(project, args.session_id)
+    args.session_id = args.session_id or modes.implied_session(
+        project, read_mode(project)
+    )
     if getattr(args, "artifact", None):
         args.artifact = [_project_relative(project, name) for name in args.artifact]
     return args
@@ -406,7 +411,8 @@ def work_session_command(args: argparse.Namespace) -> int:
             result = fmap(
                 work_sessions.list_sessions(project),
                 lambda sessions: [
-                    work_sessions.as_json(session) for session in sessions
+                    work_sessions.as_json(session)
+                    for session in work_sessions.chosen_among(sessions)
                 ],
             )
         case "route":
@@ -591,6 +597,8 @@ def decision_command(args: argparse.Namespace) -> int:
                     ),
                 }
                 if spec.approval
+                else _manual_binds(repo, args.value)
+                if spec.gate == "manual-check"
                 else None
             )
             match spec.gate:
@@ -675,6 +683,18 @@ def decision_command(args: argparse.Namespace) -> int:
             )
         case _:
             return 2
+
+
+def _manual_binds(repo: Path, values: list[str] | None) -> dict:
+    """What a manual-check question is about: the checks it names and the code as it is now, so
+    Confirm records them for exactly that code."""
+    names = dict(pairs(values)).get("checks", "")
+    return {
+        "manual": {
+            "checks": [name.strip() for name in names.split(",") if name.strip()],
+            "code": code_content.current(repo),
+        }
+    }
 
 
 def _reused(entry: dict | None) -> Result[str] | None:

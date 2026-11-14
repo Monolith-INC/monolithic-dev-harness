@@ -3,8 +3,8 @@
 Each work item is a ticket file in its state's folder; its artifacts are Markdown files under
 `Tickets/Attachments/<KEY>/`. Hierarchy follows the manifest's artifacts. A work item's planning
 fields (its sprint, points, and hours) use the same names as a planning file's front matter
-(`integrations.planning`). Planning reads these files, so it needs no replies, but it does need the
-sprint named: there is no "current" sprint to fall back on.
+(`integrations.planning`). A sprint is a `capacity-<sprint>.json` file beside `Tickets/`; the
+current sprint is the one whose dates cover today.
 """
 
 from __future__ import annotations
@@ -31,7 +31,7 @@ from integrations.contracts import (
     WorkItemKind,
     changed_fields,
 )
-from integrations.planning import IterationReading, is_current
+from integrations.planning import IterationReading, Sprint, is_current
 from integrations.planning_files import (
     ASSIGNED_TO,
     ITERATION,
@@ -42,7 +42,9 @@ from integrations.planning_files import (
 )
 
 PAGE_SIZE = 50
-FIELDS = FieldNames("title", "description", POINTS, ASSIGNED_TO, ITERATION)
+FIELDS = FieldNames(
+    "title", "description", POINTS, ASSIGNED_TO, ITERATION, "tags", "priority"
+)
 PREFIXES = {
     WorkItemKind.EPIC: "EPIC",
     WorkItemKind.FEATURE: "FEATURE",
@@ -69,7 +71,11 @@ def adapter(context: AdapterContext) -> TrackerOps:
         update_work_item=lambda ref, changes: bind(
             changed_fields(changes, FIELDS, RECORDED_HOURS),
             lambda fields: bind(
-                _find(context, root, ref), lambda found: _update(context, found, fields)
+                _find(context, root, ref),
+                lambda found: bind(
+                    _parent_fields(context, root, found, changes.parent),
+                    lambda parent: _update(context, found, {**fields, **parent}),
+                ),
             ),
         ),
         transition_work_item=lambda ref, state: bind(
@@ -93,14 +99,19 @@ def adapter(context: AdapterContext) -> TrackerOps:
             _find(context, root, ref),
             lambda found: _add_artifact(root, found[1], draft),
         ),
+        revise_artifact=lambda ref, artifact, draft: bind(
+            _find(context, root, ref),
+            lambda found: _revise_artifact(root, found[1], artifact, draft),
+        ),
         link_development_artifact=lambda ref, url, kind: bind(
             _find(context, root, ref), lambda found: _link(found, url, kind)
         ),
-        read_iteration=lambda replies, ref: bind(
-            _sprint(ref), lambda name: _capacity(context.repo, name)
+        current_sprint=lambda: _current_sprint(context.repo),
+        sprint_capacity=lambda ref: bind(
+            _named_sprint(context.repo, ref), lambda name: _capacity(context.repo, name)
         ),
-        iteration_items=lambda replies, ref: bind(
-            _sprint(ref),
+        sprint_items=lambda ref: bind(
+            _named_sprint(context.repo, ref),
             lambda name: fmap(
                 _records(context, root),
                 lambda found: tuple(
@@ -116,6 +127,12 @@ def adapter(context: AdapterContext) -> TrackerOps:
             ),
         ),
         records_hours=True,
+        optional={
+            "remove_artifact": lambda ref, artifact: bind(
+                _find(context, root, ref),
+                lambda found: _remove_artifact(root, found[1], artifact),
+            ),
+        },
     )
 
 
@@ -178,8 +195,15 @@ def _item(record: Mapping[str, Any]) -> WorkItem:
         url=str(record["key"]),
         description=str(record.get("description", "")),
         parent_id=str(record.get("parentId") or ""),
+        tags=tuple(str(tag) for tag in record.get("tags") or ()),
+        priority=_priority(record.get("priority")),
         provider_data=record,
     )
+
+
+def _priority(value: Any) -> int | None:
+    """A ticket's priority, 1 urgent … 4 low; anything else, such as a hand-written word, is none."""
+    return int(value) if str(value).strip() in ("1", "2", "3", "4") else None
 
 
 def _page(found: tuple[Record, ...], query: str, cursor: str) -> Page:
@@ -216,6 +240,27 @@ def _allowed_child(
         (),
     )
     return kinds[kind] in children
+
+
+def _parent_fields(
+    context: AdapterContext, root: Path, found: Record, parent: str | None
+) -> Result[dict[str, Any]]:
+    """The record change that moves the item under `parent`, which must be allowed to hold it,
+    as at create; nothing when no move was asked for."""
+    if parent is None:
+        return Ok({})
+    kind = WorkItemKind(str(found[1]["kind"]))
+    return bind(
+        _find(context, root, parent),
+        lambda target: (
+            Ok({"parentId": target[1]["key"]})
+            if _allowed_child(context, WorkItemKind(str(target[1]["kind"])), kind)
+            else err(
+                "invalid_parent",
+                f"a {target[1]['kind']} cannot contain a {kind.value}",
+            )
+        ),
+    )
 
 
 def _next_key(root: Path, manifest: Manifest, kind: WorkItemKind) -> str:
@@ -376,6 +421,57 @@ def _artifacts(
     )
 
 
+def _own_artifact(
+    root: Path, record: Mapping[str, Any], artifact: ArtifactRef
+) -> Result[Path]:
+    """The artifact's file, which must be one of this item's."""
+    path = root / artifact.id
+    folder = _artifact_folder(root, record).resolve()
+    return (
+        Ok(path)
+        if path.resolve().is_relative_to(folder) and path.is_file()
+        else err(
+            "artifact_not_found", f"{record['key']} has no artifact {artifact.id!r}"
+        )
+    )
+
+
+def _remove_artifact(
+    root: Path, record: Mapping[str, Any], artifact: ArtifactRef
+) -> Result[None]:
+    return bind(
+        _own_artifact(root, record, artifact),
+        lambda path: attempt(
+            path.unlink, "local_storage_error", f"could not remove {path.name}", OSError
+        ),
+    )
+
+
+def _revise_artifact(
+    root: Path, record: Mapping[str, Any], artifact: ArtifactRef, draft: ArtifactDraft
+) -> Result[ArtifactRef]:
+    """Rewrite the artifact's file, which must be one of this item's."""
+    return bind(
+        _own_artifact(root, record, artifact),
+        lambda path: fmap(
+            attempt(
+                lambda: path.write_text(artifacts.encode(draft), encoding="utf-8"),
+                "local_storage_error",
+                f"could not write {path.name}",
+                OSError,
+            ),
+            lambda _: ArtifactRef(
+                artifact.id,
+                draft.kind,
+                draft.title,
+                draft.revision,
+                artifact.url,
+                draft.content,
+            ),
+        ),
+    )
+
+
 def _relative(root: Path, path: Path) -> str:
     return path.relative_to(root).as_posix()
 
@@ -441,13 +537,56 @@ def _capacity(repo: Path, name: str) -> Result[IterationReading]:
     )
 
 
-def _sprint(ref: str) -> Result[str]:
-    """The sprint's name; the local tracker keeps no "current" sprint to fall back on."""
+def _current_sprint(repo: Path) -> Result[Sprint]:
+    """The sprint file whose dates cover today; of several, the one that started last."""
+    files = sorted(local_tracker.storage_root(repo).parent.glob("capacity-*.json"))
+    today = datetime.now(UTC).date()
+    return bind(
+        sequence(
+            tuple(
+                fmap(
+                    read_capacity_file(path, path.stem.removeprefix("capacity-")),
+                    lambda reading: reading.capacity,
+                )
+                for path in files
+            )
+        ),
+        lambda sprints: next(
+            (
+                Ok(
+                    Sprint(
+                        s.iteration_ref,
+                        s.iteration_ref,
+                        s.iteration_ref,
+                        s.start_date,
+                        s.finish_date,
+                    )
+                )
+                for s in sorted(
+                    (
+                        s
+                        for s in sprints
+                        if s.start_date
+                        and s.finish_date
+                        and s.start_date <= today <= s.finish_date
+                    ),
+                    key=lambda s: s.start_date,
+                    reverse=True,
+                )
+            ),
+            err(
+                "no_current_sprint",
+                "no sprint file beside Tickets/ covers today; read: "
+                + (", ".join(path.name for path in files) or "none"),
+            ),
+        ),
+    )
+
+
+def _named_sprint(repo: Path, ref: str) -> Result[str]:
+    """The sprint's name: the one named, or the current one's."""
     return (
-        Ok(ref.strip())
-        if not is_current(ref)
-        else err(
-            "invalid_request",
-            "name the sprint: the local tracker reads capacity-<sprint>.json beside Tickets/",
-        )
+        fmap(_current_sprint(repo), lambda sprint: sprint.name)
+        if is_current(ref)
+        else Ok(ref.strip())
     )

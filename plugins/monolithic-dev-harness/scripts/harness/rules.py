@@ -13,6 +13,7 @@ draft-reviewed-prs  Publishing a draft pull request and voting are left to human
 history-preserved   With Git-based delivery, branch history is never rewritten: no rebase, squash merge, or
                     force-push.
 feature-branch      With Git-based delivery, a Feature's Story pull request targets the Feature branch.
+mode-operations     While a mode is active, a gateway tool the mode does not list is refused (`mode_hooks`).
 
 Tests with code and guarded-path evidence are completion requirements in the workflow catalog
 (`harness.workflow_requirements`), checked before a work item is done; no rule reads a commit.
@@ -24,19 +25,23 @@ import hashlib
 import os
 import posixpath
 import re
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass, field
 from fnmatch import fnmatch
 from pathlib import Path
-from typing import Any
+from types import MappingProxyType
+from typing import Any, Literal
 
 from core.result import Ok
 
 from . import (
     code_content,
+    documents_catalog,
     gitstate,
     globs,
     local_tracker,
+    mode_hooks,
+    modes,
     sessions,
     shellscan,
     state,
@@ -53,6 +58,8 @@ GATEWAY_WRITES = frozenset(
         "tracker_update_work_item",
         "tracker_transition_work_item",
         "tracker_publish_artifact",
+        "tracker_revise_artifact",
+        "tracker_remove_artifact",
         "tracker_link_development_artifact",
         "scm_create_pull_request",
         "scm_reply_to_thread",
@@ -279,6 +286,7 @@ _OWNED_FILES = (
     (".harness", "settings.json"),
     (".harness", "state", "tracking.json"),
     (".harness", "state", "suspension.json"),
+    (".harness", "state", "mode.json"),
     (".harness", "state", "decision.json"),
     (".harness", "state", "decision-history.json"),
     (".harness", "state", "onboarding.json"),
@@ -904,7 +912,7 @@ def covering_approval(
     if work_sessions.ended(repo, work_session_id):
         return None, False
     stale = False
-    for path, record in state.open_approvals(repo, work_session_id):
+    for path, record in modes.approvals_for(repo, work_session_id):
         if not all(_covers(record, target) for target in targets):
             continue
         if _context_unchanged(
@@ -933,7 +941,50 @@ def _approved_body(repo: Path, work_session_id: str | None, body: str) -> bool:
         and _context_unchanged(
             repo, record.get("binds") or {}, str(record.get("id", ""))
         )
-        for _, record in state.open_approvals(repo, work_session_id)
+        for _, record in modes.approvals_for(repo, work_session_id)
+    )
+
+
+# Publishing or rewriting an artifact: for a catalog document its content is the document.
+_DOCUMENT_WRITES = frozenset({"tracker_publish_artifact", "tracker_revise_artifact"})
+
+
+def _document_kind(call: ToolCall) -> str:
+    """The catalog document an artifact write is about, or empty: its `kind` names one."""
+    kind = call.tool_input.get("kind")
+    if call.name not in _DOCUMENT_WRITES or not isinstance(kind, str):
+        return ""
+    match documents_catalog.load():
+        case Ok(catalog) if kind in catalog:
+            return kind
+        case _:
+            return ""
+
+
+def _reviewed_substance(repo: Path, entry: Any) -> str | None:
+    """What a reviewed file holds, as a document's substance; None when it cannot be read."""
+    try:
+        return documents_catalog.substance((repo / str(entry[0])).read_text("utf-8"))
+    except (OSError, UnicodeDecodeError, IndexError, TypeError):
+        return None
+
+
+def _approved_document(repo: Path, work_session_id: str | None, content: str) -> bool:
+    """Whether an open approval, its reviewed files unchanged, holds the draft this document is:
+    the same but for its status and change history."""
+    wanted = documents_catalog.substance(content)
+    return (
+        bool(wanted)
+        and not work_sessions.ended(repo, work_session_id)
+        and any(
+            _context_unchanged(repo, binds, str(record.get("id", "")))
+            and any(
+                _reviewed_substance(repo, entry) == wanted
+                for entry in binds.get("artifacts", ())
+            )
+            for _, record in modes.approvals_for(repo, work_session_id)
+            for binds in (record.get("binds") or {},)
+        )
     )
 
 
@@ -954,6 +1005,20 @@ def rule_approval_required(
                 "`Tickets/Ready/`), show it with `harness workflow show --artifact <draft>`, and "
                 "ask `harness decision present --gate publish-items --artifact <draft>`. The "
                 "description must be the draft's body, word for word. You cannot approve it "
+                "yourself.",
+            )
+    match _document_kind(call):
+        case str() as kind if kind and not _approved_document(
+            repo, work_session_id, str(call.tool_input.get("content") or "")
+        ):
+            return Decision.deny(
+                "approval-required",
+                f"`{call.name}` publishes a {kind} that no approved draft holds. Write the draft "
+                f"where `harness document path --type {kind} --item <key>` says, show it with "
+                "`harness workflow show --artifact <draft>`, and ask `harness decision present "
+                "--gate approve-document --artifact <draft>`: an approval of another document "
+                "does not cover this one. Publish the draft's text word for word; only its "
+                "`Status` line and its `Change history` may differ. You cannot approve it "
                 "yourself.",
             )
     match covering_approval(call, repo, work_session_id):
@@ -1064,6 +1129,57 @@ def _delivery(settings: Settings, rule: Callable[[], Decision]) -> Decision:
     return rule() if settings.git_delivery else Decision.allow()
 
 
+# What each rule `evaluate` runs does when modes scope the process: `always` guards the project or
+# the user and stays on in a mode, outside one, with or without a work session; `mode` belongs to
+# a stage of work and a mode may replace it. Keyed by the name the rule gives `Decision.deny`.
+#
+# `feature-branch` and `draft-reviewed-prs` are `always` for now: neither is bound to a work
+# session. Whether a mode takes them over is a later decision.
+#
+# The guards the hook decides itself, before or around `evaluate`, are marked in `GUARDS` below.
+# Not marked anywhere, on purpose: `work-session-context` and `work-session-mismatch` are checks of
+# `hook._held`, not rules of `evaluate`. They are the session-bound controls, and the candidates to
+# become `mode` in a later slice.
+CLASS: Mapping[str, Literal["always", "mode"]] = MappingProxyType(
+    {
+        "human-owned": "always",
+        "tracked-tickets": "always",
+        "tracker-invalid": "always",
+        "protected-items": "always",
+        "feature-branch": "always",
+        "draft-reviewed-prs": "always",
+        "history-preserved": "always",
+        "approval-required": "always",
+        "generated-files": "always",
+        "mode-operations": "mode",
+    }
+)
+
+# The guards the hook decides itself, marked like the rules: every one stays on in a mode, outside
+# one, with or without a work session. They guard the user, the hook's own integrity or a process
+# boundary, not a stage of work. Keyed by the name a guard gives `Decision.deny`; `harness-controls`
+# never denies, it is the gate that lets only a person suspend, resume or free the harness.
+#
+# Left unnamed, so unmarked: the workflow policy's own denies carry only a message
+# (`hook_runtime`, `policy/git_branch_guard`), and `codex_process` names a deny by the failure code
+# it met. None of them is scoped by a mode either.
+GUARDS: Mapping[str, Literal["always"]] = MappingProxyType(
+    {
+        "hook-entry": "always",
+        "plain-begin": "always",
+        "harness-error": "always",
+        "harness-controls": "always",
+        "decision-pending": "always",
+        "artifacts-not-shown": "always",
+        "plain-questions": "always",
+        "decision-invalid": "always",
+        "assignment-policy": "always",
+        "codex-child-lineage": "always",
+        "codex-child-authority": "always",
+    }
+)
+
+
 def evaluate(
     call: ToolCall,
     repo: Path,
@@ -1085,6 +1201,7 @@ def evaluate(
                 lambda: _delivery(settings, lambda: rule_history_preserved(call)),
                 lambda: rule_approval_required(call, repo, policy, work_session_id),
                 lambda: rule_generated_files(call, repo, settings),
+                lambda: mode_hooks.operations(call, repo) or Decision.allow(),
             )
             if not (decision := rule()).allowed
         ),

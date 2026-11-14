@@ -64,17 +64,16 @@ chart — it is invisible to the tooling that shows whether their sprint fits.
 Once the Task list is settled, **compute the estimates — do not reason them out.** The arithmetic
 is deterministic and lives in the orchestrator, so the same Story always yields the same hours.
 
-1. **Fetch the sprint context** and save it as one JSON object: one entry per reply the selected
-   tracker lists under `planning.replies` in `tracker_describe`, fetched as each entry describes
-   (so existing commitments count). A tracker that lists none reads its own files; pass
-   `iteration_ref` so it knows which sprint.
+1. **Name the sprint** in the Task list's `iteration_ref`: `current` for the running sprint, or a
+   sprint's id or name (`tracker_current_sprint` shows the running one). The tracker reads the
+   sprint and its existing commitments itself.
 2. **Write the Task list** as JSON: `story_id`, `story_points`, `assignee`, `iteration_ref`, and
    `tasks[]` of `{id, title, current_hours}`. Pass a `weight` per Task only when the Implementation
    Plan says one is materially larger; otherwise the role default applies.
 3. **Run it:**
 
 ```bash
-bin/agile-backlog-toolkit estimate-breakdown --input <tasks>.json --replies <sprint>.json
+bin/agile-backlog-toolkit estimate-breakdown --input <tasks>.json
 ```
 
 Exit codes: `0` estimated and fits, `2` **blocked** (see below), `1` could not run.

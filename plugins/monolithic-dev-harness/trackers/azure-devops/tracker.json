@@ -6,13 +6,13 @@
   "connection": {
     "kind": "mcp",
     "command": "npx",
-    "args": ["-y", "@azure-devops/mcp", "{organization}", "-d", "core", "work-items", "repositories"],
+    "args": ["-y", "@azure-devops/mcp", "{organization}", "-d", "core", "work", "work-items", "repositories"],
     "timeout": 60
   },
   "settings": [
     {"key": "organization", "required": true, "description": "The Azure DevOps organization name (dev.azure.com/<organization>)."},
     {"key": "project", "required": true, "description": "The project that holds the work items."},
-    {"key": "team", "required": false, "description": "The team whose backlog and capacity the backlog stage reads."},
+    {"key": "team", "required": false, "description": "The team whose backlog and capacity the backlog stage reads, and whose current sprint new items join (default: <project> Team)."},
     {"key": "process", "required": false, "description": "agile, scrum, or cmmi: decides whether Original Estimate exists."}
   ],
   "kinds": {"epic": "Epic", "feature": "Feature", "user_story": "User Story", "task": "Task", "bug": "Bug"},
@@ -29,7 +29,8 @@
     "query": "wit_query",
     "write": "wit_work_item_write",
     "comment": "wit_work_item_comment_write",
-    "link": "wit_work_item_link_write"
+    "link": "wit_work_item_link_write",
+    "work": "work"
   },
   "ids": {
     "pattern": "[1-9][0-9]*",
@@ -48,13 +49,5 @@
     "tools": ["*_write", "repo_create_branch", "pipelines_run", "wiki_upsert_page"]
   },
   "attachments": {"spec": "comment", "report": "comment", "pull_request": "artifact-link"},
-  "planning": {
-    "replies": [
-      {"key": "iteration", "description": "work[list_team_iterations] with project, team, timeframe \"current\" (or the named sprint)"},
-      {"key": "capacities", "description": "work[get_team_capacity] with project, team, and that iteration's id"},
-      {"key": "team_settings", "description": "work[get_team_settings] with project and team"},
-      {"key": "work_items", "description": "wit_work_item[list_for_iteration] for that iteration, then wit_work_item[get_batch] for the ids it lists (no fields list); pass the batch reply, so existing commitments count"}
-    ]
-  },
   "text_format": "markdown"
 }

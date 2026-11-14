@@ -241,6 +241,140 @@ class WorkSessionTest(unittest.TestCase):
         self.assertEqual(run("resume", session_id).returncode, 0)
         self.assertIn(session_id, run("list").stdout)
 
+    def test_a_session_records_the_mode_it_belongs_to(self) -> None:
+        created = work_sessions.create(
+            self.project, "discovery mode", mode="discovery", mode_root="EPIC-1"
+        ).value
+
+        read = work_sessions.select(self.project, created.id).value
+
+        self.assertEqual((read.mode, read.mode_root), ("discovery", "EPIC-1"))
+
+    def test_a_session_made_for_no_mode_records_none(self) -> None:
+        created = work_sessions.create(self.project, "Investigate DAY-001").value
+
+        read = work_sessions.select(self.project, created.id).value
+
+        self.assertEqual((read.mode, read.mode_root), ("", ""))
+
+    def test_recording_mode_lists_the_unended_sessions_that_carry_one(self) -> None:
+        plain = work_sessions.create(self.project, "Investigate DAY-001").value
+        active = work_sessions.create(self.project, "a mode", mode="one").value
+        paused = work_sessions.create(self.project, "b mode", mode="two").value
+        stopped = work_sessions.create(self.project, "c mode", mode="three").value
+        done = work_sessions.create(self.project, "d mode", mode="four").value
+        work_sessions.transition(self.project, paused.id, "pause")
+        work_sessions.transition(self.project, stopped.id, "stop")
+        work_sessions.transition(self.project, done.id, "complete")
+
+        found = work_sessions.recording_mode(self.project)
+
+        self.assertEqual({session.id for session in found}, {active.id, paused.id})
+        self.assertNotIn(plain.id, {session.id for session in found})
+
+    def test_recording_mode_skips_a_session_record_that_cannot_be_read(self) -> None:
+        good = work_sessions.create(self.project, "a mode", mode="one").value
+        broken = work_sessions.create(self.project, "b mode", mode="two").value
+        (broken.folder / "session.json").write_bytes(b"\xff\xfe")
+
+        found = work_sessions.recording_mode(self.project)
+
+        self.assertEqual([session.id for session in found], [good.id])
+
+    def test_recording_mode_needs_no_sessions_folder(self) -> None:
+        self.assertEqual(work_sessions.recording_mode(self.project), ())
+        self.assertFalse((self.project / ".harness").exists())
+
+    def test_a_session_that_records_a_mode_is_never_a_candidate_for_begin(self) -> None:
+        work_sessions.create(self.project, "fixture mode", mode="fixture")
+
+        routed = work_sessions.route(self.project, "add a feature").value
+
+        self.assertEqual(routed["action"], "start_new")
+        self.assertEqual(routed["candidates"], [])
+        self.assertEqual(routed["matches"], [])
+
+    def test_a_mode_session_is_not_matched_by_its_request_either(self) -> None:
+        work_sessions.create(self.project, "fixture mode", mode="fixture")
+
+        routed = work_sessions.route(self.project, "fixture mode").value
+
+        self.assertEqual(routed["action"], "start_new")
+        self.assertEqual(routed["matches"], [])
+
+    def test_route_still_offers_the_sessions_a_person_made_beside_a_mode(self) -> None:
+        work_sessions.create(self.project, "fixture mode", mode="fixture")
+        mine = work_sessions.create(self.project, "Investigate DAY-001").value
+
+        routed = work_sessions.route(self.project, "add a feature").value
+
+        self.assertEqual(routed["action"], "ask_user")
+        self.assertEqual([item["id"] for item in routed["candidates"]], [mine.id])
+
+    def test_unmark_takes_the_mode_off_a_session(self) -> None:
+        marked = work_sessions.create(
+            self.project, "fixture mode", mode="fixture", mode_root="EPIC-1"
+        ).value
+
+        result = work_sessions.unmark(self.project, marked.id)
+
+        self.assertIsInstance(result, Ok)
+        reread = work_sessions.select(self.project, marked.id).value
+        self.assertEqual((reread.mode, reread.mode_root), ("", ""))
+        self.assertEqual(reread.status, work_sessions.Status.ACTIVE)
+        self.assertEqual(work_sessions.recording_mode(self.project), ())
+
+    def test_a_session_keeps_the_mark_that_it_was_a_mode_session_once_the_mode_is_off(
+        self,
+    ) -> None:
+        marked = work_sessions.create(
+            self.project, "fixture mode", mode="fixture", mode_root="EPIC-1"
+        ).value
+        self.assertTrue(marked.mode_session)
+
+        self.assertIsInstance(work_sessions.unmark(self.project, marked.id), Ok)
+
+        reread = work_sessions.select(self.project, marked.id).value
+        self.assertEqual(reread.mode, "")
+        self.assertTrue(reread.mode_session)
+        self.assertEqual(work_sessions.chosen_among((reread,)), ())
+
+    def test_a_session_made_for_no_mode_never_carries_the_mode_session_mark(
+        self,
+    ) -> None:
+        plain = work_sessions.create(self.project, "Investigate DAY-001").value
+
+        read = work_sessions.select(self.project, plain.id).value
+
+        self.assertFalse(read.mode_session)
+        self.assertEqual(work_sessions.chosen_among((read,)), (read,))
+
+    def test_a_left_mode_session_is_neither_a_candidate_nor_a_match_for_begin(
+        self,
+    ) -> None:
+        marked = work_sessions.create(
+            self.project, "fixture mode", mode="fixture"
+        ).value
+        self.assertIsInstance(work_sessions.unmark(self.project, marked.id), Ok)
+
+        routed = work_sessions.route(self.project, "fixture mode").value
+
+        self.assertEqual(routed["action"], "start_new")
+        self.assertEqual((routed["matches"], routed["candidates"]), ([], []))
+
+    def test_unmark_leaves_a_session_that_records_no_mode_as_it_is(self) -> None:
+        plain = work_sessions.create(self.project, "Investigate DAY-001").value
+
+        self.assertIsInstance(work_sessions.unmark(self.project, plain.id), Ok)
+
+        reread = work_sessions.select(self.project, plain.id).value
+        self.assertEqual(reread.events, plain.events)
+
+    def test_unmark_of_a_session_that_is_not_there_is_refused(self) -> None:
+        self.assertIsInstance(
+            work_sessions.unmark(self.project, "WS-000000000000"), Err
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

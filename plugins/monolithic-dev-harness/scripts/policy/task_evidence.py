@@ -16,7 +16,7 @@ def approved_note(repo: Path, path: Path, key: str, kind: str = "") -> bool:
                 key in note.work_items
                 and (not kind or note.kind == kind)
                 and note.digest
-                in state.pinned_notes(repo).get(str(path.resolve()), set())
+                in local_artifacts.current_pins(repo).get(str(path.resolve()), set())
             )
         case _:
             return False
@@ -121,7 +121,7 @@ def _find(repo, task, parent, scope, artifacts) -> Result[dict]:
         case _:
             return err(
                 "task_evidence_missing",
-                f"Task {task.key} needs a verification artifact naming its session, approved plan/step, current deliverable digests and actual checks, manual evidence or approved documents.",
+                f"Task {task.key} needs a verification artifact naming its session, approved plan/step, current deliverable digests and actual checks, manual evidence or approved documents. Record manual evidence with harness decision present --gate manual-check --value checks=<names>.",
             )
 
 

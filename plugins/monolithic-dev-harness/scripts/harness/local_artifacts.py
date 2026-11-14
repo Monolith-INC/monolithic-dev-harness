@@ -12,7 +12,7 @@ This module only reads notes. Which kinds count as a spec is the spec gate's dec
 from __future__ import annotations
 
 import sys
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -21,8 +21,9 @@ _RUNTIME_DIR = Path(__file__).resolve().parents[2] / "runtime"
 if str(_RUNTIME_DIR) not in sys.path:
     sys.path.insert(0, str(_RUNTIME_DIR))
 
+from core.result import value_or  # noqa: E402
 from harness import state  # noqa: E402
-from harness.workflow import document_digest  # noqa: E402
+from harness.workflow import document_digest, file_digest  # noqa: E402
 from orchestrator_core.ingest import parse_frontmatter  # noqa: E402
 from orchestrator_core.project_config import load_project_config  # noqa: E402
 
@@ -93,7 +94,7 @@ def approved_kinds_for(project_root: Path, key: str) -> set[str]:
     Only pinned paths are read, so the cost follows the number of approvals, not the vault's size.
     """
     kinds: set[str] = set()
-    for path, digests in state.pinned_notes(project_root).items():
+    for path, digests in current_pins(project_root).items():
         found = note(Path(path))
         if (
             found is not None
@@ -103,3 +104,37 @@ def approved_kinds_for(project_root: Path, key: str) -> set[str]:
         ):
             kinds.add(found.kind)
     return kinds
+
+
+def relocated(project_root: Path, path: Path, digests: Collection[str]) -> Path | None:
+    """Where a file recorded at `path`, now gone, is after the artifacts path moved.
+
+    That is the deepest trailing part of `path` under the current artifacts path whose content has
+    one of `digests`, so only the content that was recorded matches; None when there is none or
+    `path` still exists.
+    """
+    folder = artifacts_dir(project_root)
+    if folder is None or path.exists():
+        return None
+    root = project_root.resolve()
+    parts = (
+        path.relative_to(root).parts if path.is_relative_to(root) else path.parts[1:]
+    )
+    return next(
+        (
+            candidate
+            for start in range(len(parts))
+            for candidate in (folder.resolve().joinpath(*parts[start:]),)
+            if candidate.is_file() and value_or(file_digest(candidate), None) in digests
+        ),
+        None,
+    )
+
+
+def current_pins(project_root: Path) -> dict[str, set[str]]:
+    """`state.pinned_notes`, each pin whose note is gone keyed where `relocated` finds it."""
+    pins: dict[str, set[str]] = {}
+    for path, digests in state.pinned_notes(project_root).items():
+        found = relocated(project_root, Path(path), digests)
+        pins.setdefault(str(found) if found else path, set()).update(digests)
+    return pins

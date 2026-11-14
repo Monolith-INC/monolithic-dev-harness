@@ -185,3 +185,34 @@ def test_artifact_spellings_inside_the_project_name_one_file(tmp_path):
     outside = str(tmp_path.parent / "elsewhere.md")
     assert _project_relative(project, outside) == outside
     assert _project_relative(project, "../elsewhere.md") == "../elsewhere.md"
+
+
+def test_method_results_hold_for_the_same_file_under_a_moved_artifacts_path(tmp_path):
+    from core.result import Ok
+    from harness import elicitation_store, work_sessions, workflow
+    from tests.settings_fixture import write_settings
+
+    write_settings(tmp_path, artifacts_path="Old")
+    spec = tmp_path / "Old" / "specs" / "spec.md"
+    spec.parent.mkdir(parents=True)
+    spec.write_text("# Spec\n", encoding="utf-8")
+    digest = workflow.file_digest(spec)
+    assert isinstance(digest, Ok)
+    current = work_sessions.create(tmp_path, "Apply methods").value
+    elicitation_store.save(
+        tmp_path,
+        current.id,
+        SelectionState(
+            selected=("1",),
+            phase="hardening",
+            outcomes=(("1", "apply", "Old/specs/spec.md", digest.value),),
+        ),
+    )
+    assert elicitation_store.methods_complete(tmp_path, current.id)
+
+    (tmp_path / "Old").rename(tmp_path / "New")
+    write_settings(tmp_path, artifacts_path="New")
+    assert elicitation_store.methods_complete(tmp_path, current.id)
+
+    (tmp_path / "New" / "specs" / "spec.md").write_text("# Changed\n", encoding="utf-8")
+    assert not elicitation_store.methods_complete(tmp_path, current.id)

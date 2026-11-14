@@ -47,8 +47,10 @@ from integrations.planning import (
     IterationCapacity,
     IterationReading,
     MemberCapacity,
+    Sprint,
     date_ranges,
     hour_writer,
+    is_current,
     pick_sprint,
 )
 
@@ -71,6 +73,12 @@ ORIGINAL_ESTIMATE = "Microsoft.VSTS.Scheduling.OriginalEstimate"
 COMPLETED_WORK = "Microsoft.VSTS.Scheduling.CompletedWork"
 """NOT present on Scrum projects."""
 
+STACK_RANK = "Microsoft.VSTS.Common.StackRank"
+"""Backlog order (lower is higher). The REST create leaves it empty, unlike the web UI; a backlog
+item without it is missing from the team's backlog and board, so a create ranks it at the bottom."""
+
+RANK_STEP = 1000.0
+
 ACTIVITY = "Microsoft.VSTS.Common.Activity"
 """Named `Discipline` in CMMI. Allowed values are configured per project."""
 
@@ -85,6 +93,9 @@ STATE = "System.State"
 PARENT = "System.Parent"
 ASSIGNED_TO = "System.AssignedTo"
 ITERATION_PATH = "System.IterationPath"
+CREATED_BY = "System.CreatedBy"
+TAGS = "System.Tags"  # one string, tags joined by "; "
+PRIORITY = "Microsoft.VSTS.Common.Priority"  # 1 … 4
 TEAM_PROJECT = "System.TeamProject"
 CHANGED_DATE = "System.ChangedDate"
 FIELDS = (ID, TITLE, WORK_ITEM_TYPE, STATE, DESCRIPTION, PARENT)
@@ -177,10 +188,9 @@ def adapter(context: AdapterContext) -> TrackerOps:
         search_work_items=lambda query, cursor: _search(context, call, query),
         create_work_item=lambda kind, title, description, parent: bind(
             _create(context, call, read, kind, title, description, parent),
-            lambda item: (
-                _inherit(call, read, item, parent, process)
-                if kind is WorkItemKind.TASK and parent
-                else Ok(item)
+            lambda item: bind(
+                _placed(context, call, read, item, parent, process),
+                lambda item: _ranked(call, read, item),
             ),
         ),
         update_work_item=lambda ref, changes: _update(
@@ -199,6 +209,22 @@ def adapter(context: AdapterContext) -> TrackerOps:
         ),
         list_artifacts=lambda ref: _comments(call, ref),
         add_artifact=lambda ref, draft: _comment(call, ref, draft),
+        revise_artifact=lambda ref, artifact, draft: bind(
+            payloads.number(ref, "work item"),
+            lambda number: fmap(
+                call(
+                    "comment",
+                    "update",
+                    {
+                        "workItemId": number,
+                        "commentId": int(artifact.id),
+                        "text": artifacts.encode(draft),
+                        "format": "Markdown",
+                    },
+                ),
+                lambda reply: artifacts.added(payloads.mapping(reply), draft),
+            ),
+        ),
         link_development_artifact=lambda ref, url, kind: bind(
             payloads.number(ref, "work item"),
             lambda number: fmap(
@@ -219,10 +245,15 @@ def adapter(context: AdapterContext) -> TrackerOps:
                 payloads.mapping,
             ),
         ),
-        read_iteration=lambda replies, ref: fmap(
-            _usable(replies), lambda _: _reading(replies, ref)
+        current_sprint=lambda: fmap(_sprint_entry(context, call, ""), _sprint),
+        sprint_capacity=lambda ref: bind(
+            _sprint_listing(context, call, ref),
+            lambda listing: _capacity_for(context, call, listing, ref),
         ),
-        iteration_items=lambda replies, ref: _sprint_items(replies, process),
+        sprint_items=lambda ref: bind(
+            _sprint_listing(context, call, ref),
+            lambda listing: _items_for(context, call, listing, ref, process),
+        ),
         records_hours=True,
     )
 
@@ -302,6 +333,14 @@ def _item(context: AdapterContext, record: Mapping[str, Any]) -> WorkItem:
         url=str(link or record.get("url") or ""),
         description=payloads.text(fields, DESCRIPTION),
         parent_id=payloads.text(fields, PARENT),
+        tags=tuple(
+            tag.strip() for tag in payloads.text(fields, TAGS).split(";") if tag.strip()
+        ),
+        priority=(
+            int(fields[PRIORITY])
+            if isinstance(fields.get(PRIORITY), int | float)
+            else None
+        ),
         provider_data=record,
     )
 
@@ -364,27 +403,220 @@ def _search(context: AdapterContext, call, query: str) -> Result[Page]:
     )
 
 
-def _inherit(call, read, task: WorkItem, parent: str, process: str) -> Result[WorkItem]:
-    """A Task lands in its Story's sprint, assigned as the Story is, as the agile-backlog-toolkit
-    creates it (`System.IterationPath` and `System.AssignedTo` copied from the parent)."""
+def _placed(
+    context: AdapterContext, call, read, item: WorkItem, parent: str, process: str
+) -> Result[WorkItem]:
+    """A new item assigned to whoever created it and placed in the team's current sprint, as the
+    web UI's board does. A Task takes its Story's assignee and sprint where the Story has them, as
+    the agile-backlog-toolkit creates it. A field with nothing to fill it stays as it is."""
 
-    def copy(parent: WorkItem) -> Result[WorkItem]:
-        fields = payloads.object_or_empty(parent.provider_data.get("fields"))
-        person = fields.get(ASSIGNED_TO)
-        assignee = (
-            payloads.text(person, "uniqueName", "displayName")
-            if isinstance(person, dict)
-            else str(person or "")
-        )
+    def place(source: Mapping[str, Any]) -> Result[WorkItem]:
+        own = payloads.object_or_empty(item.provider_data.get("fields"))
         changes = WorkItemChanges(
-            assignee=assignee or None,
-            iteration=payloads.text(fields, ITERATION_PATH) or None,
+            assignee=_person(source.get(ASSIGNED_TO))
+            or _person(own.get(CREATED_BY))
+            or None,
+            iteration=payloads.text(source, ITERATION_PATH)
+            or _current_iteration(context, call)
+            or None,
         )
         if changes.assignee is None and changes.iteration is None:
-            return Ok(task)
-        return _update(call, read, task.key, changes, process)
+            return Ok(item)
+        return _update(call, read, item.key, changes, process)
 
-    return bind(read(parent), copy)
+    if item.kind is WorkItemKind.TASK and parent:
+        return bind(
+            read(parent),
+            lambda story: place(
+                payloads.object_or_empty(story.provider_data.get("fields"))
+            ),
+        )
+    return place({})
+
+
+def _person(value: Any) -> str:
+    """An identity field as the name a write accepts."""
+    return (
+        payloads.text(value, "uniqueName", "displayName")
+        if isinstance(value, dict)
+        else str(value or "")
+    )
+
+
+def _current_iteration(context: AdapterContext, call) -> str:
+    """The path of the team's current sprint; `""` when it cannot be read, since a sprint is a
+    default and never a reason to fail a create."""
+    return value_or(
+        fmap(
+            _sprint_entry(context, call, ""), lambda entry: payloads.text(entry, "path")
+        ),
+        "",
+    )
+
+
+def _team(context: AdapterContext) -> str:
+    """The `team` setting, or the default team Azure names after the project."""
+    return context.values.get("team") or f"{context.values.get('project', '')} Team"
+
+
+def _sprint_listing(context: AdapterContext, call, ref: str) -> Result[Any]:
+    """The team's iterations: only the current one when `ref` asks for it. A reply that holds
+    no sprint (an error text, say) is refused, never read as a team without sprints."""
+    current = is_current(ref)
+    return bind(
+        call(
+            "work",
+            "list_team_iterations",
+            {"team": _team(context), **({"timeframe": "current"} if current else {})},
+        ),
+        lambda reply: fmap(
+            _usable({"iteration": _json_tail(reply)}), lambda _: _json_tail(reply)
+        ),
+    )
+
+
+def _pick(listing: Any, ref: str) -> Mapping[str, Any] | None:
+    return pick_sprint(
+        listing, ref, SPRINT_MARKERS, ("id", "name", "path"), _current_sprint
+    )[0]
+
+
+def _sprint_entry(context: AdapterContext, call, ref: str) -> Result[Mapping[str, Any]]:
+    """The team iteration `ref` names (id, name or path), or the current one."""
+    return bind(
+        _sprint_listing(context, call, ref),
+        lambda listing: _found(_pick(listing, ref), ref),
+    )
+
+
+def _capacity_for(
+    context: AdapterContext, call, listing: Any, ref: str
+) -> Result[IterationReading]:
+    """The sprint's capacity; a sprint the team does not have is a reading with no dates and a
+    warning that says so, as planning reports it rather than stopping."""
+    entry = _pick(listing, ref)
+    if entry is None:
+        return Ok(_reading({"iteration": listing}, ref))
+    return _capacity_reading(context, call, entry, ref)
+
+
+def _items_for(
+    context: AdapterContext, call, listing: Any, ref: str, process: str | None
+) -> Result[tuple[EstimableItem, ...]]:
+    entry = _pick(listing, ref)
+    if entry is None:
+        return Ok(())
+    return _iteration_items(context, call, entry, process)
+
+
+def _found(entry: Mapping[str, Any] | None, ref: str) -> Result[Mapping[str, Any]]:
+    if entry is not None:
+        return Ok(entry)
+    return (
+        err("no_current_sprint", "the team has no current sprint")
+        if is_current(ref)
+        else err("sprint_not_found", f"the team has no sprint {ref!r}")
+    )
+
+
+def _sprint(entry: Mapping[str, Any]) -> Sprint:
+    attributes = payloads.object_or_empty(entry.get("attributes"))
+    return Sprint(
+        id=payloads.text(entry, "id"),
+        name=payloads.text(entry, "name"),
+        path=payloads.text(entry, "path"),
+        start=parse_date(attributes.get("startDate")),
+        end=parse_date(attributes.get("finishDate")),
+    )
+
+
+def _capacity_reading(
+    context: AdapterContext, call, entry: Mapping[str, Any], ref: str
+) -> Result[IterationReading]:
+    """The sprint's team capacity and working days, read through the team's `work` tool."""
+    team = _team(context)
+    return bind(
+        call(
+            "work",
+            "get_team_capacity",
+            {"team": team, "iterationId": payloads.text(entry, "id")},
+        ),
+        lambda capacities: bind(
+            call("work", "get_team_settings", {"team": team}),
+            lambda settings: _checked_reading(
+                {
+                    # The chosen sprint, in a shape `pick_sprint` reads back as that sprint.
+                    "iteration": entry
+                    if any(marker in entry for marker in SPRINT_MARKERS)
+                    else [entry],
+                    "capacities": _json_tail(capacities),
+                    "team_settings": _json_tail(settings),
+                },
+                ref,
+            ),
+        ),
+    )
+
+
+def _checked_reading(replies: Mapping[str, Any], ref: str) -> Result[IterationReading]:
+    return fmap(_usable(replies), lambda _: _reading(replies, ref))
+
+
+def _iteration_items(
+    context: AdapterContext, call, entry: Mapping[str, Any], process: str | None
+) -> Result[tuple[EstimableItem, ...]]:
+    """The sprint's work items: the iteration lists their ids, a batch read gives their fields."""
+    return bind(
+        call(
+            "read",
+            "list_for_iteration",
+            {"team": _team(context), "iterationId": payloads.text(entry, "id")},
+        ),
+        lambda listing: _batch_items(call, _iteration_ids(listing), process),
+    )
+
+
+def _iteration_ids(listing: Any) -> tuple[int, ...]:
+    relations = payloads.object_or_empty(_json_tail(listing)).get("workItemRelations")
+    return tuple(
+        int(target["id"])
+        for relation in payloads.listed(relations)
+        if isinstance(relation, dict)
+        and isinstance(target := relation.get("target"), dict)
+        and str(target.get("id", "")).isdigit()
+    )
+
+
+def _batch_items(
+    call, ids: tuple[int, ...], process: str | None
+) -> Result[tuple[EstimableItem, ...]]:
+    if not ids:
+        return Ok(())
+    return bind(
+        call("read", "get_batch", {"ids": list(ids)}),
+        lambda batch: _sprint_items({"work_items": batch}, process),
+    )
+
+
+def _json_tail(reply: Any) -> Any:
+    """The JSON after a text preamble: `list_team_iterations` puts a "Project: ..., Team: ..."
+    line before the listing, so the joined reply is not JSON as a whole."""
+    if not isinstance(reply, str):
+        return reply
+    starts = [index for index in (reply.find("["), reply.find("{")) if index >= 0]
+    return (
+        value_or(
+            attempt(
+                lambda: json.loads(reply[min(starts) :]),
+                "not_json",
+                "reply",
+                ValueError,
+            ),
+            None,
+        )
+        if starts
+        else None
+    )
 
 
 def _create(
@@ -452,18 +684,134 @@ def _update(
 ) -> Result[WorkItem]:
     """One JSON-Patch update with only the named fields, then the item read back."""
     names = FieldNames(
-        TITLE, DESCRIPTION, _points_field(process), ASSIGNED_TO, ITERATION_PATH
+        TITLE,
+        DESCRIPTION,
+        _points_field(process),
+        ASSIGNED_TO,
+        ITERATION_PATH,
+        TAGS,
+        PRIORITY,
     )
     return bind(
         changed_fields(changes, names, _hour_fields(process)),
         lambda fields: bind(
             payloads.number(ref, "work item"),
+            # The move goes first: it checks the new parent before changing anything, so a move
+            # that cannot be made leaves the item's fields as they were too.
             lambda number: bind(
-                call("write", "update", {"id": number, "updates": _patch(fields)}),
-                lambda _: read(ref),
+                _reparent(call, read, ref, number, changes.parent),
+                lambda _: bind(
+                    (
+                        call(
+                            "write",
+                            "update",
+                            {"id": number, "updates": _patch(_azure(fields))},
+                        )
+                        if fields
+                        else Ok(None)
+                    ),
+                    lambda _: read(ref),
+                ),
             ),
         ),
     )
+
+
+def _azure(fields: Mapping[str, Any]) -> dict[str, Any]:
+    """Field values as Azure stores them: the tag list is one string, tags joined by "; "."""
+    return {
+        name: "; ".join(value) if name == TAGS else value
+        for name, value in fields.items()
+    }
+
+
+def _reparent(call, read, ref: str, number: int, parent: str | None) -> Result[None]:
+    """Move the item under `parent`. Azure keeps the parent as a link, and an item has one, so
+    the old link is removed before the new one is added; the new parent is read first, so a
+    parent that does not exist leaves the old link in place."""
+    if parent is None:
+        return Ok(None)
+    return bind(
+        payloads.number(parent, "parent"),
+        lambda target: bind(
+            read(parent),
+            lambda _: bind(
+                read(ref),
+                lambda item: bind(
+                    (
+                        call("link", "unlink", {"id": number, "type": "parent"})
+                        if item.parent_id
+                        else Ok(None)
+                    ),
+                    lambda _: fmap(
+                        call(
+                            "link",
+                            "link",
+                            {
+                                "updates": [
+                                    {"id": number, "linkToId": target, "type": "parent"}
+                                ]
+                            },
+                        ),
+                        lambda _: None,
+                    ),
+                ),
+            ),
+        ),
+    )
+
+
+def _ranked(call, read, item: WorkItem) -> Result[WorkItem]:
+    """A backlog item (not a Task) without a backlog rank, ranked at the bottom of the backlog
+    the way the web UI places a new item; any other item as it is."""
+    fields = payloads.object_or_empty(item.provider_data.get("fields"))
+    if item.kind is WorkItemKind.TASK or fields.get(STACK_RANK) is not None:
+        return Ok(item)
+    return bind(
+        _bottom_rank(call),
+        lambda rank: bind(
+            payloads.number(item.key, "work item"),
+            lambda number: bind(
+                call(
+                    "write",
+                    "update",
+                    {
+                        "id": number,
+                        "updates": [
+                            {"op": "add", "path": _field_ref(STACK_RANK), "value": rank}
+                        ],
+                    },
+                ),
+                lambda _: read(item.key),
+            ),
+        ),
+    )
+
+
+def _bottom_rank(call) -> Result[float]:
+    """One step past the highest backlog rank in the project."""
+    statement = (
+        f"SELECT [{ID}] FROM WorkItems WHERE [{TEAM_PROJECT}] = @project "
+        f"AND [{STACK_RANK}] > 0 ORDER BY [{STACK_RANK}] DESC"
+    )
+
+    def highest(ids: tuple[int, ...]) -> Result[float]:
+        if not ids:
+            return Ok(RANK_STEP)
+        return fmap(
+            call("read", "get_batch", {"ids": [ids[0]], "fields": [STACK_RANK]}),
+            lambda reply: next(
+                (
+                    float(record["fields"][STACK_RANK]) + RANK_STEP
+                    for record in _records(reply)
+                    if isinstance(record.get("fields"), dict)
+                    and record["fields"].get(STACK_RANK) is not None
+                ),
+                RANK_STEP,
+            ),
+        )
+
+    return bind(_ids(call, statement), highest)
 
 
 def _patch(fields: Mapping[str, Any]) -> list[dict[str, Any]]:
@@ -537,7 +885,7 @@ def _comment(call, ref: str, draft: ArtifactDraft) -> Result[ArtifactRef]:
 
 
 def _reading(replies: Mapping[str, Any], iteration_ref: str) -> IterationReading:
-    """The sprint from the replies the manifest's `planning.replies` names; see `pick_sprint`."""
+    """The sprint from Azure's iteration, capacity and team-settings replies; see `pick_sprint`."""
     sprint, missing = pick_sprint(
         replies.get("iteration"),
         iteration_ref,
@@ -575,7 +923,7 @@ def _usable(replies: Mapping[str, Any]) -> Result[None]:
     return require(
         not unusable,
         "unreadable_reply",
-        f"these replies hold no usable data, fetch them again: {', '.join(unusable)}",
+        f"Azure DevOps returned no usable data for: {', '.join(unusable)}",
     )
 
 
@@ -592,9 +940,8 @@ def _sprint_items(
     return (
         err(
             "ids_only",
-            "the work_items reply lists only work item ids; read them with "
-            "wit_work_item[get_batch] (no fields list) and pass that reply as work_items, "
-            "or [] when the sprint has none",
+            "Azure DevOps returned only work item ids for the sprint's work items, not their "
+            "fields",
         )
         if payloads.listed(relations)
         or any(
@@ -605,7 +952,7 @@ def _sprint_items(
         if isinstance(relations, list)
         else err(
             "unreadable_reply",
-            "the work_items reply holds no usable data, fetch it again",
+            "Azure DevOps returned no usable data for the sprint's work items",
         )
         if "work_items" in replies and not payloads.readable(reply, "fields", "id")
         else Ok(_estimables(reply, process=process))

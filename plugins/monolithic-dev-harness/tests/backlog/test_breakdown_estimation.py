@@ -2,9 +2,12 @@ import unittest
 from datetime import date
 
 from azure_tracker import (
+    linear_server,
     reading,
     refused,
     select_azure,
+    server,
+    serving,
     sprint,
 )
 
@@ -23,6 +26,7 @@ from orchestrator_core.estimation import (
     estimate_breakdown,
     recompute_breakdown,
 )
+from tests.integrations.fakes import FakeTransport
 from tests.settings_fixture import write_settings
 
 
@@ -424,13 +428,26 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
     """The orchestrator handler -- deterministic, and it performs no writes."""
 
     def _run(self, arguments, setup=select_azure):
-        """Runs in a fresh repository prepared by `setup` (Azure DevOps, agile, by default)."""
+        """Runs in a fresh repository prepared by `setup` (Azure DevOps, agile, by default).
+
+        `served` in the arguments is what a fake Azure DevOps server answers, or a fake server
+        itself; with one, the current sprint is checked.
+        """
         import tempfile
         from pathlib import Path as P
 
         from orchestrator_core.handlers import handle_estimate_breakdown
 
-        with tempfile.TemporaryDirectory() as tmpdir:
+        arguments = dict(arguments)
+        served = arguments.pop("served", None)
+        transport = (
+            served
+            if served is None or isinstance(served, FakeTransport)
+            else server(**served)
+        )
+        if served is not None:
+            arguments.setdefault("iteration_ref", "current")
+        with tempfile.TemporaryDirectory() as tmpdir, serving(transport):
             root = P(tmpdir)
             setup(root)
             state = root / ".harness" / "backlog"
@@ -454,15 +471,19 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
         },
     }
 
-    def test_a_missing_reply_stops_the_run_instead_of_skipping_the_ceiling(self):
-        """The regression: without work_items the check used to switch off and the hours were
-        written past the assignee's capacity."""
+    def test_unreadable_sprint_items_stop_the_run_instead_of_skipping_the_ceiling(self):
+        """The regression: without the sprint's items the check used to switch off and the hours
+        were written past the assignee's capacity."""
         result = self._run(
-            dict(self.BASE, story_points=21, assignee="Ana", replies=self.SPRINT)
+            dict(
+                self.BASE,
+                story_points=21,
+                assignee="Ana",
+                served=dict(self.SPRINT, work_items="Error: 401"),
+            )
         )
         self.assertFalse(result["ok"])
-        self.assertIn("work_items", result["error"])
-        self.assertIn("get_batch", result["error"])
+        self.assertIn("work items", result["error"])
 
     def test_an_ids_only_work_items_reply_stops_the_run(self):
         """The round-two regression: the adapter refused the reply, and the handler then counted
@@ -470,14 +491,14 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
         replies = dict(
             self.SPRINT, work_items={"workItemRelations": [{"target": {"id": 9}}]}
         )
-        result = self._run(dict(self.BASE, assignee="Ana", replies=replies))
+        result = self._run(dict(self.BASE, assignee="Ana", served=replies))
         self.assertFalse(result["ok"])
-        self.assertIn("get_batch", result["error"])
+        self.assertIn("only work item ids", result["error"])
 
     def test_a_reply_that_holds_no_data_stops_the_run(self):
         """An error text in place of the capacities is not "no team capacity"."""
         replies = dict(self.SPRINT, capacities="Error: 401", work_items=[])
-        result = self._run(dict(self.BASE, assignee="Ana", replies=replies))
+        result = self._run(dict(self.BASE, assignee="Ana", served=replies))
         self.assertFalse(result["ok"])
         self.assertIn("capacities", result["error"])
 
@@ -497,19 +518,14 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             root = P(tmpdir)
             write_settings(root, tracker={"name": "linear", "values": {"team": "ENG"}})
-            (root / "in.json").write_text(json.dumps(dict(self.BASE, assignee="Ana")))
-            (root / "replies.json").write_text('{"cycle": [], "issues": []}')
+            (root / "in.json").write_text(
+                json.dumps(dict(self.BASE, assignee="Ana", iteration_ref="current"))
+            )
             out = io.StringIO()
             with mock.patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": tmpdir}):
-                with contextlib.redirect_stdout(out):
+                with contextlib.redirect_stdout(out), serving(linear_server()):
                     code = main(
-                        [
-                            "estimate-breakdown",
-                            "--input",
-                            str(root / "in.json"),
-                            "--replies",
-                            str(root / "replies.json"),
-                        ]
+                        ["estimate-breakdown", "--input", str(root / "in.json")]
                     )
         self.assertEqual(code, 0)
         self.assertIn("record these hours by hand", out.getvalue())
@@ -517,7 +533,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
         self.assertNotIn("Write these to the tracker", out.getvalue())
 
     def test_capacity_is_not_checked_unless_asked(self):
-        """No replies and no sprint named: the estimate stands, with no invented warnings."""
+        """No sprint named: the estimate stands, with no invented warnings."""
         result = self._run(dict(self.BASE, assignee="Ana"))
         self.assertTrue(result["ok"])
         self.assertEqual(result["capacity_errors"], [])
@@ -547,7 +563,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
 
     def test_linear_says_it_has_no_capacity_rather_than_blaming_the_assignee(self):
         result = self._run(
-            dict(self.BASE, assignee="Ana", replies={"cycle": [], "issues": []}),
+            dict(self.BASE, assignee="Ana", served=linear_server()),
             lambda root: write_settings(
                 root, tracker={"name": "linear", "values": {"team": "ENG"}}
             ),
@@ -636,7 +652,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
             "work_items": {"value": []},
         }
         result = self._run(
-            dict(self.BASE, story_points=21, assignee="Ana", replies=replies)
+            dict(self.BASE, story_points=21, assignee="Ana", served=replies)
         )
         self.assertTrue(result["blocked"])
         self.assertEqual(result["write_ops"], [])
@@ -660,7 +676,7 @@ class TestEstimateBreakdownHandler(unittest.TestCase):
             },
             "work_items": {"value": []},
         }
-        result = self._run(dict(self.BASE, assignee="Ana", replies=replies))
+        result = self._run(dict(self.BASE, assignee="Ana", served=replies))
         self.assertTrue(
             any("capacity mismatch" in warning for warning in result["warnings"])
         )

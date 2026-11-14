@@ -6,7 +6,7 @@ import sys
 from pathlib import Path
 
 from core.result import Err, Ok, Result
-from harness import project_paths
+from harness import modes, project_paths
 
 
 def print_result(result: Result[str]) -> int:
@@ -28,3 +28,12 @@ def pairs(values: list[str] | None) -> tuple[tuple[str, str], ...]:
         (key.strip(), value.strip())
         for key, _, value in (item.partition("=") for item in values or ())
     )
+
+
+def read_mode(repo: Path) -> modes.Active | None:
+    """The active mode, if any. What the read repaired, or could not repair, is said on stderr, so
+    whoever runs the command sees it."""
+    read = modes.resolve(repo)
+    if read.notice:
+        print(read.notice, file=sys.stderr)
+    return read.active

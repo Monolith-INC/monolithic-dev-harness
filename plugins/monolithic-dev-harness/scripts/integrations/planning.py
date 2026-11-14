@@ -1,8 +1,7 @@
 """The sprint model every tracker's planning operations speak.
 
 Each tracker's `TrackerOps` (see `contracts.py`) turns what it knows about a sprint into these
-values: the replies a skill fetched through the host's tools (Azure DevOps, Linear) or the
-tracker's own files (local). Its `tracker.json` names the replies it needs under `planning`.
+values, read from its tracker (Azure DevOps, Linear) or from its own files (local).
 They read and plan only: a planned write is shown to a person before anything is recorded.
 """
 
@@ -14,6 +13,20 @@ from datetime import date, timedelta
 from typing import Any
 
 from .payloads import listed, named, one_or_many, parse_date
+
+
+@dataclass(frozen=True)
+class Sprint:
+    """A sprint as every tracker names it: an Azure DevOps iteration, a Linear cycle, a local
+    sprint file. `path` is the value a work item's `iteration` takes to join the sprint; the
+    sprint operations take its id, name or path."""
+
+    id: str
+    name: str
+    path: str
+    start: date | None = None
+    end: date | None = None
+
 
 # Saturday and Sunday. Azure DevOps lets a team configure its own weekend days; when that
 # setting is unknown this is the assumption, and `IterationCapacity.weekend_days` overrides it.
@@ -157,7 +170,7 @@ class EstimableItem:
 
 @dataclass(frozen=True)
 class IterationReading:
-    """A sprint read from provider replies, with anything the translation could not account for."""
+    """A sprint read from the tracker, with anything the translation could not account for."""
 
     capacity: IterationCapacity
     warnings: tuple[str, ...] = ()

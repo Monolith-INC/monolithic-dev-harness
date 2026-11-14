@@ -6,8 +6,11 @@ import json
 import os
 import socket
 import struct
+import types
+import typing
 from collections.abc import Mapping
-from dataclasses import replace
+from dataclasses import fields, is_dataclass, replace
+from datetime import date
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
@@ -23,6 +26,7 @@ from integrations.contracts import (
     WorkItem,
     WorkItemKind,
 )
+from integrations.planning import EstimableItem, IterationReading, Sprint
 
 
 def call(repo: Path, operation: str, arguments: Mapping[str, Any]) -> Result[Any]:
@@ -113,6 +117,30 @@ def _item(value: dict) -> WorkItem:
     )
 
 
+def _rebuilt(kind: Any, value: Any) -> Any:
+    """A contract value from the JSON the gateway sent (`gateway.plain`): records, tuples, dates
+    and optional fields rebuilt from the record's own type hints."""
+    if value is None:
+        return None
+    if is_dataclass(kind):
+        hints = typing.get_type_hints(kind)
+        return kind(
+            **{
+                field.name: _rebuilt(hints[field.name], value[field.name])
+                for field in fields(kind)
+                if field.name in value
+            }
+        )
+    origin, arguments = typing.get_origin(kind), typing.get_args(kind)
+    if origin in (types.UnionType, typing.Union):
+        return _rebuilt(next(a for a in arguments if a is not type(None)), value)
+    if origin is tuple:
+        return tuple(_rebuilt(arguments[0], item) for item in value)
+    if kind is date:
+        return date.fromisoformat(value)
+    return value
+
+
 def open_selected(active: Any, repo: Path) -> Result[TrackerOps]:
     from . import registry, transport
 
@@ -136,6 +164,20 @@ def open_selected(active: Any, repo: Path) -> Result[TrackerOps]:
             list_artifacts=lambda ref: fmap(
                 call(repo, "tracker_list_artifacts", {"ref": ref}),
                 lambda values: tuple(ArtifactRef(**value) for value in values),
+            ),
+            current_sprint=lambda: fmap(
+                call(repo, "tracker_current_sprint", {}),
+                lambda value: _rebuilt(Sprint, value),
+            ),
+            sprint_capacity=lambda sprint: fmap(
+                call(repo, "tracker_sprint_capacity", {"sprint": sprint}),
+                lambda value: _rebuilt(IterationReading, value),
+            ),
+            sprint_items=lambda sprint: fmap(
+                call(repo, "tracker_sprint_items", {"sprint": sprint}),
+                lambda values: tuple(
+                    _rebuilt(EstimableItem, value) for value in values
+                ),
             ),
             search_work_items=lambda query, cursor: fmap(
                 call(

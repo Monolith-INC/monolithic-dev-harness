@@ -4,6 +4,63 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0-rc.13] - 2026-11-11
+
+### Added
+
+- **Modes, slice 1: discovery (preview).** `harness modes enter discovery [--root <epic>]` starts a
+  mode that takes an idea through a Vision Doc and a PRD on its Epic. The `discovery` skill picks it up
+  or can be called by name. `harness modes step` shows where the work stands, and each prompt repeats
+  it. `harness modes leave` ends the mode. The mode runs its own hidden work session: no question is
+  asked, a broken mode record is repaired and the mode resumes, and every repair is shown to the user.
+  Inside a mode an approval covers the content it approved. The always-on controls apply inside and
+  outside a mode. The knowledge-first hook is declared but not active yet.
+- A Vision Doc or PRD is published only as the draft the user approved: approving the Vision Doc
+  does not cover the PRD. While a mode is active, the hook and harness commands agree on which
+  session a command belongs to, and an ordinary session's publication receipt is kept.
+- A `manual-check` question confirms checks the user ran by hand (#50):
+  `harness decision present --gate manual-check --value "checks=<name>, <name>"`. **Confirm**
+  records each check for the code as it was when the question was shown. Before this, a Task's manual
+  evidence was recorded only from the typed phrase `harness manual-check <name> ok`, which still
+  works.
+- Azure Boards places new items where the team works (#51). A new item is assigned to whoever
+  created it and joins the team's current sprint (the `team` setting, or `<project> Team`); a Task
+  still takes its Story's assignee and sprint first. A new backlog item is ranked last on the
+  backlog. If the sprint cannot be read, the item is created without one.
+  `tracker_create_work_item` takes `storyPoints`, so a Story is created with its estimate. Story
+  points are whole numbers.
+- Every tracker has the same base surface (Article 14 of the constitution):
+  `tracker_update_work_item` takes `parentRef` (move an item under another parent), `tags` (the
+  whole tag list) and `priority` (1 urgent to 4 low); `tracker_current_sprint`,
+  `tracker_sprint_items` and `tracker_sprint_capacity` read sprints; `tracker_revise_artifact`
+  rewrites a published document in place. Azure DevOps, Linear and the local tracker implement all
+  of it, and one contract scenario runs against all three.
+- A tracker can offer what goes beyond the base surface where it has it natively, listed under
+  `optional` in its `tracker.json`. `tracker_remove_artifact` is offered by Linear and the local
+  tracker; Azure DevOps cannot delete a comment, so it does not offer it, and the tool is not
+  listed there.
+
+### Changed
+
+- Sprint planning reads the sprint through the selected tracker, via the host gateway, instead of
+  replies an agent fetched from the tracker's own tools and pasted in. Capacity is checked when a
+  sprint is named (`--iteration current`, or `iteration_ref` in the Task list). A planning run never
+  starts its own tracker server, so it never asks to sign in again.
+
+### Removed
+
+- `planning.replies` in `tracker.json`, the `--replies` option of `capacity` and
+  `estimate-breakdown`, and the `read_iteration` and `iteration_items` tracker operations.
+
+### Fixed
+
+- `.tsv` files in the artifacts path are planning documents, like `.csv`, not code (#49).
+- Approvals and method results survive a move of the artifacts path (#49). A file is still covered
+  when the same content is at the same trailing path under the new artifacts path. Before this, a
+  Story already in review went back to preparation.
+- A `move-item` question shows a tracker state such as `in_progress` as words ("in progress"), so
+  it is no longer refused for showing an identifier.
+
 ## [0.7.0-rc.12] - 2026-11-06
 
 ### Changed

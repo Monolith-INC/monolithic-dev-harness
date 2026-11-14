@@ -72,8 +72,9 @@ The decision itself is unchanged: only the user opens an approval, never the age
 
 - A general window covers any write for its duration, not only the batch that was shown.
 - An approval tied to reviewed drafts covers that work session's tracker writes while the drafts are
-  unchanged; the hook cannot match each write to one draft. Branch, item, and pull-request approvals
-  are matched exactly.
+  unchanged; the hook cannot match each write to one draft, except for a catalog document (a Vision
+  Doc or PRD), whose publication must be the approved draft's text apart from its `Status` line and
+  `Change history`. Branch, item, and pull-request approvals are matched exactly.
 - Tool output cannot open a window, but a user who pastes `approve HB-…` does.
 
 ## Host-specific Impact

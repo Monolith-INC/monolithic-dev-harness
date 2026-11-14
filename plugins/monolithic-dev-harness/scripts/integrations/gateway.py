@@ -11,12 +11,13 @@ import json
 import secrets
 import sys
 from collections.abc import Callable, Mapping
-from dataclasses import fields, is_dataclass
+from dataclasses import fields, is_dataclass, replace
+from datetime import date
 from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from core.result import Err, Ok, Result, attempt, bind, err, fmap
+from core.result import Err, Ok, Result, attempt, bind, err, fmap, sequence, value_or
 from core.schema import validate
 from harness import decisions, state
 from harness import settings as repo_settings
@@ -30,6 +31,7 @@ from .contracts import (
     PullRequestDraft,
     ScmOps,
     TrackerOps,
+    WorkItem,
     WorkItemChanges,
     WorkItemKind,
 )
@@ -37,6 +39,7 @@ from .contracts import (
 STRING = {"type": "string"}
 NUMBER = {"type": "number"}
 BOOLEAN = {"type": "boolean"}
+INTEGER = {"type": "integer"}
 TOOLS: tuple[Mapping[str, Any], ...] = tuple(
     {
         "name": name,
@@ -64,7 +67,8 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
         ),
         (
             "tracker_create_work_item",
-            "Create an epic, feature, user_story, task, or bug.",
+            "Create an epic, feature, user_story, task, or bug. storyPoints is the item's "
+            "estimate, a whole number, recorded in the same call.",
             ("kind", "title"),
             {
                 "kind": {
@@ -74,26 +78,53 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
                 "title": STRING,
                 "description": STRING,
                 "parentRef": STRING,
+                "storyPoints": INTEGER,
             },
         ),
         (
             "tracker_update_work_item",
             "Change the named fields of an existing work item, then read it back. The description "
             "is the whole refined body. hours is a Task's effort; firstEstimate also records it "
-            "as the original estimate where the tracker keeps one.",
+            "as the original estimate where the tracker keeps one. parentRef moves the item under "
+            "another parent. tags is the item's whole tag list, replacing the old one. priority "
+            "is 1 (urgent) to 4 (low).",
             ("ref",),
             {
                 "ref": STRING,
                 "title": STRING,
                 "description": STRING,
-                "storyPoints": NUMBER,
+                "storyPoints": INTEGER,
                 "hours": NUMBER,
                 "firstEstimate": BOOLEAN,
                 "assignee": STRING,
                 "iteration": STRING,
+                "parentRef": STRING,
+                "tags": {"type": "array", "items": STRING},
+                "priority": {"type": "integer", "minimum": 1, "maximum": 4},
             },
         ),
         ("tracker_list_children", "List child work items.", ("ref",), {"ref": STRING}),
+        (
+            "tracker_current_sprint",
+            "The sprint running now: its id, name, dates, and the path a work item's iteration "
+            "takes to join it.",
+            (),
+            {},
+        ),
+        (
+            "tracker_sprint_items",
+            "The work items in a sprint, with their points and hours. sprint is the sprint's id, "
+            "name or path; leave it out for the current sprint.",
+            (),
+            {"sprint": STRING},
+        ),
+        (
+            "tracker_sprint_capacity",
+            "A sprint's dates, team members, their daily capacity and days off. sprint is the "
+            "sprint's id, name or path; leave it out for the current sprint.",
+            (),
+            {"sprint": STRING},
+        ),
         (
             "tracker_transition_work_item",
             "Move a work item to a harness state.",
@@ -112,6 +143,27 @@ TOOLS: tuple[Mapping[str, Any], ...] = tuple(
             ("ref", "kind", "title", "content", "revision"),
             {
                 "ref": STRING,
+                "kind": STRING,
+                "title": STRING,
+                "content": STRING,
+                "revision": STRING,
+            },
+        ),
+        (
+            "tracker_remove_artifact",
+            "Remove a published artifact (artifactId from tracker_list_artifacts). Offered only "
+            "by trackers that can remove one.",
+            ("ref", "artifactId"),
+            {"ref": STRING, "artifactId": STRING},
+        ),
+        (
+            "tracker_revise_artifact",
+            "Rewrite a published artifact in place: artifactId is its id from "
+            "tracker_list_artifacts; kind, title, revision and content are what it becomes.",
+            ("ref", "artifactId", "kind", "title", "content", "revision"),
+            {
+                "ref": STRING,
+                "artifactId": STRING,
                 "kind": STRING,
                 "title": STRING,
                 "content": STRING,
@@ -242,6 +294,8 @@ def plain(value: Any) -> Any:
             return [plain(item) for item in value]
         case Path():
             return str(value)
+        case date():
+            return value.isoformat()
         case _:
             return value
 
@@ -298,6 +352,9 @@ READ_ONLY_OPERATIONS = frozenset(
         "tracker_search_work_items",
         "tracker_list_children",
         "tracker_list_artifacts",
+        "tracker_current_sprint",
+        "tracker_sprint_items",
+        "tracker_sprint_capacity",
         "scm_get_pull_request",
         "scm_list_review_threads",
         "workflow_tracking_status",
@@ -387,20 +444,44 @@ def _tracker_call(name: str, args: Mapping[str, Any], ops: TrackerOps) -> Result
         "tracker_search_work_items": lambda: ops.search_work_items(
             args["query"], args.get("cursor", "")
         ),
-        "tracker_create_work_item": lambda: ops.create_work_item(
-            WorkItemKind(args["kind"]),
-            args["title"],
-            args.get("description", ""),
-            args.get("parentRef", ""),
+        "tracker_create_work_item": lambda: bind(
+            ops.create_work_item(
+                WorkItemKind(args["kind"]),
+                args["title"],
+                args.get("description", ""),
+                args.get("parentRef", ""),
+            ),
+            lambda item: (
+                ops.update_work_item(
+                    item.key, WorkItemChanges(story_points=args["storyPoints"])
+                )
+                if "storyPoints" in args
+                else Ok(item)
+            ),
         ),
-        "tracker_update_work_item": lambda: ops.update_work_item(
-            args["ref"], _changes(args)
+        "tracker_update_work_item": lambda: bind(
+            _valid_parent(ops, args["ref"], args.get("parentRef", "")),
+            lambda _: ops.update_work_item(args["ref"], _changes(args)),
         ),
         "tracker_list_children": lambda: ops.list_children(args["ref"]),
+        "tracker_current_sprint": lambda: ops.current_sprint(),
+        "tracker_sprint_items": lambda: ops.sprint_items(args.get("sprint", "")),
+        "tracker_sprint_capacity": lambda: ops.sprint_capacity(args.get("sprint", "")),
         "tracker_transition_work_item": lambda: ops.transition_work_item(
             args["ref"], LogicalState(args["state"])
         ),
         "tracker_publish_artifact": lambda: _publish(ops, args),
+        "tracker_remove_artifact": lambda: _remove_artifact(
+            ops, args["ref"], args["artifactId"]
+        ),
+        "tracker_revise_artifact": lambda: artifacts.revise(
+            ops,
+            args["ref"],
+            args["artifactId"],
+            ArtifactDraft(
+                args["kind"], args["title"], args["content"], args["revision"]
+            ),
+        ),
         "tracker_list_artifacts": lambda: fmap(
             ops.list_artifacts(args["ref"]),
             lambda found: artifacts.of_kind(found, args.get("kind", "")),
@@ -425,7 +506,7 @@ def _verified_item_write(name, value, ops, args) -> Result[Any]:
                 ops.get_work_item(value.id),
                 lambda readback: (
                     Ok(plain(readback))
-                    if readback == value
+                    if _comparable(readback) == _comparable(value)
                     else err(
                         "write_readback_mismatch",
                         "The tracker readback differs from the write result; reconcile it before retrying.",
@@ -434,6 +515,28 @@ def _verified_item_write(name, value, ops, args) -> Result[Any]:
             )
         case _:
             return Ok(plain(value))
+
+
+def _remove_artifact(ops: TrackerOps, ref: str, artifact_id: str) -> Result[Any]:
+    remove = ops.optional.get("remove_artifact")
+    if remove is None:
+        return err(
+            "unsupported_capability", "this tracker cannot remove a published artifact"
+        )
+    return bind(
+        ops.list_artifacts(ref),
+        lambda found: next(
+            (remove(ref, artifact) for artifact in found if artifact.id == artifact_id),
+            err(
+                "artifact_not_found", f"{ref} has no published artifact {artifact_id!r}"
+            ),
+        ),
+    )
+
+
+def _comparable(item: WorkItem) -> WorkItem:
+    """The item with its tags as a set: trackers return them in their own order and case."""
+    return replace(item, tags=tuple(sorted({tag.casefold() for tag in item.tags})))
 
 
 def _changes(args: Mapping[str, Any]) -> WorkItemChanges:
@@ -449,7 +552,44 @@ def _changes(args: Mapping[str, Any]) -> WorkItemChanges:
         ),
         assignee=args.get("assignee"),
         iteration=args.get("iteration"),
+        parent=args.get("parentRef"),
+        tags=tuple(args["tags"]) if "tags" in args else None,
+        priority=args.get("priority"),
     )
+
+
+def _valid_parent(ops: TrackerOps, ref: str, parent: str) -> Result[None]:
+    """A new parent that exists and is neither the item itself nor one of its descendants, checked
+    before any write, so a move that cannot be made changes nothing."""
+    if not parent:
+        return Ok(None)
+    wanted = parent.casefold()
+
+    def refuse(reason: str) -> Result[None]:
+        return err("invalid_parent", f"{ref} cannot move under {parent}: {reason}")
+
+    def names(item: WorkItem) -> set[str]:
+        return {item.id.casefold(), item.key.casefold()}
+
+    def below(items: tuple[WorkItem, ...]) -> Result[None]:
+        """Refuse when the new parent is among `items` or anything below them."""
+        if any(wanted in names(item) for item in items):
+            return refuse("it is one of the item's own children")
+        if not items:
+            return Ok(None)
+        return bind(
+            sequence(tuple(ops.list_children(item.key) for item in items)),
+            lambda levels: below(tuple(child for level in levels for child in level)),
+        )
+
+    def check(item: WorkItem) -> Result[None]:
+        if wanted in names(item):
+            return refuse("an item cannot be its own parent")
+        if isinstance(ops.get_work_item(parent), Err):
+            return refuse("no such work item")
+        return bind(ops.list_children(item.key), below)
+
+    return bind(ops.get_work_item(ref), check)
 
 
 def _publish(ops: TrackerOps, args: Mapping[str, Any]) -> Result[Any]:
@@ -528,13 +668,26 @@ def _telemetry(operation: str, outcome: str, attempts: int, value: Any) -> Any:
 # --- the MCP protocol -------------------------------------------------------------------------
 
 
+# Tools for operations beyond the base surface, listed only when the selected tracker offers them.
+OPTIONAL_TOOLS = {"tracker_remove_artifact": "remove_artifact"}
+
+
 def tools_for(root: Path) -> list[Mapping[str, Any]]:
-    """Every tool, except the tracker's own while tracking is skipped."""
+    """Every tool, except the tracker's own while tracking is skipped, and an optional one the
+    selected tracker does not offer. Read from its manifest: no tracker is opened to list tools."""
     skipped = state.tracking_mode(root) != "enforced"
+    offered = value_or(
+        fmap(
+            registry.selected(root, repo_settings.load(root)),
+            lambda active: set(active.manifest.optional),
+        ),
+        set(),
+    )
     return [
         tool
         for tool in TOOLS
         if not (skipped and str(tool["name"]).startswith("tracker_"))
+        and OPTIONAL_TOOLS.get(str(tool["name"]), "") in offered | {""}
     ]
 
 

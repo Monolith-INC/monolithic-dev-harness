@@ -6,9 +6,8 @@ A tracker is two things in its folder (`trackers/<name>/`): `tracker.json`, chec
 record of functions, so an adapter that leaves one out cannot be built. Every function returns an
 `Ok`/`Err` value; none raises for an expected condition.
 
-Every tracker plans too: it reads a sprint and its items into the model in `planning.py` and names
-the fields that record hours. The replies it reads are the ones its manifest lists under
-`planning.replies`, fetched by a skill through the host's tools and handed over as a mapping.
+Every tracker plans too: it reads its sprints from its tracker itself, into the model in
+`planning.py`, and names the fields that record hours.
 
 Values are plain and immutable. Text that is absent is `""`, never `None`.
 """
@@ -24,7 +23,7 @@ from typing import Any
 
 from core.result import Ok, Result, err
 
-from .planning import EstimableItem, HourFields, IterationReading
+from .planning import EstimableItem, HourFields, IterationReading, Sprint
 
 EMPTY: Mapping[str, Any] = MappingProxyType({})
 
@@ -67,6 +66,8 @@ class WorkItem:
     url: str = ""
     description: str = ""
     parent_id: str = ""
+    tags: tuple[str, ...] = ()
+    priority: int | None = None  # 1 urgent … 4 low; None when the item has none
     provider_data: Mapping[str, Any] = field(
         default_factory=lambda: EMPTY, compare=False
     )
@@ -175,14 +176,6 @@ class Artifact:
 
 
 @dataclass(frozen=True)
-class PlanningReply:
-    """A provider reply the tracker's planning operations read, and what to fetch for it."""
-
-    key: str
-    description: str
-
-
-@dataclass(frozen=True)
 class Manifest:
     """A checked `tracker.json`. `document` keeps the file as read, for `tracker_describe`."""
 
@@ -200,8 +193,9 @@ class Manifest:
     settings: tuple[str, ...]
     required_settings: tuple[str, ...]
     text_format: str
-    planning: tuple[PlanningReply, ...]
     document: Mapping[str, Any] = field(compare=False)
+    # Operations beyond the base surface this tracker offers (`TrackerOps.optional`).
+    optional: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -230,10 +224,15 @@ class WorkItemChanges:
 
     title: str | None = None
     description: str | None = None
-    story_points: float | None = None
+    story_points: int | None = None
     hours: Hours | None = None
     assignee: str | None = None
     iteration: str | None = None
+    # The new parent's id or key. Moving an item is the adapter's own write, never a plain field.
+    parent: str | None = None
+    # The item's whole tag list: it replaces the tags the item had, and () clears them.
+    tags: tuple[str, ...] | None = None
+    priority: int | None = None  # 1 urgent … 4 low
 
 
 @dataclass(frozen=True)
@@ -245,6 +244,8 @@ class FieldNames:
     story_points: str
     assignee: str
     iteration: str
+    tags: str
+    priority: str
 
 
 def changed_fields(
@@ -258,6 +259,8 @@ def changed_fields(
         names.story_points: changes.story_points,
         names.assignee: changes.assignee,
         names.iteration: changes.iteration,
+        names.tags: None if changes.tags is None else list(changes.tags),
+        names.priority: changes.priority,
     }
     fields: dict[str, Any] = {
         name: value for name, value in named.items() if value is not None
@@ -271,7 +274,7 @@ def changed_fields(
             pass
     return (
         Ok(fields)
-        if fields
+        if fields or changes.parent is not None
         else err("invalid_request", "name at least one field to change")
     )
 
@@ -287,16 +290,20 @@ class TrackerOps:
     list_children: Callable[[str], Result[tuple[WorkItem, ...]]]
     list_artifacts: Callable[[str], Result[tuple[ArtifactRef, ...]]]
     add_artifact: Callable[[str, ArtifactDraft], Result[ArtifactRef]]
+    # Rewrites a published artifact in place (its id stays) with the draft, envelope included.
+    revise_artifact: Callable[[str, ArtifactRef, ArtifactDraft], Result[ArtifactRef]]
     link_development_artifact: Callable[[str, str, str], Result[Mapping[str, Any]]]
-    # Planning: (replies, sprint reference) in. The reference "current", or none, means the active
-    # sprint (`planning.CURRENT`); a tracker that cannot tell which that is refuses it. A reply
-    # that was given but holds no data is refused, never read as an empty sprint.
-    # `records_hours`: whether a Task's hours can be written (`update_work_item`) at all.
-    read_iteration: Callable[[Mapping[str, Any], str], Result[IterationReading]]
-    iteration_items: Callable[
-        [Mapping[str, Any], str], Result[tuple[EstimableItem, ...]]
-    ]
+    # Sprints, read by the adapter from its tracker. A sprint reference is a sprint's id, name or
+    # path; "current", or none, is the sprint running now (`planning.CURRENT`).
+    current_sprint: Callable[[], Result[Sprint]]
+    sprint_capacity: Callable[[str], Result[IterationReading]]
+    sprint_items: Callable[[str], Result[tuple[EstimableItem, ...]]]
+    # Whether a Task's hours can be written (`update_work_item`) at all.
     records_hours: bool
+    # Operations beyond the base surface, offered only where the tracker has them natively
+    # (Article 14); the manifest's `optional` names the same ones. "remove_artifact":
+    # (ref, artifact) -> Result[None].
+    optional: Mapping[str, Callable[..., Result[Any]]] = EMPTY
 
 
 def _unsupported(operation: str) -> Callable[..., Result[Mapping[str, Any]]]:

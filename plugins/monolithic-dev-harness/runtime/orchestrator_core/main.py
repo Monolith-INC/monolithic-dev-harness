@@ -111,10 +111,7 @@ def main(argv: list[str] | None = None) -> int:
         "--provider",
         default="filesystem",
         choices=("filesystem", "tracker"),
-        help="your planning files, or the selected tracker (with the --replies its tracker.json lists)",
-    )
-    capacity_p.add_argument(
-        "--replies", help="Path to JSON of the tracker replies a skill fetched"
+        help="your planning files, or the selected tracker, which reads its own sprints",
     )
 
     breakdown_p = sub.add_parser(
@@ -123,9 +120,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     breakdown_p.add_argument(
         "--input", required=True, help="Path to JSON: story_id, story_points, tasks[]"
-    )
-    breakdown_p.add_argument(
-        "--replies", help="Path to JSON of the tracker replies a skill fetched"
     )
 
     config_p = sub.add_parser(
@@ -226,19 +220,8 @@ def main(argv: list[str] | None = None) -> int:
 
         from .handlers import handle_plan_capacity
 
-        match _read_json(args.replies, "replies") if args.replies else Ok({}):
-            case Ok(replies):
-                pass
-            case Err(failure):
-                print(f"[!] {failure.message}")
-                return 1
-
         result = handle_plan_capacity(
-            {
-                "iteration_ref": args.iteration,
-                "provider": args.provider,
-                "replies": replies,
-            },
+            {"iteration_ref": args.iteration, "provider": args.provider},
             skills_dir=skills_dir,
             state_dir=state_dir,
             instructions="",
@@ -259,21 +242,11 @@ def main(argv: list[str] | None = None) -> int:
         return 1 if result.get("overcommitted") else 0
 
     if args.command == "estimate-breakdown":
-        from core.result import Err, Ok, bind, fmap
+        from core.result import Err, Ok
 
         from .handlers import handle_estimate_breakdown
 
-        match bind(
-            _read_json(args.input, "input"),
-            lambda payload: (
-                fmap(
-                    _read_json(args.replies, "replies"),
-                    lambda replies: {**payload, "replies": replies},
-                )
-                if args.replies
-                else Ok(payload)
-            ),
-        ):
+        match _read_json(args.input, "input"):
             case Ok(payload):
                 pass
             case Err(failure):

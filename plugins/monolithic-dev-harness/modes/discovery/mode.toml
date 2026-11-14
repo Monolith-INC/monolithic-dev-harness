@@ -1,0 +1,30 @@
+name = "discovery"
+goal = "Turn an idea into an approved Vision Doc and PRD, published as revisions on a discovery Epic."
+expectations = [
+  "Each document is published on the discovery Epic as a new revision; no revision is overwritten.",
+  "Only the user approves a document; the agent records the approval by publishing a revision.",
+  "Where the work stands is read from the Epic, so leaving and returning resumes at the right step.",
+  "The user is asked for each fact once, in one message, and never about a fact an approved document already states.",
+]
+entry_skill = "discovery"
+knowledge = "first"
+operations = [
+  "tracker_describe",
+  "tracker_preflight",
+  "tracker_search_work_items",
+  "tracker_get_work_item",
+  "tracker_create_work_item",
+  "tracker_list_artifacts",
+  "tracker_publish_artifact",
+  "tracker_revise_artifact",
+]
+hooks = ["orient", "operations"]
+exit = ["The PRD is approved."]
+
+[[skills]]
+name = "knowledge-acquire"
+when = "At most once before step 1, to find what the project already records; skipped without comment when the store is empty or stale."
+
+[[skills]]
+name = "bmad-advanced-elicitation"
+when = "Only to deepen an interview answer that is too thin to write from, at most once per section; never as a gate."

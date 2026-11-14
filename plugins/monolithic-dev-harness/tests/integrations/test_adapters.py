@@ -14,6 +14,7 @@ from integrations.contracts import (
     ArtifactDraft,
     Hours,
     LogicalState,
+    TrackerOps,
     WorkItemChanges,
     WorkItemKind,
 )
@@ -96,11 +97,12 @@ class AzureTest(unittest.TestCase):
         )
         self.assertNotIn("parentId", first)
         self.tracker.create_work_item(WorkItemKind.USER_STORY, "Story", "body", "10")
-        last = self.call.sent("wit_work_item_write")[-1]
-        self.assertEqual(
-            (last["action"], last["parentId"], last["workItemType"]),
-            ("add_child", 10, "User Story"),
-        )
+        [child] = [
+            write
+            for write in self.call.sent("wit_work_item_write")
+            if write["action"] == "add_child"
+        ]
+        self.assertEqual((child["parentId"], child["workItemType"]), (10, "User Story"))
 
     def test_a_task_gets_its_storys_sprint_and_assignee(self) -> None:
         story = ado_item(20, "User Story", "Active")
@@ -127,6 +129,97 @@ class AzureTest(unittest.TestCase):
                 "/fields/System.AssignedTo": "ana@example.com",
                 "/fields/System.IterationPath": "proj\\Sprint 65",
             },
+        )
+
+    def created_story(
+        self, fields: dict, work: object = None, highest: float | None = 2000.0
+    ) -> FakeTransport:
+        """Create a Story on a fake Azure whose new item carries `fields`."""
+        story = ado_item(40, "User Story", "New")
+        story["fields"].update(fields)
+        ranked = {"id": 5, "fields": {"Microsoft.VSTS.Common.StackRank": highest}}
+
+        def read(args):
+            match args["action"]:
+                case "get":
+                    return story
+                case "get_batch":
+                    return [{"body": json.dumps(ranked)}]
+
+        call = FakeTransport(
+            {
+                "wit_work_item": read,
+                "wit_query": {"workItems": [{"id": 5}] if highest else []},
+                "wit_work_item_write": {"id": 40, "fields": {}},
+                **({"work": work} if work is not None else {}),
+            }
+        )
+        ops("azure-devops", AZURE, call).create_work_item(
+            WorkItemKind.USER_STORY, "Story", "body", ""
+        )
+        return call
+
+    def test_a_new_story_goes_to_its_creator_and_the_current_sprint(self) -> None:
+        sprint = [{"path": "proj\\Sprint 66", "attributes": {"timeFrame": 1}}]
+        call = self.created_story(
+            {"System.CreatedBy": {"uniqueName": "ana@example.com"}},
+            work=f"Project: proj, Team: proj Team\n{json.dumps(sprint)}",
+        )
+        [asked] = call.sent("work")
+        self.assertEqual(
+            (asked["action"], asked["project"], asked["team"], asked["timeframe"]),
+            ("list_team_iterations", "proj", "proj Team", "current"),
+        )
+        placed = call.sent("wit_work_item_write")[1]
+        self.assertEqual(
+            {u["path"]: u["value"] for u in placed["updates"]},
+            {
+                "/fields/System.AssignedTo": "ana@example.com",
+                "/fields/System.IterationPath": "proj\\Sprint 66",
+            },
+        )
+
+    def test_an_unreadable_sprint_leaves_the_sprint_and_still_creates(self) -> None:
+        call = self.created_story(
+            {"System.CreatedBy": {"uniqueName": "ana@example.com"}}
+        )
+        placed = call.sent("wit_work_item_write")[1]
+        self.assertEqual(
+            {u["path"]: u["value"] for u in placed["updates"]},
+            {"/fields/System.AssignedTo": "ana@example.com"},
+        )
+
+    def test_a_new_backlog_item_is_ranked_after_the_last_one(self) -> None:
+        rank = self.created_story({}).sent("wit_work_item_write")[-1]
+        self.assertEqual(
+            rank["updates"],
+            [
+                {
+                    "op": "add",
+                    "path": "/fields/Microsoft.VSTS.Common.StackRank",
+                    "value": 3000.0,
+                }
+            ],
+        )
+
+    def test_the_first_ranked_item_takes_the_first_rank_step(self) -> None:
+        rank = self.created_story({}, highest=None).sent("wit_work_item_write")[-1]
+        self.assertEqual(rank["updates"][0]["value"], 1000.0)
+
+    def test_an_item_that_has_a_rank_keeps_it(self) -> None:
+        writes = self.created_story({"Microsoft.VSTS.Common.StackRank": 10.0}).sent(
+            "wit_work_item_write"
+        )
+        self.assertEqual([write["action"] for write in writes], ["create"])
+
+    def test_an_update_never_reranks(self) -> None:
+        self.tracker.update_work_item("10", WorkItemChanges(title="Renamed"))
+        self.assertFalse(
+            any(
+                u["path"].endswith("StackRank")
+                for write in self.call.sent("wit_work_item_write")
+                for u in write.get("updates", ())
+            )
         )
 
     def test_transition_writes_the_provider_state(self) -> None:
@@ -229,23 +322,47 @@ class AzureTest(unittest.TestCase):
         page = self.tracker.search_work_items("x", "").value
         self.assertEqual((len(page.items), page.truncated), (2, False))
 
-    def test_planning_reads_replies_and_names_hour_fields(self) -> None:
-        tracker = ops("azure-devops", {**AZURE, "process": "Scrum"}, self.call)
-        replies = {
-            "iteration": {
-                "value": [
-                    {"name": "S0", "attributes": {"timeFrame": 0}},
-                    {
-                        "name": "S1",
-                        "attributes": {"timeFrame": 1, "startDate": "2026-08-03"},
-                    },
-                ]
-            },
-            "work_items": {"value": [{"body": json.dumps(ado_item(5, "Task", "New"))}]},
+    def sprint_server(self, batch: object) -> FakeTransport:
+        """A fake Azure DevOps server for the sprint reads: two sprints, S1 current, whose
+        iteration lists item 5; `batch` is what the batch read of its fields answers."""
+        iterations = {
+            "value": [
+                {"id": "s0", "name": "S0", "attributes": {"timeFrame": 0}},
+                {
+                    "id": "s1",
+                    "name": "S1",
+                    "attributes": {"timeFrame": 1, "startDate": "2026-08-03"},
+                },
+            ]
         }
-        reading = tracker.read_iteration(replies, "current").value
+
+        def work(args):
+            return {
+                "list_team_iterations": iterations,
+                "get_team_capacity": [],
+                "get_team_settings": {},
+            }[args["action"]]
+
+        def read(args):
+            match args["action"]:
+                case "list_for_iteration":
+                    return {"workItemRelations": [{"target": {"id": 5}}]}
+                case "get_batch":
+                    return batch
+
+        return FakeTransport({"work": work, "wit_work_item": read})
+
+    def test_planning_reads_the_sprint_and_names_hour_fields(self) -> None:
+        tracker = ops(
+            "azure-devops",
+            {**AZURE, "process": "Scrum"},
+            self.sprint_server(
+                {"value": [{"body": json.dumps(ado_item(5, "Task", "New"))}]}
+            ),
+        )
+        reading = tracker.sprint_capacity("current").value
         self.assertEqual(str(reading.capacity.start_date), "2026-08-03")
-        (item,) = tracker.iteration_items(replies, "current").value
+        (item,) = tracker.sprint_items("current").value
         self.assertEqual(item.item_id, "5")
         self.assertTrue(tracker.records_hours)
 
@@ -271,13 +388,15 @@ class AzureTest(unittest.TestCase):
         self.assertEqual(hour_paths("", Hours(4, True)), {remaining})
 
     def test_a_work_items_reply_of_ids_alone_is_refused_not_read_as_empty(self) -> None:
-        """list_for_iteration answers with ids only; counting that as no work would overstate
-        everyone's free hours, so the tracker asks for the batch read instead."""
+        """A batch read that answers with ids only would count as no work and overstate
+        everyone's free hours, so it is refused."""
         relations = {"workItemRelations": [{"rel": None, "target": {"id": 5}}]}
         for reply in (relations, relations["workItemRelations"]):
-            refused = self.tracker.iteration_items({"work_items": reply}, "current")
+            refused = ops(
+                "azure-devops", AZURE, self.sprint_server(reply)
+            ).sprint_items("current")
             self.assertEqual(refused.failure.code, "ids_only")
-            self.assertIn("get_batch", refused.failure.message)
+            self.assertIn("only work item ids", refused.failure.message)
 
     def test_link_sends_a_hyperlink(self) -> None:
         self.assertEqual(
@@ -399,6 +518,29 @@ class LinearTest(unittest.TestCase):
         )
         self.assertEqual(tracker.get_work_item("ENG-1").failure.code, "provider_error")
 
+    def cycles(self, replies: dict) -> TrackerOps:
+        """The Linear adapter on a fake server answering the cycle reads with `replies`."""
+        return ops(
+            "linear",
+            {"team": "ENG"},
+            FakeTransport(
+                {
+                    "list_cycles": lambda args: replies.get(
+                        "cycle",
+                        [
+                            {
+                                "id": "c7",
+                                "number": 7,
+                                "isActive": True,
+                                "startsAt": "2026-08-03",
+                            }
+                        ],
+                    ),
+                    "list_issues": lambda args: replies.get("issues", []),
+                }
+            ),
+        )
+
     def test_planning_reads_cycle_dates_and_issue_estimates(self) -> None:
         replies = {
             "cycle": [
@@ -422,14 +564,15 @@ class LinearTest(unittest.TestCase):
                 ]
             },
         }
-        reading = self.tracker.read_iteration(replies, "current").value
+        tracker = self.cycles(replies)
+        reading = tracker.sprint_capacity("current").value
         self.assertEqual(
             (str(reading.capacity.start_date), str(reading.capacity.finish_date)),
             ("2026-08-03", "2026-08-14"),
         )
         self.assertEqual(reading.capacity.members, ())
         self.assertIn("no team capacity", reading.warnings[0])
-        (item,) = self.tracker.iteration_items(replies, "current").value
+        (item,) = tracker.sprint_items("current").value
         self.assertEqual(
             (
                 item.item_id,
@@ -440,10 +583,10 @@ class LinearTest(unittest.TestCase):
             ),
             ("ENG-2", 3.0, "Ana", "user_story", "7"),
         )
-        self.assertFalse(self.tracker.records_hours)
-        named = self.tracker.read_iteration(replies, "6").value.capacity
+        self.assertFalse(tracker.records_hours)
+        named = tracker.sprint_capacity("6").value.capacity
         self.assertEqual(str(named.start_date), "2026-07-20")
-        missing = self.tracker.read_iteration(replies, "99").value
+        missing = tracker.sprint_capacity("99").value
         self.assertIsNone(missing.capacity.start_date)
         self.assertIn("'99'", missing.warnings[-1])
 
@@ -458,7 +601,7 @@ class LinearTest(unittest.TestCase):
                 {**self.issue("ENG-4"), "assignee": "Bia", "estimate": "x"},
             ]
         }
-        first, second = self.tracker.iteration_items(replies, "current").value
+        first, second = self.cycles(replies).sprint_items("current").value
         self.assertEqual((first.assigned_to, first.points), (None, 2.0))
         self.assertEqual((second.assigned_to, second.points), ("Bia", None))
 
@@ -538,27 +681,31 @@ class LocalTest(unittest.TestCase):
         (self.repo / "Tickets/Ready/task-stray.md").write_text(
             "---\ntype: ticket\nwork_item_type: Task\niteration: S1\n---\n\nStray\n"
         )
-        reading = self.tracker.read_iteration({}, "S1").value
+        reading = self.tracker.sprint_capacity("S1").value
         self.assertEqual(reading.capacity.members[0].daily_hours, 6.0)
-        (item,) = self.tracker.iteration_items({}, "S1").value
+        (item,) = self.tracker.sprint_items("S1").value
         self.assertEqual(
             (item.item_id, item.points, item.planned_hours), (story.key, 5.0, 8.0)
         )
-        self.assertEqual(self.tracker.iteration_items({}, "S2").value, ())
+        self.assertEqual(self.tracker.sprint_items("S2").value, ())
         # A sprint with no capacity file cannot be checked, so it is refused, not read as empty.
-        missing = self.tracker.read_iteration({}, "S2").failure
+        missing = self.tracker.sprint_capacity("S2").failure
         self.assertEqual(missing.code, "no_capacity")
         self.assertIn("capacity-S2.json", missing.message)
         self.assertTrue(self.tracker.records_hours)
 
-    def test_planning_needs_the_sprint_named(self) -> None:
-        """No sprint name must not read a made-up file or count every unplanned item."""
+    def test_no_sprint_name_is_the_current_sprint_never_a_made_up_one(self) -> None:
+        """No sprint name means the current sprint: with none covering today, nothing is read
+        as a sprint and no unplanned item is counted."""
+        (self.repo / "capacity-OLD.json").write_text(
+            json.dumps({"startDate": "2020-01-06", "finishDate": "2020-01-17"})
+        )
         for ref in ("", "  "):
             self.assertEqual(
-                self.tracker.read_iteration({}, ref).failure.code, "invalid_request"
+                self.tracker.sprint_capacity(ref).failure.code, "no_current_sprint"
             )
             self.assertEqual(
-                self.tracker.iteration_items({}, ref).failure.code, "invalid_request"
+                self.tracker.sprint_items(ref).failure.code, "no_current_sprint"
             )
 
     def test_update_changes_the_record_and_reads_it_back(self) -> None:

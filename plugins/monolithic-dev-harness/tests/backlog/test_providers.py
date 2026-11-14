@@ -90,7 +90,7 @@ class TestCapacitySources(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmpdir:
             for provider in (
                 FilesystemProvider(Path(tmpdir)),
-                TrackerProvider(tracker(), {}),
+                TrackerProvider(tracker()),
             ):
                 self.assertIsInstance(provider, CapacityProvider)
 
@@ -223,7 +223,7 @@ class TestAzureMapping(unittest.TestCase):
 
 
 class TestAzurePlanning(unittest.TestCase):
-    """The Azure tracker's planning capability, driven by the replies a skill fetched."""
+    """The Azure tracker's planning capability: the adapter reads the sprint itself."""
 
     REPLIES = {
         "iteration": ITERATION_PAYLOAD,
@@ -233,20 +233,19 @@ class TestAzurePlanning(unittest.TestCase):
     }
 
     def _provider(self, process="agile"):
-        return TrackerProvider(tracker(process), self.REPLIES)
+        return TrackerProvider(tracker(process, **self.REPLIES))
 
-    def test_fetch_iteration_from_the_replies(self):
-        """The replies are all it needs; there is no credential and no network."""
+    def test_fetch_iteration_from_the_tracker(self):
         result = self._provider().fetch_iteration("it1")
         self.assertTrue(result.ok)
         self.assertEqual(len(result.data.members), 2)
 
-    def test_fetch_work_items_from_the_replies(self):
+    def test_fetch_work_items_from_the_tracker(self):
         result = self._provider().fetch_work_items("it1")
         self.assertTrue(result.ok)
         self.assertEqual(len(result.data), 2)
 
-    def test_end_to_end_plan_from_azure_replies(self):
+    def test_end_to_end_plan_from_azure(self):
         """Azure JSON in, capacity plan out.
 
         u1 gives 8h/day over 8 present days (two days off) and u2 gives 6h/day over 10,

@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from azure_tracker import select_azure
+from azure_tracker import select_azure, server, serving
 
 from integrations.payloads import as_float
 from orchestrator_core.artifact_validator import validate_artifact
@@ -186,18 +186,21 @@ class TestPlanCapacityHandler(unittest.TestCase):
             select_azure(root)
         if artifacts_path:
             write_settings(root, artifacts_path=str(artifacts_path))
-        return handle_plan_capacity(
-            arguments, skills_dir=Path("."), state_dir=state_dir, instructions=""
-        )
+        arguments = dict(arguments)
+        served = arguments.pop("served", None)
+        with serving(None if served is None else server(**served)):
+            return handle_plan_capacity(
+                arguments, skills_dir=Path("."), state_dir=state_dir, instructions=""
+            )
 
-    def test_azure_replies_produce_a_plan(self):
-        """Injected Azure JSON flows through to a capacity plan."""
+    def test_azure_sprint_produces_a_plan(self):
+        """What Azure DevOps answers flows through to a capacity plan."""
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self._run(
                 {
                     "iteration_ref": "it1",
                     "provider": "tracker",
-                    "replies": AZURE_REPLIES,
+                    "served": AZURE_REPLIES,
                 },
                 Path(tmpdir),
             )
@@ -217,7 +220,7 @@ class TestPlanCapacityHandler(unittest.TestCase):
                 {
                     "iteration_ref": "it1",
                     "provider": "tracker",
-                    "replies": replies,
+                    "served": replies,
                 },
                 Path(tmpdir),
             )
@@ -230,14 +233,18 @@ class TestPlanCapacityHandler(unittest.TestCase):
             self.assertFalse(result["ok"])
             self.assertIn("unknown provider", result["error"])
 
-    def test_missing_replies_are_named_with_how_to_fetch_them(self):
+    def test_unreadable_capacity_is_named(self):
         with tempfile.TemporaryDirectory() as tmpdir:
             result = self._run(
-                {"provider": "tracker", "replies": {"iteration": {}}}, Path(tmpdir)
+                {
+                    "iteration_ref": "it1",
+                    "provider": "tracker",
+                    "served": dict(AZURE_REPLIES, capacities="Error: 401"),
+                },
+                Path(tmpdir),
             )
             self.assertFalse(result["ok"])
-            for key in ("capacities", "team_settings", "work_items"):
-                self.assertIn(key, result["error"])
+            self.assertIn("capacities", result["error"])
 
     def test_unknown_provider_errors_cleanly(self):
         """An unknown provider is an error message, not an exception."""

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -183,12 +182,7 @@ def handle_plan_capacity(
     provider_name = str(arguments.get("provider", "filesystem")).strip() or "filesystem"
 
     project_root = project_root_of(state_dir)
-    match bind(
-        _replies(arguments),
-        lambda replies: _capacity_source(
-            provider_name, project_root, settings.load(project_root), replies
-        ),
-    ):
+    match _capacity_source(provider_name, project_root, settings.load(project_root)):
         case Ok(provider):
             pass
         case Err(failure):
@@ -298,12 +292,6 @@ def handle_estimate_breakdown(
             "instructions": instructions,
         }
 
-    match _replies(arguments):
-        case Ok(replies):
-            pass
-        case Err(failure):
-            return {"ok": False, "error": failure.message, "instructions": instructions}
-
     assignee = as_text(arguments.get("assignee")) or None
 
     tasks = [
@@ -337,17 +325,17 @@ def handle_estimate_breakdown(
     tracker = _tracker(project_root, settings.load(project_root))
     iteration_ref = as_text(arguments.get("iteration_ref")) or None
 
-    # Capacity is checked when asked for: replies were given, or a sprint was named. Once asked, a
-    # check that cannot run (no usable tracker, a reply missing or unreadable, a sprint or its
-    # items unreadable) stops the run, since writing hours past an unchecked ceiling is what the
-    # check exists to prevent. What a check that ran finds (nobody to match, no team capacity
+    # Capacity is checked when asked for: a sprint was named ("current" names the running one).
+    # Once asked, a check that cannot run (no usable tracker or gateway, a sprint or its items
+    # unreadable) stops the run, since writing hours past an unchecked ceiling is what the check
+    # exists to prevent. What a check that ran finds (nobody to match, no team capacity
     # recorded) is reported and the estimate stands.
-    asked = bool(replies) or iteration_ref is not None
+    asked = iteration_ref is not None
     match (
         bind(
-            _planning_tracker(tracker, replies),
+            fmap(tracker, lambda found: found[1]),
             lambda planning: _assignee_capacity(
-                planning, replies, iteration_ref or CURRENT, assignee
+                planning, iteration_ref or CURRENT, assignee
             ),
         )
         if asked
@@ -457,50 +445,29 @@ class CapacityCheck:
 NOT_ASKED = CapacityCheck(None, (), ())
 
 
-def _replies(arguments: Mapping[str, Any]) -> Result[Mapping[str, Any]]:
-    replies = arguments.get("replies") or {}
-    return (
-        Ok(replies)
-        if isinstance(replies, dict)
-        else err("invalid_request", "replies must be an object")
-    )
-
-
 def _tracker(
     project_root: Path, loaded: Result[Settings]
 ) -> Result[tuple[Manifest, TrackerOps]]:
-    """The selected tracker's manifest and operations."""
+    """The selected tracker's manifest and operations. A provider server is the host gateway's:
+    this client forwards its reads there and never starts one (and its sign-in) itself."""
     return bind(
         registry.selected(project_root, loaded),
         lambda active: fmap(
-            registry.open_tracker(active, project_root),
+            registry.open_selected(project_root, loaded),
             lambda tracker: (active.manifest, tracker),
-        ),
-    )
-
-
-def _planning_tracker(
-    tracker: Result[tuple[Manifest, TrackerOps]], replies: Mapping[str, Any]
-) -> Result[TrackerOps]:
-    """The tracker's operations, once every reply its planning reads is present."""
-    return bind(
-        tracker,
-        lambda found: fmap(
-            registry.require_replies(found[0], replies), lambda _: found[1]
         ),
     )
 
 
 def _assignee_capacity(
     tracker: TrackerOps,
-    replies: Mapping[str, Any],
     iteration_ref: str,
     assignee: str | None,
 ) -> Result[CapacityCheck]:
     from .capacity import availability_for
     from .providers import ProviderResult, TrackerProvider
 
-    provider = TrackerProvider(tracker, replies)
+    provider = TrackerProvider(tracker)
     sprint = provider.fetch_iteration(iteration_ref)
     items = provider.fetch_work_items(iteration_ref) if sprint.ok else sprint
     match (sprint, items):
@@ -552,9 +519,8 @@ def _capacity_source(
     provider_name: str,
     project_root: Path,
     loaded: Result[Settings],
-    replies: Mapping[str, Any],
 ) -> Result[Any]:
-    """The user's planning files, or the selected tracker reading the replies a skill fetched."""
+    """The user's planning files, or the selected tracker, which reads its own sprints."""
     from .project_config import from_settings
     from .providers import FilesystemProvider, TrackerProvider
 
@@ -567,8 +533,7 @@ def _capacity_source(
             )
         case "tracker":
             return fmap(
-                _planning_tracker(_tracker(project_root, loaded), replies),
-                lambda tracker: TrackerProvider(tracker, replies),
+                _tracker(project_root, loaded), lambda found: TrackerProvider(found[1])
             )
         case _:
             return err(

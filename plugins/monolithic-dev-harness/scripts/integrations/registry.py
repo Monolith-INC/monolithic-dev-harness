@@ -43,7 +43,6 @@ from .contracts import (
     IdRules,
     LogicalState,
     Manifest,
-    PlanningReply,
     TrackerOps,
     Transport,
     WorkItemKind,
@@ -167,7 +166,6 @@ def _consistent(folder: Path, document: Mapping[str, Any]) -> Result[None]:
     }
     kinds = document["kinds"]
     settings = tuple(str(item["key"]) for item in document["settings"])
-    replies = tuple(str(item["key"]) for item in document["planning"]["replies"])
     return bind(
         sequence(
             (
@@ -213,11 +211,6 @@ def _consistent(folder: Path, document: Mapping[str, Any]) -> Result[None]:
                     len(set(settings)) == len(settings),
                     "invalid_tracker",
                     "setting keys must be unique",
-                ),
-                require(
-                    len(set(replies)) == len(replies),
-                    "invalid_tracker",
-                    "planning reply keys must be unique",
                 ),
                 _placeholders(document["connection"], frozenset(settings)),
             )
@@ -345,15 +338,12 @@ def _manifest(folder: Path, source: str, document: Mapping[str, Any]) -> Manifes
         tools=MappingProxyType(dict(document.get("tools", {}))),
         connection=MappingProxyType(dict(document["connection"])),
         settings=tuple(str(item["key"]) for item in document["settings"]),
-        planning=tuple(
-            PlanningReply(str(item["key"]), str(item["description"]))
-            for item in document["planning"]["replies"]
-        ),
         required_settings=tuple(
             str(item["key"]) for item in document["settings"] if item["required"]
         ),
         text_format=str(document["text_format"]),
         document=MappingProxyType(dict(document)),
+        optional=tuple(map(str, document.get("optional", ()))),
     )
 
 
@@ -621,18 +611,6 @@ def _adapter_function(manifest: Manifest) -> Result[Any]:
     )
 
 
-def require_replies(manifest: Manifest, replies: Mapping[str, Any]) -> Result[None]:
-    """Every reply the tracker's planning reads is present, or which are missing and how to fetch them."""
-    missing = tuple(reply for reply in manifest.planning if reply.key not in replies)
-    return require(
-        not missing,
-        "missing_replies",
-        f"{manifest.name} planning needs these replies, fetched through the host's tools and "
-        "passed as --replies: "
-        + "; ".join(f"{reply.key} ({reply.description})" for reply in missing),
-    )
-
-
 def onboarded_writes(repo: Path) -> tuple[Result[WriteRules], ...]:
     """What each onboarded folder says writes, read on its own: trusted or not, valid or not.
 
@@ -683,11 +661,19 @@ def _import(module_name: str, file: Path) -> Any:
 
 
 def _built(manifest: Manifest, ops: Any) -> Result[TrackerOps]:
-    return (
-        Ok(ops)
-        if isinstance(ops, TrackerOps)
-        else err(
+    if not isinstance(ops, TrackerOps):
+        return err(
             "invalid_tracker",
             f"{manifest.name}/{ADAPTER} adapter(context) did not return TrackerOps",
+        )
+    offered, declared = set(ops.optional), set(manifest.optional)
+    return (
+        Ok(ops)
+        if offered == declared
+        else err(
+            "invalid_tracker",
+            f"{manifest.name}: the adapter offers {sorted(offered) or 'nothing'} beyond the base "
+            f"surface, but tracker.json declares {sorted(declared) or 'nothing'}: "
+            + ", ".join(sorted(offered ^ declared)),
         )
     )

@@ -3,6 +3,9 @@
     "patterns": [
       "CLAUDE.md",
       "GEMINI.md",
+      "AGENTS.md",
+      "CONSTITUTION.md",
+      ".superpowers/*",
       ".agent/*",
       "docs/*",
       "plugins/*",

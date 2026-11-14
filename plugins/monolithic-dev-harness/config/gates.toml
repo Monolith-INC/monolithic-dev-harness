@@ -470,3 +470,23 @@ label.en = "Not now"
 label.pt-br = "Agora não"
 detail.en = "Keep tracker checks on."
 detail.pt-br = "Manter as verificações do rastreador ativas."
+
+[[gate]]
+id = "manual-check"
+question.en = "Did {checks} pass on the code as it is now?"
+question.pt-br = "{checks} passou no código como está agora?"
+recommended = "confirm"
+
+[[gate.option]]
+id = "confirm"
+label.en = "Confirm"
+label.pt-br = "Confirmar"
+detail.en = "Record that these checks passed on the current code. A later code change needs a new confirmation."
+detail.pt-br = "Registrar que estas verificações passaram no código atual. Uma mudança posterior no código exige nova confirmação."
+
+[[gate.option]]
+id = "not-now"
+label.en = "Not now"
+label.pt-br = "Agora não"
+detail.en = "Record nothing; the work that needs these checks stays open."
+detail.pt-br = "Não registrar nada; o trabalho que depende destas verificações continua aberto."

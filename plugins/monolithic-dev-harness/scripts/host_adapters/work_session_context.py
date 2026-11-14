@@ -9,18 +9,25 @@ The startup adapter pairs trusted pre/post events and protected completion evide
 The pending-decision guard runs first, so a pending question cannot be escaped by switching work.
 A damaged link refuses everything but an explicit switch, which keeps the damaged record and binds
 the conversation again (`relink_allowed`).
+While a mode is active, a conversation acts in the mode's session unless it chose a live session
+after the mode was entered: the newest explicit choice wins, and entering a mode is one. That is
+derived on each read (`for_payload`) from when the link was made, and never stored: nothing links a
+conversation to a mode. A command without `--session-id` runs in the mode's session whoever sends
+it (`modes.implied_session`, the CLI's own answer), so a conversation acting elsewhere is refused
+it, and the refusal names the mode and that conversation's own session, never the mode's.
 """
 
 from __future__ import annotations
 
 import hashlib
 import json
+from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from core.result import Err, Failure, Ok, Result, attempt, bind, fmap, require
-from harness import commands, decisions, state, work_sessions
+from harness import commands, decisions, modes, state, work_sessions
 
 VERSION = 1
 ROOT = Path(".harness") / "state" / "host_sessions"
@@ -78,6 +85,7 @@ def bind_session(
                                 "host": host,
                                 "host_session_id": host_session_id,
                                 "work_session_id": session.id,
+                                "bound": datetime.now(UTC).isoformat(),
                                 "consumed_startups": list(
                                     dict.fromkeys(
                                         (*consumed_startups(destination),)
@@ -205,7 +213,7 @@ def requested(command: str, cwd: Path, project: Path) -> tuple[str, str] | None:
 
     `how` is `select` or `resume` for an explicit switch, `named` when a session-scoped
     `workflow` or `decision` command names its session, `implied` when it names none and so
-    uses the project's current one.
+    runs in the session the CLI picks for it (`modes.implied_session`).
     """
     match commands.harness_args(command, cwd):
         case ("begin", *rest) if "--new" not in rest:
@@ -233,10 +241,21 @@ def _scoped(
         case str(), _ if named:
             return named, "named"
         case _, True:
-            implied = work_sessions.current(project)
+            implied = modes.implied_session(project, modes.active(project))
             return (implied, "implied") if implied else None
         case _:
             return None
+
+
+def mode_named(project: Path, acting: str | None) -> str:
+    """The name of the mode a conversation acts in, or empty: its session is the mode's."""
+    match modes.active(project):
+        case modes.Active(mode=name, session_id=identifier) if (
+            acting is not None and identifier == acting
+        ):
+            return name
+        case _:
+            return ""
 
 
 def recovery_allowed(
@@ -275,14 +294,49 @@ def damaged(failure: Failure) -> str:
     )
 
 
-def mismatch(current: str | None, request: tuple[str, str] | None) -> Failure | None:
-    """A command that names another session than the one this conversation works in."""
+def runs_in(project: Path, request: tuple[str, str] | None) -> str:
+    """The name of the mode a command without `--session-id` would run in, or empty."""
     match request:
+        case (identifier, "implied"):
+            return mode_named(project, identifier)
+        case _:
+            return ""
+
+
+def mismatch(
+    current: str | None,
+    request: tuple[str, str] | None,
+    mode: str = "",
+    mode_run: str = "",
+) -> Failure | None:
+    """A command that names, or runs in, another session than the one this conversation works in.
+
+    Inside a mode (`mode` names it) the message names the mode, never a session. A command
+    without a session that would run in a mode this conversation is not in (`mode_run` names it)
+    is refused by the mode's name and the conversation's own session, never the mode's.
+    """
+    match request:
+        case (_, "named") if mode and current is not None and request[0] != current:
+            return Failure(
+                "work_session_mismatch",
+                f"this conversation works in the {mode} mode, so a command that names another "
+                "work session is refused. Run it without `--session-id`, or leave the mode "
+                "with `harness modes leave` to work on other work",
+            )
         case (named, "named") if current is not None and named != current:
             return Failure(
                 "work_session_mismatch",
                 f"this conversation works on {current}; switch with "
                 f"`harness work-session select {named}` before working on {named}",
+            )
+        case (implied, "implied") if (
+            mode_run and current is not None and implied != current
+        ):
+            return Failure(
+                "work_session_mismatch",
+                f"this conversation works on {current}, and a command without `--session-id` "
+                f"would run in the {mode_run} mode instead. Run it with `--session-id "
+                f"{current}` to work on {current}, or end the mode with `harness modes leave`",
             )
         case (implied, "implied") if current is not None and implied != current:
             return Failure(
@@ -316,9 +370,58 @@ def bind_requested(
 def for_payload(
     project: Path, host: str, payload: dict[str, Any]
 ) -> Result[str | None]:
+    """The work session a conversation acts in: the one it chose, else the active mode's.
+
+    Pure: nothing is written for the conversation. A damaged link stays an error and is never
+    adopted, so it keeps its refusal.
+    """
     from host_adapters import native_session_id
 
     host_session_id = native_session_id(host, payload)
-    return (
+    linked = (
         resolve_session(project, host, host_session_id) if host_session_id else Ok(None)
     )
+    return fmap(
+        linked,
+        lambda identifier: _derived(
+            project, identifier, lambda: _bound_at(project, host, host_session_id)
+        ),
+    )
+
+
+def _derived(project: Path, linked: str | None, bound: Callable[[], str]) -> str | None:
+    """The mode's session, unless the conversation chose a live session after the mode was
+    entered. Entering a mode is its newest explicit choice, so one it chose before gives way; none,
+    or one that has ended, is no choice."""
+    match modes.active(project):
+        case None:
+            return linked
+        case modes.Active(entered=entered) if (
+            linked is not None
+            and not work_sessions.ended(project, linked)
+            and _later(bound(), entered)
+        ):
+            return linked
+        case current:
+            return current.session_id
+
+
+def _bound_at(project: Path, host: str, host_session_id: str) -> str:
+    """When the conversation's link was made, or empty when it records no time."""
+    match _path(project, host, host_session_id):
+        case Ok(source):
+            match state.read_json(source):
+                case {"bound": str() as stamp}:
+                    return stamp
+                case _:
+                    return ""
+        case _:
+            return ""
+
+
+def _later(stamp: str, than: str) -> bool:
+    """Whether the ISO time `stamp` is after `than`; a time that cannot be read is not."""
+    try:
+        return datetime.fromisoformat(stamp) > datetime.fromisoformat(than)
+    except (TypeError, ValueError):
+        return False

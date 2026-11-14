@@ -138,6 +138,26 @@ class TestArtifactValidator(unittest.TestCase):
         results = validate_artifact(ingest_from_text(text, filename="draft-mixed"))
         self.assertEqual(outcome_from_results(results), "FAIL")
 
+    def test_a_refined_story_quoting_its_raw_draft_is_read_as_refined(self) -> None:
+        """rc.10 trial: the quoted draft's `## Requirements` made the refined Story read as raw."""
+        from orchestrator_core.artifact_validator import _detect_body_format
+
+        quoted = ENGLISH_RAW_STORY.split("---\n", 2)[2]
+        refined = (
+            "## 🎯 What\n\nShow both counts.\n\n## 💡 Why\n\nSee progress.\n\n"
+            "## 📄 Original Description\n\n" + quoted
+        )
+        self.assertEqual(_detect_body_format(refined), "enriched_story")
+
+    def test_the_refined_ticket_document_name_is_accepted(self) -> None:
+        from orchestrator_core.ingest import FILENAME_RE
+
+        self.assertTrue(
+            FILENAME_RE.match("ticket-user-story-0001-show-both-task-counts")
+        )
+        self.assertTrue(FILENAME_RE.match("0001-show-both-task-counts"))
+        self.assertFalse(FILENAME_RE.match("ticket-show-both-task-counts"))
+
     def test_an_unknown_body_gets_one_diagnostic(self) -> None:
         text = ENGLISH_RAW_STORY.replace("## Requirements", "## Notes").replace(
             "## Acceptance Criteria", "## Checks"

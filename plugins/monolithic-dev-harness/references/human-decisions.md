@@ -44,6 +44,7 @@ harness decision present --repo <project> --host <host> \
 | `plan-checkpoint` | The discovery plan is ready (`--artifact` the plan) |
 | `refinement-split` | A proposed split of an Epic, Feature or Story is ready (`--artifact` the outline); no write |
 | `harness-controls` | The user wants to suspend, resume, or use free mode |
+| `manual-check` | The user validated checks by hand (`--value "checks=<name>, <name>"`); **Confirm** records each for the code as it is now |
 | `publish-items` (`--value count= --value items= --value tracker=`), `move-item` (`--value item= --value status= --value ref=`), `approve-spec`, `implementation-confirm`, `approve-document`, `publish-branch` (`--value branch=`), `reply-pr` (`--value pr=`), `pause-tracking` | Approvals; see the harness skill's approval protocol. `publish-items` lists the exact `key:<existing-key>` and/or `title:<new-item-title>` identities in `items`, matching `count`, so generated tracker keys can be verified after creation. `publish-items`, `implementation-confirm` and `approve-document` require the files shown first: run `harness workflow show`, put its output in your reply, run `harness decision status` (the host records a reply only once another tool runs), then ask |
 
 - Never pass a session id: the harness asks in the project's current work session, or

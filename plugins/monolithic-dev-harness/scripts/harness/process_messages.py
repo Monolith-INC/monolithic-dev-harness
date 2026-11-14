@@ -39,6 +39,9 @@ INTEGRATION_READS = frozenset(
         "tracker_search_work_items",
         "tracker_list_children",
         "tracker_list_artifacts",
+        "tracker_current_sprint",
+        "tracker_sprint_items",
+        "tracker_sprint_capacity",
         "workflow_tracking_status",
     }
 )

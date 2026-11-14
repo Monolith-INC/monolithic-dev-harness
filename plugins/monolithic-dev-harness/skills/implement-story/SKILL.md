@@ -79,7 +79,10 @@ prerequisite for local implementation.
    ```
 
    The named checks and manual observations must already exist in local verification state; a
-   self-authored claim alone does not verify them. Documentary Tasks can use deliverables that are
+   self-authored claim alone does not verify them. To record a manual observation, ask
+   `harness decision present --gate manual-check --value "checks=<name>, <name>"` after the user
+   has validated those checks; their **Confirm** records each check for the code as it is then.
+   A later code change needs a new confirmation. Documentary Tasks can use deliverables that are
    approved notes. Before accepting older completed Tasks, run
    `harness workflow audit-completion --story <story-key>`; this reports gaps without changing
    tracker state.

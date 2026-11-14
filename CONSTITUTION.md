@@ -2,7 +2,7 @@
 title: Constitution of the monolithic-dev-harness
 status: active
 owner: monolithic-dev-harness maintainers
-last_reviewed: 2026-10-24
+last_reviewed: 2026-11-11
 ---
 
 # Constitution
@@ -184,3 +184,22 @@ implementation details.
   the shared bus interface does not require a separately deployed broker.
 
 Implementation status and the central contracts are documented in [adapter messaging](docs/01-architecture/architecture.md#adapter-messaging-contract).
+
+## Article 14 — Each concern is solved by its owner
+
+Owner decision, 2026-11-11: the harness is the infrastructure that drives the process. Every
+concern is solved by its owner, at the owner's own boundary: a tracker's by the tracker or its
+adapter, a host's by the host or its adapter, and so on. The harness never takes over a provider's
+job or works around a provider's limits.
+
+- **The agent knows the harness, not the provider.** The agent knows the operation it is doing, the
+  harness tool that does it, and what happens. It never calls a provider's own tools for work the
+  harness covers, and never needs to know how a provider works.
+- **A base surface every adapter provides.** The process needs certain things from each kind of
+  provider. A tracker, for example, must provide work items in a hierarchy, a sprint, effort and
+  status. Every adapter of that kind provides all of the base surface; there are no gaps.
+- **Optional capabilities only where native.** An adapter offers a capability beyond the base
+  surface only when its provider has it. When it does not, the limitation is accepted. The harness
+  builds no substitute, such as its own change log for a tracker without history.
+- **Extend once.** A new operation is added to the neutral contract once. Every adapter then
+  implements it if it is base, or offers it if its provider can.

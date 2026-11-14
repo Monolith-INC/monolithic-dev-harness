@@ -84,6 +84,165 @@ class GatewayTest(unittest.TestCase):
             self.call("tracker_update_work_item", ref=story["key"]).failure.message, str
         )
 
+    def test_a_create_records_whole_story_points_in_the_same_call(self) -> None:
+        story = self.call(
+            "tracker_create_work_item", kind="user_story", title="S", storyPoints=3
+        ).value
+        self.assertEqual(story["provider_data"]["story_points"], 3)
+        self.assertIn(
+            "storyPoints",
+            self.call(
+                "tracker_create_work_item",
+                kind="user_story",
+                title="S",
+                storyPoints=2.5,
+            ).failure.message,
+        )
+
+    def test_reparent_to_itself_is_refused(self) -> None:
+        story = self.call(
+            "tracker_create_work_item", kind="user_story", title="S"
+        ).value
+        refused = self.call(
+            "tracker_update_work_item", ref=story["key"], parentRef=story["key"]
+        )
+        self.assertEqual(refused.failure.code, "invalid_parent")
+
+    def test_reparent_to_its_own_child_is_refused(self) -> None:
+        feature = self.call("tracker_create_work_item", kind="feature", title="F").value
+        story = self.call(
+            "tracker_create_work_item",
+            kind="user_story",
+            title="S",
+            parentRef=feature["key"],
+        ).value
+        refused = self.call(
+            "tracker_update_work_item", ref=feature["key"], parentRef=story["key"]
+        )
+        self.assertEqual(refused.failure.code, "invalid_parent")
+
+    def test_priority_outside_1_to_4_is_rejected(self) -> None:
+        story = self.call(
+            "tracker_create_work_item", kind="user_story", title="S"
+        ).value
+        for value in (0, 5):
+            self.assertIn(
+                "priority",
+                self.call(
+                    "tracker_update_work_item", ref=story["key"], priority=value
+                ).failure.message,
+            )
+
+    def test_readback_ignores_tag_order_and_case(self) -> None:
+        from integrations.contracts import LogicalState, WorkItem, WorkItemKind
+
+        written = WorkItem(
+            "1",
+            "1",
+            "S",
+            WorkItemKind.USER_STORY,
+            LogicalState.BACKLOG,
+            tags=("api", "ux"),
+        )
+        read = WorkItem(
+            "1",
+            "1",
+            "S",
+            WorkItemKind.USER_STORY,
+            LogicalState.BACKLOG,
+            tags=("UX", "api"),
+        )
+        tracker = mock.Mock(get_work_item=lambda ref: Ok(read))
+        self.assertIsInstance(
+            gateway._verified_item_write(
+                "tracker_update_work_item", written, tracker, {}
+            ),
+            Ok,
+        )
+
+    def test_sprint_tools_stay_allowed_while_a_question_waits(self) -> None:
+        self.assertLessEqual(
+            {"tracker_current_sprint", "tracker_sprint_items"},
+            gateway.READ_ONLY_OPERATIONS,
+        )
+        self.assertLessEqual(
+            {"tracker_current_sprint", "tracker_sprint_items"},
+            set(gateway.TOOLS_BY_NAME),
+        )
+
+    def test_revising_an_unknown_document_fails(self) -> None:
+        story = self.call(
+            "tracker_create_work_item", kind="user_story", title="S"
+        ).value
+        refused = self.call(
+            "tracker_revise_artifact",
+            ref=story["key"],
+            artifactId="nope",
+            kind="spec",
+            title="Spec",
+            revision="1",
+            content="x",
+        )
+        self.assertEqual(refused.failure.code, "artifact_not_found")
+
+    def test_tools_list_hides_removal_for_a_tracker_without_it(self) -> None:
+        from harness import state
+
+        state.set_tracking_mode(self.root, "enforced")
+        names = {tool["name"] for tool in gateway.tools_for(self.root)}
+        self.assertIn("tracker_remove_artifact", names)
+        write_settings(
+            self.root,
+            tracker={
+                "name": "azure-devops",
+                "values": {"organization": "o", "project": "p"},
+            },
+        )
+        names = {tool["name"] for tool in gateway.tools_for(self.root)}
+        self.assertNotIn("tracker_remove_artifact", names)
+        self.assertIn("tracker_revise_artifact", names)
+
+    def test_removing_on_a_tracker_without_it_is_unsupported(self) -> None:
+        write_settings(
+            self.root,
+            tracker={
+                "name": "azure-devops",
+                "values": {"organization": "o", "project": "p"},
+            },
+        )
+        refused = self.call("tracker_remove_artifact", ref="1", artifactId="9")
+        self.assertEqual(refused.failure.code, "unsupported_capability")
+        self.assertIn("cannot remove a published artifact", refused.failure.message)
+
+    def test_reparent_to_a_missing_item_is_refused(self) -> None:
+        story = self.call(
+            "tracker_create_work_item", kind="user_story", title="S"
+        ).value
+        refused = self.call(
+            "tracker_update_work_item", ref=story["key"], parentRef="FEATURE-9999"
+        )
+        self.assertEqual(refused.failure.code, "invalid_parent")
+
+    def test_reparent_under_any_descendant_is_refused(self) -> None:
+        epic = self.call("tracker_create_work_item", kind="epic", title="E").value
+        feature = self.call(
+            "tracker_create_work_item", kind="feature", title="F", parentRef=epic["key"]
+        ).value
+        story = self.call(
+            "tracker_create_work_item",
+            kind="user_story",
+            title="S",
+            parentRef=feature["key"],
+        ).value
+        task = self.call(
+            "tracker_create_work_item", kind="task", title="T", parentRef=story["key"]
+        ).value
+        refused = self.call(
+            "tracker_update_work_item", ref=epic["key"], parentRef=task["key"]
+        )
+        self.assertEqual(refused.failure.code, "invalid_parent")
+        self.assertIn("own children", refused.failure.message)
+
     def test_arguments_are_checked_against_the_tool_schema(self) -> None:
         self.assertIn(
             "missing 'title'",

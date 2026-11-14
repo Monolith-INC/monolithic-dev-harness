@@ -10,7 +10,15 @@ from pathlib import Path
 from typing import Any
 
 from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
-from harness import commands, gates, questions, setup_reviews, state, workflow
+from harness import (
+    code_content,
+    commands,
+    gates,
+    questions,
+    setup_reviews,
+    state,
+    workflow,
+)
 
 RELATIVE_PATH = Path(".harness/state/decision.json")
 HISTORY = "decision-history.json"
@@ -732,6 +740,22 @@ def _resolve(
                     raise ValueError(failure.message)
                 case Ok():
                     pass
+        case "manual-check", _ if not own_words and (
+            questions.choice_label(answer).casefold() not in questions.DECLINE_LABELS
+        ):
+            manual = (current.get("binds") or {}).get("manual") or {}
+            if code_content.current(repo) != manual.get("code"):
+                raise ValueError(
+                    "the code changed after the question was shown, so the manual check was "
+                    "not recorded; ask again about the code as it is now"
+                )
+            for name in manual.get("checks", ()):
+                state.record_manual(
+                    repo,
+                    str(name),
+                    manual["code"],
+                    str(current.get("question", ""))[:500],
+                )
         case _:
             pass
     match current.get("gate"), current.get("work_session_id"):
@@ -813,9 +837,10 @@ def reusable(
         return None
     match _path(repo, work_session_id):
         case Ok(path):
-            history = (state.read_json(path.with_name(HISTORY)) or {}).get(
-                "answers", []
-            )
+            history = [
+                *_earlier_mode_answers(repo, work_session_id),
+                *_answers(path.with_name(HISTORY)),
+            ]
         case Err():
             return None
     labels = {questions.choice_label(option).casefold() for option in options}
@@ -840,13 +865,35 @@ def reusable(
     return None
 
 
+def _answers(history: Path) -> list[dict[str, Any]]:
+    return (state.read_json(history) or {}).get("answers", [])
+
+
+def _earlier_mode_answers(repo: Path, scope: str | None) -> list[dict[str, Any]]:
+    """Inside a mode, the answers given in the mode's other sessions, oldest first. An answer
+    belongs to the content it approved, so a repair that replaced the session does not lose it."""
+    from harness import modes, work_sessions
+
+    match work_sessions.list_sessions(repo) if modes.acting_in(repo, scope) else None:
+        case Ok(sessions):
+            return [
+                answer
+                for session in sessions
+                if session.mode_session and session.id != scope
+                for answer in _answers(session.folder / HISTORY)
+            ]
+        case _:
+            return []
+
+
 def _window_open(repo: Path, entry: dict[str, Any], scope: str | None) -> bool:
-    """Whether the approval this answer opened still holds (not revoked, expired, or ended)."""
-    from harness import work_sessions
+    """Whether the approval this answer opened still holds (not revoked, expired, or ended).
+    Inside a mode it is found by its approved content, whichever of the mode's sessions gave it."""
+    from harness import modes, work_sessions
 
     wanted = questions.approval_id(str(entry.get("id", "")))
     return not work_sessions.ended(repo, scope) and any(
-        record.get("id") == wanted for _, record in state.open_approvals(repo, scope)
+        record.get("id") == wanted for _, record in modes.approvals_for(repo, scope)
     )
 
 

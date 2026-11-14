@@ -105,15 +105,6 @@ class RegistryTest(unittest.TestCase):
             "placeholder": {
                 "connection": {"kind": "mcp", "command": "x", "args": ["{token}"]}
             },
-            "reply keys": {
-                "planning": {
-                    "replies": [
-                        {"key": "cycle", "description": "one"},
-                        {"key": "cycle", "description": "two"},
-                    ]
-                }
-            },
-            "no planning": {"planning": None},
         }
         for label, change in cases.items():
             folder = copy_tracker(
@@ -122,15 +113,6 @@ class RegistryTest(unittest.TestCase):
             self.assertIsInstance(
                 registry.read_manifest(folder, "onboarded"), Err, label
             )
-
-    def test_the_manifest_declares_the_replies_planning_reads(self) -> None:
-        manifest = registry.read_manifest(
-            registry.SHIPPED_ROOT / "azure-devops", "shipped"
-        ).value
-        self.assertEqual(
-            tuple(reply.key for reply in manifest.planning),
-            ("iteration", "capacities", "team_settings", "work_items"),
-        )
 
     def test_a_wide_diamond_hierarchy_is_checked_quickly(self) -> None:
         import time
@@ -257,6 +239,19 @@ class RegistryTest(unittest.TestCase):
             registry.build(active, self.repo, FakeTransport({})).failure.message,
         )
 
+    def test_registry_refuses_optional_ops_the_manifest_does_not_declare(self) -> None:
+        folder = copy_tracker(
+            "local", self.onboarded / "quiet", name="quiet", optional=[]
+        )
+        trust.trust(self.repo, "quiet", folder, trust.digest(folder))
+        active = registry.resolve(
+            self.repo, settings({"name": "quiet", "source": "onboarded"})
+        )
+        self.assertIn(
+            "remove_artifact",
+            registry.build(active, self.repo, FakeTransport({})).failure.message,
+        )
+
 
 class ManifestFileTest(unittest.TestCase):
     def test_shipped_manifests_are_json_objects_with_schema_version_1(self) -> None:
@@ -264,3 +259,22 @@ class ManifestFileTest(unittest.TestCase):
             self.assertEqual(
                 json.loads((folder / "tracker.json").read_text())["schemaVersion"], 1
             )
+
+
+def test_a_test_never_starts_a_real_tracker_server(tmp_path) -> None:
+    """The suite-wide guard (`tests/conftest.py`): the Azure DevOps tracker opened by a test
+    answers that its server is unavailable instead of starting `npx @azure-devops/mcp`."""
+    from tests.settings_fixture import write_settings
+
+    write_settings(
+        tmp_path,
+        tracker={
+            "name": "azure-devops",
+            "values": {"organization": "o", "project": "p"},
+        },
+    )
+    from harness import settings as repo_settings
+
+    active = registry.selected(tmp_path, repo_settings.load(tmp_path)).value
+    tracker = registry.open_tracker(active, tmp_path).value
+    assert tracker.get_work_item("1").failure.code == "provider_unavailable"

@@ -9,7 +9,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 
 from core.result import Ok, Result, attempt, bind, err, fmap
-from harness import state, work_sessions, workflow
+from harness import local_artifacts, state, work_sessions, workflow
 from harness.elicitation import SelectionEvent, SelectionState, reduce_selection
 
 
@@ -456,11 +456,19 @@ def methods_complete(repo, scope) -> bool:
     match load(repo, scope):
         case Ok(current) if current.phase == "hardening":
             return all(
-                workflow.file_digest(repo / artifact) == Ok(digest)
+                _holds(repo, artifact, digest)
                 for _, _, artifact, digest in current.outcomes
             )
         case _:
             return False
+
+
+def _holds(repo: Path, artifact: str, digest: str) -> bool:
+    """A method result still holds: the file it names, or the same file under a moved artifacts
+    path, reads as recorded."""
+    return workflow.file_digest(repo / artifact) == Ok(digest) or bool(
+        local_artifacts.relocated(repo, (repo / artifact).resolve(), {digest})
+    )
 
 
 def methods_selected(repo, scope) -> bool:

@@ -76,6 +76,7 @@ def test_multiple_delimiters_and_carriage_returns_do_not_hide_execution() -> Non
     ):
         assert shellscan.git_commands(command)
     assert not is_code("docs/planning/source.json", None, planning="docs/planning")
+    assert not is_code("docs/planning/catalog.tsv", None, planning="docs/planning")
     assert is_code(
         "docs/planning/acceptance-evidence/run.py", None, planning="docs/planning"
     )

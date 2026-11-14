@@ -124,7 +124,8 @@ way the Azure DevOps server fences its own output. Errors from those tools are f
 ## Residual Risks
 
 - An approval window covers any tracker/SCM write in its work session for its duration, not only
-  the batch shown. Writes from other work sessions need their own approval.
+  the batch shown, except the publication of a catalog document (a Vision Doc or PRD): that needs
+  an approval of that draft. Writes from other work sessions need their own approval.
 - The shell reader is a guard against a model that routes around a rule, not a sandbox
   ([issue 7](https://github.com/Monolith-INC/monolithic-dev-harness/issues/7)). Not inspected: a
   script run by path; deliberate obfuscation (brace expansion, `$'…'` quoting, a directory name

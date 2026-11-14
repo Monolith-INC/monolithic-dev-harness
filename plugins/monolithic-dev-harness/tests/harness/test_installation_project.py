@@ -1,4 +1,6 @@
 import json
+import os
+import re
 from pathlib import Path
 
 from core.result import Err, Ok
@@ -154,3 +156,29 @@ def test_linked_skills_find_their_shared_documents(tmp_path: Path):
         links[shared] / "human-decisions.md" == plugin / "references/human-decisions.md"
     )
     assert links[(skill / "../../common").resolve()] == plugin / "common"
+
+
+def test_the_discovery_skill_finds_its_procedure_and_catalog_in_a_project_install(
+    tmp_path: Path,
+):
+    """The skill reads the mode's procedure and the document catalog through `../../…` links."""
+    plugin = Path(__file__).parents[2]
+    project = tmp_path / "p"
+    project.mkdir()
+    links = {
+        asset.path: asset.target
+        for asset in assets("claude", project, plugin).value
+        if asset.kind == "symlink"
+    }
+    skill = project / ".claude/skills/discovery"
+    linked = re.findall(
+        r"\]\((\.\./\.\./[^)#]+)\)",
+        (plugin / "skills/discovery/SKILL.md").read_text(encoding="utf-8"),
+    )
+
+    assert linked
+    for link in linked:
+        logical = Path(os.path.normpath(skill / link))
+        shared = [path for path in links if logical.is_relative_to(path)]
+        assert shared, f"{link} lands on {logical}, which no project install links"
+        assert (links[shared[0]] / logical.relative_to(shared[0])).is_file()
