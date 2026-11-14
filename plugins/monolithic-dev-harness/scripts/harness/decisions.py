@@ -38,6 +38,7 @@ class Pending:
     allow_free_text: bool = False
     details: tuple[str, ...] = ()
     kind: str = "required"
+    presented_on: tuple[str, ...] = ()
 
     @classmethod
     def from_record(cls, value: dict[str, Any], scope: str | None) -> Pending:
@@ -53,23 +54,35 @@ class Pending:
             allow_free_text=bool(value.get("allow_free_text"))
             and not bool(value.get("approval")),
             details=tuple(str(detail) for detail in value.get("details", ())),
+            presented_on=tuple(str(name) for name in value.get("presented_on", ())),
         )
 
+    @property
+    def shown_as(self) -> str:
+        """The host's id for the question's latest presentation (its tool call), else its own id."""
+        return self.presentation_id or self.id
+
     def matches_presentation(self, question: dict[str, Any], transport: str) -> bool:
-        """Whether a question being shown is this decision's prepared presentation."""
-        return (
-            self.transport in ("blocking", "async")
-            and self.transport == transport
-            and (
-                question.get("id") == self.id
-                # Async questions and Claude's AskUserQuestion carry no id; match the wording.
-                or (
-                    (transport == "async" or "id" not in question)
-                    and question.get("question") == self.question
-                )
-            )
-            and not self.presentation_id
-        )
+        """Whether a question being shown is this decision, so showing it binds to it.
+
+        A question waiting in a dialog or in the chat can always be shown again in a dialog: its
+        wording and options are what the user sees, whatever showed it before. Codex's async
+        delivery keeps its own rule: once, on the transport it was prepared for.
+        """
+        match self.transport, transport:
+            case (("blocking" | "chat"), "blocking"):
+                return question.get("question") == self.question and tuple(
+                    str(option.get("label", ""))
+                    for option in question.get("options", ())
+                    if isinstance(option, dict)
+                ) == tuple(self.options)
+            case "async", "async":
+                return (
+                    question.get("id") == self.id
+                    or question.get("question") == self.question
+                ) and not self.presentation_id
+            case _:
+                return False
 
 
 def _path(
@@ -656,38 +669,85 @@ def _async_adoption(
 
 def bind_question(
     repo: Path,
-    presentation_id: str,
+    key: str,
     tool_id: str,
     question: str,
     options: tuple[str, ...],
+    transport: str,
     *,
     work_session_id: str | None = None,
 ) -> Result[dict[str, Any]]:
-    match _path(repo, work_session_id):
-        case Err() as failure:
-            return failure
-        case Ok(path):
-            pass
+    """Tie the pending decision `key` to the host question `tool_id` now showing it.
 
-    def bind_native() -> dict[str, Any]:
-        current = state.read_json(path) or {}
-        if (
-            not tool_id
-            or current.get("status") != "pending"
-            or current.get("transport") not in ("blocking", "async")
-            or current.get("id") != presentation_id
-            or current.get("question") != question
-            or tuple(current.get("options", ())) != options
-            or current.get("presentation_id")
-        ):
-            raise ValueError("this question does not match the prepared decision")
-        updated = {**current, "presentation_id": presentation_id, "id": tool_id}
-        state.write_json(path, updated)
-        return updated
-
-    return attempt(
-        bind_native, "decision_invalid", "native question", OSError, ValueError
+    The decision keeps its own id; `presentation_id` names the latest showing, and `presented_on`
+    every transport it was shown on. A dialog or chat question may be shown again, and the newest
+    showing is the one whose answer counts.
+    """
+    return bind(
+        _path(repo, work_session_id),
+        lambda path: attempt(
+            lambda: _bind_at(path, key, tool_id, question, options, transport),
+            "decision_invalid",
+            "native question",
+            OSError,
+            ValueError,
+        ),
     )
+
+
+def _bind_at(
+    path: Path,
+    key: str,
+    tool_id: str,
+    question: str,
+    options: tuple[str, ...],
+    transport: str,
+) -> dict[str, Any]:
+    current = state.read_json(path) or {}
+    match _bindable(current, key, tool_id, question, options, transport):
+        case False:
+            raise ValueError("this question does not match the prepared decision")
+        case True:
+            pass
+    updated = {
+        **current,
+        "transport": transport,
+        "presentation_id": tool_id,
+        "presented_on": sorted(
+            {*current.get("presented_on", ()), str(current.get("transport")), transport}
+        ),
+    }
+    state.write_json(path, updated)
+    return updated
+
+
+def _bindable(
+    current: dict[str, Any],
+    key: str,
+    tool_id: str,
+    question: str,
+    options: tuple[str, ...],
+    transport: str,
+) -> bool:
+    same = (
+        bool(tool_id)
+        and current.get("status") == "pending"
+        and current.get("id") == key
+        and current.get("question") == question
+        and tuple(current.get("options", ())) == options
+    )
+    match current.get("transport"), transport:
+        case (("blocking" | "chat"), "blocking"):
+            return same
+        case "async", "async":
+            return same and not current.get("presentation_id")
+        case _:
+            return False
+
+
+def answers_to(record: dict[str, Any], key: str) -> bool:
+    """Whether `key` names this decision: its own id, or the host's id for its latest showing."""
+    return bool(key) and key in (record.get("id"), record.get("presentation_id"))
 
 
 def _resolve(
@@ -699,7 +759,7 @@ def _resolve(
     human_reply_evidence: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     current = state.read_json(path) or {}
-    if current.get("status") != "pending" or current.get("id") != key:
+    if current.get("status") != "pending" or not answers_to(current, key):
         raise ValueError("this answer does not belong to the pending decision")
     if questions.no_choice(answer):
         raise ValueError(
@@ -714,7 +774,9 @@ def _resolve(
     )
     if own_words and not answer.strip():
         raise ValueError("the human reply is empty")
-    if source != current.get("transport"):
+    if source != current.get("transport") and source not in current.get(
+        "presented_on", ()
+    ):
         raise ValueError("the answer arrived through a different interaction")
     # An answer is recorded from local files only. What `implementation-confirm` needs from the
     # tracker (the route is at the plan step, the plan matches the Story) ran when the question

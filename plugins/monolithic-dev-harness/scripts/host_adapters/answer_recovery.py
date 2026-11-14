@@ -62,7 +62,7 @@ def _matching_answer(
                     if isinstance(row, dict)
                     and row.get("type") == "response_item"
                     and isinstance(row.get("payload"), dict)
-                    and row["payload"].get("call_id") == pending.id
+                    and row["payload"].get("call_id") == pending.shown_as
                 ),
                 pending,
             )

@@ -212,7 +212,8 @@ def test_rejected_native_question_explains_verbatim_recovery(tmp_path: Path) -> 
     )
 
     assert not retried
-    assert decisions.record(tmp_path)["presentation_id"] == shown["decision_id"]
+    assert decisions.record(tmp_path)["id"] == shown["decision_id"]
+    assert decisions.record(tmp_path)["presentation_id"] == "exact-call"
 
 
 def test_pending_gate_names_supported_fallback_when_agent_adds_unknown_flags(
@@ -458,7 +459,8 @@ def test_claude_shows_the_prepared_question_without_an_id(tmp_path: Path) -> Non
             "tool_input": {"questions": [offered]},
         },
     )
-    assert decisions.record(tmp_path)["presentation_id"] == shown["decision_id"]
+    assert decisions.record(tmp_path)["id"] == shown["decision_id"]
+    assert decisions.record(tmp_path)["presentation_id"] == "toolu_exact"
 
 
 def test_claude_fallback_command_named_by_the_gate_may_run(tmp_path: Path) -> None:
@@ -516,7 +518,8 @@ def test_claude_free_text_menu_from_the_trial_is_shown_verbatim(tmp_path: Path) 
             "tool_input": {"questions": shown["questions"]},
         },
     )
-    assert decisions.record(tmp_path)["presentation_id"] == shown["decision_id"]
+    assert decisions.record(tmp_path)["id"] == shown["decision_id"]
+    assert decisions.record(tmp_path)["presentation_id"] == "toolu_trial"
 
 
 def _claude_present(repo: Path, *available: str) -> dict:

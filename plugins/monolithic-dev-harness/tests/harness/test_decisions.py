@@ -448,24 +448,32 @@ def test_blocking_acknowledgment_does_not_resolve_pending(tmp_path: Path) -> Non
     assert not decisions.waiting(tmp_path)
 
 
-def test_prepared_native_question_binds_once(tmp_path: Path) -> None:
+def test_a_prepared_native_question_binds_to_its_latest_showing(tmp_path: Path) -> None:
     decisions.begin(tmp_path, "prepared", "Continue?", ("Continue", "Stop"), "blocking")
+    for call in ("call-1", "call-2"):
+        assert isinstance(
+            decisions.bind_question(
+                tmp_path,
+                "prepared",
+                call,
+                "Continue?",
+                ("Continue", "Stop"),
+                "blocking",
+            ),
+            Ok,
+        )
     assert isinstance(
         decisions.bind_question(
-            tmp_path, "prepared", "call-1", "Continue?", ("Continue", "Stop")
-        ),
-        Ok,
-    )
-    assert isinstance(
-        decisions.bind_question(
-            tmp_path, "prepared", "call-2", "Continue?", ("Continue", "Stop")
+            tmp_path, "prepared", "call-3", "Stop?", ("Continue", "Stop"), "blocking"
         ),
         Err,
     )
+    assert decisions.record(tmp_path)["id"] == "prepared"
+    assert decisions.record(tmp_path)["presentation_id"] == "call-2"
     assert isinstance(
-        decisions.resolve(tmp_path, "prepared", "Continue", "blocking"), Err
+        decisions.resolve(tmp_path, "call-1", "Continue", "blocking"), Err
     )
-    assert isinstance(decisions.resolve(tmp_path, "call-1", "Continue", "blocking"), Ok)
+    assert isinstance(decisions.resolve(tmp_path, "call-2", "Continue", "blocking"), Ok)
 
 
 def test_invalid_presentation_cannot_create_pending(tmp_path: Path) -> None:

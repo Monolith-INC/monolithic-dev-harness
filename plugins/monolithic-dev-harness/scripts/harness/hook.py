@@ -729,7 +729,7 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         return 0
     work_session_id = context.value
     match state.harness_mode(repo), decisions.pending(repo, work_session_id):
-        case "suspended", decisions.Pending(id=identifier):
+        case "suspended", decisions.Pending(shown_as=identifier):
             from harness import question_observation
 
             match question_observation.foreign_prompt(repo, identifier, prompt):
@@ -1104,6 +1104,7 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             tool_use_id,
             question,
             options,
+            transport,
             work_session_id=decision_scope,
         )
         if preparing
@@ -1125,8 +1126,9 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             host, rules.Decision.deny("decision-invalid", result.failure.message)
         )
         return 0
+    # The earlier showing's marker goes first, so a late answer to an old dialog opens nothing.
     match preparing, pending:
-        case True, decisions.Pending(id=old_id) if old_id != tool_use_id:
+        case True, decisions.Pending(shown_as=old_id) if old_id != tool_use_id:
             state.take_asked(repo, questions.marker_name(old_id), decision_scope)
         case _:
             pass
@@ -1308,7 +1310,7 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
             match work_session_context.for_payload(observed, host, payload):
                 case Ok(scope):
                     match decisions.pending(observed, scope):
-                        case decisions.Pending(id=identifier) if (
+                        case decisions.Pending(shown_as=identifier) if (
                             identifier == hook_bridge.question_id(payload)
                         ):
                             pass
@@ -1351,6 +1353,21 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
             )
             return 0
         case Ok(response):
+            pass
+    match pending:
+        case decisions.Pending(presentation_id=newest) if (
+            newest and newest != tool_use_id
+        ):
+            # An earlier dialog of a question shown again: only the newest showing counts.
+            print(
+                hook_bridge.format_answer_context(
+                    "[harness] decision not recorded: this answer came from an earlier "
+                    "showing of the question, and only the newest showing counts. The question "
+                    "is still open; wait for the answer to the one now on screen."
+                )
+            )
+            return 0
+        case _:
             pass
     if pending is not None:
         answered = questions.answer(tool_input, response)
@@ -1412,6 +1429,7 @@ def _answer_decision(
             return [f"[harness] decision not recorded: {failure.message}"]
         case Ok(found):
             pass
+
     notes = [
         f"[harness] the user answered in their own words, choosing none of the options: "
         f"{found['answer']}. This approves nothing. Act on what they said, then run "
@@ -1421,8 +1439,14 @@ def _answer_decision(
     ]
     match decision_exchange(pending, answer):
         case tool_input, response:
+            # The marker belongs to the question's latest showing; this reply uses it up.
             match _apply_marker(
-                repo, key, decision_scope, conversation_scope, tool_input, response
+                repo,
+                pending.shown_as,
+                decision_scope,
+                conversation_scope,
+                tool_input,
+                response,
             ):
                 case str() as note:
                     return notes + [note]
@@ -1502,7 +1526,7 @@ def _answered_binds(repo: Path, scope: str | None, key: str) -> dict[str, Any] |
     record = decisions.record(repo, scope) or {}
     return (
         decisions.approval_binds(record)
-        if record.get("id") == key and record.get("status") == "answered"
+        if decisions.answers_to(record, key) and record.get("status") == "answered"
         else None
     )
 
@@ -1599,23 +1623,30 @@ def _apply_marker(
         return None
     return _open_approval(
         repo,
-        questions.approval_id(marker_id),
+        questions.approval_id(_decision_id(repo, decision_scope, marker_id)),
         approved[0],
         conversation_scope,
         _answered_binds(repo, decision_scope, marker_id),
     )
 
 
+def _decision_id(repo: Path, scope: str | None, key: str) -> str:
+    """The decision's own id when `key` names one of its showings, so its approval carries the
+    same id whichever showing was answered; else `key`, a question with no decision."""
+    record = decisions.record(repo, scope) or {}
+    return str(record["id"]) if decisions.answers_to(record, key) else key
+
+
 def _captured_language(repo: Path, scope: str | None, key: str) -> str | None:
     """Persist only a language choice already resolved by a trusted human-answer hook."""
     match decisions.record(repo, scope):
         case {
-            "id": saved_key,
             "status": "answered",
             "gate": "language",
             "answer": str() as answer,
         } as record if (
-            saved_key == key and decisions.decision_kind(record) == "preference"
+            decisions.answers_to(record, key)
+            and decisions.decision_kind(record) == "preference"
         ):
             return _save_captured_language(repo, questions.choice_label(answer))
         case _:
