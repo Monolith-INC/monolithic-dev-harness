@@ -110,7 +110,7 @@ WEEKDAY_INDEX = {
     "saturday": 5,
     "sunday": 6,
 }
-TIMEFRAME_CURRENT = 1  # Azure's iteration timeFrame: 0 past, 1 current, 2 future
+TIMEFRAME_CURRENT = (1, "current")  # Azure's iteration timeFrame: the SDK's enum number or the REST text
 SPRINT_MARKERS = (
     "attributes",
     "startDate",
@@ -1021,7 +1021,7 @@ def _current_sprint(
     """
     unmarked = tuple(entry for entry in entries if _time_frame(entry) is None)
     return next(
-        (entry for entry in entries if _time_frame(entry) == TIMEFRAME_CURRENT),
+        (entry for entry in entries if _time_frame(entry) in TIMEFRAME_CURRENT),
         unmarked[0] if len(entries) == 1 and unmarked else None,
     )
 

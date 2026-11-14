@@ -179,6 +179,22 @@ class AzureTest(unittest.TestCase):
             },
         )
 
+    def test_a_sprint_azure_marks_with_the_word_current_is_the_current_sprint(
+        self,
+    ) -> None:
+        sprint = [{"path": "proj\\Sprint 67", "attributes": {"timeFrame": "current"}}]
+        call = self.created_story(
+            {"System.CreatedBy": {"uniqueName": "ana@example.com"}},
+            work=f"Project: proj, Team: proj Team\n{json.dumps(sprint)}",
+        )
+        placed = call.sent("wit_work_item_write")[1]
+        self.assertEqual(
+            {u["path"]: u["value"] for u in placed["updates"]}.get(
+                "/fields/System.IterationPath"
+            ),
+            "proj\\Sprint 67",
+        )
+
     def test_an_unreadable_sprint_leaves_the_sprint_and_still_creates(self) -> None:
         call = self.created_story(
             {"System.CreatedBy": {"uniqueName": "ana@example.com"}}
