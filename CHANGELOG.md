@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- A new Azure DevOps item goes to the current sprint when Azure marks that sprint with the word
+  `current`, not only with the number `1` (the Feature 8321 trial, where the item landed at the
+  project root).
+
 ## [0.7.0-rc.14] - 2026-11-14
 
 ### Fixed
