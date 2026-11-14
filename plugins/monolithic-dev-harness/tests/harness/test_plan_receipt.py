@@ -213,3 +213,25 @@ def test_a_session_with_no_approved_plan_is_not_held(tmp_path: Path) -> None:
 
     assert rules.rule_plan_checked(_write(tmp_path, "app.py"), tmp_path, scope).allowed
     assert rules.rule_plan_checked(_write(tmp_path, "app.py"), tmp_path, None).allowed
+
+
+def test_a_receipt_uses_only_the_tracker_revision_that_was_validated(
+    tmp_path: Path,
+) -> None:
+    from dataclasses import replace
+
+    story, scope, plan = _pending(tmp_path)
+    ops = registry.open_selected(tmp_path, settings.load(tmp_path)).value
+    original = ops.get_work_item(story).value
+    newer = replace(original, description=original.description + "\nNew requirements")
+    reads = []
+
+    def changing_item(key):
+        assert key == story
+        reads.append(key)
+        return Ok(original if len(reads) < 3 else newer)
+
+    changing_ops = replace(ops, get_work_item=changing_item)
+    assert isinstance(plan_review.verify(tmp_path, [plan], changing_ops, scope), Ok)
+    assert plan_review.receipt(tmp_path, story)["story_digest"] == item_digest(original)
+    assert len(reads) == 1
