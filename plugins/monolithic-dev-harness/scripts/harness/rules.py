@@ -1201,6 +1201,7 @@ GUARDS: Mapping[str, Literal["always"]] = MappingProxyType(
         "hook-entry": "always",
         "plain-begin": "always",
         "harness-error": "always",
+        "hook-budget": "always",
         "harness-controls": "always",
         "decision-pending": "always",
         "artifacts-not-shown": "always",

@@ -47,6 +47,11 @@ def decision(identifier: str) -> None:
     _run["decision"] = identifier
 
 
+def current_decision() -> str:
+    """The decision this event named so far, or "" when none yet."""
+    return str(_run.get("decision", ""))
+
+
 def line(event: str, host: str) -> str:
     name, seconds = max(_run["steps"], key=lambda entry: entry[1], default=("", 0.0))
     slow = f" slow={name}:{seconds:.3f}" if seconds > SLOW_STEP_SECONDS else ""

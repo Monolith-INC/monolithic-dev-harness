@@ -1491,18 +1491,34 @@ class TestFailClosed(HookTestCase):
             result = self._in_process("Bash", {"command": "ls"})
         self.assertDenied(result, "harness-error")
 
+    def _timed(self, tool: str, tool_input: dict) -> dict:
+        """Run the whole hook process in this process, under its time budget."""
+        import contextlib
+        import io
+        from unittest import mock
+
+        hook = self._hook_module()
+        out = io.StringIO()
+        payload = {"cwd": str(self.repo), "tool_name": tool, "tool_input": tool_input}
+        with (
+            mock.patch.object(sys, "stdin", io.StringIO(json.dumps(payload))),
+            contextlib.redirect_stdout(out),
+        ):
+            hook.main(["--host", "claude", "--event", "pre-tool"])
+        return json.loads(out.getvalue())
+
     def test_running_out_of_time_blocks_writes(self) -> None:
         import time
         from unittest import mock
 
         hook = self._hook_module()
         with (
-            mock.patch.object(hook, "RULES_BUDGET_SECONDS", 1),
+            mock.patch.object(hook.hook_budget, "PRE_TOOL_SECONDS", 1),
             mock.patch.object(
                 hook.rules, "evaluate", side_effect=lambda *a: time.sleep(3)
             ),
         ):
-            result = self._in_process("Write", {"file_path": str(self.repo / "a")})
+            result = self._timed("Write", {"file_path": str(self.repo / "a")})
         self.assertDenied(result, "harness-error")
 
     def test_a_slow_workflow_policy_blocks_writes_within_the_budget(self) -> None:
@@ -1522,10 +1538,10 @@ class TestFailClosed(HookTestCase):
 
         hook = self._hook_module()
         with (
-            mock.patch.object(hook, "RULES_BUDGET_SECONDS", 1),
+            mock.patch.object(hook.hook_budget, "PRE_TOOL_SECONDS", 1),
             mock.patch.object(hook_runtime, "run", side_effect=stall),
         ):
-            result = self._in_process("Write", {"file_path": str(self.repo / "a")})
+            result = self._timed("Write", {"file_path": str(self.repo / "a")})
         self.assertDenied(result, "harness-error")
 
     def test_a_command_nested_too_deep_to_read_is_blocked(self) -> None:
