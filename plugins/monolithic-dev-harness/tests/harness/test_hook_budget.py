@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from core.result import Ok
-from harness import decisions, hook, hook_budget, state
+from harness import decisions, hook, hook_budget, questions, state
 from tests.harness.test_codex_answer_capture import question
 from tests.settings_fixture import write_settings
 
@@ -227,3 +227,62 @@ def test_a_timeout_between_the_record_and_the_marker_loses_nothing(
     assert not decisions.waiting(tmp_path)
     assert decisions.record(tmp_path)["answer"] == "Approve"
     assert state.active_approval(tmp_path) is not None
+
+
+@pytest.mark.parametrize("previously_shown", [False, True])
+def test_a_timed_out_showing_preserves_the_previous_question(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, previously_shown: bool
+) -> None:
+    write_settings(tmp_path)
+    asked = {
+        "questions": [
+            {
+                "header": "Plan",
+                "question": "Approve this plan?",
+                "multiSelect": False,
+                "options": [
+                    {"label": "Approve", "description": "Proceed."},
+                    {"label": "Revise", "description": "Change."},
+                ],
+            }
+        ]
+    }
+    payload = {"tool_name": "AskUserQuestion", "tool_input": asked, "session_id": "s1"}
+    if previously_shown:
+        shown, _ = _run(
+            tmp_path, "ask", {**payload, "tool_use_id": "visible"}, "claude"
+        )
+        assert "deny" not in shown
+    before = decisions.record(tmp_path)
+    original = state.mark_asked
+
+    def slow_mark(*args, **kwargs):
+        original(*args, **kwargs)
+        time.sleep(SLOW)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(hook_budget, "OTHER_SECONDS", BUDGET)
+        patch.setattr(state, "mark_asked", slow_mark)
+        denied, _ = _run(
+            tmp_path, "ask", {**payload, "tool_use_id": "unseen"}, "claude"
+        )
+    assert "hook-budget" in denied and "deny" in denied
+    assert decisions.record(tmp_path) == before
+    assert state.take_asked(tmp_path, questions.marker_name("unseen")) is None
+    if previously_shown:
+        response = {**asked, "answers": {"Approve this plan?": "Approve"}}
+        _run(
+            tmp_path,
+            "answer",
+            {
+                **payload,
+                "tool_use_id": "visible",
+                "tool_input": response,
+                "tool_response": response,
+            },
+            "claude",
+        )
+        assert decisions.record(tmp_path)["answer"] == "Approve"
+    else:
+        _run(tmp_path, "prompt", {"prompt": "1", "session_id": "s1"}, "claude")
+        assert decisions.record(tmp_path) is None

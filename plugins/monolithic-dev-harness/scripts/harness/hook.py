@@ -1102,6 +1102,20 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
     decision_scope = (
         pending.scope if pending is not None and preparing else work_session_id
     )
+    artifacts = _artifacts(repo, decision_scope) if not preparing else ()
+    # Prepare the new marker while a timeout can still deny the ask. Do not replace the
+    # decision or consume its previous marker until this preparation finishes in time.
+    try:
+        state.mark_asked(
+            repo, questions.marker_name(tool_use_id), detail, decision_scope
+        )
+        hook_budget.step("prepare-marker")
+    except hook_budget.OutOfTime:
+        if pending is None or pending.shown_as != tool_use_id:
+            state.take_asked(repo, questions.marker_name(tool_use_id), decision_scope)
+        raise
+    # As with recording an answer, finish the local binding and its successful result together.
+    hook_budget.commit()
     result = (
         decisions.bind_question(
             repo,
@@ -1121,7 +1135,7 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             question,
             options,
             transport,
-            _artifacts(repo, decision_scope),
+            artifacts,
             work_session_id=decision_scope,
             allow_free_text=questions.native_routing_question(tool_input)
             and not detail
@@ -1129,6 +1143,8 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
         )
     )
     if isinstance(result, Err):
+        if pending is None or pending.shown_as != tool_use_id:
+            state.take_asked(repo, questions.marker_name(tool_use_id), decision_scope)
         _emit_decision(
             host, rules.Decision.deny("decision-invalid", result.failure.message)
         )
@@ -1139,7 +1155,6 @@ def _handle_ask(host: str, payload: dict[str, Any]) -> int:
             state.take_asked(repo, questions.marker_name(old_id), decision_scope)
         case _:
             pass
-    state.mark_asked(repo, questions.marker_name(tool_use_id), detail, decision_scope)
     hook_budget.step("record-and-marker")
     return 0
 
