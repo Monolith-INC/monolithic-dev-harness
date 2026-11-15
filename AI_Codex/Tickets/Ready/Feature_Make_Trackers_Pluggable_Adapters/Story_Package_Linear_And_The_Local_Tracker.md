@@ -3,7 +3,7 @@ date: 2026-09-24
 type: ticket
 work_item_type: User Story
 provider: local
-parent_id: "pending:draft-make-trackers-pluggable-adapters"
+parent_id: "pending:Feature_Make_Trackers_Pluggable_Adapters"
 story_points: 5
 language: en
 tags: [ticket, user-story, trackers, linear, local-tracker]
