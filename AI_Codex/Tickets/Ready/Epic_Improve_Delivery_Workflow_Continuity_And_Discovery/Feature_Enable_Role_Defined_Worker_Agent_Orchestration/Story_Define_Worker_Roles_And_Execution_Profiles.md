@@ -3,7 +3,7 @@ date: 2026-09-23
 type: ticket
 work_item_type: User Story
 provider: local
-parent_id: "pending:draft-enable-role-defined-worker-agent-orchestration"
+parent_id: "pending:Feature_Enable_Role_Defined_Worker_Agent_Orchestration"
 story_points: 3
 language: en
 tags: [ticket, user-story, worker-agents]

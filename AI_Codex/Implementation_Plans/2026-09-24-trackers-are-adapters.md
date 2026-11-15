@@ -1,7 +1,7 @@
 ---
 type: implementation-plan
-feature: "pending:draft-make-trackers-pluggable-adapters"
-story: "pending:draft-define-the-tracker-manifest-and-registry"
+feature: "pending:Feature_Make_Trackers_Pluggable_Adapters"
+story: "pending:Story_Define_The_Tracker_Manifest_And_Registry"
 skill: generate-breakdown-work-items
 language: en
 destination: filesystem
@@ -15,7 +15,7 @@ tags: [implementation-plan, trackers, adapters]
 # Trackers are adapters — implementation plan
 
 Design: `AI_Codex/Specs/2026-09-24-trackers-are-adapters-design.md` (draft, awaiting G2).
-Backlog: `AI_Codex/Tickets/Ready/draft-make-trackers-pluggable-adapters.md` and its seven Story drafts (local only;
+Backlog: `AI_Codex/Tickets/Ready/Feature_Make_Trackers_Pluggable_Adapters/Feature_Make_Trackers_Pluggable_Adapters.md` and its seven Story drafts (local only;
 no Azure items for this Feature).
 
 ## Delivery order

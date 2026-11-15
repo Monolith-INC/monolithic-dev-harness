@@ -3,7 +3,7 @@ date: 2026-09-23
 type: ticket
 work_item_type: User Story
 provider: local
-parent_id: "pending:draft-support-structured-product-discovery"
+parent_id: "pending:Feature_Support_Structured_Product_Discovery"
 story_points: 3
 language: en
 tags: [ticket, user-story, discovery]

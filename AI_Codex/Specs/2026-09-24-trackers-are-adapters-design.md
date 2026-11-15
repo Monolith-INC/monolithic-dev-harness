@@ -1,7 +1,7 @@
 ---
 type: design-doc
 work_item_type: Feature
-feature: "pending:draft-make-trackers-pluggable-adapters"
+feature: "pending:Feature_Make_Trackers_Pluggable_Adapters"
 area: trackers
 stack: [python, markdown, json]
 tags: [spec, design-doc, trackers, adapters]

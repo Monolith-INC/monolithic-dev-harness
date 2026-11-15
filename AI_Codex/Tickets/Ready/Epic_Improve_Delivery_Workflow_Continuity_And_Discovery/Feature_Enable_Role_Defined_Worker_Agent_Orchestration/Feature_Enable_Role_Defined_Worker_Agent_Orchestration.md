@@ -3,7 +3,7 @@ date: 2026-09-23
 type: ticket
 work_item_type: Feature
 provider: local
-parent_id: "pending:draft-improve-delivery-workflow-continuity-and-discovery"
+parent_id: "pending:Epic_Improve_Delivery_Workflow_Continuity_And_Discovery"
 language: en
 tags: [ticket, feature, worker-agents, delivery-workflow]
 ---

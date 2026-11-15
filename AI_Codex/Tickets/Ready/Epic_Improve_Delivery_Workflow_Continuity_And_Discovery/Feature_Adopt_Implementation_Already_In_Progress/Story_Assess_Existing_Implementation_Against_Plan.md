@@ -3,7 +3,7 @@ date: 2026-09-23
 type: ticket
 work_item_type: User Story
 provider: local
-parent_id: "pending:draft-adopt-implementation-already-in-progress"
+parent_id: "pending:Feature_Adopt_Implementation_Already_In_Progress"
 story_points: 3
 language: en
 tags: [ticket, user-story, delivery-workflow]
