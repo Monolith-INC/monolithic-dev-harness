@@ -6,6 +6,16 @@
         "command": "sh \"${CURSOR_PLUGIN_ROOT}/bin/harness-python\" \"${CURSOR_PLUGIN_ROOT}/scripts/harness/hook.py\" --host cursor --event pre-tool"
       }
     ],
+    "postToolUse": [
+      {
+        "matcher": "Shell",
+        "command": "sh \"${CURSOR_PLUGIN_ROOT}/bin/harness-python\" \"${CURSOR_PLUGIN_ROOT}/scripts/harness/hook.py\" --host cursor --event startup"
+      },
+      {
+        "matcher": "Shell|Read|Grep|MCP:.*",
+        "command": "sh \"${CURSOR_PLUGIN_ROOT}/bin/harness-python\" \"${CURSOR_PLUGIN_ROOT}/scripts/harness/hook.py\" --host cursor --event knowledge-post"
+      }
+    ],
     "beforeShellExecution": [
       {
         "command": "sh \"${CURSOR_PLUGIN_ROOT}/bin/harness-python\" \"${CURSOR_PLUGIN_ROOT}/scripts/harness/hook.py\" --host cursor --event shell"
@@ -19,6 +29,11 @@
     "beforeSubmitPrompt": [
       {
         "command": "sh \"${CURSOR_PLUGIN_ROOT}/bin/harness-python\" \"${CURSOR_PLUGIN_ROOT}/scripts/harness/hook.py\" --host cursor --event prompt"
+      }
+    ],
+    "afterAgentResponse": [
+      {
+        "command": "sh \"${CURSOR_PLUGIN_ROOT}/bin/harness-python\" \"${CURSOR_PLUGIN_ROOT}/scripts/harness/hook.py\" --host cursor --event response"
       }
     ]
   }

@@ -35,7 +35,7 @@ INSTALL_ENV=(
   "AGENTS_SHARED_DIR=${TEMP_ROOT}/agents"
   "HOME=${TEMP_ROOT}/home"
   "CLAUDE_CONFIG_DIR=${TEMP_ROOT}/claude-config"
-  "HARNESS_PYTHON=$(command -v python3.12)"
+  "HARNESS_PYTHON=$(command -v "${PYTHON:-python3.12}")"
   "PATH=${TEMP_ROOT}/bin:/usr/bin:/bin"
 )
 

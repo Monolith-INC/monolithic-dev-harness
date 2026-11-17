@@ -7,8 +7,8 @@ from pathlib import Path
 import pytest
 
 from core.result import Ok
-from harness import decisions, state, work_sessions
-from host_adapters import startup_context, work_session_context
+from harness import decisions, session_entry, state, work_sessions
+from host_adapters import hook_bridge, startup_context, work_session_context
 from tests.harness.test_discovery_render import cli, prepare, session
 from tests.harness.test_hook_security import run_hook
 
@@ -43,6 +43,73 @@ def response(host, result):
             return json.dumps({"exit_code": 0, "output": result.stdout})
         case _:
             return {"stdout": result.stdout, "stderr": "", "interrupted": False}
+
+
+def test_cursor_startup_response_uses_documented_tool_output_status():
+    cursor_payload = {
+        "tool_output": json.dumps(
+            {"exitCode": 0, "stdout": json.dumps({"session_id": "WS-12345678"})}
+        )
+    }
+    assert startup_context._output(
+        hook_bridge.post_tool_response("cursor", cursor_payload)
+    ) == Ok({"session_id": "WS-12345678"})
+    assert (
+        hook_bridge.post_tool_response(
+            "cursor", {"tool_output": json.dumps({"stdout": "success?"})}
+        )
+        is None
+    )
+
+
+def capture_entry_choice(project, host, option_key):
+    conversation = "conversation"
+    prepared = session_entry.current_offer(project, host, conversation).value
+    index = next(
+        index
+        for index, option in enumerate(prepared.options)
+        if option.key == option_key
+    )
+    shown = session_entry.question(prepared, "en")
+    payload = {
+        "session_id": conversation,
+        "tool_use_id": "entry-choice",
+        "tool_name": {"codex": "request_user_input", "claude": "AskUserQuestion"}[host],
+        "tool_input": {"questions": [shown]},
+    }
+    assert session_entry.observe(project, host, payload).value
+    response_ = {"answers": {shown["question"]: shown["options"][index]["label"]}}
+    assert (
+        session_entry.answer(
+            project, host, {**payload, "tool_response": response_}
+        ).value
+        == option_key
+    )
+    return session_entry.apply_selection(project, host, conversation)
+
+
+def observe_saved_question(project, host, work_session_id):
+    record = decisions.record(project, work_session_id)
+    assert record is not None
+    tool_name = {"codex": "request_user_input", "claude": "AskUserQuestion"}[host]
+    question = {
+        "id": "saved-question",
+        "header": "Review",
+        "question": record["question"],
+        "options": [{"label": option} for option in record["options"]],
+    }
+    observed = run_hook(
+        project,
+        "ask",
+        {
+            "session_id": "conversation",
+            "tool_use_id": "saved-question-display",
+            "tool_name": tool_name,
+            "tool_input": {"questions": [question]},
+        },
+        host,
+    )
+    assert "deny" not in observed
 
 
 @pytest.mark.parametrize("host", ("codex", "claude"))
@@ -149,6 +216,21 @@ def test_failed_begin_does_not_switch_conversation(project):
     )
 
 
+@pytest.mark.parametrize("flag", ("--session", "--new"))
+def test_unbound_begin_flags_cannot_bypass_the_saved_work_choice(project, flag):
+    selected = session(project)
+    extra = (flag, selected.id) if flag == "--session" else (flag,)
+    cmd = command(project, "New work", extra)
+
+    output = run_hook(project, "pre-tool", payload(cmd))
+
+    assert "session-entry question" in output
+    assert (
+        state.read_json(startup_context._arm_path(project, "codex", "conversation"))
+        is None
+    )
+
+
 def test_unarmed_output_and_replay_cannot_switch_the_conversation(project):
     first = session(project)
     selected = work_sessions.start(project, "Other work").value
@@ -210,14 +292,16 @@ def test_setup_choice_is_not_a_successful_binding(tmp_path):
 
 @pytest.mark.parametrize("tool_name", ("exec_command", "functions.exec_command"))
 def test_executor_payload_aliases_are_bound(project, tool_name):
-    selected = session(project)
-    cmd = command(project, selected.request)
+    request = "First work"
+    cmd = command(project, request)
     pre = {**payload(cmd), "tool_name": tool_name, "tool_input": {"cmd": cmd}}
     assert "deny" not in run_hook(project, "pre-tool", pre)
-    result = cli(project, "begin", "--request", selected.request)
+    result = cli(project, "begin", "--request", request)
+    assert result.returncode == 0, result.stderr
+    identifier = json.loads(result.stdout)["session_id"]
     run_hook(project, "startup", {**pre, "tool_response": response("codex", result)})
     assert work_session_context.resolve_session(project, "codex", "conversation") == Ok(
-        selected.id
+        identifier
     )
     import re
 
@@ -283,6 +367,9 @@ def test_cleanup_failure_cannot_rebind_a_consumed_startup(project, monkeypatch, 
     from core.result import Err
 
     selected = session(project)
+    assert work_session_context.bind_session(
+        project, host, "conversation", selected.id
+    ) == Ok(selected.id)
     cmd = command(project, selected.request, ("--session", selected.id))
     assert "deny" not in run_hook(project, "pre-tool", payload(cmd), host)
     result = cli(
@@ -337,14 +424,27 @@ def test_begin_recovers_an_existing_question_in_selected_scope(project, host, bo
             ("Continue", "Revise"),
             "chat",
             work_session_id=selected.id,
+            native_session_id="previous-conversation",
         ),
         Ok,
     )
-    cmd = command(project, selected.request, ("--session", selected.id))
-    assert "deny" not in run_hook(project, "pre-tool", payload(cmd), host)
-    result = cli(
-        project, "begin", "--request", selected.request, "--session", selected.id
-    )
+    if not bound:
+        cmd = command(project, selected.request)
+        assert "deny" not in run_hook(project, "pre-tool", payload(cmd), host)
+        menu = cli(project, "begin", "--request", selected.request)
+        assert menu.returncode == 0, menu.stderr
+        assert json.loads(menu.stdout)["state"] == "choose_session"
+        selected_choice = capture_entry_choice(project, host, f"continue:{selected.id}")
+        assert selected_choice == Ok(selected.id)
+        cmd = command(project, selected.request)
+        assert "deny" not in run_hook(project, "pre-tool", payload(cmd), host)
+        result = cli(project, "begin", "--request", selected.request)
+    else:
+        cmd = command(project, selected.request, ("--session", selected.id))
+        assert "deny" not in run_hook(project, "pre-tool", payload(cmd), host)
+        result = cli(
+            project, "begin", "--request", selected.request, "--session", selected.id
+        )
     assert result.returncode == 0, result.stderr
     presentation = json.loads(result.stdout)
     assert presentation["state"] == "waiting_for_human"
@@ -356,6 +456,18 @@ def test_begin_recovers_an_existing_question_in_selected_scope(project, host, bo
     assert work_session_context.resolve_session(project, host, "conversation") == Ok(
         selected.id
     )
+    shown = cli(
+        project,
+        "decision",
+        "fallback",
+        "--host",
+        host,
+        "--session-id",
+        selected.id,
+    )
+    assert shown.returncode == 0, shown.stderr
+    assert json.loads(shown.stdout)["question"] == "Continue?"
+    observe_saved_question(project, host, selected.id)
     run_hook(
         project, "prompt", {"session_id": "conversation", "prompt": "Continue"}, host
     )
@@ -381,6 +493,37 @@ def test_begin_cannot_escape_an_unanswered_bound_scope(project):
     )
     cmd = command(project, selected.request, ("--session", selected.id))
     assert "decision-pending" in run_hook(project, "pre-tool", payload(cmd), "codex")
+
+
+def test_pending_choice_control_cannot_start_new_or_different_work(project):
+    saved = session(project, "Saved request")
+    assert work_session_context.bind_session(
+        project, "codex", "conversation", saved.id
+    ) == Ok(saved.id)
+    assert isinstance(
+        decisions.begin(
+            project,
+            "review",
+            "Continue?",
+            ("Continue", "Revise"),
+            "chat",
+            work_session_id=saved.id,
+            native_session_id="conversation",
+        ),
+        Ok,
+    )
+
+    exact_continue = command(project, saved.request)
+    explicit_new = command(project, saved.request, ("--new",))
+    different_request = command(project, "Different request")
+
+    assert "decision-pending" not in run_hook(
+        project, "pre-tool", payload(exact_continue), "codex"
+    )
+    assert "deny" in run_hook(project, "pre-tool", payload(explicit_new), "codex")
+    assert "decision-pending" in run_hook(
+        project, "pre-tool", payload(different_request), "codex"
+    )
 
 
 @pytest.mark.parametrize("global_question", (True, False))

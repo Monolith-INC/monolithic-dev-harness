@@ -1,5 +1,6 @@
 """Consolidated startup, using the same checked lifecycle as explicit commands."""
 
+import shlex
 from dataclasses import asdict
 from pathlib import Path
 
@@ -9,6 +10,7 @@ from harness import (
     discovery,
     onboarding,
     route_facts,
+    session_entry,
     setup,
     startup_receipts,
     work_lifecycle,
@@ -18,17 +20,144 @@ from harness import (
 
 
 def begin(
-    repo: Path, request: str, selected_id: str | None = None, new: bool = False
+    repo: Path,
+    request: str,
+    selected_id: str | None = None,
+    new: bool = False,
+    host: str = "",
+    conversation: str = "",
 ) -> Result[dict]:
     match onboarding.mode(repo):
         case "free":
             return Ok(onboarding.free_payload(repo, request))
         case _:
+            return _begin_entry(repo, request, selected_id, new, host, conversation)
+
+
+def _begin_entry(
+    repo: Path,
+    request: str,
+    selected_id: str | None,
+    new: bool,
+    host: str,
+    conversation: str,
+) -> Result[dict]:
+    from host_adapters import startup_context, work_session_context
+
+    match bool(conversation):
+        case False:
+            match startup_context.identity_for_invocation(
+                repo,
+                startup_receipts.Invocation(request, selected_id, new),
+                host,
+            ):
+                case Err() as failure:
+                    return failure
+                case Ok((resolved_host, resolved_conversation)):
+                    host, conversation = resolved_host, resolved_conversation
+                case _:
+                    pass
+        case _:
+            pass
+
+    match (host, conversation):
+        case ("codex" | "claude" | "cursor", str() as identity) if identity:
+            match session_entry.recover_reply(repo, host, identity):
+                case Err() as failure:
+                    return failure
+                case Ok(str() as _choice):
+                    match session_entry.apply_selection(repo, host, identity):
+                        case Err() as failure:
+                            return failure
+                        case Ok():
+                            pass
+                case _:
+                    pass
+            match session_entry.selected(repo, host, identity):
+                case "setup":
+                    return _begin_setup_handover(repo, request)
+                case str() as selected if selected.startswith("WS-"):
+                    return _begin_unpaused(
+                        repo,
+                        request,
+                        selected,
+                        False,
+                        startup_receipts.Invocation(request, selected_id, new),
+                    )
+                case _:
+                    match work_session_context.resolve_session(repo, host, identity):
+                        case Ok(str()):
+                            return _begin_unpaused(repo, request, selected_id, new)
+                        case Ok(None):
+                            return _offer_entry(
+                                repo, request, selected_id, new, host, identity
+                            )
+                        case Err() as failure:
+                            return failure
+        case _:
+            found = session_entry.candidates(repo, conversation)
+            match bool(found.sessions or found.unfinished_setup):
+                case False:
+                    pass
+                case True:
+                    return err(
+                        "entry_identity_missing",
+                        "Saved work or unfinished setup is available, but this conversation has no trusted identity for a human choice.",
+                    )
+            if selected_id is not None or new:
+                return err(
+                    "entry_identity_missing",
+                    "This conversation has no trusted identity for a saved-work choice.",
+                )
             return _begin_unpaused(repo, request, selected_id, new)
 
 
+def _offer_entry(
+    repo: Path,
+    request: str,
+    selected_id: str | None,
+    new: bool,
+    host: str,
+    conversation: str,
+) -> Result[dict]:
+    found = session_entry.candidates(repo, conversation)
+    match bool(found.sessions or found.unfinished_setup):
+        case False:
+            return _begin_unpaused(repo, request, selected_id, new)
+        case True if selected_id is not None or new:
+            return err(
+                "entry_choice_required",
+                "Choose saved work or unfinished setup through the conversation's session-entry question first.",
+            )
+        case True:
+            return bind(
+                session_entry.offer(repo, host, conversation, request),
+                lambda prepared: Ok(
+                    {
+                        "state": "choose_session",
+                        "request": prepared.request,
+                        "candidates": [
+                            {"id": item.id, "request": item.request}
+                            for item in found.sessions[:3]
+                        ],
+                        "unfinished_setup": found.unfinished_setup,
+                        "command": (
+                            "harness decision present --gate session-entry "
+                            f"--host {host} --entry-request {shlex.quote(prepared.request)} "
+                            f"--repo {shlex.quote(str(repo))}"
+                        ),
+                        "next": "Show this question and wait for the human's answer before continuing.",
+                    }
+                ),
+            )
+
+
 def _begin_unpaused(
-    repo: Path, request: str, selected_id: str | None, new: bool
+    repo: Path,
+    request: str,
+    selected_id: str | None,
+    new: bool,
+    invocation: startup_receipts.Invocation | None = None,
 ) -> Result[dict]:
     match onboarding.status(repo):
         case {"status": "paused"}:
@@ -42,12 +171,19 @@ def _begin_unpaused(
         case _:
             return bind(
                 setup.onboarding_status(repo),
-                lambda report: _begin_ready(repo, request, selected_id, new, report),
+                lambda report: _begin_ready(
+                    repo, request, selected_id, new, report, invocation
+                ),
             )
 
 
 def _begin_ready(
-    repo: Path, request: str, selected_id: str | None, new: bool, report: dict
+    repo: Path,
+    request: str,
+    selected_id: str | None,
+    new: bool,
+    report: dict,
+    invocation: startup_receipts.Invocation | None = None,
 ) -> Result[dict]:
     match report:
         case {"status": "ready", "bmad_ready": True}:
@@ -57,7 +193,8 @@ def _begin_ready(
                     repo,
                     selected,
                     report,
-                    startup_receipts.Invocation(request, selected_id, new),
+                    invocation
+                    or startup_receipts.Invocation(request, selected_id, new),
                 ),
             )
         case _:
@@ -69,6 +206,23 @@ def _begin_ready(
                     "next": "Finish bootstrap, then repeat begin with this request.",
                 }
             )
+
+
+def _begin_setup_handover(repo: Path, request: str) -> Result[dict]:
+    from dataclasses import asdict as to_dict
+
+    match decisions.pending(repo):
+        case decisions.Pending() as pending:
+            return Ok(
+                {
+                    "state": "waiting_for_human",
+                    "request": request,
+                    **to_dict(pending),
+                    "next": "Re-present the saved setup question through `harness decision fallback` and wait for the answer.",
+                }
+            )
+        case _:
+            return _begin_unpaused(repo, request, None, False)
 
 
 def _begin_selected(

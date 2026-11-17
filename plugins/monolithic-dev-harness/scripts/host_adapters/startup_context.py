@@ -7,7 +7,7 @@ that exact invocation; arbitrary shell text, old output, and an unarmed call bin
 import hashlib
 import json
 from dataclasses import asdict
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 from core.result import Ok, Result, attempt, bind, err, fmap, require
@@ -57,6 +57,8 @@ def arm(
                     _arm_path(repo, host, conversation),
                     {
                         "tool_id": call_id,
+                        "host": host,
+                        "conversation": conversation,
                         "command": command,
                         "invocation": asdict(requested),
                         "created": datetime.now(UTC).isoformat(),
@@ -67,13 +69,62 @@ def arm(
                 "prepare startup conversation binding",
                 OSError,
             )
-        case startup_receipts.Invocation(), _, _ if host in ("codex", "claude"):
+        case startup_receipts.Invocation(), _, _ if host in (
+            "codex",
+            "claude",
+            "cursor",
+        ):
             return err(
                 "startup_identity_missing",
                 "the host did not supply a conversation and tool-call identity for startup",
             )
         case _:
             return Ok(None)
+
+
+def identity_for_invocation(
+    repo: Path,
+    requested: startup_receipts.Invocation,
+    preferred_host: str = "",
+) -> Result[tuple[str, str] | None]:
+    """Resolve CLI identity only from a unique, still-armed host pre-tool event."""
+    hosts = (
+        (preferred_host,)
+        if preferred_host in ("codex", "claude", "cursor")
+        else ("codex", "claude", "cursor")
+    )
+    matches = tuple(
+        (host, record.get("conversation", ""))
+        for host in hosts
+        for path in (repo / work_session_context.ROOT / host).glob("*-begin.json")
+        for record in (state.read_json(path) or {},)
+        if record.get("host") == host
+        and record.get("consumed") is False
+        and record.get("invocation") == asdict(requested)
+        and isinstance(record.get("conversation"), str)
+        and record["conversation"]
+        and _recent(record.get("created"))
+    )
+    unique = tuple(dict.fromkeys(matches))
+    match unique:
+        case ():
+            return Ok(None)
+        case (identity,):
+            return Ok(identity)
+        case _:
+            return err(
+                "startup_identity_ambiguous",
+                "More than one host conversation has the same armed begin command; retry from one conversation at a time.",
+            )
+
+
+def _recent(value: object) -> bool:
+    try:
+        created = datetime.fromisoformat(str(value))
+    except ValueError:
+        return False
+    age = datetime.now(UTC) - created
+    return timedelta(0) <= age <= timedelta(minutes=10)
 
 
 def complete(repo: Path, host: str, payload: dict) -> Result[str | None]:
@@ -105,13 +156,16 @@ def _complete_at(
             and armed_request == asdict(requested)
         ):
             return bind(
-                _output(payload.get("tool_response")),
+                _output(hook_bridge.post_tool_response(host, payload)),
                 lambda output: _bind_output(
                     repo, host, conversation, requested, output, created, armed
                 ),
             )
         case startup_receipts.Invocation(), _:
-            return bind(_output(payload.get("tool_response")), _unarmed_output)
+            return bind(
+                _output(hook_bridge.post_tool_response(host, payload)),
+                _unarmed_output,
+            )
         case _:
             return Ok(None)
 
@@ -141,6 +195,8 @@ def _output(response: object) -> Result[dict | None]:
             )
         case {"exit_code": code} if code != 0:
             return Ok(None)
+        case {"exitCode": code} if code != 0:
+            return Ok(None)
         case {"interrupted": True} | {"isError": True}:
             return Ok(None)
         case {"stdout": str() as text} | {"output": str() as text}:
@@ -148,6 +204,13 @@ def _output(response: object) -> Result[dict | None]:
                 lambda: json.loads(text),
                 "startup_response_invalid",
                 "startup command output",
+                ValueError,
+            )
+        case {"exitCode": 0, "stdout": str() as text}:
+            return attempt(
+                lambda: json.loads(text),
+                "startup_response_invalid",
+                "Cursor startup command output",
                 ValueError,
             )
         case _:
@@ -262,14 +325,41 @@ def _consume_or_bind(
                     "answer the pending question before switching work",
                 ),
                 lambda _: bind(
-                    work_session_context.bind_session(
-                        repo, host, conversation, identifier, startup_receipt=receipt
-                    ),
-                    lambda selected: _finish_arm(
-                        repo, host, conversation, armed, selected
+                    _handover_selected_question(repo, identifier, conversation),
+                    lambda __: bind(
+                        work_session_context.bind_session(
+                            repo,
+                            host,
+                            conversation,
+                            identifier,
+                            startup_receipt=receipt,
+                        ),
+                        lambda selected: _finish_arm(
+                            repo, host, conversation, armed, selected
+                        ),
                     ),
                 ),
             )
+
+
+def _handover_selected_question(
+    repo: Path, identifier: str, conversation: str
+) -> Result[None]:
+    pending = decisions.pending(repo, identifier)
+    match pending:
+        case decisions.Pending(scope=scope) if scope == identifier:
+            record = decisions.record(repo, identifier) or {}
+            owner = str(record.get("native_session_id") or "")
+            match owner and owner != conversation:
+                case True:
+                    return fmap(
+                        decisions.hand_over(repo, identifier, conversation),
+                        lambda _: None,
+                    )
+                case False:
+                    return Ok(None)
+        case _:
+            return Ok(None)
 
 
 def _finish_arm(

@@ -1,6 +1,17 @@
 {
   "description": "Codex harness policy and approval capture",
   "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event session-start",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": ".*",
@@ -15,6 +26,16 @@
       }
     ],
     "PostToolUse": [
+      {
+        "matcher": "^(Bash|exec_command|functions\\.exec_command|Read|read_file)$",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "sh \"${PLUGIN_ROOT}/bin/harness-python\" \"${PLUGIN_ROOT}/scripts/harness/hook.py\" --host codex --event knowledge-post",
+            "timeout": 10
+          }
+        ]
+      },
       {
         "matcher": "^(functions\\.)?request_user_input(_async)?$",
         "hooks": [

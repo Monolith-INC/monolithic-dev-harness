@@ -28,8 +28,9 @@ read from ROOT, so leaving and coming back resumes at the right step.
 5. Run `harness modes step`. It reads ROOT's documents and prints where the work stands: the
    `step` and what holds. Follow that step. Run it again after every publish and whenever the user
    comes back; each prompt also repeats it as the current step.
-6. When the knowledge store may hold facts about the project, run the `knowledge-acquire` skill
-   once, before step 1. An empty, stale or missing store is never a reason to wait.
+6. When the project knowledge store may hold facts about the project, use the `knowledge` skill
+   once, before step 1. It follows the project's selected store format. An empty, stale or missing
+   store is never a reason to wait.
 
 While the mode runs, only the gateway tools the mode lists are allowed, and every tracker write
 still needs the user's approval. Answer a general question directly and stay in the mode.

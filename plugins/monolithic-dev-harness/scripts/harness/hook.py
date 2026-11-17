@@ -41,7 +41,7 @@ for entry in (PLUGIN_ROOT, PLUGIN_ROOT / "scripts"):
     if str(entry) not in sys.path:
         sys.path.insert(0, str(entry))
 
-from core.result import Err, Ok, Result, attempt, bind  # noqa: E402
+from core.result import Err, Ok, Result, attempt, bind, err  # noqa: E402
 from harness import (  # noqa: E402
     adoption,
     code_content,
@@ -67,6 +67,7 @@ from harness import (  # noqa: E402
 )
 from host_adapters import (  # noqa: E402
     hook_bridge,
+    native_session_id,
     process_channel,
     work_session_context,
 )
@@ -154,9 +155,13 @@ def _fail(host: str, call: rules.ToolCall, message: str) -> int:
 
 
 def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
-    """Check one tool call. A call that repaired the mode, or met a mode that cannot be repaired,
-    carries one line about it: as context for the agent, and as a line the host shows the user when
-    the mode was repaired, even on a call that is denied."""
+    """Check one tool call and carry any decision notice to the agent and, when marked, user."""
+    call = _tool_call(host, event, payload)
+    match host, event, call.name.rsplit(".", 1)[-1]:
+        case "codex", "pre-tool", "request_user_input" | "request_user_input_async":
+            return _handle_ask(host, payload, observe_entry=False)
+        case _:
+            pass
     reads: list[modes.Resolution] = []
     printed = io.StringIO()
     with contextlib.redirect_stdout(printed):
@@ -168,7 +173,7 @@ def handle_pre_tool(host: str, event: str, payload: dict[str, Any]) -> int:
 def _with_mode_notice(host: str, output: str, reads: list[modes.Resolution]) -> str:
     note = " ".join(read.notice for read in reads if read.notice)
     shown = (
-        " ".join(read.notice for read in reads if read.repaired)
+        " ".join(read.notice for read in reads if read.repaired or read.user_notice)
         if hook_bridge.reaches_user(host)
         else ""
     )
@@ -226,6 +231,21 @@ def _pre_tool(
     if settings.governed(repo):
         # The first read of the mode in a call repairs it, so this one comes before any other.
         reads.append(modes.resolve(repo))
+    from harness import knowledge_first_live
+
+    match attempt(
+        lambda: knowledge_first_live.before(repo, host, payload, call),
+        "knowledge_first_unavailable",
+        "Knowledge-first check",
+        Exception,
+    ):
+        case Ok(rules.Decision(allowed=False) as denied):
+            _emit_decision(host, denied)
+            return 0
+        case Ok(rules.Decision(allowed=True, reason=str() as note)) if note:
+            reads.append(modes.Resolution(None, note, user_notice=True))
+        case _:
+            pass
     context = work_session_context.for_payload(repo, host, payload)
     request = (
         work_session_context.requested(
@@ -360,6 +380,11 @@ def _held(
             return None
         case _:
             pass
+    match _session_entry_control(call, repo, context):
+        case True:
+            return None
+        case _:
+            pass
     if decisions.blocking(repo, current) and not (
         decisions.status_command(call.command, Path(call.cwd or repo))
         or decisions.next_command(call.command, Path(call.cwd or repo))
@@ -375,6 +400,76 @@ def _held(
             _pending_decision_guidance(repo, pending, host, current),
         )
     return None
+
+
+def _session_entry_control(call: rules.ToolCall, repo: Path, context: Any) -> bool:
+    """Permit only presenting an existing saved-work choice in an unbound conversation.
+
+    These commands cannot start or select work. `begin` only prepares the menu, while the
+    decision command only presents that prepared menu; the captured host reply remains the sole
+    route to applying a choice.
+    """
+    from harness import session_entry
+    from host_adapters import startup_context
+
+    found = session_entry.candidates(repo)
+    if not (found.sessions or found.unfinished_setup):
+        return False
+    cwd = Path(call.cwd or repo)
+    match startup_context.invocation(call.command, cwd):
+        case invocation if (
+            invocation is not None
+            and invocation.selected_id is None
+            and not invocation.new
+        ):
+            match context:
+                case Ok(None):
+                    return True
+                case Ok(str() as current):
+                    active = work_sessions.select(repo, current)
+                    pending = decisions.pending(repo, current)
+                    return (
+                        isinstance(active, Ok)
+                        and active.value.request == invocation.request
+                        and pending is not None
+                        and pending.scope == current
+                    )
+                case _:
+                    return False
+        case _:
+            pass
+    match context:
+        case Ok(None):
+            pass
+        case _:
+            return False
+    match commands.harness_args(call.command, cwd):
+        case ("decision", "present", *args):
+            return _session_entry_present_args(tuple(args))
+        case _:
+            return False
+
+
+def _session_entry_present_args(args: tuple[str, ...]) -> bool:
+    value_flags = {"--gate", "--entry-request", "--host", "--repo"}
+    bool_flags = {
+        "--blocking-available",
+        "--async-available",
+        "--native-unavailable",
+    }
+    values = dict(zip(args[::2], args[1::2], strict=False))
+    flags = args[::2]
+    return (
+        set(flags) <= value_flags
+        and len(flags) == len(values)
+        and values.get("--gate") == "session-entry"
+        and bool(values.get("--entry-request", "").strip())
+        and values.get("--host", "codex") in ("codex", "claude", "cursor")
+    ) or (
+        set(args) <= bool_flags | {"--gate", "session-entry"}
+        and args.count("--gate") == 1
+        and values.get("--gate") == "session-entry"
+    )
 
 
 def _pending_decision_guidance(
@@ -478,9 +573,35 @@ def _diagnostic_read(call: rules.ToolCall, repo: Path) -> bool:
     """Let proven file reads through the waiting gate, without skipping other rules."""
     match call.kind:
         case "shell":
-            return _has_no_shell_writes(
+            return _knowledge_read_command(call, repo) or _has_no_shell_writes(
                 rules.shellscan.scan(call.command, str(call.cwd or repo), repo)
             )
+        case _:
+            return False
+
+
+def _knowledge_read_command(call: rules.ToolCall, repo: Path) -> bool:
+    """Recognize only a single, validated harness knowledge read for this project."""
+    match commands.harness_args(call.command, Path(call.cwd or repo)):
+        case (
+            "knowledge",
+            "catalog" | "find" | "fetch" | "resolve" | "status" | "links",
+            *_,
+        ) as args:
+            repo_options = tuple(
+                word for word in args if word == "--repo" or word.startswith("--repo=")
+            )
+            if len(repo_options) > 1:
+                return False
+            selected = commands.option(args, "--repo")
+            if repo_options and selected is None:
+                return False
+            command_repo = (
+                (Path(call.cwd or repo) / selected).resolve()
+                if selected
+                else Path(call.cwd or repo).resolve()
+            )
+            return command_repo == repo.resolve()
         case _:
             return False
 
@@ -510,11 +631,32 @@ def _bind(
     from host_adapters import native_session_id, startup_context
 
     conversation = native_session_id(host, payload)
+    call = _tool_call(host, "pre-tool", payload)
+    match startup_context.invocation(call.command, Path(call.cwd or repo)):
+        case invocation if invocation is not None and (
+            invocation.selected_id is not None or invocation.new
+        ):
+            from harness import session_entry
+
+            candidates = session_entry.candidates(repo, conversation)
+            match work_session_context.resolve_session(repo, host, conversation):
+                case Ok(None) if candidates.sessions or candidates.unfinished_setup:
+                    return err(
+                        "entry_choice_required",
+                        "Choose saved work through the host's session-entry question before using --session or --new.",
+                    )
+                case Err() if candidates.sessions or candidates.unfinished_setup:
+                    return err(
+                        "entry_identity_missing",
+                        "This conversation cannot be matched to saved work; do not select a session by command flag.",
+                    )
+                case _:
+                    pass
+        case _:
+            pass
     return bind(
         work_session_context.bind_requested(repo, host, conversation, current, request),
-        lambda _: startup_context.arm(
-            repo, host, payload, _tool_call(host, "pre-tool", payload).command, repo
-        ),
+        lambda _: startup_context.arm(repo, host, payload, call.command, repo),
     )
 
 
@@ -687,11 +829,121 @@ def _print_prompt(host: str, notes: list[str], mode_notes: Sequence[str] = ()) -
         print(output)
 
 
+def _session_entry_choice(
+    repo: Path, host: str, conversation: str, choice: str
+) -> None:
+    from harness import session_entry
+
+    match session_entry.apply_selection(repo, host, conversation):
+        case Ok(selected):
+            print(
+                hook_bridge.format_answer_context(
+                    f"[harness] Saved-work choice recorded ({selected}). Run `harness begin` again with the same request to continue."
+                )
+            )
+        case Err(failure) if failure.code == "entry_disposition_required":
+            print(
+                hook_bridge.format_answer_context(
+                    "[harness] Before starting new work, choose what to do with the saved work. Run `harness decision present --gate session-entry"
+                    f" --host {shlex.quote(host)}` and wait for the user's answer."
+                )
+            )
+        case Err(failure) if failure.code == "entry_more_options":
+            prepared = session_entry.current_offer(repo, host, conversation)
+            match prepared:
+                case Ok(offer):
+                    command = (
+                        "harness decision present --gate session-entry"
+                        f" --host {shlex.quote(host)}"
+                        f" --entry-request {shlex.quote(offer.request)}"
+                    )
+                    delivery = (
+                        "display the returned menu exactly and wait for a user reply"
+                        if host == "cursor"
+                        else "show the returned native question tool to the user"
+                    )
+                    print(
+                        hook_bridge.format_answer_context(
+                            f"[harness] More saved-work choices are ready. Run `{command}` and {delivery}."
+                        )
+                    )
+                case Err():
+                    print(hook_bridge.format_answer_context(failure.message))
+        case Err(failure):
+            print(
+                hook_bridge.format_answer_context(
+                    f"[harness] The saved-work choice remains pending: {failure.message}"
+                )
+            )
+
+
+def _session_entry_prompt(
+    repo: Path, host: str, prompt: str, conversation: str, generation: str = ""
+) -> bool:
+    from harness import session_entry
+
+    match session_entry.answer_prompt(repo, host, conversation, prompt):
+        case Err(failure) if failure.code == "entry_identity_missing":
+            return False
+        case Err(failure):
+            print(hook_bridge.format_answer_context(failure.message))
+            return True
+        case Ok(str() as choice):
+            _session_entry_choice(repo, host, conversation, choice)
+            return True
+        case _:
+            pass
+    match session_entry.recover_reply(repo, host, conversation):
+        case Ok(str() as choice):
+            _session_entry_choice(repo, host, conversation, choice)
+            return True
+        case Err(failure) if failure.code != "entry_missing":
+            print(hook_bridge.format_answer_context(failure.message))
+            return True
+        case _:
+            pass
+    if host == "cursor":
+        match session_entry.current_offer(repo, host, conversation):
+            case Ok():
+                session_entry.note_prompt(
+                    repo,
+                    host,
+                    {
+                        "conversation_id": conversation,
+                        "generation_id": generation,
+                    },
+                )
+                _print_prompt(host, [])
+                return True
+            case Err(failure) if failure.code == "entry_missing":
+                return False
+            case Err(failure):
+                print(hook_bridge.format_answer_context(failure.message))
+                return True
+
+
 def _mode_notes(repo: Path) -> list[str]:
     """The line the first read of the mode in a prompt has to say, when it repaired the mode or could
     not. The prompt says it once, to the agent and to the user."""
     notice = modes.resolve(repo).notice if settings.governed(repo) else ""
     return [notice] if notice else []
+
+
+def handle_session_start(host: str, payload: dict[str, Any]) -> int:
+    """Orient a root conversation without creating or selecting any work."""
+    from harness import session_entry
+    from host_adapters import format_start_context, start_event
+
+    match start_event(host, payload):
+        case None:
+            return 0
+        case event:
+            match session_entry.on_start(_workspace(payload, host), host, event):
+                case str() as context:
+                    print(format_start_context(host, context))
+                case _:
+                    pass
+            return 0
 
 
 def handle_prompt(host: str, payload: dict[str, Any]) -> int:
@@ -719,15 +971,60 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
             return 0
         case _:
             pass
+    if _session_entry_prompt(
+        repo,
+        host,
+        prompt,
+        native_session_id(host, payload) or "",
+        str(payload.get("generation_id") or ""),
+    ):
+        return 0
+    if host == "cursor":
+        from harness import session_entry
+
+        session_entry.note_prompt(repo, host, payload)
     hook_budget.step("controls")
     # The first read of the mode in a call repairs it, so this one comes before any other.
     mode_notes = _mode_notes(repo)
+    from harness import knowledge_first_live
+
+    attempt(
+        lambda: knowledge_first_live.prompt(repo, host, payload),
+        "knowledge_first_unavailable",
+        "Knowledge-first reset",
+        Exception,
+    )
     context = work_session_context.for_payload(repo, host, payload)
     hook_budget.step("mode-and-session")
     if isinstance(context, Err):
         _print_prompt(host, [context.failure.message], mode_notes)
         return 0
     work_session_id = context.value
+    match decisions.pending(repo, work_session_id):
+        case decisions.Pending(scope=scope, id=identifier) if (
+            (record := decisions.record(repo, scope) or {}).get("handover_pending")
+            or record.get("presentation_pending")
+        ) and not decisions.presented_here(
+            record, native_session_id(host, payload) or ""
+        ):
+            scope_arg = (
+                f" --session-id {shlex.quote(scope)}" if scope is not None else ""
+            )
+            redisplay = (
+                "harness decision fallback"
+                f" --repo {shlex.quote(str(repo.resolve()))}{scope_arg}"
+                f" --host {shlex.quote(host)} --blocking-available"
+            )
+            _print_prompt(
+                host,
+                [
+                    f"[harness] Saved question {identifier} has not been shown in this conversation. This message cannot answer it. Re-present it with `{redisplay}`, then invoke the returned host question tool. The command output alone does not prove display; the native question event must be observed. If the host cannot show it, return to the conversation where it was already shown."
+                ],
+                mode_notes,
+            )
+            return 0
+        case _:
+            pass
     match state.harness_mode(repo), decisions.pending(repo, work_session_id):
         case "suspended", decisions.Pending(shown_as=identifier):
             from harness import question_observation
@@ -756,7 +1053,13 @@ def handle_prompt(host: str, payload: dict[str, Any]) -> int:
         else None
     )
     if pending is not None and reply is not None:
-        answered = _answer_decision(repo, pending, work_session_id, reply)
+        answered = _answer_decision(
+            repo,
+            pending,
+            work_session_id,
+            reply,
+            native_session_id(host, payload) or "",
+        )
         hook_budget.step("record-answer")
         _print_prompt(host, answered, mode_notes)
         return 0
@@ -815,7 +1118,13 @@ def _recover_prompt_answer(
             match recorded_answer(host, payload, pending):
                 case tuple() as captured:
                     return (
-                        _answer_decision(repo, pending, scope, captured),
+                        _answer_decision(
+                            repo,
+                            pending,
+                            scope,
+                            captured,
+                            native_session_id(host, payload) or "",
+                        ),
                         decisions.pending(repo, scope),
                     )
                 case None:
@@ -989,9 +1298,19 @@ def handle_ask(host: str, payload: dict[str, Any]) -> int:
             return _handle_ask(host, payload)
 
 
-def _handle_ask(host: str, payload: dict[str, Any]) -> int:
+def _handle_ask(
+    host: str, payload: dict[str, Any], *, observe_entry: bool = True
+) -> int:
     """Before a question is shown: send it back if a person would have to decode it."""
+    from harness import session_entry
     from host_adapters import native_session_id
+
+    if observe_entry:
+        match session_entry.observe(_workspace(payload, host), host, payload):
+            case Ok(True):
+                return 0
+            case _:
+                pass
 
     match harness_controls.observe(_workspace(payload, host), host, payload):
         case True:
@@ -1351,6 +1670,30 @@ def _adoption_question(repo: Path, tool_input: dict[str, Any]) -> dict[str, Any]
 @_announcing
 def handle_answer(host: str, payload: dict[str, Any]) -> int:
     """After the user answers a question: record the decision, then what the question pinned."""
+    from harness import session_entry
+
+    repo = _workspace(payload, host)
+    # Codex has no separate question PreToolUse matcher. Its configured generic
+    # PreToolUse check validates request_user_input, while PostToolUse is the first
+    # host-observed evidence that the native dialog actually completed. Observe it
+    # here before consuming its answer; the payload's session_id and tool_use_id
+    # bind this evidence to the exact conversation and presentation.
+    match host, hook_bridge.answer_response(payload):
+        case "codex", Ok(dict()):
+            session_entry.observe(repo, host, payload)
+        case _:
+            pass
+    match session_entry.answer(repo, host, payload):
+        case Ok(str() as choice):
+            _session_entry_choice(
+                repo, host, native_session_id(host, payload) or "", choice
+            )
+            return 0
+        case Err(failure) if failure.code == "entry_reply_collision":
+            print(hook_bridge.format_answer_context(failure.message))
+            return 0
+        case _:
+            pass
     match harness_controls.answer(_workspace(payload, host), payload, host):
         case "suspend" | "resume" as operation:
             print(
@@ -1455,6 +1798,7 @@ def handle_answer(host: str, payload: dict[str, Any]) -> int:
             chosen,
             pending.transport,
             work_session_id=decision_scope,
+            native_session_id=native_session_id(host, payload) or "",
         )
         hook_budget.step("record-answer")
         if isinstance(result, Err):
@@ -1479,13 +1823,19 @@ def _answer_decision(
     pending: decisions.Pending,
     conversation_scope: str | None,
     reply: tuple[str, str, str],
+    native_session: str = "",
 ) -> list[str]:
     """Record a typed or delayed reply, then what it approves; notes for the agent."""
     hook_budget.commit()
     key, answer, transport = reply
     decision_scope = pending.scope
     match decisions.resolve(
-        repo, key, answer, transport, work_session_id=decision_scope
+        repo,
+        key,
+        answer,
+        transport,
+        work_session_id=decision_scope,
+        native_session_id=native_session,
     ):
         case Err(failure):
             return [f"[harness] decision not recorded: {failure.message}"]
@@ -1754,9 +2104,12 @@ def main(argv: list[str] | None = None, started: float | None = None) -> int:
             "answer",
             "stop",
             "startup",
+            "session-start",
             "subagent-start",
             "subagent-stop",
             "interrupt",
+            "knowledge-post",
+            "response",
         ),
         required=True,
     )
@@ -1768,7 +2121,14 @@ def main(argv: list[str] | None = None, started: float | None = None) -> int:
     if not isinstance(payload, dict):
         payload = {}
     hook_timing.step("startup")
-    event = process_channel.event_name(args.host, args.event, payload)
+    event = (
+        "pre-tool"
+        if args.host == "codex"
+        and args.event == "pre-tool"
+        and str(payload.get("tool_name", "")).removeprefix("functions.")
+        in {"request_user_input", "request_user_input_async"}
+        else process_channel.event_name(args.host, args.event, payload)
+    )
     try:
         return hook_budget.run(
             event,
@@ -1848,6 +2208,41 @@ def _log_timing(host: str, event: str, payload: dict[str, Any]) -> None:
 
 
 def _dispatch_event(args: argparse.Namespace, payload: dict[str, Any]) -> int:
+    if args.event == "response":
+        from harness import session_entry
+
+        session_entry.observe_chat_response(
+            _workspace(payload, args.host), args.host, payload
+        )
+        return 0
+    match args.event:
+        case "knowledge-post":
+            from harness import knowledge_first_live
+
+            attempt(
+                lambda: knowledge_first_live.after(
+                    _workspace(payload, args.host), args.host, payload
+                ),
+                "knowledge_first_unavailable",
+                "Knowledge-first observation",
+                Exception,
+            )
+            return 0
+        case _:
+            pass
+    match args.event:
+        case "session-start":
+            match attempt(
+                lambda: handle_session_start(args.host, payload),
+                "session_start_unavailable",
+                "Read saved-work orientation",
+            ):
+                case Ok(code):
+                    return code
+                case Err():
+                    return 0
+        case _:
+            pass
     match process_channel.event(
         args.host, args.event, _workspace(payload, args.host), payload
     ):
@@ -1917,6 +2312,8 @@ def _dispatch_event(args: argparse.Namespace, payload: dict[str, Any]) -> int:
             # A question is not a write: a broken check shows it as asked. Its answer then opens
             # nothing, because only a question the check let through is honoured.
             return 0
+    if args.event == "response":
+        return 0
     try:
         return handle_pre_tool(args.host, args.event, payload)
     except Exception as exc:

@@ -655,7 +655,7 @@
    ],
    "skills": [
     {
-     "name": "knowledge-acquire",
+     "name": "knowledge",
      "when": "Before analysis, find source-backed project notes related to the exact request."
     },
     {

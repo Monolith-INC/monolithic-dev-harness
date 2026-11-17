@@ -70,6 +70,8 @@ class Settings:
     require_review_verdict: bool
     # The user chose Git-based delivery: only then do the rules about Git commands apply.
     git_delivery: bool = False
+    knowledge_root: str = ""
+    knowledge_format: str = "legacy"
 
     @property
     def check_names(self) -> frozenset[str]:
@@ -228,6 +230,8 @@ def _parse(raw: Mapping[str, Any]) -> Result[Settings]:
                 pull_requests.get("require_review_verdict", True)
             ),
             git_delivery=raw.get("git", {}).get("delivery") is True,
+            knowledge_root=str(raw.get("knowledge", {}).get("root", "")),
+            knowledge_format=str(raw.get("knowledge", {}).get("format", "legacy")),
         )
     )
 

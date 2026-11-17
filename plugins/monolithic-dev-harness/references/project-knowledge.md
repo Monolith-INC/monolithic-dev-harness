@@ -28,12 +28,18 @@ facts remain open questions. Facts reported by source are distinguished from der
 unsupported assumptions are not promoted to project rules. A catalog is a rebuildable index, not a
 second source of truth.
 
-The harness stores immutable revisions beneath `.harness/knowledge/stores/<store>/`; its catalog,
+The legacy store keeps immutable revisions beneath `.harness/knowledge/stores/<store>/`; its catalog,
 source index and lifecycle events make provenance and freshness inspectable. Querying is bounded:
 `catalog` routes, `find` returns at most twelve current matches, and `fetch` loads only selected
 units. The current v1 store seeds a source-backed pointer to `.harness/settings.json`. Curated units
 can be added as the store's acquisition capability grows; agents must not treat an empty store as a
 project failure.
+
+Projects may instead select `knowledge.format: "markdown"` in `.harness/settings.json` and set
+`knowledge.root`; the default root is `Project_Knowledge` beneath `artifacts_path`. Markdown
+stores expose read-only catalog, find, fetch and links operations. Existing JSON stores remain
+available by default, and choosing the Markdown format does not migrate their revisions. The
+discovery-mode reminder allows inspection when source freshness cannot be verified.
 
 ## Retrieval contract
 
@@ -63,5 +69,5 @@ knowledge store to route readers there.
 
 This design follows the five-tier taxonomy, catalog/find/fetch ladder, bounded results, provenance,
 freshness, source citations and open-question discipline of Aplicatudo's `Project_Knowledge` model.
-Those project-specific facts are not copied into this harness. Current implementation details are
-verified against `plugins/monolithic-dev-harness/scripts/harness/knowledge.py` and its tests.
+Those project-specific facts are not copied into this harness. The legacy implementation is in
+`scripts/harness/knowledge.py`; the Markdown read engine is in `scripts/project_knowledge/`.

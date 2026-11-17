@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import json
 import os
 import sys
+from dataclasses import dataclass
+from typing import Any
 
 # Bare imports (policy, ...) need scripts/ on path when loaded as host_adapters.
 _SCRIPTS_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -55,6 +58,50 @@ def native_session_id(client: str, payload):
             return ""
 
 
+def conversation_id(client: str) -> str:
+    """Stable identity available to CLI calls running inside a host conversation."""
+    match client.strip().lower():
+        case "codex":
+            return os.environ.get("CODEX_THREAD_ID", "")
+        case _:
+            return ""
+
+
+@dataclass(frozen=True)
+class StartEvent:
+    conversation: str
+    source: str
+    subagent: bool
+
+
+def start_event(client: str, payload: dict[str, Any]) -> StartEvent | None:
+    match client.strip().lower(), native_session_id(client, payload):
+        case (("codex" | "claude"), str() as conversation) if conversation:
+            return StartEvent(
+                conversation,
+                str(payload.get("source") or "startup"),
+                bool(payload.get("agent_id")),
+            )
+        case _:
+            return None
+
+
+def format_start_context(client: str, text: str) -> str:
+    match client.strip().lower():
+        case "codex" | "claude":
+            return json.dumps(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "SessionStart",
+                        "additionalContext": text,
+                    }
+                },
+                ensure_ascii=False,
+            )
+        case _:
+            return ""
+
+
 __all__ = [
     "format_claude_decision",
     "format_codex_decision",
@@ -66,4 +113,7 @@ __all__ = [
     "parse_kimi_payload",
     "select_adapter",
     "native_session_id",
+    "conversation_id",
+    "StartEvent",
+    "start_event",
 ]

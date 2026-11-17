@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import fcntl
 import json
 import secrets
 from dataclasses import dataclass
@@ -586,6 +587,7 @@ def resolve(
     *,
     work_session_id: str | None = None,
     human_reply_evidence: dict[str, Any] | None = None,
+    native_session_id: str = "",
 ) -> Result[dict[str, Any]]:
     from harness import review_decisions
 
@@ -594,7 +596,18 @@ def resolve(
         lambda _: bind(
             _path(repo, work_session_id),
             lambda path: attempt(
-                lambda: _resolve(repo, path, key, answer, source, human_reply_evidence),
+                lambda: _locked(
+                    path,
+                    lambda: _resolve(
+                        repo,
+                        path,
+                        key,
+                        answer,
+                        source,
+                        human_reply_evidence,
+                        native_session_id,
+                    ),
+                ),
                 "decision_invalid",
                 "human answer",
                 OSError,
@@ -617,23 +630,43 @@ def adopt_native_async(
     return bind(
         _path(repo, work_session_id),
         lambda path: bind(
-            _async_adoption(
-                repo,
-                state.read_json(path) or {},
-                key,
-                question,
-                options,
-                native_session_id,
-            ),
-            lambda updated: fmap(
-                attempt(
-                    lambda: state.write_json(path, updated),
-                    "decision_invalid",
-                    "native async discovery",
-                    OSError,
+            attempt(
+                lambda: _locked(
+                    path,
+                    lambda: _adopt_native_async_locked(
+                        repo, path, key, question, options, native_session_id
+                    ),
                 ),
-                lambda _: updated,
+                "decision_invalid",
+                "native async discovery",
+                OSError,
+                ValueError,
             ),
+            lambda result: result,
+        ),
+    )
+
+
+def _adopt_native_async_locked(
+    repo: Path,
+    path: Path,
+    key: str,
+    question: str,
+    options: tuple[str, ...],
+    native_session_id: str,
+) -> Result[dict[str, Any]]:
+    return bind(
+        _async_adoption(
+            repo, state.read_json(path) or {}, key, question, options, native_session_id
+        ),
+        lambda updated: fmap(
+            attempt(
+                lambda: state.write_json(path, updated),
+                "decision_invalid",
+                "native async discovery",
+                OSError,
+            ),
+            lambda _: updated,
         ),
     )
 
@@ -663,7 +696,15 @@ def _async_adoption(
             "decision_invalid",
             "Native discovery does not match the prepared decision and session.",
         ),
-        lambda _: {**current, "transport": "async"},
+        lambda _: {
+            **current,
+            "transport": "async",
+            "handover_pending": False,
+            "presentation_pending": False,
+            "presented_in": sorted(
+                {*current.get("presented_in", ()), native_session_id} - {""}
+            ),
+        },
     )
 
 
@@ -688,8 +729,11 @@ def bind_question(
     return bind(
         _path(repo, work_session_id),
         lambda path: attempt(
-            lambda: _bind_at(
-                path, key, tool_id, question, options, transport, native_session
+            lambda: _locked(
+                path,
+                lambda: _bind_at(
+                    path, key, tool_id, question, options, transport, native_session
+                ),
             ),
             "decision_invalid",
             "native question",
@@ -717,6 +761,8 @@ def _bind_at(
     updated = {
         **current,
         "transport": transport,
+        "handover_pending": False,
+        "presentation_pending": False,
         "presentation_id": tool_id,
         "presented_on": sorted(
             {*current.get("presented_on", ()), str(current.get("transport")), transport}
@@ -763,8 +809,15 @@ def presented_here(record: dict[str, Any], native_session: str) -> bool:
     question waiting in the chat or in Codex's async delivery counts as shown, and one waiting
     for a dialog only once a dialog showed it.
     """
+    shown_in = set(record.get("presented_in", ()))
+    if (
+        (record.get("handover_pending") or record.get("presentation_pending"))
+        and not record.get("presentation_id")
+        and native_session not in shown_in
+    ):
+        return False
     sessions = {
-        *record.get("presented_in", ()),
+        *shown_in,
         str(record.get("native_session_id") or ""),
     } - {""}
     match bool(sessions):
@@ -788,10 +841,13 @@ def _resolve(
     answer: str,
     source: str,
     human_reply_evidence: dict[str, Any] | None = None,
+    native_session_id: str = "",
 ) -> dict[str, Any]:
     current = state.read_json(path) or {}
     if current.get("status") != "pending" or not answers_to(current, key):
         raise ValueError("this answer does not belong to the pending decision")
+    if native_session_id and not presented_here(current, native_session_id):
+        raise ValueError("this conversation has not been shown the pending question")
     if questions.no_choice(answer):
         raise ValueError(
             "the user chose no option, so the question is still waiting. Do not act on it: "
@@ -1006,44 +1062,123 @@ def fallback(
     transport: str,
     *,
     work_session_id: str | None = None,
-    native_session_id: str = "",
 ) -> Result[dict[str, Any]]:
     """Move the same unanswered review to a simpler delivery method; never answer it."""
     return bind(
         _path(repo, work_session_id),
         lambda path: bind(
-            fmap(
-                _fallback_record(state.read_json(path) or {}, transport),
-                lambda updated: _fallback_origin(updated, native_session_id),
-            ),
-            lambda updated: fmap(
-                attempt(
-                    lambda: state.write_json(path, updated),
-                    "decision_invalid",
-                    "question fallback",
-                    OSError,
+            attempt(
+                lambda: _locked(
+                    path,
+                    lambda: _fallback_at(path, transport),
                 ),
-                lambda _: updated,
+                "decision_invalid",
+                "question fallback",
+                OSError,
+                ValueError,
+            ),
+            lambda result: result,
+        ),
+    )
+
+
+def _fallback_at(path: Path, transport: str) -> Result[dict[str, Any]]:
+    return bind(
+        _fallback_record(state.read_json(path) or {}, transport),
+        lambda updated: fmap(
+            attempt(
+                lambda: state.write_json(path, updated),
+                "decision_invalid",
+                "question fallback",
+                OSError,
+            ),
+            lambda _: updated,
+        ),
+    )
+
+
+def hand_over(
+    repo: Path, work_session_id: str | None, conversation: str
+) -> Result[dict[str, Any]]:
+    """Give a still-pending saved question to the conversation that explicitly resumed it."""
+    return bind(
+        require(
+            bool(conversation),
+            "decision_handover_invalid",
+            "A saved question needs a work session and conversation.",
+        ),
+        lambda _: bind(
+            _path(repo, work_session_id),
+            lambda path: bind(
+                attempt(
+                    lambda: _locked(
+                        path, lambda: _hand_over_record(path, conversation)
+                    ),
+                    "decision_handover_invalid",
+                    "saved question handover",
+                    OSError,
+                    ValueError,
+                ),
+                lambda record: Ok(record),
             ),
         ),
     )
 
 
-def _fallback_origin(current: dict[str, Any], native_session_id: str) -> dict[str, Any]:
-    """The conversation re-presenting the saved menu owns its next human reply."""
-    match native_session_id:
-        case str() as session if session:
-            return {**current, "native_session_id": session}
-        case _:
-            return current
+def _locked(path: Path, action):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with path.with_suffix(".lock").open("a") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        return action()
+
+
+def _hand_over_record(path: Path, conversation: str) -> dict[str, Any]:
+    current = state.read_json(path) or {}
+    if current.get("status") != "pending":
+        raise ValueError("there is no pending saved question to hand over")
+    updated = {
+        **current,
+        "native_session_id": conversation,
+        "presented_in": [],
+        "presentation_id": "",
+        "handover_pending": True,
+    }
+    state.write_json(path, updated)
+    return updated
 
 
 def _fallback_record(current: dict[str, Any], transport: str) -> Result[dict[str, Any]]:
+    presentation_pending = current.get("presentation_pending", False) or (
+        transport == "chat" and current.get("transport") != "chat"
+    )
     match current.get("status"), current.get("transport"), transport:
+        case "pending", "chat", "blocking":
+            return Ok(
+                {
+                    **current,
+                    "transport": transport,
+                    "presentation_id": "",
+                    "presentation_pending": True,
+                }
+            )
         case "pending", "blocking", "async" | "chat":
-            return Ok({**current, "transport": transport, "presentation_id": ""})
+            return Ok(
+                {
+                    **current,
+                    "transport": transport,
+                    "presentation_id": "",
+                    "presentation_pending": presentation_pending,
+                }
+            )
         case "pending", "async", "chat":
-            return Ok({**current, "transport": transport, "presentation_id": ""})
+            return Ok(
+                {
+                    **current,
+                    "transport": transport,
+                    "presentation_id": "",
+                    "presentation_pending": presentation_pending,
+                }
+            )
         case "pending", "chat", "chat":
             return Ok(current)
         case _:
@@ -1135,7 +1270,10 @@ def _fallback_options(options: tuple[str, ...]) -> bool:
     match options:
         case ():
             return True
-        case ("--async-available" | "--native-unavailable", *rest):
+        case (
+            "--async-available" | "--blocking-available" | "--native-unavailable",
+            *rest,
+        ):
             return _fallback_options(tuple(rest))
         case ("--repo" | "--session-id" | "--host", value, *rest) if (
             not value.startswith("--")

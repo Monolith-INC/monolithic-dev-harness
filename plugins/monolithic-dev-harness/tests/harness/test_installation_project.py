@@ -158,6 +158,21 @@ def test_linked_skills_find_their_shared_documents(tmp_path: Path):
     assert links[(skill / "../../common").resolve()] == plugin / "common"
 
 
+def test_installation_exposes_the_unified_knowledge_skill(tmp_path: Path):
+    plugin = Path(__file__).parents[2]
+    project = tmp_path / "p"
+    project.mkdir()
+    links = {
+        asset.path: asset.target
+        for asset in assets("claude", project, plugin).value
+        if asset.kind == "symlink"
+    }
+    skill = project / ".claude/skills/knowledge"
+
+    assert links[skill] == plugin / "skills/knowledge"
+    assert (links[skill] / "SKILL.md").is_file()
+
+
 def test_the_discovery_skill_finds_its_procedure_and_catalog_in_a_project_install(
     tmp_path: Path,
 ):

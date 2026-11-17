@@ -30,8 +30,9 @@ Other states `begin` and `next` can return:
 
 - `setup_needed`: follow the bootstrap skill, keeping the request, then run `begin` again.
 - `free`: give the requested guidance or skill without a session.
-- `choose_session`: offer its candidates and Start new as a menu; run `begin` again with the
-  chosen `--session` or `--new`.
+- `choose_session`: run its `command`, present the returned question through the host control,
+  and wait for the human's answer. If another page or disposition is needed, present it as
+  instructed. Then repeat the original `begin`; do not choose `--session` or `--new` yourself.
 - `waiting_for_human`: the user has not answered the saved question; show it again with
   `harness decision fallback`.
 - `tracker_unreachable`: recover or reload the owning `workflow-integrations` gateway before one
