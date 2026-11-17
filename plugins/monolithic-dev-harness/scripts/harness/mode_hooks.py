@@ -12,7 +12,7 @@ from pathlib import Path
 
 from core.result import Err, Ok, Result, attempt, bind, err
 
-from . import modes, routing, rules
+from . import knowledge_first, modes, routing, rules
 
 GATEWAY_SERVER = "workflow-integrations"
 # The host stops a prompt hook that runs for more than a few seconds, and with it the approvals the
@@ -124,6 +124,24 @@ def operations(call: rules.ToolCall, repo: Path) -> rules.Decision | None:
                 f"`{call.name}` is not an operation of the {mode.name} mode, which allows: "
                 f"{', '.join(mode.operations)}. Leave the mode to use other tools.",
             )
+
+
+def knowledge_first_decision(
+    repo: Path,
+    current: knowledge_first.State,
+    available: bool,
+    action: knowledge_first.Action,
+) -> knowledge_first.Outcome:
+    """Evaluate a per-prompt knowledge action for a mode that opts into the hook.
+
+    The caller owns the per-conversation state and records a knowledge read only
+    after observing its successful result. This function performs no state writes.
+    """
+    match _hooked(repo, "knowledge_first"):
+        case modes.Active(manifest=mode) if mode.knowledge == "first":
+            return knowledge_first.evaluate(current, True, available, action)
+        case _:
+            return knowledge_first.evaluate(current, False, available, action)
 
 
 def _gateway(call: rules.ToolCall) -> bool:

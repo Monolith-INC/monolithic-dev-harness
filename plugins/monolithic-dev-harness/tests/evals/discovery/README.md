@@ -1,0 +1,7 @@
+# Discovery evaluation scenarios
+
+Six manual or agent-run scenarios adapted from Agile Product 1.4.2-v5 `evals-vision/01–03` and `evals-prd/01–03`. Discovery documents are artifacts on a discovery Epic. These evaluations do not run as part of `tests/run.sh`.
+
+Run each scenario in a fresh conversation, with the harness discovery skill available. Supply `prompt.md` verbatim. Positive scenarios inline tracker results: keep actual tracker, shell, and agent dispatch unavailable, and evaluate the described action instead of making external writes. For each run, inspect the final response against `graders/outcome.md` and inspect the tool trace against the companion skill-use grader. Skill-use graders are manual trace checks, not generic `tool_used` counters: they match the discovery skill name or invocation arguments, including equivalent host activation events. Record the identifying event, and mark a missing or incomplete trace inconclusive. Negative scenarios are ordinary questions and must not invoke discovery; unrelated skill activations do not by themselves fail the skill-use criterion.
+
+The frontmatter carries the original limits of six turns, 240 seconds and three runs. The evaluator may use a suitable available model and should record the model, outcomes, and any unavailable tools; do not count a missing tool trace as a pass. These are human or agent judgments, not executable tests or proof of a live tracker integration.

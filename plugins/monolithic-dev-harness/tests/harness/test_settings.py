@@ -11,6 +11,25 @@ from tests.settings_fixture import MINIMAL
 
 
 class SettingsTest(unittest.TestCase):
+    def test_knowledge_root_is_optional_and_parsed(self) -> None:
+        self.assertEqual(settings.parse(MINIMAL).value.knowledge_root, "")
+        self.assertEqual(settings.parse(MINIMAL).value.knowledge_format, "legacy")
+        self.assertEqual(
+            settings.parse(
+                {**MINIMAL, "knowledge": {"root": "docs/knowledge"}}
+            ).value.knowledge_root,
+            "docs/knowledge",
+        )
+        self.assertEqual(
+            settings.parse(
+                {**MINIMAL, "knowledge": {"format": "markdown"}}
+            ).value.knowledge_format,
+            "markdown",
+        )
+        self.assertNotIsInstance(
+            settings.parse({**MINIMAL, "knowledge": {"format": "unknown"}}), Ok
+        )
+
     def test_omitted_sections_take_their_defaults(self) -> None:
         loaded = settings.parse(MINIMAL).value
         self.assertEqual(

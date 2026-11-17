@@ -5,7 +5,7 @@ from pathlib import Path
 import pytest
 
 from core.result import Err, Ok
-from harness import discovery, startup, work_sessions, workflow
+from harness import discovery, session_entry, startup, state, work_sessions, workflow
 from tests.harness.test_discovery_render import cli, prepare, session
 
 
@@ -13,6 +13,32 @@ from tests.harness.test_discovery_render import cli, prepare, session
 def project(tmp_path, monkeypatch):
     monkeypatch.setenv("HARNESS_USER_STATE_DIR", str(tmp_path / "preferences"))
     return prepare(tmp_path / "project")
+
+
+def capture_entry_choice(project, option_key, conversation="recovery-chat"):
+    host = "codex"
+    prepared = session_entry.current_offer(project, host, conversation).value
+    index = next(
+        index
+        for index, option in enumerate(prepared.options)
+        if option.key == option_key
+    )
+    shown = session_entry.question(prepared, "en")
+    payload = {
+        "session_id": conversation,
+        "tool_use_id": "recovery-entry-question",
+        "tool_name": "request_user_input",
+        "tool_input": {"questions": [shown]},
+    }
+    assert session_entry.observe(project, host, payload).value
+    response = {"answers": {shown["question"]: shown["options"][index]["label"]}}
+    assert (
+        session_entry.answer(
+            project, host, {**payload, "tool_response": response}
+        ).value
+        == option_key
+    )
+    return session_entry.apply_selection(project, host, conversation)
 
 
 @pytest.mark.parametrize("stage", ("discovery", "execution"))
@@ -98,7 +124,18 @@ def test_failed_first_startup_is_recoverable_but_not_implicitly_selected(
         assert isinstance(startup.begin(project, "First work"), Err)
         assert work_sessions.current(project) is None
     assert len(work_sessions.list_sessions(project).value) == 1
-    assert isinstance(startup.begin(project, "First work"), Ok)
+    menu = startup.begin(
+        project, "First work", host="codex", conversation="recovery-chat"
+    )
+    assert isinstance(menu, Ok) and menu.value["state"] == "choose_session"
+    selected = work_sessions.list_sessions(project).value[0]
+    assert capture_entry_choice(project, f"continue:{selected.id}") == Ok(selected.id)
+    assert isinstance(
+        startup.begin(
+            project, "First work", host="codex", conversation="recovery-chat"
+        ),
+        Ok,
+    )
     assert (
         work_sessions.current(project)
         == work_sessions.list_sessions(project).value[0].id
@@ -109,11 +146,23 @@ def fail_selection(*_):
     raise OSError("selection unavailable")
 
 
-def test_completed_startup_remains_eligible_after_later_selection_is_paused(project):
+def test_new_choice_pauses_saved_work_without_losing_the_previous_pointer(project):
     first = startup.begin(project, "First work").value["session_id"]
-    second = startup.begin(project, "Second work", new=True).value["session_id"]
-    assert isinstance(work_sessions.transition(project, second, "pause"), Ok)
-    assert work_sessions.current(project) == first
+    menu = startup.begin(
+        project, "Second work", host="codex", conversation="recovery-chat"
+    )
+    assert isinstance(menu, Ok) and menu.value["state"] == "choose_session"
+    new_session = capture_entry_choice(project, "new:pause")
+    assert isinstance(new_session, Ok)
+    assert (
+        work_sessions.select(project, new_session.value).value.request == "Second work"
+    )
+    assert (
+        work_sessions.select(project, first).value.status == work_sessions.Status.PAUSED
+    )
+    assert (
+        state.read_json(work_sessions.root(project) / work_sessions.CURRENT) or {}
+    ).get("id") == first
 
 
 def test_legacy_session_preserves_implicit_selection(project):

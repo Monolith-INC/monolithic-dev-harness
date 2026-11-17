@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Saved ordinary work can be selected through a human choice when a conversation starts work;
+  mode sessions remain hidden. Session-start hooks orient Claude and Codex conversations without
+  selecting work, and a continued question must be presented again before its answer is recorded.
+- Discovery can consult a Markdown project-knowledge store with bounded catalog, search, fetch and
+  link commands. A knowledge-first reminder applies when the configured store has verifiably fresh
+  sources. Existing JSON stores remain the default and are not migrated automatically.
+
 ### Fixed
 
 - A new Azure DevOps item goes to the current sprint when Azure marks that sprint with the word

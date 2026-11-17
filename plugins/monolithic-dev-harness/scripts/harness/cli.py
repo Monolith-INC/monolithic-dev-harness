@@ -588,7 +588,167 @@ def preference_command(args: argparse.Namespace) -> int:
             return 2
 
 
+def knowledge_root(repo: Path, configured: settings.Settings) -> Path:
+    """Resolve the configured store or the store beside project artifacts."""
+    return repo.resolve() / (
+        Path(configured.knowledge_root)
+        if configured.knowledge_root
+        else Path(configured.artifacts_path) / "Project_Knowledge"
+    )
+
+
 def knowledge_command(args: argparse.Namespace) -> int:
+    repo = Path(args.repo).resolve()
+    match args.operation:
+        case "migrate":
+            return migrate_knowledge_command(args, repo)
+        case _:
+            match settings.load(repo):
+                case Ok(chosen) if chosen.knowledge_format == "markdown":
+                    match args.legacy:
+                        case True:
+                            return _legacy_knowledge_command(args)
+                        case False:
+                            return _markdown_knowledge_command(
+                                args, knowledge_root(repo, chosen)
+                            )
+                case Err(failure) if settings.path(repo).exists():
+                    print(failure.message, file=sys.stderr)
+                    return 2
+                case _:
+                    return _legacy_knowledge_command(args)
+
+
+def migrate_knowledge_command(args: argparse.Namespace, repo: Path) -> int:
+    match args.destination:
+        case None | "":
+            print(
+                "Migration requires an explicit --destination; legacy data is never moved or replaced.",
+                file=sys.stderr,
+            )
+            return 2
+        case destination_text:
+            from project_knowledge import migration
+
+            destination = Path(destination_text)
+            destination = (
+                destination if destination.is_absolute() else repo / destination
+            )
+            return print_result(
+                bind(
+                    legacy_migration_source(repo, args.store),
+                    lambda source: migration.migrate(source, destination),
+                )
+            )
+
+
+def legacy_migration_source(repo: Path, store_id: str) -> Result[Path]:
+    def resolve() -> Path:
+        stores = repo / ".harness" / "knowledge" / "stores"
+        source = stores / store_id
+        paths = (
+            repo / ".harness",
+            repo / ".harness" / "knowledge",
+            stores,
+            source,
+        )
+        match (
+            knowledge.STORE_ID_RE.fullmatch(store_id),
+            tuple(path for path in paths if path.is_symlink()),
+        ):
+            case None, _:
+                raise ValueError("legacy store id is invalid")
+            case _, symlinks if symlinks:
+                raise ValueError("legacy store paths cannot contain symbolic links")
+            case _:
+                pass
+        resolved_stores = stores.resolve(strict=True)
+        resolved_source = source.resolve(strict=True)
+        match resolved_source.is_relative_to(resolved_stores), resolved_source.is_dir():
+            case True, True:
+                return source
+            case _:
+                raise ValueError(
+                    "legacy store must be inside its configured store root"
+                )
+
+    return attempt(
+        resolve,
+        "knowledge_migration_source_invalid",
+        "Could not safely resolve the legacy knowledge store",
+        OSError,
+        ValueError,
+    )
+
+
+def _markdown_knowledge_command(args: argparse.Namespace, root: Path) -> int:
+    from project_knowledge import service
+
+    match args.store:
+        case "project":
+            pass
+        case _:
+            print(
+                "The selected Markdown store does not use --store; configure its root instead.",
+                file=sys.stderr,
+            )
+            return 2
+    match args.operation:
+        case "catalog":
+            return print_result(service.catalog(root))
+        case "find":
+            return print_result(
+                service.find(
+                    root,
+                    " ".join(value for value in (args.address, *args.terms) if value),
+                )
+            )
+        case "fetch" if args.address:
+            return print_result(
+                service.fetch(
+                    root,
+                    args.address,
+                    anchor=args.anchor,
+                    start_line=args.start_line,
+                    start_column=args.start_column,
+                    max_tokens=args.max_tokens,
+                )
+            )
+        case "links" if args.address:
+            return print_result(service.links(root, args.address))
+        case _:
+            print(
+                "The selected Markdown knowledge store supports read-only catalog, find, fetch and links; legacy revisions remain in the legacy store.",
+                file=sys.stderr,
+            )
+            return 2
+
+
+def _legacy_knowledge_command(args: argparse.Namespace) -> int:
+    match args.operation:
+        case "init" | "refresh" if args.legacy:
+            print(
+                "The --legacy compatibility path is read-only; use the legacy configuration to initialize or refresh.",
+                file=sys.stderr,
+            )
+            return 2
+        case _:
+            pass
+    match (args.anchor, args.start_line, args.start_column, args.max_tokens):
+        case (None, None, 0, 2000):
+            pass
+        case _:
+            print(
+                "Fetch range options require the Markdown knowledge store.",
+                file=sys.stderr,
+            )
+            return 2
+    match args.operation:
+        case "links":
+            print("Knowledge links are available for Markdown stores.", file=sys.stderr)
+            return 2
+        case _:
+            pass
     try:
         result = {
             "init": lambda: knowledge.initialize(Path(args.repo), args.store),
@@ -801,12 +961,34 @@ def parser() -> argparse.ArgumentParser:
     )
     knowledge_parser.add_argument(
         "operation",
-        choices=("init", "refresh", "catalog", "find", "resolve", "fetch", "status"),
+        choices=(
+            "init",
+            "refresh",
+            "catalog",
+            "find",
+            "resolve",
+            "fetch",
+            "status",
+            "links",
+            "migrate",
+        ),
     )
     knowledge_parser.add_argument("address", nargs="?")
     knowledge_parser.add_argument("terms", nargs="*")
     knowledge_parser.add_argument("--repo", default=".")
     knowledge_parser.add_argument("--store", default="project")
+    knowledge_parser.add_argument(
+        "--destination", help="new Markdown store path (required for migrate)"
+    )
+    knowledge_parser.add_argument(
+        "--legacy",
+        action="store_true",
+        help="query the legacy JSON store even when Markdown is selected",
+    )
+    knowledge_parser.add_argument("--anchor")
+    knowledge_parser.add_argument("--start-line", type=int)
+    knowledge_parser.add_argument("--start-column", type=int, default=0)
+    knowledge_parser.add_argument("--max-tokens", type=int, default=2000)
     modes_parser = sub.add_parser(
         "modes",
         help="enter, leave, or show the active mode, or print the step its work is at",

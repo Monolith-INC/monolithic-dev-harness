@@ -14,8 +14,10 @@ def parse_cursor_payload(
     return parse_policy_event("cursor", payload, project_root)
 
 
-def cursor_session_id(_payload: dict[str, Any]) -> str:
-    return ""
+def cursor_session_id(payload: dict[str, Any]) -> str:
+    """Cursor supplies a stable conversation id on its documented agent hook payloads."""
+    value = payload.get("conversation_id")
+    return value.strip() if isinstance(value, str) else ""
 
 
 def format_cursor_decision(decision: PolicyDecision) -> dict[str, Any]:

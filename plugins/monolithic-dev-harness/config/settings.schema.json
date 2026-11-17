@@ -54,6 +54,14 @@
       "minLength": 1,
       "description": "Where plans, specs, backlog drafts, and reports live (the repository's vault or docs folder)."
     },
+    "knowledge": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "root": {"type": "string", "minLength": 1},
+        "format": {"enum": ["legacy", "markdown"]}
+      }
+    },
     "git": {
       "type": "object",
       "additionalProperties": false,

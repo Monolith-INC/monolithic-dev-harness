@@ -382,6 +382,38 @@ def question_id(payload: dict[str, Any]) -> str:
     return str(payload.get("tool_use_id") or "")
 
 
+def post_tool_response(host: str, payload: dict[str, Any]) -> Any:
+    """Return a host's observed post-tool result in the shared exit_code shape.
+
+    Cursor documents ``tool_output`` as JSON text with ``exitCode`` and optional
+    stdout. Missing, malformed, or status-free results are deliberately unknown.
+    """
+    match (host, payload.get("tool_response"), payload.get("tool_output")):
+        case (_, dict() as response, _):
+            return response
+        case (_, str() as response, _):
+            return response
+        case ("cursor", _, str() as serialized):
+            try:
+                output = json.loads(serialized)
+            except json.JSONDecodeError:
+                return None
+            match output:
+                case {"exitCode": int() as code} if type(code) is int:
+                    return {
+                        "exit_code": code,
+                        **(
+                            {"stdout": output["stdout"]}
+                            if isinstance(output.get("stdout"), str)
+                            else {}
+                        ),
+                    }
+                case _:
+                    return None
+        case _:
+            return None
+
+
 def answer_response(payload: dict[str, Any]) -> Result[dict[str, Any] | None]:
     """Codex function outputs are JSON text; Claude may supply an object already."""
     match payload.get("tool_response"):

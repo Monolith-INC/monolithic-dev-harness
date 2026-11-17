@@ -215,10 +215,12 @@ class Active:
 @dataclass(frozen=True)
 class Resolution:
     """What a read of the mode found. `notice` is one line for the agent when the read repaired
-    the mode or could not, and empty otherwise. It never names the work session."""
+    the mode or could not, and empty otherwise. `user_notice` marks an independent user-visible
+    notice. Neither field names the work session."""
 
     active: Active | None
     notice: str = ""
+    user_notice: bool = False
 
     @property
     def repaired(self) -> bool:

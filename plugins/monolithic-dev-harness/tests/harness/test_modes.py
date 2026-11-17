@@ -265,10 +265,26 @@ def test_the_discovery_mode_loads() -> None:
     assert mode.name == "discovery"
     assert mode.entry_skill == "discovery"
     assert mode.operations == DISCOVERY_OPERATIONS
-    assert mode.hooks == ("orient", "operations")
+    assert mode.hooks == ("orient", "operations", "knowledge_first")
     assert mode.knowledge == "first"
     assert mode.exit == ("The PRD is approved.",)
     assert "discovery" in modes.available()
+
+
+def test_discovery_references_the_unified_knowledge_skill() -> None:
+    mode = discovery()
+    skill = modes.SKILLS_ROOT / "discovery" / "SKILL.md"
+    references = skill.read_text("utf-8")
+
+    assert "knowledge" in {item.name for item in mode.skills}
+    assert "knowledge-acquire" not in references
+    assert "knowledge" in references
+    assert (modes.SKILLS_ROOT / "knowledge" / "SKILL.md").is_file()
+
+    instructions = (modes.SKILLS_ROOT / "knowledge" / "SKILL.md").read_text("utf-8")
+    assert "Legacy revision stores" in instructions
+    assert "refresh --store project" in instructions
+    assert "Markdown store" in instructions
 
 
 def test_the_discovery_rules_are_imperatives_only() -> None:

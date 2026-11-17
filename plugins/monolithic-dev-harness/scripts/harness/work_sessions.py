@@ -7,6 +7,7 @@ session in :mod:`harness.sessions`. They require no tracker, Git branch, or proj
 from __future__ import annotations
 
 import json
+import re
 import secrets
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
@@ -14,7 +15,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Any
 
-from core.result import Ok, Result, attempt, bind, err, fmap, require
+from core.result import Err, Ok, Result, attempt, bind, err, fmap, require
 
 from . import state
 
@@ -196,19 +197,66 @@ def create(
     )
 
 
+def create_reserved(project: Path, request: str, identifier: str) -> Result[Session]:
+    """Create or find one previously reserved session; never adopt a conflicting record."""
+    match bool(re.fullmatch(r"WS-[0-9a-f]{24}", identifier)), bool(request.strip()):
+        case True, True:
+            return _create_reserved(project.resolve(), request.strip(), identifier)
+        case _:
+            return err(
+                "invalid_session", "A reserved session needs a valid ID and request."
+            )
+
+
+def _create_reserved(project: Path, request: str, identifier: str) -> Result[Session]:
+    match select(project, identifier):
+        case Ok(session):
+            return (
+                Ok(session)
+                if session.request == request and not session.mode_session
+                else err(
+                    "session_conflict", "The reserved session contains other work."
+                )
+            )
+        case Err(failure) if failure.code == "session_not_found":
+            match attempt(
+                lambda: _create(project, request, False, "", "", identifier),
+                "session_unwritable",
+                "Could not create the reserved work session",
+                OSError,
+            ):
+                case Ok() as created:
+                    return created
+                case Err() as failed:
+                    match select(project, identifier):
+                        case Ok(session) if (
+                            session.request == request and not session.mode_session
+                        ):
+                            return Ok(session)
+                        case _:
+                            return failed
+        case Err() as failed:
+            return failed
+
+
 def _remembered(project: Path, session: Session) -> Session:
     remember_current(project, session.id)
     return session
 
 
 def _create(
-    project: Path, request: str, implicit_selection: bool, mode: str, mode_root: str
+    project: Path,
+    request: str,
+    implicit_selection: bool,
+    mode: str,
+    mode_root: str,
+    reserved_id: str = "",
 ) -> Session:
     state.ensure_local_exclude(project)
-    identifier = "WS-" + secrets.token_hex(6)
+    identifier = reserved_id or "WS-" + secrets.token_hex(6)
     sessions_root = root(project)
     folder = sessions_root / identifier
-    staging = sessions_root / ("." + identifier + ".tmp")
+    staging = sessions_root / ("." + identifier + "." + secrets.token_hex(6) + ".tmp")
     now = _now()
     session = Session(
         id=identifier,
@@ -314,6 +362,18 @@ def list_sessions(project: Path) -> Result[tuple[Session, ...]]:
         sorted(path.parent for path in root(project).glob("*/session.json"))
     )
     return _read_many(project.resolve(), folders)
+
+
+def scan(project: Path) -> tuple[tuple[Session, ...], tuple[Path, ...]]:
+    """Report readable sessions and damaged records without hiding either."""
+    records = tuple(
+        (path, _read(project.resolve(), path.parent))
+        for path in sorted(root(project).glob("*/session.json"))
+    )
+    return (
+        tuple(result.value for _, result in records if isinstance(result, Ok)),
+        tuple(path for path, result in records if isinstance(result, Err)),
+    )
 
 
 def chosen_among(sessions: tuple[Session, ...]) -> tuple[Session, ...]:

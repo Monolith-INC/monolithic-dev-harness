@@ -6,7 +6,10 @@ import hashlib
 import json
 import subprocess
 import sys
+import threading
 from pathlib import Path
+
+import pytest
 
 from core.result import Err, Ok
 from harness import decisions, review_decisions, state, work_sessions, workflow
@@ -399,6 +402,101 @@ def test_replayed_chat_answer_cannot_change_a_resolved_decision(tmp_path: Path) 
     assert resolved["status"] == "answered"
     assert current["status"] == "answered"
     assert current["answer"] == "Continue"
+
+
+@pytest.mark.parametrize("transition", ("bind", "fallback", "adopt"))
+def test_decision_delivery_transition_cannot_resurrect_resolved_record(
+    tmp_path: Path, monkeypatch, transition: str
+) -> None:
+    from threading import current_thread
+
+    assert isinstance(
+        decisions.begin(
+            tmp_path,
+            "decision-race",
+            "Continue?",
+            ("Continue", "Stop"),
+            "chat",
+            native_session_id="conversation",
+        ),
+        Ok,
+    )
+    path = tmp_path / decisions.RELATIVE_PATH
+    original_read = state.read_json
+    original_lock = decisions._locked
+    transition_read = threading.Event()
+    resolution_waiting = threading.Event()
+    release_transition = threading.Event()
+    outcomes: dict[str, object] = {}
+
+    def controlled_read(candidate):
+        snapshot = original_read(candidate)
+        if candidate == path and current_thread().name == "delivery-transition":
+            transition_read.set()
+            assert release_transition.wait(5)
+        return snapshot
+
+    def observed_lock(candidate, action):
+        if current_thread().name == "resolver":
+            resolution_waiting.set()
+        return original_lock(candidate, action)
+
+    monkeypatch.setattr(state, "read_json", controlled_read)
+    monkeypatch.setattr(decisions, "_locked", observed_lock)
+
+    def deliver():
+        match transition:
+            case "bind":
+                return decisions.bind_question(
+                    tmp_path,
+                    "decision-race",
+                    "question-call",
+                    "Continue?",
+                    ("Continue", "Stop"),
+                    "blocking",
+                    native_session="conversation",
+                )
+            case "fallback":
+                return decisions.fallback(tmp_path, "blocking")
+            case "adopt":
+                return decisions.adopt_native_async(
+                    tmp_path,
+                    "decision-race",
+                    "Continue?",
+                    ("Continue", "Stop"),
+                    "conversation",
+                )
+
+    delivery_thread = threading.Thread(
+        name="delivery-transition",
+        target=lambda: outcomes.update(delivery=deliver()),
+    )
+    delivery_thread.start()
+    assert transition_read.wait(5)
+    resolver_thread = threading.Thread(
+        name="resolver",
+        target=lambda: outcomes.update(
+            resolution=decisions.resolve(
+                tmp_path,
+                "decision-race",
+                "Continue",
+                {"bind": "chat", "fallback": "blocking", "adopt": "async"}[transition],
+            )
+        ),
+    )
+    resolver_thread.start()
+    assert resolution_waiting.wait(5)
+    release_transition.set()
+    delivery_thread.join(5)
+    resolver_thread.join(5)
+
+    assert not delivery_thread.is_alive()
+    assert not resolver_thread.is_alive()
+    assert isinstance(outcomes.get("delivery"), Ok)
+    assert isinstance(outcomes.get("resolution"), Ok)
+    record = decisions.record(tmp_path) or {}
+    assert record.get("status") == "answered"
+    assert record.get("answer") == "Continue"
 
 
 def test_blocking_acknowledgment_does_not_resolve_pending(tmp_path: Path) -> None:

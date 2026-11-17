@@ -42,11 +42,13 @@ def test_manifest_routes_native_controls(name, tmp_path, monkeypatch):
     )
     monkeypatch.setattr(
         hook,
-        "handle_ask",
-        lambda host, payload: routed.append((host, payload["tool_name"])) or 0,
+        "_handle_ask",
+        lambda host, payload, *, observe_entry: (
+            routed.append((host, payload["tool_name"], observe_entry)) or 0
+        ),
     )
     assert hook.main(["--host", "codex", "--event", "pre-tool"]) == 0
-    assert routed == [("codex", name)]
+    assert routed == [("codex", name, False)]
     assert question_transport("codex", name) == (
         "async" if name.endswith("_async") else "blocking"
     )

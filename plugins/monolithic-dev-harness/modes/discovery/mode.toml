@@ -18,11 +18,11 @@ operations = [
   "tracker_publish_artifact",
   "tracker_revise_artifact",
 ]
-hooks = ["orient", "operations"]
+hooks = ["orient", "operations", "knowledge_first"]
 exit = ["The PRD is approved."]
 
 [[skills]]
-name = "knowledge-acquire"
+name = "knowledge"
 when = "At most once before step 1, to find what the project already records; skipped without comment when the store is empty or stale."
 
 [[skills]]

@@ -63,6 +63,12 @@ A **one-off question** that no gate covers (a product choice specific to this wo
 `--allow-free-text` when a typed direction is a valid answer. Write it in the project's language.
 Approvals are never one-off: they always come from a gate, which fixes what they are tied to.
 
+When `harness begin` returns `choose_session`, run the returned command and present its exact
+saved-work question. A human response selects the work; repeat the original `begin` after the
+choice is recorded. A transferred pending question remains unanswered until it is presented
+again in the new conversation. If a host cannot provide an observed question control, leave the
+choice pending and continue in a supported host or the conversation that saw the question.
+
 The command returns one of:
 
 - `"state": "already_answered"`: the human already answered this question about the same,

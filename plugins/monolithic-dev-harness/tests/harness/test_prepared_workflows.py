@@ -348,7 +348,7 @@ class PreparedWorkflowTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         package = json.loads(result.stdout)
         self.assertIn(
-            "knowledge-acquire",
+            "knowledge",
             {skill["name"] for skill in package["recommended_skills"]},
         )
         self.assertIn(

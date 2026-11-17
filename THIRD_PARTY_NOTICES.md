@@ -9,6 +9,7 @@ revision (not a working tree) and adapted in place. License texts are in
 | Backlog skills, `common/`, `references/`, `runtime/orchestrator_core/`, `tests/backlog/` | agile-backlog-toolkit | `e7ae82c` | MIT (`agile-backlog-toolkit.LICENSE`) |
 | Delivery skills, `scripts/` (policy, Claude and Cursor host adapters, orchestrator), `tests/delivery/` | codex-workflows-plugin (Monolith-INC) | `75c22f0` | no license file in the source repository; internal |
 | `review-story-preflight`, `review-setup`, `review-typescript`, `review-maintainability`, `triage-pr-comments`, `respond-pr-comments` | monolithic-code-review-toolkit (Monolith-INC) | `9f3c6a4` | MIT (`monolithic-code-review-toolkit.LICENSE`) |
+| `scripts/project_knowledge/store.py`, `scripts/project_knowledge/present.py` | monolithic-code-review-toolkit (Monolith-INC) | `3af148b44421521bb453be0abea05750e45f6f8a` | MIT (`monolithic-code-review-toolkit.LICENSE`) |
 | `thermos`, `thermo-nuclear-review`, `thermo-nuclear-code-quality-review`, `agents/thermo-*` | thermos-claude (Claude adaptation of cursor/plugins `thermos`) | HEAD at copy time | MIT (`thermos.LICENSE`) |
 | `deslop`, `verify-this`; adapted: `check`, `branch-and-pr` | cursor/plugins `cursor-team-kit` | `46756f8` | MIT (`cursor-team-kit.LICENSE`) |
 | `prove-it-works`, `sequence-verifiable-units`, `architect/references/*`; adapted: `architect`, `tdd` | cursor/plugins `pstack` (Lauren Tan) | `46756f8` | MIT (`pstack.LICENSE`) |

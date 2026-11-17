@@ -71,6 +71,30 @@ def fallback(repo: Path, *available: str) -> subprocess.CompletedProcess[str]:
     )
 
 
+def show_pending(repo: Path, session_id: str) -> None:
+    record = decisions.record(repo)
+    assert record is not None
+    native(
+        repo,
+        "ask",
+        {
+            "session_id": session_id,
+            "tool_name": "request_user_input",
+            "tool_use_id": "observed-fallback-question",
+            "tool_input": {
+                "questions": [
+                    {
+                        "id": "fallback-question",
+                        "header": "Review",
+                        "question": record["question"],
+                        "options": [{"label": option} for option in record["options"]],
+                    }
+                ]
+            },
+        },
+    )
+
+
 def test_failed_blocking_control_uses_chat_when_async_is_unqualified(
     tmp_path: Path,
 ) -> None:
@@ -90,7 +114,12 @@ def test_failed_blocking_control_uses_chat_when_async_is_unqualified(
         case result:
             assert result.returncode == 0, result.stderr
     assert decisions.waiting(tmp_path)
-    native(tmp_path, "prompt", {"prompt": "Yes"})
+    show_pending(tmp_path, "current-chat")
+    native(
+        tmp_path,
+        "prompt",
+        {"session_id": "current-chat", "prompt": "Yes"},
+    )
     assert decisions.record(tmp_path)["answer"] == "Yes"
     assert state.active_approval(tmp_path) is None
 
@@ -103,7 +132,8 @@ def test_chat_fallback_preserves_checked_approval_and_prevents_replay(
     assert fallback(tmp_path).returncode == 0
     assert decisions.waiting(tmp_path)
     assert state.active_approval(tmp_path) is None
-    native(tmp_path, "prompt", {"prompt": "Approve"})
+    show_pending(tmp_path, "current-chat")
+    native(tmp_path, "prompt", {"session_id": "current-chat", "prompt": "Approve"})
     assert not decisions.waiting(tmp_path)
     assert state.active_approval(tmp_path) is not None
     state.revoke_approvals(tmp_path)
@@ -111,7 +141,7 @@ def test_chat_fallback_preserves_checked_approval_and_prevents_replay(
     assert state.active_approval(tmp_path) is None
 
 
-def test_fallback_rebinds_pending_answer_to_the_current_codex_chat(
+def test_fallback_does_not_rebind_pending_answer_without_explicit_handover(
     tmp_path: Path, monkeypatch
 ) -> None:
     assert isinstance(
@@ -125,14 +155,75 @@ def test_fallback_rebinds_pending_answer_to_the_current_codex_chat(
         ),
         Ok,
     )
+    show_pending(tmp_path, "original-root")
     monkeypatch.setenv("CODEX_THREAD_ID", "recovery-root")
 
     assert fallback(tmp_path, "--async-available").returncode == 0
-    assert decisions.record(tmp_path)["native_session_id"] == "recovery-root"
+    assert decisions.record(tmp_path)["native_session_id"] == "original-root"
     assert decisions.record(tmp_path)["answer"] == ""
 
-    native(tmp_path, "prompt", {"session_id": "original-root", "prompt": "Yes"})
+    native(tmp_path, "prompt", {"session_id": "recovery-root", "prompt": "Yes"})
     assert decisions.waiting(tmp_path)
+    assert decisions.record(tmp_path)["answer"] == ""
+    native(tmp_path, "prompt", {"session_id": "original-root", "prompt": "Yes"})
+    assert not decisions.waiting(tmp_path)
+    assert decisions.record(tmp_path)["answer"] == "Yes"
+
+
+def test_explicit_handover_needs_host_observed_question_before_answer(
+    tmp_path: Path, monkeypatch
+) -> None:
+    assert isinstance(
+        decisions.begin(
+            tmp_path,
+            "native-handover",
+            "Confirm recovery?",
+            ("Yes", "No"),
+            "blocking",
+            native_session_id="original-root",
+        ),
+        Ok,
+    )
+    monkeypatch.setenv("CODEX_THREAD_ID", "recovery-root")
+    assert isinstance(decisions.hand_over(tmp_path, None, "recovery-root"), Ok)
+
+    assert fallback(tmp_path).returncode == 0
+    prepared = decisions.record(tmp_path)
+    assert prepared["native_session_id"] == "recovery-root"
+    assert prepared["handover_pending"] is True
+    assert not decisions.presented_here(prepared, "recovery-root")
+
+    native(tmp_path, "prompt", {"session_id": "recovery-root", "prompt": "Yes"})
+    assert decisions.waiting(tmp_path)
+    assert decisions.record(tmp_path)["answer"] == ""
+
+    native_reask = fallback(tmp_path, "--blocking-available")
+    assert native_reask.returncode == 0, (native_reask.stdout, native_reask.stderr)
+    assert json.loads(native_reask.stdout)["transport"] == "blocking"
+
+    native(
+        tmp_path,
+        "ask",
+        {
+            "session_id": "recovery-root",
+            "tool_name": "request_user_input",
+            "tool_use_id": "observed-recovery-question",
+            "tool_input": {
+                "questions": [
+                    {
+                        "id": "recovery-confirmation",
+                        "header": "Review",
+                        "question": "Confirm recovery?",
+                        "options": [{"label": "Yes"}, {"label": "No"}],
+                    }
+                ]
+            },
+        },
+    )
+    shown = decisions.record(tmp_path)
+    assert shown["handover_pending"] is False
+    assert decisions.presented_here(shown, "recovery-root")
+
     native(tmp_path, "prompt", {"session_id": "recovery-root", "prompt": "Yes"})
     assert not decisions.waiting(tmp_path)
     assert decisions.record(tmp_path)["answer"] == "Yes"
@@ -344,9 +435,14 @@ def test_route_fallback_accepts_the_actual_chat_request(tmp_path: Path) -> None:
     write_settings(tmp_path)
     ask(tmp_path)
     assert fallback(tmp_path).returncode == 0
-    native(tmp_path, "prompt", {"prompt": "harness revoke"})
+    show_pending(tmp_path, "chat-root")
+    native(tmp_path, "prompt", {"session_id": "chat-root", "prompt": "harness revoke"})
     assert decisions.waiting(tmp_path)
-    native(tmp_path, "prompt", {"prompt": "backlog/DAY-003-shared-lists.md"})
+    native(
+        tmp_path,
+        "prompt",
+        {"session_id": "chat-root", "prompt": "backlog/DAY-003-shared-lists.md"},
+    )
     assert decisions.record(tmp_path)["answer"] == "backlog/DAY-003-shared-lists.md"
     assert state.active_approval(tmp_path) is None
 
@@ -372,10 +468,11 @@ def test_fallback_preserves_stale_review_protection(tmp_path: Path) -> None:
     )
     assert fallback(tmp_path).returncode == 0
     (tmp_path / "review.md").write_text("different review")
-    native(tmp_path, "prompt", {"prompt": "Approve"})
+    show_pending(tmp_path, "review-chat")
+    native(tmp_path, "prompt", {"session_id": "review-chat", "prompt": "Approve"})
     assert decisions.waiting(tmp_path)
     assert state.active_approval(tmp_path) is None
-    native(tmp_path, "prompt", {"prompt": "Revise"})
+    native(tmp_path, "prompt", {"session_id": "review-chat", "prompt": "Revise"})
     assert not decisions.waiting(tmp_path)
 
 

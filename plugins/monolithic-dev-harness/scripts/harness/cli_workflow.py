@@ -127,6 +127,11 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     )
     begin_parser.add_argument("--repo", default=".")
     begin_parser.add_argument(
+        "--host",
+        choices=("codex", "claude", "cursor", "zed", "kimi", "text"),
+        default=_default_decision_host(),
+    )
+    begin_parser.add_argument(
         "--session", help="continue this saved work session (the user chose it)"
     )
     begin_parser.add_argument(
@@ -255,6 +260,10 @@ def add_parsers(sub: argparse._SubParsersAction) -> None:
     decision_parser.add_argument("--decision-id")
     decision_parser.add_argument("--repo", default=".")
     decision_parser.add_argument(
+        "--entry-request",
+        help="the exact begin request whose trusted host invocation owns this saved-work choice",
+    )
+    decision_parser.add_argument(
         "--session-id", help="scope the question to a project work session"
     )
     decision_parser.add_argument(
@@ -358,10 +367,17 @@ def run(args: argparse.Namespace) -> int:
                 )
             )
         case "begin":
+            from host_adapters import conversation_id
+
             return print_result(
                 fmap(
                     startup.begin(
-                        resolve_repo(args.repo), args.request, args.session, args.new
+                        resolve_repo(args.repo),
+                        args.request,
+                        args.session,
+                        args.new,
+                        args.host,
+                        conversation_id(args.host),
                     ),
                     lambda value: json.dumps(value, ensure_ascii=False),
                 )
@@ -532,10 +548,11 @@ def decision_command(args: argparse.Namespace) -> int:
             or args.artifact
             or args.approval
             or args.allow_free_text
-            or args.blocking_available
         ):
             return _fallback_decision(repo, args)
         case "present":
+            if args.gate == "session-entry":
+                return _present_session_entry(repo, args)
             from harness.workflow_evidence import gate_ready
 
             match gate_ready(
@@ -700,6 +717,107 @@ def decision_command(args: argparse.Namespace) -> int:
             )
         case _:
             return 2
+
+
+def _present_session_entry(repo: Path, args: argparse.Namespace) -> int:
+    from harness import session_entry
+    from harness.startup_receipts import Invocation
+    from host_adapters import conversation_id, startup_context
+
+    conversation = conversation_id(args.host)
+    if args.host == "cursor" and not conversation:
+        match session_entry.current_offer_for_request(
+            repo, args.host, args.entry_request or ""
+        ):
+            case Ok(prepared):
+                pass
+            case Err(failure):
+                return print_result(Err(failure))
+    else:
+        prepared = None
+    match bool(conversation), args.entry_request:
+        case False, str() as request if args.host == "cursor" and prepared is not None:
+            pass
+        case False, str() as request if request:
+            match startup_context.identity_for_invocation(
+                repo, Invocation(request), args.host
+            ):
+                case Err() as failure:
+                    return print_result(Err(failure))
+                case Ok((resolved_host, resolved_conversation)):
+                    args.host, conversation = resolved_host, resolved_conversation
+                case _:
+                    return print_result(
+                        err(
+                            "entry_identity_missing",
+                            "The original trusted begin invocation is no longer available; run harness begin again from this conversation.",
+                        )
+                    )
+        case False, _:
+            return print_result(
+                err(
+                    "entry_identity_missing",
+                    "This host did not provide a conversation identity or a matching trusted begin invocation.",
+                )
+            )
+        case _:
+            pass
+    if prepared is None:
+        match session_entry.current_offer(repo, args.host, conversation):
+            case Err(failure):
+                return print_result(Err(failure))
+            case Ok(found):
+                prepared = found
+    wording = session_entry.question(prepared, _language(repo))
+    over_native_limit = len(wording["options"]) > 3
+    shown = present(
+        {
+            "id": decisions.new_key(),
+            "header": "Work",
+            "question": wording["question"],
+            "options": [{"label": option["label"]} for option in wording["options"]],
+        },
+        args.host,
+        not over_native_limit
+        and (
+            args.blocking_available
+            or (
+                args.host in ("codex", "claude")
+                and not args.async_available
+                and not args.native_unavailable
+            )
+        ),
+        args.async_available and not over_native_limit,
+        language=_language(repo),
+        codex_profile=None,
+        decision=DecisionContext(
+            kind="required", structured_required=not args.native_unavailable
+        ),
+    )
+    if shown.get("transport") == "chat" and args.host != "cursor":
+        return print_result(
+            err(
+                "entry_native_required",
+                "Saved-work choices require a host-observed native question; chat output cannot count as a human choice. Invoke the host's native question tool with the current saved-work question. If unavailable, leave this choice pending and continue in a host that supports native questions.",
+            )
+        )
+    instruction = (
+        "Display the returned menu text exactly. The user's next reply is accepted only if the completed Cursor assistant response contains this exact menu and the reply selects one of its listed options. Do not choose or create work before that reply."
+        if args.host == "cursor" and shown.get("transport") == "chat"
+        else "The saved-work choice is waiting for the user's answer. Do not select or create work before the host records it."
+    )
+    return print_result(
+        Ok(
+            json.dumps(
+                {
+                    **shown,
+                    "state": "choose_session",
+                    "instruction": instruction,
+                },
+                ensure_ascii=False,
+            )
+        )
+    )
 
 
 def _manual_binds(repo: Path, values: list[str] | None) -> dict:
@@ -889,30 +1007,39 @@ def _fallback_decision(repo: Path, args: argparse.Namespace) -> int:
         case None:
             return print_result(err("decision_invalid", "no question is waiting"))
         case pending:
+            shown = present(
+                {
+                    "id": pending.id,
+                    "header": "Review",
+                    "question": pending.question,
+                    "options": _choice_options(pending.options, pending.details),
+                },
+                args.host,
+                args.blocking_available,
+                args.async_available and pending.transport == "blocking",
+                free_text=pending.allow_free_text,
+                language=_language(repo),
+                codex_profile=_fallback_profile(repo, args.host, pending.transport),
+                decision=DecisionContext(
+                    kind=pending.kind,
+                    approval=pending.approval,
+                    structured_required=False,
+                ),
+            )
             return _show_fallback(
                 repo,
                 args,
                 pending,
-                present(
-                    {
-                        "id": pending.id,
-                        "header": "Review",
-                        "question": pending.question,
-                        "options": _choice_options(pending.options, pending.details),
-                    },
-                    args.host,
-                    False,
-                    args.async_available and pending.transport == "blocking",
-                    free_text=pending.allow_free_text,
-                    language=_language(repo),
-                    codex_profile=_fallback_profile(repo, args.host, pending.transport),
-                    decision=DecisionContext(
-                        kind=pending.kind,
-                        approval=pending.approval,
-                        structured_required=False,
-                    ),
-                ),
+                _fallback_metadata(shown, args.host),
             )
+
+
+def _fallback_metadata(shown: dict, host: str) -> dict:
+    match host, "structured_qualified" in shown:
+        case "codex", False:
+            return {**shown, "structured_qualified": False}
+        case _:
+            return shown
 
 
 def _codex_profile(repo: Path, host: str) -> CodexRuntimeProfile | None:
@@ -933,6 +1060,8 @@ def _fallback_profile(
     match host, transport:
         case "codex", "blocking":
             return _codex_profile(repo, host)
+        case "codex", "chat":
+            return None
         case "codex", _:
             return CodexRuntimeProfile()
         case _:
@@ -951,9 +1080,6 @@ def _show_fallback(
                 repo,
                 shown["transport"],
                 work_session_id=pending.scope,
-                native_session_id={"codex": os.environ.get("CODEX_THREAD_ID", "")}.get(
-                    args.host, ""
-                ),
             ),
             lambda _: json.dumps(
                 {**shown, "decision_id": pending.id, "state": "waiting_for_human"}
