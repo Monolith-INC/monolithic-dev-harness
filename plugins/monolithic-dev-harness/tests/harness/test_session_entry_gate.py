@@ -54,11 +54,40 @@ def test_unbound_claude_begin_fails_closed_without_creating_an_offer(
     assert saved.id == before[0].id
 
 
+def test_absolute_plugin_begin_is_readable_without_harness_on_path(
+    tmp_path: Path, monkeypatch
+) -> None:
+    plugin = Path(hook.__file__).resolve().parents[2]
+    monkeypatch.setenv("PATH", "")
+    command = shlex.join(
+        (
+            str(plugin / "bin/harness"),
+            "begin",
+            "--request",
+            "New request",
+            "--repo",
+            str(tmp_path),
+        )
+    )
+
+    assert startup_context.invocation(command, tmp_path) == Invocation("New request")
+
+
 def test_claude_begin_uses_only_the_matching_trusted_host_invocation(
     tmp_path: Path, monkeypatch, capsys
 ) -> None:
     work_sessions.start(tmp_path, "Saved report")
-    command = "harness begin --request 'New request' --repo ."
+    plugin = Path(hook.__file__).resolve().parents[2]
+    command = shlex.join(
+        (
+            str(plugin / "bin/harness"),
+            "begin",
+            "--request",
+            "New request",
+            "--repo",
+            ".",
+        )
+    )
     payload = {
         "session_id": "claude-thread",
         "tool_use_id": "begin-call",
@@ -78,7 +107,6 @@ def test_claude_begin_uses_only_the_matching_trusted_host_invocation(
         tmp_path, Invocation("New request"), "claude"
     ).value == ("claude", "claude-thread")
 
-    plugin = Path(hook.__file__).resolve().parents[2]
     presented = subprocess.run(
         [
             sys.executable,
@@ -568,7 +596,16 @@ def test_cursor_installed_hooks_capture_only_the_displayed_menu_and_scoped_reply
         )
 
     request = "New Cursor request"
-    begin_command = f"harness begin --request {shlex.quote(request)} --repo {shlex.quote(str(tmp_path))}"
+    begin_command = shlex.join(
+        (
+            str(plugin / "bin/harness"),
+            "begin",
+            "--request",
+            request,
+            "--repo",
+            str(tmp_path),
+        )
+    )
     begin_payload = {
         "hook_event_name": "preToolUse",
         "conversation_id": "cursor-thread",
