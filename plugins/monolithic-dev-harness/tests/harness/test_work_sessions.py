@@ -189,8 +189,7 @@ class WorkSessionTest(unittest.TestCase):
         payload = json.loads((first.folder / "session.json").read_text())
         sessions_root = work_sessions.root(self.project)
         records = tuple(
-            (sessions_root / f"WS-{number:04d}", number)
-            for number in range(1, 1100)
+            (sessions_root / f"WS-{number:04d}", number) for number in range(1, 1100)
         )
         tuple(
             (

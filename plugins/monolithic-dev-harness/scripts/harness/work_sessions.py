@@ -474,8 +474,12 @@ def _read_many(project: Path, folders: tuple[Path, ...]) -> Result[tuple[Session
         case Err() as failure:
             return failure
         case _:
-            sessions = tuple(record.value for record in records if isinstance(record, Ok))
-            return Ok(tuple(sorted(sessions, key=lambda item: (item.created_at, item.id))))
+            sessions = tuple(
+                record.value for record in records if isinstance(record, Ok)
+            )
+            return Ok(
+                tuple(sorted(sessions, key=lambda item: (item.created_at, item.id)))
+            )
 
 
 def select(project: Path, identifier: str) -> Result[Session]:
