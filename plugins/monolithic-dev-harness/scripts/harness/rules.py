@@ -314,6 +314,12 @@ _OWNED_DIRS = (
     (".harness", "state", "checks"),
     (".harness", "state", "review"),
     (".harness", "state", "code-baselines"),
+    # Receipts and staged or ended sessions: written by the harness's own code, never by hand.
+    (".harness", "state", "plan-receipts"),
+    (".harness", "state", "requirements-receipts"),
+    (".harness", "state", "work_sessions_ended"),
+    (".harness", "state", "work_sessions_staging"),
+    (".harness", "state", "sessions-staging"),
 )
 
 
@@ -540,8 +546,9 @@ def rule_human_owned(call: ToolCall, repo: Path) -> Decision:
                     f"{_relative(repo, path)} is human-owned. Approvals, manual checks, and tracker trust are "
                     "recorded from the user's own prompt; checkout sessions change through `harness session`, "
                     "and work sessions through `harness work-session`; check results and review verdicts "
-                    "are recorded by scripts/harness/checks.py and review_verdict.py; the "
-                    "settings are edited by a person (or created once by bootstrap).",
+                    "are recorded by scripts/harness/checks.py and review_verdict.py; plan and requirements "
+                    "receipts come from `harness plan check`, and staged or ended sessions from `harness "
+                    "session`; the settings are edited by a person (or created once by bootstrap).",
                 )
     if call.kind == "shell":
         written = shell_human_owned_write(call, repo)

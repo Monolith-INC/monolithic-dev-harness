@@ -184,6 +184,34 @@ class WorkSessionTest(unittest.TestCase):
         self.assertIsInstance(result, Err)
         self.assertEqual(record.read_text(encoding="utf-8"), original)
 
+    def test_listing_many_sessions_does_not_recurse_per_record(self) -> None:
+        first = work_sessions.start(self.project, "Investigate DAY-001").value
+        payload = json.loads((first.folder / "session.json").read_text())
+        sessions_root = work_sessions.root(self.project)
+        records = tuple(
+            (sessions_root / f"WS-{number:04d}", number) for number in range(1, 1100)
+        )
+        tuple(
+            (
+                folder.mkdir(),
+                (folder / "session.json").write_text(
+                    json.dumps(
+                        {**payload, "id": folder.name, "created_at": str(number)}
+                    )
+                ),
+            )
+            for folder, number in records
+        )
+
+        listed = work_sessions.list_sessions(self.project)
+
+        self.assertIsInstance(listed, Ok)
+        self.assertEqual(len(listed.value), 1100)
+        self.assertEqual(
+            listed.value,
+            tuple(sorted(listed.value, key=lambda item: (item.created_at, item.id))),
+        )
+
     def test_cli_can_start_select_pause_stop_and_resume_without_git(self) -> None:
         def run(*args: str) -> subprocess.CompletedProcess[str]:
             return subprocess.run(
