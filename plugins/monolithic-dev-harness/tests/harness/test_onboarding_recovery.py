@@ -3,6 +3,8 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from core.result import Ok
 from harness import (
     cli,
@@ -162,6 +164,35 @@ def test_agents_cannot_forge_control_or_observation_records(tmp_path: Path) -> N
         assert not rules.rule_human_owned(
             rules.ToolCall(kind="edit", name="edit", file_paths=(str(path),)), tmp_path
         ).allowed
+
+
+@pytest.mark.parametrize(
+    "folder",
+    (
+        "plan-receipts",
+        "requirements-receipts",
+        "work_sessions_ended",
+        "work_sessions_staging",
+        "sessions-staging",
+    ),
+)
+def test_the_agent_cannot_write_a_receipt_or_archive_folder(
+    tmp_path: Path, folder: str
+) -> None:
+    relative = f".harness/state/{folder}/X.json"
+    path = tmp_path / relative
+    assert rules.is_human_owned(relative)
+    edit = rules.ToolCall(kind="edit", name="edit", file_paths=(str(path),))
+    shell = rules.make_call(
+        "shell",
+        {"command": f"echo x > {relative}"},
+        kind="shell",
+        command=f"echo x > {relative}",
+    )
+    for call in (edit, shell):
+        decision = rules.rule_human_owned(call, tmp_path)
+        assert not decision.allowed
+        assert decision.rule == "human-owned"
 
 
 def test_foreign_async_reply_is_evidence_not_an_older_decision(tmp_path: Path) -> None:

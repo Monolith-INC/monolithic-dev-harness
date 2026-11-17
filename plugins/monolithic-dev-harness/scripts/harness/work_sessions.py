@@ -469,24 +469,13 @@ def _unended(found: Result[Session]) -> tuple[Session, ...]:
 
 
 def _read_many(project: Path, folders: tuple[Path, ...]) -> Result[tuple[Session, ...]]:
-    match folders:
-        case ():
-            return Ok(())
-        case (first, *rest):
-            return bind(
-                _read(project, first),
-                lambda session: bind(
-                    _read_many(project, tuple(rest)),
-                    lambda sessions: Ok(
-                        tuple(
-                            sorted(
-                                (session, *sessions),
-                                key=lambda item: (item.created_at, item.id),
-                            )
-                        )
-                    ),
-                ),
-            )
+    records = tuple(_read(project, folder) for folder in folders)
+    match next((record for record in records if isinstance(record, Err)), None):
+        case Err() as failure:
+            return failure
+        case _:
+            sessions = tuple(record.value for record in records if isinstance(record, Ok))
+            return Ok(tuple(sorted(sessions, key=lambda item: (item.created_at, item.id))))
 
 
 def select(project: Path, identifier: str) -> Result[Session]:
