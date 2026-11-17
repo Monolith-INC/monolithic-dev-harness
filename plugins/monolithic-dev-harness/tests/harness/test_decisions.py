@@ -404,6 +404,86 @@ def test_replayed_chat_answer_cannot_change_a_resolved_decision(tmp_path: Path) 
     assert current["answer"] == "Continue"
 
 
+def test_begin_serializes_prepared_record_replacement_with_resolution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from threading import current_thread
+
+    assert isinstance(
+        decisions.begin(
+            tmp_path,
+            "first",
+            "Continue?",
+            ("Continue", "Stop"),
+            "chat",
+            kind="preference",
+        ),
+        Ok,
+    )
+    path = tmp_path / decisions.RELATIVE_PATH
+    original_save = decisions._save_prepared
+    original_resolve = decisions._resolve
+    begin_entered_save = threading.Event()
+    release_begin = threading.Event()
+    resolve_at_lock = threading.Event()
+    resolve_entered_action = threading.Event()
+    outcomes: dict[str, object] = {}
+    original_lock = decisions._locked
+
+    monkeypatch.setattr(
+        decisions,
+        "_prepared",
+        lambda *args, **kwargs: Ok({"id": "second", "status": "pending"}),
+    )
+
+    def paused_save(candidate: Path, value: dict) -> object:
+        if value.get("id") == "second":
+            begin_entered_save.set()
+            assert release_begin.wait(5)
+        return original_save(candidate, value)
+
+    def observed_resolve(*args, **kwargs):
+        resolve_entered_action.set()
+        return original_resolve(*args, **kwargs)
+
+    def observed_lock(candidate: Path, action):
+        if current_thread().name == "resolver":
+            resolve_at_lock.set()
+        return original_lock(candidate, action)
+
+    monkeypatch.setattr(decisions, "_save_prepared", paused_save)
+    monkeypatch.setattr(decisions, "_resolve", observed_resolve)
+    monkeypatch.setattr(decisions, "_locked", observed_lock)
+
+    def begin_second() -> None:
+        outcomes["begin"] = decisions.begin(
+            tmp_path, "second", "Continue another plan?", ("Continue", "Stop"), "chat"
+        )
+
+    def resolve_first() -> None:
+        outcomes["resolve"] = decisions.resolve(tmp_path, "first", "Continue", "chat")
+
+    begin_thread = threading.Thread(target=begin_second)
+    resolve_thread = threading.Thread(target=resolve_first, name="resolver")
+    begin_thread.start()
+    assert begin_entered_save.wait(5)
+    resolve_thread.start()
+    try:
+        assert resolve_at_lock.wait(5)
+        assert not resolve_entered_action.is_set()
+    finally:
+        release_begin.set()
+    begin_thread.join(5)
+    resolve_thread.join(5)
+
+    assert not begin_thread.is_alive()
+    assert not resolve_thread.is_alive()
+    assert isinstance(outcomes["begin"], Ok)
+    assert isinstance(outcomes["resolve"], Err)
+    assert (state.read_json(path) or {}).get("id") == "second"
+    assert (state.read_json(path) or {}).get("status") == "pending"
+
+
 @pytest.mark.parametrize("transition", ("bind", "fallback", "adopt"))
 def test_decision_delivery_transition_cannot_resurrect_resolved_record(
     tmp_path: Path, monkeypatch, transition: str

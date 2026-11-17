@@ -150,7 +150,21 @@ def cancel_onboarding(repo: Path) -> Result[dict[str, Any]]:
         case dict() as current if (
             onboarding_question(current) or decision_kind(current) == "preference"
         ):
-            return bind(review_decisions.recover(repo), lambda _: _cancel_ready(repo))
+            return bind(
+                review_decisions.recover(repo),
+                lambda _: bind(
+                    _path(repo, None),
+                    lambda path: bind(
+                        attempt(
+                            lambda: _locked(path, lambda: _cancel_ready(repo, current)),
+                            "decision_invalid",
+                            "cancel onboarding question",
+                            OSError,
+                        ),
+                        lambda result: result,
+                    ),
+                ),
+            )
         case current:
             return Ok(current or {})
 
@@ -159,7 +173,15 @@ def cancel_preparation(repo: Path, scope: str | None) -> Result[object]:
     """A reset abandons a pending preparation question; it grants no approval."""
     return bind(
         _path(repo, scope),
-        lambda path: _cancel_preparation_at(path),
+        lambda path: bind(
+            attempt(
+                lambda: _locked(path, lambda: _cancel_preparation_at(path)),
+                "decision_invalid",
+                "archive preparation question",
+                OSError,
+            ),
+            lambda result: result,
+        ),
     )
 
 
@@ -176,8 +198,41 @@ def _cancel_preparation_at(path: Path) -> Result[object]:
             return Ok(None)
 
 
-def _cancel_ready(repo: Path) -> Result[dict[str, Any]]:
-    match record(repo):
+def _cancel_ready(repo: Path, expected: dict[str, Any]) -> Result[dict[str, Any]]:
+    match record(repo) or {}:
+        case current if _same_decision(current, expected):
+            return _cancel_current(repo, current)
+        case _:
+            return err(
+                "decision_changed",
+                "The onboarding question changed before it could be cancelled; no question was cancelled.",
+            )
+
+
+def _same_decision(current: dict[str, Any], expected: dict[str, Any]) -> bool:
+    match expected.get("instance_id"), current.get("instance_id"):
+        case str() as expected_id, str() as current_id if expected_id and current_id:
+            return expected_id == current_id
+        case _:
+            return (
+                current.get("id"),
+                current.get("gate"),
+                current.get("work_session_id"),
+                current.get("question"),
+                current.get("options"),
+                current.get("artifacts"),
+            ) == (
+                expected.get("id"),
+                expected.get("gate"),
+                expected.get("work_session_id"),
+                expected.get("question"),
+                expected.get("options"),
+                expected.get("artifacts"),
+            )
+
+
+def _cancel_current(repo: Path, current: dict[str, Any]) -> Result[dict[str, Any]]:
+    match current:
         case {"status": "cancelled"} as current if onboarding_question(current):
             return Ok(current)
         case {"status": "pending"} as current if onboarding_question(current):
@@ -195,7 +250,7 @@ def _cancel_ready(repo: Path) -> Result[dict[str, Any]]:
                 ),
             )
         case dict() as current if decision_kind(current) == "preference":
-            return dismiss_optional(repo)
+            return _dismiss_at(repo / RELATIVE_PATH, current)
         case current:
             return Ok(current or {})
 
@@ -289,7 +344,17 @@ def dismiss_optional(repo: Path, scope: str | None = None) -> Result[dict[str, A
         review_decisions.recover(repo, scope),
         lambda _: bind(
             _path(repo, scope),
-            lambda path: _dismiss_at(path, state.read_json(path) or {}),
+            lambda path: bind(
+                attempt(
+                    lambda: _locked(
+                        path, lambda: _dismiss_at(path, state.read_json(path) or {})
+                    ),
+                    "decision_invalid",
+                    "optional decision dismissal",
+                    OSError,
+                ),
+                lambda result: result,
+            ),
         ),
     )
 
@@ -322,21 +387,7 @@ def _dismiss_at(path: Path, current: dict[str, Any]) -> Result[dict[str, Any]]:
 
 def _archive_dismissal(path: Path, dismissed: dict[str, Any]) -> dict[str, Any]:
     # Isolated filesystem edge: preserve evidence before replacing the current question.
-    state.write_json(
-        path.with_name(HISTORY),
-        {
-            "answers": [
-                *(
-                    item
-                    for item in (state.read_json(path.with_name(HISTORY)) or {}).get(
-                        "answers", []
-                    )
-                    if item != dismissed
-                ),
-                dismissed,
-            ]
-        },
-    )
+    _append_history_locked(path, dismissed)
     state.write_json(path, dismissed)
     return dismissed
 
@@ -368,16 +419,33 @@ def _supersede_at(path: Path, current: dict[str, Any]) -> Result[dict[str, Any]]
 def _save_prepared(path: Path, value: dict[str, Any]) -> Result[dict[str, Any]]:
     return bind(
         _supersede_at(path, state.read_json(path) or {}),
-        lambda _: fmap(
-            attempt(
-                lambda: state.write_json(path, value),
-                "decision_invalid",
-                "human decision",
-                OSError,
+        lambda previous: bind(
+            _preserve_answer(path, previous),
+            lambda _: fmap(
+                attempt(
+                    lambda: state.write_json(path, value),
+                    "decision_invalid",
+                    "human decision",
+                    OSError,
+                ),
+                lambda _: value,
             ),
-            lambda _: value,
         ),
     )
+
+
+def _preserve_answer(path: Path, previous: dict[str, Any]) -> Result[None]:
+    """Recover an answered current record into history before replacing that record."""
+    match previous.get("status"):
+        case "answered":
+            return attempt(
+                lambda: _append_history_locked(path, previous),
+                "decision_invalid",
+                "preserve answered decision history",
+                OSError,
+            )
+        case _:
+            return Ok(None)
 
 
 def blocking(repo: Path, work_session_id: str | None) -> bool:
@@ -493,9 +561,14 @@ def begin(
                     kind,
                     native_session_id,
                 ),
-                lambda value: fmap(
-                    _save_prepared(path, value),
-                    lambda _: value,
+                lambda value: bind(
+                    attempt(
+                        lambda: _locked(path, lambda: _save_prepared(path, value)),
+                        "decision_invalid",
+                        "human decision",
+                        OSError,
+                    ),
+                    lambda saved: fmap(saved, lambda _: value),
                 ),
             ),
         ),
@@ -938,10 +1011,10 @@ def _resolve(
                     pass
         case _:
             pass
+    # The current decision is authoritative. If archiving fails, keep the answered record
+    # recoverable there; _save_prepared archives it before replacing it on a later attempt.
     state.write_json(path, updated)
-    history = path.with_name(HISTORY)
-    earlier = (state.read_json(history) or {}).get("answers", [])
-    state.write_json(history, {"answers": [*earlier, updated]})
+    _append_history_locked(path, updated)
     return updated
 
 
@@ -968,7 +1041,7 @@ def reusable(
         case Ok(path):
             history = [
                 *_earlier_mode_answers(repo, work_session_id),
-                *_answers(path.with_name(HISTORY)),
+                *history_entries(path),
             ]
         case Err():
             return None
@@ -998,6 +1071,44 @@ def _answers(history: Path) -> list[dict[str, Any]]:
     return (state.read_json(history) or {}).get("answers", [])
 
 
+def history_entries(path: Path) -> tuple[dict[str, Any], ...]:
+    """Read archived answers plus an answered current record not yet archived."""
+    answers = _answers(path.with_name(HISTORY))
+    current = state.read_json(path) or {}
+    return tuple(
+        [
+            *(answers if isinstance(answers, list) else ()),
+            *(
+                [current]
+                if current.get("status") == "answered" and current not in answers
+                else []
+            ),
+        ]
+    )
+
+
+def append_history(
+    path: Path, entry: dict[str, Any]
+) -> Result[tuple[dict[str, Any], ...]]:
+    """Append one history entry under the decision lock, preserving concurrent updates."""
+    return attempt(
+        lambda: _locked(path, lambda: _append_history_locked(path, entry)),
+        "decision_invalid",
+        "decision history",
+        OSError,
+    )
+
+
+def _append_history_locked(
+    path: Path, entry: dict[str, Any]
+) -> tuple[dict[str, Any], ...]:
+    archived = _answers(path.with_name(HISTORY))
+    entries = tuple(archived) if isinstance(archived, list) else ()
+    updated = tuple((*entries, entry)) if entry not in entries else entries
+    state.write_json(path.with_name(HISTORY), {"answers": list(updated)})
+    return updated
+
+
 def _earlier_mode_answers(repo: Path, scope: str | None) -> list[dict[str, Any]]:
     """Inside a mode, the answers given in the mode's other sessions, oldest first. An answer
     belongs to the content it approved, so a repair that replaced the session does not lose it."""
@@ -1009,7 +1120,7 @@ def _earlier_mode_answers(repo: Path, scope: str | None) -> list[dict[str, Any]]
                 answer
                 for session in sessions
                 if session.mode_session and session.id != scope
-                for answer in _answers(session.folder / HISTORY)
+                for answer in history_entries(session.folder / "decision.json")
             ]
         case _:
             return []

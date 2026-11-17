@@ -141,11 +141,27 @@ def _hook_asset(path: Path, source: Path, plugin: Path) -> ProjectAsset:
 
 
 def _mcp_asset(
-    path: Path, source: Path, plugin: Path, key: str = "mcpServers"
+    path: Path,
+    source: Path,
+    plugin: Path,
+    key: str = "mcpServers",
+    gateway_host: str | None = None,
 ) -> ProjectAsset:
     current = _document(path)
     incoming = _expand(_document(source), plugin)
     servers = incoming.get("mcpServers", incoming)
+    match gateway_host:
+        case str() as host if "workflow-integrations" in servers:
+            gateway = servers["workflow-integrations"]
+            servers = {
+                **servers,
+                "workflow-integrations": {
+                    **gateway,
+                    "env": {**gateway.get("env", {}), "MDH_GATEWAY_HOST": host},
+                },
+            }
+        case _:
+            pass
     return _file(
         path, {**current, key: _merge_servers(_object(current.get(key, {})), servers)}
     )
@@ -297,7 +313,12 @@ def _codex(project: Path, plugin: Path) -> tuple[ProjectAsset, ...]:
 
 def _kimi(project: Path, plugin: Path) -> tuple[ProjectAsset, ...]:
     return (
-        _mcp_asset(project / ".kimi-code/mcp.json", plugin / "codex.mcp.json", plugin),
+        _mcp_asset(
+            project / ".kimi-code/mcp.json",
+            plugin / "codex.mcp.json",
+            plugin,
+            gateway_host="kimi",
+        ),
         ProjectAsset(
             project / ".kimi-code/config.toml",
             "file",

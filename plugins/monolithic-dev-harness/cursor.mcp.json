@@ -31,7 +31,8 @@
         "${CURSOR_PLUGIN_ROOT}/scripts/integrations/run_gateway.py"
       ],
       "env": {
-        "PYTHONPATH": "${CURSOR_PLUGIN_ROOT}"
+        "PYTHONPATH": "${CURSOR_PLUGIN_ROOT}",
+        "MDH_GATEWAY_HOST": "cursor"
       }
     }
   }

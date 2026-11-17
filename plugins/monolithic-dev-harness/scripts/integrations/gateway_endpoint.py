@@ -15,6 +15,7 @@ import threading
 from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from uuid import uuid4
 
 from core.result import Result
 from harness import state
@@ -24,6 +25,7 @@ from harness.process_messages import Context
 MAX_MESSAGE = 16 * 1024 * 1024
 # AF_UNIX paths are limited to 108 bytes on Linux, including the terminating NUL.
 MAX_SOCKET_PATH = 107
+HOSTS = frozenset(("claude", "codex", "cursor", "kimi", "default"))
 
 
 def identity(repo: Path) -> str:
@@ -34,11 +36,41 @@ def identity(repo: Path) -> str:
 
 
 def address(repo: Path) -> Path:
-    """Where a new owner listens. Clients read the owner record instead of recomputing this, so a
-    different temporary directory in their environment cannot hide the owner."""
+    """Base endpoint. Clients read the owner record instead of recomputing it, so a different
+    temporary directory in their environment cannot hide the owner."""
     return (
         Path(tempfile.gettempdir()) / f"mdh-{os.getuid()}" / (identity(repo) + ".sock")
     )
+
+
+def host_address(repo: Path, host: str) -> Path:
+    """A distinct private endpoint for each host connection."""
+    return address(repo).with_name(f"{identity(repo)}-{_host(host)}.sock")
+
+
+def instance_address(repo: Path, host: str, instance: str) -> Path:
+    """A distinct endpoint for each process launched by a host product."""
+    return address(repo).with_name(
+        f"{identity(repo)[:16]}-{_host(host)}-{_instance(instance)[:24]}.sock"
+    )
+
+
+def _host(host: str) -> str:
+    match host in HOSTS:
+        case True:
+            return host
+        case False:
+            raise ValueError(f"Unsupported workflow-integrations host: {host!r}")
+
+
+def _instance(instance: str) -> str:
+    match len(instance) == 32 and all(char in "0123456789abcdef" for char in instance):
+        case True:
+            return instance
+        case False:
+            raise ValueError(
+                "Gateway instance id must be 32 lowercase hexadecimal characters"
+            )
 
 
 def _settings(repo: Path) -> str:
@@ -57,15 +89,25 @@ def private(path: Path) -> bool:
     )
 
 
-def owner_record(repo: Path) -> Path:
-    return repo / ".harness/state/gateway-owners" / (identity(repo) + ".json")
+def owner_record(
+    repo: Path, host: str = "default", instance: str | None = None
+) -> Path:
+    suffix = "" if host == "default" else f"-{_host(host)}"
+    suffix += f"-{_instance(instance)}" if instance else ""
+    return repo / ".harness/state/gateway-owners" / (identity(repo) + suffix + ".json")
 
 
 @contextmanager
-def serve(repo: Path, read: Callable[[str, dict], Result]) -> Iterator[Path]:
+def serve(
+    repo: Path, read: Callable[[str, dict], Result], host: str = "default"
+) -> Iterator[Path]:
     """Effect boundary: owns listener/thread/socket cleanup; a duplicate owner fails closed."""
-    location = address(repo)
-    proof = owner_record(repo)
+    host = _host(host)
+    instance = uuid4().hex if host != "default" else ""
+    location = (
+        address(repo) if host == "default" else instance_address(repo, host, instance)
+    )
+    proof = owner_record(repo, host, instance or None)
     if len(os.fsencode(location)) > MAX_SOCKET_PATH:
         raise OSError(
             f"The gateway socket path {location} is longer than a Unix socket allows; start "
@@ -107,14 +149,19 @@ def serve(repo: Path, read: Callable[[str, dict], Result]) -> Iterator[Path]:
                 case _:
                     return
 
-    # The lock sits beside the owner record, so owners with different temporary directories
-    # still exclude each other.
-    with proof.with_suffix(".lock").open("a+") as owner:
+    # Legacy default owners lock beside their stable record. Instance owners lock the endpoint,
+    # including the shortened socket name, so even an instance-id collision fails closed.
+    lock_path = (
+        proof.with_suffix(".lock")
+        if host == "default"
+        else location.with_suffix(".lock")
+    )
+    with lock_path.open("a+") as owner:
         try:
             fcntl.flock(owner, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError as failure:
             raise OSError(
-                "Another workflow-integrations gateway owns this project/configuration; use that host connection or reload its owner. No second provider was started."
+                "Another workflow-integrations gateway owns this instance endpoint; reload that host connection. No second provider was started."
             ) from failure
         match location.exists():
             case True if private(location) and stat.S_ISSOCK(location.stat().st_mode):
@@ -129,7 +176,13 @@ def serve(repo: Path, read: Callable[[str, dict], Result]) -> Iterator[Path]:
             os.chmod(location, 0o600)
             state.write_json(
                 proof,
-                {"pid": os.getpid(), "uid": os.getuid(), "endpoint": str(location)},
+                {
+                    "pid": os.getpid(),
+                    "uid": os.getuid(),
+                    "host": host,
+                    "instance": instance or None,
+                    "endpoint": str(location),
+                },
             )
             thread = threading.Thread(
                 target=server.serve_forever, kwargs={"poll_interval": 0.05}, daemon=True

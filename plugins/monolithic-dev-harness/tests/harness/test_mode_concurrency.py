@@ -158,10 +158,10 @@ def test_a_failed_write_leaves_no_staging_file_behind(
 ) -> None:
     target = tmp_path / "state" / "record.json"
 
-    def refuse(self: Path, destination: Path) -> None:
+    def refuse(source: Path, destination: Path) -> None:
         raise OSError("the file cannot be replaced")
 
-    monkeypatch.setattr(Path, "replace", refuse)
+    monkeypatch.setattr(state.os, "replace", refuse)
 
     with pytest.raises(OSError):
         state.write_json(target, {"writer": 1})

@@ -31,7 +31,8 @@
         "${PLUGIN_ROOT}/scripts/integrations/run_gateway.py"
       ],
       "env": {
-        "PYTHONPATH": "${PLUGIN_ROOT}"
+        "PYTHONPATH": "${PLUGIN_ROOT}",
+        "MDH_GATEWAY_HOST": "codex"
       }
     }
   }

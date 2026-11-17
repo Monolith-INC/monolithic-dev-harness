@@ -105,6 +105,23 @@ def test_real_kimi_plan_is_hooks_not_mcp_namespace(tmp_path):
     assert len(tomllib.loads(text)["hooks"]) == 3
 
 
+def test_kimi_gateway_asset_has_its_own_marker_without_changing_codex_asset(tmp_path):
+    plugin = Path(__file__).resolve().parents[2]
+    result = assets("kimi", tmp_path, plugin)
+    assert isinstance(result, Ok)
+    kimi_mcp = next(
+        asset
+        for asset in result.value
+        if asset.path == tmp_path / ".kimi-code/mcp.json"
+    )
+    kimi = json.loads(kimi_mcp.text)["mcpServers"]["workflow-integrations"]
+    codex = json.loads((plugin / "codex.mcp.json").read_text())["mcpServers"][
+        "workflow-integrations"
+    ]
+    assert kimi["env"]["MDH_GATEWAY_HOST"] == "kimi"
+    assert codex["env"]["MDH_GATEWAY_HOST"] == "codex"
+
+
 def test_local_install_preserves_unrelated_same_named_server(tmp_path):
     project = tmp_path / "p"
     project.mkdir()

@@ -7,7 +7,9 @@ the stage scripts and keyed to git tree/commit ids, so they go stale the moment 
 
 from __future__ import annotations
 
+import errno
 import json
+import os
 import re
 import secrets
 from collections.abc import Callable
@@ -66,19 +68,67 @@ def ensure_local_exclude(repo: Path) -> tuple[str, ...]:
             return ()
 
 
+class StateWriteDurabilityError(OSError):
+    """The replacement is visible, but its directory entry could not be synced."""
+
+    def __init__(self, path: Path, cause: OSError) -> None:
+        self.path = path
+        self.replacement_visible = True
+        super().__init__(
+            f"the new state at {path} is visible, but syncing its parent directory failed; "
+            f"crash durability is unknown: {cause}"
+        )
+
+
+def sync_directory(directory: Path) -> None:
+    """Sync directory metadata on platforms that support opening directories."""
+    match os.name:
+        case "nt":
+            return
+        case _:
+            try:
+                descriptor = os.open(directory, os.O_RDONLY)
+                try:
+                    os.fsync(descriptor)
+                finally:
+                    os.close(descriptor)
+            except OSError as exc:
+                if exc.errno not in {
+                    errno.EINVAL,
+                    errno.ENOTSUP,
+                    getattr(errno, "EOPNOTSUPP", errno.ENOTSUP),
+                }:
+                    raise
+
+
+def ensure_directory(directory: Path) -> None:
+    """Create a directory path and persist each new parent entry where supported."""
+    missing = tuple(
+        path for path in (directory, *directory.parents) if not path.exists()
+    )
+    directory.mkdir(parents=True, exist_ok=True)
+    for created in reversed(missing):
+        sync_directory(created.parent)
+
+
 def write_json(path: Path, payload: dict[str, Any]) -> None:
-    """Replace a state file atomically: readers see the old record or the new one, never half."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+    """Atomically replace a state file and sync its contents and directory entry where supported."""
+    ensure_directory(path.parent)
     # One staging name per writer, so writers of the same file never share (and tear) one.
     tmp = path.with_name(f"{path.name}.{secrets.token_hex(6)}.tmp")
     try:
-        tmp.write_text(
-            json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8"
-        )
-        tmp.replace(path)
+        with tmp.open("w", encoding="utf-8") as stream:
+            stream.write(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(tmp, path)
     except BaseException:
         tmp.unlink(missing_ok=True)
         raise
+    try:
+        sync_directory(path.parent)
+    except OSError as exc:
+        raise StateWriteDurabilityError(path, exc) from exc
 
 
 def read_json(path: Path) -> dict[str, Any] | None:

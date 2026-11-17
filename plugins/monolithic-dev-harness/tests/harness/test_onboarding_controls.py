@@ -7,7 +7,16 @@ from pathlib import Path
 import pytest
 
 from core.result import Err, Failure, Ok
-from harness import cli, decisions, hook, onboarding, rules, state, work_sessions
+from harness import (
+    cli,
+    decisions,
+    hook,
+    onboarding,
+    review_decisions,
+    rules,
+    state,
+    work_sessions,
+)
 from tests.settings_fixture import write_settings
 
 HARNESS = Path(__file__).resolve().parents[2] / "bin/harness"
@@ -228,11 +237,14 @@ def test_recovery_runs_governance(tmp_path, monkeypatch, capsys):
 
 def test_optional_dismissal_failure_does_not_claim_free(tmp_path, monkeypatch):
     assert isinstance(_pending(tmp_path, "preference"), Ok)
-    monkeypatch.setattr(
-        decisions,
-        "dismiss_optional",
-        lambda *_args, **_kw: Err(Failure("decision_invalid", "storage unavailable")),
-    )
+    original_write = state.write_json
+
+    def fail_history(path, payload):
+        if path.name == decisions.HISTORY:
+            raise OSError("storage unavailable")
+        return original_write(path, payload)
+
+    monkeypatch.setattr(state, "write_json", fail_history)
     assert isinstance(onboarding.control(tmp_path, "mode", "free"), Err)
     assert onboarding.mode(tmp_path) == "structured"
 
@@ -320,6 +332,47 @@ def test_onboarding_controls_cancel_only_the_abandoned_onboarding_question(
         ),
         Ok,
     )
+
+
+def test_onboarding_cancel_refuses_to_cancel_question_replaced_during_recovery(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert isinstance(
+        decisions.begin(
+            tmp_path,
+            "HD-first",
+            "First question?",
+            ("Continue", "Stop"),
+            "chat",
+            gate="next-step",
+        ),
+        Ok,
+    )
+    path = tmp_path / decisions.RELATIVE_PATH
+    first = state.read_json(path)
+    assert first is not None
+    second = {
+        **first,
+        "id": "HD-second",
+        "instance_id": "second-instance",
+        "question": "Second question?",
+    }
+
+    def replace_during_recovery(*_args: object, **_kwargs: object) -> Ok[None]:
+        state.write_json(path, second)
+        return Ok(None)
+
+    monkeypatch.setattr(review_decisions, "recover", replace_during_recovery)
+
+    cancelled = decisions.cancel_onboarding(tmp_path)
+
+    assert isinstance(cancelled, Err)
+    assert cancelled.failure.code == "decision_changed"
+    current = state.read_json(path)
+    assert current is not None
+    assert current["id"] == "HD-second"
+    assert current["status"] == "pending"
+    assert state.read_json(path.with_name(decisions.HISTORY)) is None
 
 
 def test_onboarding_gate_cannot_disguise_an_approval(tmp_path):

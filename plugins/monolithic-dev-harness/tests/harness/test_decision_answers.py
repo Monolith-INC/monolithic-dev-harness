@@ -7,7 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from harness import decisions, questions, state, work_sessions
+from core.result import Ok
+from harness import decisions, questions, state, work_sessions, workflow_evidence
 from host_adapters import work_session_context
 from tests.harness.test_hook_security import HARNESS, run_hook
 from tests.settings_fixture import write_settings
@@ -59,6 +60,67 @@ def test_typed_choice_answers_async_question(repo: Path) -> None:
     type_prompt(repo, "english")
     assert (decisions.record(repo) or {}).get("answer") == "English"
     assert not decisions.waiting(repo)
+
+
+def test_resolved_answer_is_written_to_history(repo: Path) -> None:
+    decisions.begin(repo, "d1", "Continue?", ("Continue", "Stop"), "chat")
+    path = state.state_dir(repo) / decisions.RELATIVE_PATH.name
+
+    assert isinstance(decisions.resolve(repo, "d1", "Continue", "chat"), Ok)
+
+    history = state.read_json(path.with_name(decisions.HISTORY))
+    assert history is not None
+    assert [entry["id"] for entry in history["answers"]] == ["d1"]
+
+
+def test_answer_is_recovered_into_history_before_next_decision_replaces_it(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    decisions.begin(repo, "d1", "Continue?", ("Continue", "Stop"), "chat")
+    path = state.state_dir(repo) / decisions.RELATIVE_PATH.name
+    real_sync = state.sync_directory
+    failed = False
+
+    def fail_once(directory: Path) -> None:
+        nonlocal failed
+        if not failed:
+            failed = True
+            raise OSError("directory sync failed")
+        real_sync(directory)
+
+    monkeypatch.setattr(state, "sync_directory", fail_once)
+    with pytest.raises(state.StateWriteDurabilityError):
+        decisions._resolve(repo, path, "d1", "Continue", "chat")
+
+    assert (state.read_json(path) or {}).get("status") == "answered"
+    assert state.read_json(path.with_name(decisions.HISTORY)) is None
+
+    decisions.begin(repo, "d2", "Continue another plan?", ("Continue", "Stop"), "chat")
+
+    history = state.read_json(path.with_name(decisions.HISTORY))
+    assert history is not None
+    assert [entry["id"] for entry in history["answers"]] == ["d1"]
+    assert (state.read_json(path) or {}).get("id") == "d2"
+
+
+def test_workflow_history_recovers_answer_when_archive_write_fails(
+    repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    session = work_sessions.start(repo, "recover answer").value
+    chat_decision(repo, session.id)
+    path = session.folder / "decision.json"
+    original_write = state.write_json
+
+    def fail_archive(target: Path, payload: dict) -> None:
+        if target.name == decisions.HISTORY:
+            raise OSError("archive write failed")
+        original_write(target, payload)
+
+    monkeypatch.setattr(state, "write_json", fail_archive)
+    with pytest.raises(OSError, match="archive write failed"):
+        decisions._resolve(repo, path, "d1", "Continue", "chat")
+
+    assert [entry["id"] for entry in workflow_evidence.all_history(session)] == ["d1"]
 
 
 def test_suspension_works_with_a_broken_conversation_link(repo: Path) -> None:

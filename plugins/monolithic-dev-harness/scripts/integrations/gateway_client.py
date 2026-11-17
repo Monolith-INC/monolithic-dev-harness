@@ -5,7 +5,9 @@ from __future__ import annotations
 import json
 import os
 import socket
+import stat
 import struct
+import time
 import types
 import typing
 from collections.abc import Mapping
@@ -29,10 +31,16 @@ from integrations.contracts import (
 from integrations.planning import EstimableItem, IterationReading, Sprint
 
 
-def call(repo: Path, operation: str, arguments: Mapping[str, Any]) -> Result[Any]:
+def call(
+    repo: Path,
+    operation: str,
+    arguments: Mapping[str, Any],
+    host: str | None = None,
+    instance: str | None = None,
+) -> Result[Any]:
     return bind(
         attempt(
-            lambda: _exchange(repo, operation, dict(arguments)),
+            lambda: _exchange(repo, operation, dict(arguments), host, instance),
             "gateway_unavailable",
             "The host gateway is unavailable; reload/start workflow-integrations in this project, then retry this read. No provider was started.",
             OSError,
@@ -43,14 +51,42 @@ def call(repo: Path, operation: str, arguments: Mapping[str, Any]) -> Result[Any
     )
 
 
-def _exchange(repo: Path, operation: str, arguments: dict) -> dict:
-    from .gateway_endpoint import MAX_MESSAGE, owner_record, private
+def _exchange(
+    repo: Path,
+    operation: str,
+    arguments: dict,
+    host: str | None,
+    instance: str | None,
+) -> dict:
+    from .gateway_endpoint import HOSTS, MAX_MESSAGE, identity, owner_record, private
 
-    match state.read_json(owner_record(repo)):
-        case {"endpoint": str() as recorded}:
-            target = Path(recorded)
+    selected_host = (
+        host
+        or os.environ.get("MDH_GATEWAY_HOST", "").strip()
+        or _host_from_environment()
+    )
+    if selected_host and selected_host not in HOSTS:
+        raise ValueError(f"Unsupported workflow-integrations host: {selected_host!r}")
+    selected_instance = instance or os.environ.get("MDH_GATEWAY_INSTANCE", "").strip()
+    if selected_host and selected_instance:
+        proof = owner_record(repo, selected_host, selected_instance)
+        owner = state.read_json(proof)
+        if owner is None:
+            raise FileNotFoundError(
+                "No gateway owner is recorded for this host instance"
+            )
+    else:
+        proof, owner = _select_owner(
+            repo, identity(repo), selected_host, selected_instance or None
+        )
+    selected_host = owner.get("host", "default")
+    match owner:
+        case {"endpoint": str() as endpoint}:
+            target = Path(endpoint)
         case _:
-            raise FileNotFoundError("No gateway owner is recorded for this project")
+            raise FileNotFoundError(
+                "No gateway owner is recorded for this project and host"
+            )
     match private(target.parent) and private(target):
         case False:
             raise PermissionError("Gateway endpoint is not private")
@@ -63,16 +99,19 @@ def _exchange(repo: Path, operation: str, arguments: dict) -> dict:
             struct.unpack(
                 "3i", connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
             ),
-            state.read_json(owner_record(repo)),
+            state.read_json(proof),
         ):
             case (pid, uid, _), {
                 "pid": int() as expected_pid,
                 "uid": int() as expected_uid,
                 "endpoint": str() as endpoint,
+                **recorded,
             } if (
                 pid == expected_pid
                 and uid == expected_uid == os.getuid()
                 and endpoint == str(target)
+                and recorded.get("host", "default") == selected_host
+                and recorded.get("instance") == owner.get("instance")
             ):
                 pass
             case _:
@@ -91,6 +130,103 @@ def _exchange(repo: Path, operation: str, arguments: dict) -> dict:
                     return value
                 case _:
                     raise ValueError("Gateway response does not match its request")
+
+
+def _host_from_environment() -> str | None:
+    return next(
+        (
+            host
+            for host, variable in (
+                ("claude", "CLAUDE_PROJECT_DIR"),
+                ("cursor", "CURSOR_PROJECT_DIR"),
+                ("codex", "CODEX_PROJECT_ROOT"),
+            )
+            if os.environ.get(variable, "").strip()
+        ),
+        None,
+    )
+
+
+def _select_owner(
+    repo: Path,
+    project_identity: str,
+    selected_host: str | None,
+    selected_instance: str | None,
+) -> tuple[Path, dict]:
+    from .gateway_endpoint import HOSTS, private
+
+    directory = repo / ".harness/state/gateway-owners"
+    deadline = time.monotonic() + 0.5
+    records = []
+    for path in directory.glob(f"{project_identity}*.json"):
+        if not (
+            path.name == f"{project_identity}.json"
+            or path.name.startswith(f"{project_identity}-")
+        ):
+            continue
+        owner = state.read_json(path)
+        if owner is None:
+            continue
+        owner_host = owner.get("host", "default")
+        if owner_host not in HOSTS or (selected_host and owner_host != selected_host):
+            continue
+        if selected_instance and owner.get("instance") != selected_instance:
+            continue
+        if time.monotonic() >= deadline:
+            raise TimeoutError(
+                "Gateway owner discovery reached its 500 ms limit; select MDH_GATEWAY_HOST and MDH_GATEWAY_INSTANCE."
+            )
+        if _owner_is_live(owner, private, deadline - time.monotonic()):
+            records.append((path, owner))
+    match records:
+        case ((proof, owner),):
+            return proof, owner
+        case ():
+            raise FileNotFoundError("No gateway owner is recorded for this project")
+        case _:
+            raise ValueError(
+                "Multiple live workflow-integrations instances own this project; select MDH_GATEWAY_HOST and MDH_GATEWAY_INSTANCE. No provider was started."
+            )
+
+
+def _owner_is_live(owner: dict, private: Any, timeout: float) -> bool:
+    match owner:
+        case {
+            "endpoint": str() as endpoint,
+            "pid": int() as expected_pid,
+            "uid": int() as expected_uid,
+        } if expected_uid == os.getuid():
+            target = Path(endpoint)
+        case _:
+            return False
+    try:
+        if not private(target.parent) or not private(target):
+            return False
+        if not stat.S_ISSOCK(target.stat().st_mode):
+            return False
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+            connection.settimeout(max(timeout, 0.001))
+            connection.connect(str(target))
+            peer_pid, peer_uid, _ = struct.unpack(
+                "3i", connection.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
+            )
+            return peer_pid == expected_pid and peer_uid == expected_uid
+    except TimeoutError:
+        # A saturated listener is an active but busy gateway. Keep it in selection so we fail
+        # closed instead of routing to a different host instance.
+        return _process_exists(expected_pid)
+    except OSError:
+        return False
+
+
+def _process_exists(pid: int) -> bool:
+    try:
+        os.kill(pid, 0)
+        return True
+    except PermissionError:
+        return True
+    except ProcessLookupError:
+        return False
 
 
 def _result(response: dict) -> Result[Any]:
