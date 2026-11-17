@@ -28,7 +28,7 @@ class WorkSessionTest(unittest.TestCase):
 
         self.assertIsInstance(result, Ok)
         session = result.value
-        self.assertEqual(session.project_root, self.project.resolve())
+        self.assertEqual(session.folder.parents[3], self.project.resolve())
         self.assertEqual(session.request, "Investigate DAY-001")
         self.assertEqual(session.status, work_sessions.Status.ACTIVE)
         self.assertTrue((session.folder / "session.json").is_file())
