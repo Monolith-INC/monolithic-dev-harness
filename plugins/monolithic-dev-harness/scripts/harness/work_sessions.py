@@ -220,12 +220,16 @@ def _create_reserved(project: Path, request: str, identifier: str) -> Result[Ses
                 )
             )
         case Err(failure) if failure.code == "session_not_found":
-            match attempt(
-                lambda: _create(project, request, False, "", "", identifier),
-                "session_unwritable",
-                "Could not create the reserved work session",
-                OSError,
-            ):
+            try:
+                created = Ok(_create(project, request, False, "", "", identifier))
+            except state.StateWriteDurabilityError as exc:
+                return err("session_unwritable", str(exc))
+            except OSError as exc:
+                created = err(
+                    "session_unwritable",
+                    f"Could not create the reserved work session: {exc}",
+                )
+            match created:
                 case Ok() as created:
                     return created
                 case Err() as failed:
@@ -256,6 +260,7 @@ def _create(
     state.ensure_local_exclude(project)
     identifier = reserved_id or "WS-" + secrets.token_hex(6)
     sessions_root = root(project)
+    state.ensure_directory(sessions_root)
     folder = sessions_root / identifier
     staging = sessions_root / ("." + identifier + "." + secrets.token_hex(6) + ".tmp")
     now = _now()
@@ -276,12 +281,26 @@ def _create(
     try:
         state.write_json(staging / "session.json", _payload(session))
         staging.rename(folder)
-    except BaseException:
+        try:
+            state.sync_directory(sessions_root)
+        except OSError as exc:
+            raise state.StateWriteDurabilityError(folder / "session.json", exc) from exc
+    except BaseException as failure:
         if staging.exists():
             import shutil
 
             shutil.rmtree(staging)
-        raise
+        match failure:
+            case state.StateWriteDurabilityError() as durability if (
+                durability.path == staging / "session.json"
+            ):
+                raise OSError(
+                    "The staged session write failed its durability check; its temporary "
+                    "folder was removed before publication: "
+                    f"{durability.__cause__}"
+                ) from durability
+            case _:
+                raise
     return session
 
 
@@ -542,7 +561,15 @@ def transition(
 
 
 def _save_transition(project: Path, updated: Session, make_current: bool) -> Session:
-    state.write_json(updated.folder / "session.json", _payload(updated))
+    try:
+        state.write_json(updated.folder / "session.json", _payload(updated))
+    except state.StateWriteDurabilityError:
+        match updated.status, make_current:
+            case Status.ACTIVE, True:
+                remember_current(project, updated.id)
+            case _:
+                pass
+        raise
     match updated.status, make_current:
         case Status.ACTIVE, True:
             remember_current(project, updated.id)

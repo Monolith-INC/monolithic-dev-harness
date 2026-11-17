@@ -7,14 +7,12 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
-from core.result import Err, Ok, Result, bind, err
+from core.result import Err, Ok, Result, bind, err, fmap
 from harness import decisions, gates, modes, questions, state, work_sessions
 
 
 def all_history(session: work_sessions.Session) -> tuple[dict, ...]:
-    return tuple(
-        (state.read_json(session.folder / decisions.HISTORY) or {}).get("answers", ())
-    )
+    return decisions.history_entries(session.folder / "decision.json")
 
 
 def history(session: work_sessions.Session) -> tuple[dict, ...]:
@@ -338,11 +336,12 @@ def reuse_preference(
             }
             match referenced(repo, session, reference):
                 case {"gate": "planning-depth"}:
-                    state.write_json(
-                        session.folder / decisions.HISTORY,
-                        {"answers": [*history(session), reference]},
+                    return fmap(
+                        decisions.append_history(
+                            session.folder / "decision.json", reference
+                        ),
+                        lambda _: reference,
                     )
-                    return Ok(reference)
                 case _:
                     return err(
                         "invalid_decision_reference",

@@ -31,7 +31,8 @@
         "${CLAUDE_PLUGIN_ROOT}/scripts/integrations/run_gateway.py"
       ],
       "env": {
-        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}"
+        "PYTHONPATH": "${CLAUDE_PLUGIN_ROOT}",
+        "MDH_GATEWAY_HOST": "claude"
       }
     }
   }

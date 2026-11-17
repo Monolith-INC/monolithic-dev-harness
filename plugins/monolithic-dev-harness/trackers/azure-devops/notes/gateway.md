@@ -14,10 +14,20 @@ Never call `@azure-devops/mcp` tools directly, search for their host-specific na
 Azure MCP server, or substitute Azure CLI, `az login`, or a PAT. This keeps authentication and
 provider details behind the gateway.
 
-The host's `workflow-integrations` process owns the Azure MCP transport. Local CLI and hook readers
-use its private per-project Unix socket; they never start a second provider. The socket accepts only
-centrally allowlisted reads, checks same-user peer credentials and a protected owner record, and is
-mode 0600 inside a mode 0700 user directory. Restart or reload the host to recover a dead owner.
+Each `workflow-integrations` process owns an independent Azure MCP transport and private Unix
+socket. This also separates multiple windows or host products that use the same MCP config. Local
+CLI and hook readers reuse the sole live owner, or can select with `MDH_GATEWAY_HOST=claude|codex|cursor|kimi`.
+If several instances are live, select both `MDH_GATEWAY_HOST` and the `MDH_GATEWAY_INSTANCE` value
+from that instance's owner record under `.harness/state/gateway-owners/`; the record's `instance`
+field supplies the value. For example, set both variables on a CLI or hook command:
+`MDH_GATEWAY_HOST=codex MDH_GATEWAY_INSTANCE=<instance-id> harness ...`. With multiple windows of
+one host product, harness CLI and hook reads cannot infer which window's MCP process to use; they
+fail closed until an instance is selected. The host's own MCP tool calls remain bound to its
+individual stdio gateway automatically. Stale crash records are ignored after bounded local peer
+checks, and do not trigger a provider launch. Busy listeners remain candidates after a probe
+timeout, so selection cannot silently move to another instance. Sockets accept only centrally
+allowlisted reads, check same-user peer credentials and an owner record, and use mode 0600 inside a
+mode 0700 user directory. Restart or reload the affected host to recover a dead owner.
 
 The repository's `.harness/settings.json` is the source of organization, project, team, and
 repository selection (`tracker.values` and `scm.values`). Ask the user to configure missing values

@@ -75,6 +75,160 @@ def test_two_subprocess_clients_share_gateway_owner(tmp_path):
     )
 
 
+def test_host_connections_are_independent_and_cli_requires_selection_when_ambiguous(
+    tmp_path, monkeypatch
+):
+    from integrations.gateway_client import call
+    from integrations.gateway_endpoint import serve
+
+    write_settings(tmp_path)
+    with (
+        serve(tmp_path, lambda operation, args: Ok({"host": "claude"}), "claude"),
+        serve(tmp_path, lambda operation, args: Ok({"host": "codex"}), "codex"),
+    ):
+        assert call(tmp_path, "tracker_get_work_item", {"ref": "1"}, "claude") == Ok(
+            {"host": "claude"}
+        )
+        assert call(tmp_path, "tracker_get_work_item", {"ref": "1"}, "codex") == Ok(
+            {"host": "codex"}
+        )
+        monkeypatch.delenv("MDH_GATEWAY_HOST", raising=False)
+        monkeypatch.delenv("CLAUDE_PROJECT_DIR", raising=False)
+        monkeypatch.delenv("CURSOR_PROJECT_DIR", raising=False)
+        monkeypatch.delenv("CODEX_PROJECT_ROOT", raising=False)
+        ambiguous = call(tmp_path, "tracker_get_work_item", {"ref": "1"})
+        assert ambiguous.failure.code == "gateway_unavailable"
+        assert (
+            "Multiple live workflow-integrations instances" in ambiguous.failure.message
+        )
+        monkeypatch.setenv("MDH_GATEWAY_HOST", "codex")
+        assert call(tmp_path, "tracker_get_work_item", {"ref": "1"}) == Ok(
+            {"host": "codex"}
+        )
+        assert (
+            call(
+                tmp_path,
+                "tracker_transition_work_item",
+                {"ref": "1", "state": "done"},
+                "codex",
+            ).failure.code
+            == "gateway_read_only"
+        )
+
+
+def test_two_instances_of_one_host_are_independent_and_teardown_is_instance_scoped(
+    tmp_path,
+):
+    from contextlib import ExitStack
+
+    from integrations.gateway_client import call
+    from integrations.gateway_endpoint import identity, serve
+
+    write_settings(tmp_path)
+    with ExitStack() as stack:
+        first = stack.enter_context(
+            serve(tmp_path, lambda operation, args: Ok({"instance": "first"}), "codex")
+        )
+        second = stack.enter_context(
+            serve(tmp_path, lambda operation, args: Ok({"instance": "second"}), "codex")
+        )
+        assert first != second
+        records = tuple(
+            (tmp_path / ".harness/state/gateway-owners").glob(
+                f"{identity(tmp_path)}-codex-*.json"
+            )
+        )
+        assert len(records) == 2
+        instances = tuple(json.loads(path.read_text())["instance"] for path in records)
+        assert len(set(instances)) == 2
+        assert (
+            call(tmp_path, "tracker_get_work_item", {"ref": "1"}, "codex").failure.code
+            == "gateway_unavailable"
+        )
+        assert {
+            call(
+                tmp_path,
+                "tracker_get_work_item",
+                {"ref": "1"},
+                "codex",
+                instance,
+            ).value["instance"]
+            for instance in instances
+        } == {"first", "second"}
+        stack.pop_all().close()
+        assert not tuple(
+            (tmp_path / ".harness/state/gateway-owners").glob(
+                f"{identity(tmp_path)}-codex-*.json"
+            )
+        )
+
+
+def test_crashed_gateway_record_is_ignored_when_selecting_live_owner(tmp_path):
+    from integrations.gateway_client import call
+    from integrations.gateway_endpoint import identity, serve
+
+    write_settings(tmp_path)
+    directory = tmp_path / ".harness/state/gateway-owners"
+    directory.mkdir(parents=True, exist_ok=True)
+    stale = directory / f"{identity(tmp_path)}-codex-{'a' * 32}.json"
+    stale.write_text(
+        json.dumps(
+            {
+                "pid": 99999999,
+                "uid": os.getuid(),
+                "host": "codex",
+                "instance": "a" * 32,
+                "endpoint": str(tmp_path / "missing.sock"),
+            }
+        )
+    )
+    with serve(tmp_path, lambda operation, args: Ok({"live": True}), "codex"):
+        live_owner_records = tuple(
+            path
+            for path in directory.glob(f"{identity(tmp_path)}-codex-*.json")
+            if path != stale
+        )
+        assert call(tmp_path, "tracker_get_work_item", {"ref": "1"}, "codex") == Ok(
+            {"live": True}
+        )
+        assert (
+            stale.exists()
+        )  # stale records are ignored, never removed as untrusted input
+    assert all(not path.exists() for path in live_owner_records)
+
+
+def test_busy_gateway_remains_a_live_owner_when_probe_times_out(tmp_path, monkeypatch):
+    from integrations import gateway_client
+    from integrations.gateway_endpoint import identity, private, serve
+
+    write_settings(tmp_path)
+
+    class BusyProbe:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *_args):
+            return None
+
+        def settimeout(self, _timeout):
+            return None
+
+        def connect(self, _endpoint):
+            raise TimeoutError("simulated saturated listener")
+
+    with serve(tmp_path, lambda operation, args: Ok({"live": True}), "codex"):
+        owner = json.loads(
+            next(
+                (tmp_path / ".harness/state/gateway-owners").glob(
+                    f"{identity(tmp_path)}-codex-*.json"
+                )
+            ).read_text()
+        )
+        monkeypatch.setattr(gateway_client.socket, "socket", lambda *_args: BusyProbe())
+        monkeypatch.setattr(gateway_client, "_process_exists", lambda _pid: True)
+        assert gateway_client._owner_is_live(owner, private, 0.1)
+
+
 def test_endpoint_is_scoped_to_project_and_configuration(tmp_path):
     from integrations.gateway_client import call
     from integrations.gateway_endpoint import serve
