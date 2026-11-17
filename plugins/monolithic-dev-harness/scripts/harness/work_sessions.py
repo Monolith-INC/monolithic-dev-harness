@@ -33,7 +33,6 @@ class Status(str, Enum):
 @dataclass(frozen=True)
 class Session:
     id: str
-    project_root: Path
     request: str
     status: Status
     created_at: str
@@ -78,7 +77,6 @@ def _payload(session: Session) -> dict[str, Any]:
     return {
         "version": VERSION,
         "id": session.id,
-        "project_root": str(session.project_root),
         "request": session.request,
         "status": session.status.value,
         "created_at": session.created_at,
@@ -93,18 +91,35 @@ def _payload(session: Session) -> dict[str, Any]:
     }
 
 
-def _from_payload(
-    folder: Path, payload: dict[str, Any], project: Path
-) -> Result[Session]:
-    expected_root = project.resolve()
+def _from_payload(folder: Path, payload: dict[str, Any]) -> Result[Session]:
     try:
+        identifier = payload["id"]
+        version = payload["version"]
+        if (
+            not isinstance(identifier, str)
+            or identifier != folder.name
+            or type(version) is not int
+            or version != VERSION
+        ):
+            raise ValueError("record identity does not match its folder")
+        if not all(
+            isinstance(payload[key], str)
+            for key in ("request", "status", "created_at", "updated_at")
+        ):
+            raise TypeError("session fields must be strings")
+        if not isinstance(payload["events"], list) or not all(
+            isinstance(event, dict)
+            and isinstance(event.get("type"), str)
+            and isinstance(event.get("at"), str)
+            for event in payload["events"]
+        ):
+            raise TypeError("session events are invalid")
         session = Session(
-            id=str(payload["id"]),
-            project_root=Path(str(payload["project_root"])).resolve(),
-            request=str(payload["request"]),
-            status=Status(str(payload["status"])),
-            created_at=str(payload["created_at"]),
-            updated_at=str(payload["updated_at"]),
+            id=folder.name,
+            request=payload["request"],
+            status=Status(payload["status"]),
+            created_at=payload["created_at"],
+            updated_at=payload["updated_at"],
             events=tuple(
                 {"type": str(event["type"]), "at": str(event["at"])}
                 for event in payload["events"]
@@ -121,21 +136,7 @@ def _from_payload(
         return err(
             "session_unreadable", f"work session {folder.name} has an invalid record"
         )
-    return bind(
-        require(
-            payload.get("version") == VERSION,
-            "session_unreadable",
-            f"work session {folder.name} uses an unsupported version",
-        ),
-        lambda _: fmap(
-            require(
-                session.project_root == expected_root and session.id == folder.name,
-                "session_unreadable",
-                f"work session {folder.name} does not belong to this project",
-            ),
-            lambda _: session,
-        ),
-    )
+    return Ok(session)
 
 
 def _read(project: Path, folder: Path) -> Result[Session]:
@@ -148,7 +149,7 @@ def _read(project: Path, folder: Path) -> Result[Session]:
             ValueError,
         ),
         lambda payload: (
-            _from_payload(folder, payload, project)
+            _from_payload(folder, payload)
             if isinstance(payload, dict)
             else err(
                 "session_unreadable", f"work session {folder.name} is not an object"
@@ -260,7 +261,6 @@ def _create(
     now = _now()
     session = Session(
         id=identifier,
-        project_root=project,
         request=request,
         status=Status.ACTIVE,
         created_at=now,
@@ -537,22 +537,22 @@ def transition(
 ) -> Result[Session]:
     return bind(
         select(project, identifier),
-        lambda current: _transition(current, operation, make_current),
+        lambda current: _transition(project, current, operation, make_current),
     )
 
 
-def _save_transition(updated: Session, make_current: bool) -> Session:
+def _save_transition(project: Path, updated: Session, make_current: bool) -> Session:
     state.write_json(updated.folder / "session.json", _payload(updated))
     match updated.status, make_current:
         case Status.ACTIVE, True:
-            remember_current(updated.project_root, updated.id)
+            remember_current(project, updated.id)
         case _:
             pass
     return updated
 
 
 def _transition(
-    current: Session, operation: str, make_current: bool
+    project: Path, current: Session, operation: str, make_current: bool
 ) -> Result[Session]:
     match TRANSITIONS.get((operation, current.status)):
         case None:
@@ -570,7 +570,7 @@ def _transition(
             )
             return bind(
                 attempt(
-                    lambda: _save_transition(updated, make_current),
+                    lambda: _save_transition(project, updated, make_current),
                     "session_unwritable",
                     f"could not update work session {current.id}",
                     OSError,
